@@ -930,10 +930,20 @@ target's runtime Interface that the attachment's events invoke. Activation is
 admitted against the target's ACTIVE DEPLOYMENT, not against any stored
 version, and EVERY version the deployment weights MUST provide the annotated
 entrypoint, because an event served by any weighted version has to find it.
-The same rule gates a class-selecting identity (`DurableWorkflow`,
-`ActorNamespace`): its annotated requirement is the class export its
-`x-takoform-relation-extras` member names, and a deployment selecting code
-without that export is refused the same way.
+A class-selecting IDENTITY (`DurableWorkflow`, `ActorNamespace`) states the
+same kind of requirement — the class export its `x-takoform-relation-extras`
+member names — and is gated on it wherever a deployment exists to contradict
+it: a live deployment whose weighted code lacks the class refuses the identity,
+and a deployment change that would leave a live one's class unexported is
+refused the same way. It differs from an attachment in the ABSENT-deployment
+case, and the difference is structural rather than a concession. A worker's own
+version may declare a binding to the workflow or actor its own worker serves,
+so the identity, the version that implements it, and the deployment that
+selects that version are ordinarily created in ONE apply. Refusing the identity
+before a deployment exists would make that ordinary wiring unconstructible in
+any order — there is no order in which the deployment precedes the identity it
+needs. Such an identity therefore STORES with `Ready=False` / `Provisioning`,
+and the deployment that lands next is what makes it serve.
 
 The Edge family's instances of the rule are READ OUT OF its Definitions, not
 out of this document. They are listed here so a reader can see the shape, and
@@ -949,11 +959,12 @@ with this table:
 | `DurableWorkflow` | the declared workflow class export | `className` via `x-takoform-relation-extras` |
 | `ActorNamespace` | the declared actor class export | `className` via `x-takoform-relation-extras` |
 
-An absent deployment, or a
-weighted version that does not export the handler, fails
-`unsupported_capability` (422) before any mutation and the message names what is
-missing. A stored version is a history entry, not a running one: gating on it
-would admit a cron trigger against code no deployment selects.
+For an ATTACHMENT, an absent deployment, or a weighted version that does not
+export the handler, fails `unsupported_capability` (422) before any mutation
+and the message names what is missing. For a class-selecting identity only the
+second is a refusal; the first stores `Provisioning`, as above. A stored
+version is a history entry, not a running one: gating on it would admit a cron
+trigger against code no deployment selects.
 
 Two attachments carry a further rule the desired schema cannot state
 ([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).

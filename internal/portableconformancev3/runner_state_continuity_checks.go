@@ -292,7 +292,7 @@ func (r *v3Runner) checkExactFormRefFailsClosedOnUnknownDefinition(kv probeTarge
 	// The same three surfaces still answer the identity the host DOES have, so
 	// the refusals above are about the exact identity and not about a surface
 	// that refuses everything.
-	installed, err := r.request(http.MethodGet, r.apiBase+"/forms?"+r.exactQuery(kv.Space, kv.Ref).Encode(), nil, nil)
+	installed, err := r.request(http.MethodGet, r.apiBase+"/forms?"+r.formsAvailabilityQuery(kv.Space, kv.Ref).Encode(), nil, nil)
 	if err != nil {
 		return err
 	}

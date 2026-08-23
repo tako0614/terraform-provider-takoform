@@ -219,18 +219,65 @@ func (h *ReferenceHost) validateSQLiteMigrationApplication(
 	caller hostAuthContext,
 	form *InstalledForm,
 	scope resourceScope,
+	name string,
 	relations []storedRelation,
 ) *hostError {
+	if hostErr := h.validateSingleMigrationApplication(form, scope, name, relations); hostErr != nil {
+		return hostErr
+	}
 	_, _, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
 	return hostErr
 }
 
+// validateSingleMigrationApplication holds a database to AT MOST ONE live
+// application, over its UID, exactly like one-deployment-per-worker and
+// one-consumer-per-queue. Two live applications would each declare the whole
+// schema of one database, and "Ready means the ledger equals the exact ordered
+// set" would then name two different sets with no rule for which one the
+// database is supposed to match.
+//
+// It is invalid_argument rather than dependency_in_use because the request is
+// well formed and what is untrue is what it says about the database it points
+// at. Advancing a schema is a handover — delete, then create against the
+// longer set — and the ledger prefix check makes that resume at the unapplied
+// suffix, so the rule costs no replay.
+func (h *ReferenceHost) validateSingleMigrationApplication(
+	form *InstalledForm, scope resourceScope, name string, relations []storedRelation,
+) *hostError {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != sqliteMigrationApplicationKind {
+		return nil
+	}
+	databaseUID := relationTargetUID(relations, migrationDatabasePointer)
+	if databaseUID == "" {
+		return nil
+	}
+	selfKey := resourceKey(scope, edgeFormsGroup, form.Ref.Kind, name)
+	for _, candidate := range h.scopedResources(scope) {
+		if candidate.group() != edgeFormsGroup ||
+			candidate.kind() != sqliteMigrationApplicationKind ||
+			candidate.key() == selfKey {
+			continue
+		}
+		if relationTargetUID(candidate.Relations, migrationDatabasePointer) == databaseUID {
+			return stableError("invalid_argument",
+				"SQLiteMigrationApplication "+name+" applies to the SQLiteDatabase at uid "+databaseUID+
+					", which SQLiteMigrationApplication "+candidate.Name+" already applies to; "+
+					"a database carries at most one live migration application, and advancing its schema "+
+					"is deleting that application and creating one referencing the longer set")
+		}
+	}
+	return nil
+}
+
 // sqliteMigrationApplicationUnavailable is the derived readiness half of the
-// migration contract. Applying a later superset is allowed to leave an older
-// application resource live; its representation simply becomes not Ready
-// because the database ledger is no longer exactly the ordered set that
-// application declares. This is intentionally a comparison of full ordered
-// sets, not a one-live-application or name-based rule.
+// migration contract: Ready means the durable ledger equals the exact ordered
+// set this application declares. It is a comparison of full ordered sets, not
+// a name-based rule.
+//
+// The CARDINALITY half is separate and is enforced before any mutation: a
+// database carries at most one live application (validateSqliteMigrationHolder).
+// Readiness therefore never has to describe a second live application, because
+// there cannot be one.
 func (h *ReferenceHost) sqliteMigrationApplicationUnavailable(
 	resource *storedResource,
 ) (reason, hostReason string, unavailable bool) {

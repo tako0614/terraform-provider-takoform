@@ -176,7 +176,7 @@ func TestSQLiteMigrationHistoryIsExactPrefixAndDeleteNeverRollsBack(t *testing.T
 		{"path": "0002.sql", "mediaType": "application/sql", "body": "ALTER TABLE rewritten ADD COLUMN body TEXT;\n"},
 	})
 	set.Spec = map[string]any{"manifestDigest": rewritten}
-	if hostErr := host.validateSQLiteMigrationApplication(referencePrimaryAuth, applicationForm, scope, relations); hostErr == nil || hostErr.Code != "migration_required" {
+	if hostErr := host.validateSQLiteMigrationApplication(referencePrimaryAuth, applicationForm, scope, "application", relations); hostErr == nil || hostErr.Code != "migration_required" {
 		t.Fatalf("rewritten history = %+v, want migration_required", hostErr)
 	}
 	if got := host.migrationLedgers[database.UID]; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {

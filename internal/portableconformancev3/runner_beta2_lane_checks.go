@@ -113,6 +113,64 @@ func (r *v3Runner) checkFenceMatrixObserved(target probeTarget) error {
 		)
 	}
 
+	// The matrix publishes TWO transports for an update fence and calls them
+	// equal. A runner that only ever sent the header would leave a host
+	// serving only the header passing, and a client reading the document would
+	// find the body transport does not work.
+	viaBody, err := r.prepareWithFenceAs(r.token, probe, created.Metadata.Generation)
+	if err != nil {
+		return fmt.Errorf("preparing the body-transport fence: %w", err)
+	}
+	if response, err := r.apply(probe, applyOptions{
+		PrepareDigest:  viaBody.PrepareDigest,
+		BodyGeneration: created.Metadata.Generation,
+		IdempotencyKey: "key-fence-matrix-body-transport",
+	}); err != nil {
+		return err
+	} else if response.Status != http.StatusOK {
+		return fmt.Errorf(
+			"an update fencing through the body's expectedGeneration answered HTTP %d, want 200; "+
+				"the matrix offers the body and the header as equal transports",
+			response.Status,
+		)
+	}
+	afterBody, _, err := r.read(probe)
+	if err != nil {
+		return fmt.Errorf("reading after the body-transport fence: %w", err)
+	}
+
+	// Both transports at once, disagreeing. The lane refuses this BEFORE
+	// either is evaluated, so a host that picked one and ignored the other
+	// would silently apply against a belief the caller did not hold.
+	disagreeing, err := r.prepareWithFenceAs(r.token, probe, afterBody.Metadata.Generation)
+	if err != nil {
+		return fmt.Errorf("preparing the disagreeing fence: %w", err)
+	}
+	if response, err := r.apply(probe, applyOptions{
+		PrepareDigest:             disagreeing.PrepareDigest,
+		ExpectedGeneration:        afterBody.Metadata.Generation,
+		DisagreeingBodyGeneration: afterBody.Metadata.Generation + "0",
+		IdempotencyKey:            "key-fence-matrix-disagreement",
+	}); err != nil {
+		return err
+	} else if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("an apply whose header and body fences disagree: %w", err)
+	}
+
+	// A create carrying If-None-Match together with a generation fence asserts
+	// that the resource both does and does not exist.
+	contradictory := probe
+	contradictory.Name = "fence-matrix-contradictory-create"
+	if response, err := r.apply(contradictory, applyOptions{
+		Create:                    true,
+		CreateWithGenerationFence: "1",
+		IdempotencyKey:            "key-fence-matrix-contradictory-create",
+	}); err != nil {
+		return err
+	} else if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("a create carrying both If-None-Match and a generation fence: %w", err)
+	}
+
 	// The optional review.specDigest echo is the last fence in the matrix and
 	// the only one a client opts into. Echoing what prepare answered must be
 	// accepted; echoing anything else must be refused, because the whole
@@ -272,6 +330,34 @@ func (r *v3Runner) checkFormsRouteEnumerates(target probeTarget) error {
 				"so the query vocabulary is closed against it",
 		)
 	}
+
+	// Every filter states a grammar, so every filter refuses a value outside
+	// it. A host that validated only `space` answers 200 with an empty set to
+	// a malformed query, which a client cannot tell from "this host holds no
+	// such Form" — the one answer it must not be confused with. An explicitly
+	// empty value is malformed too: absent means unfiltered, and a present
+	// empty string is neither absent nor a value.
+	for _, malformed := range []struct{ key, value string }{
+		{"group", "Not A Group"},
+		{"version", "beta1"},
+		{"kind", "not-a-kind"},
+		{"definitionVersion", "0.1"},
+		{"schemaDigest", "bad"},
+		{"space", ""},
+		{"kind", ""},
+	} {
+		query := url.Values{}
+		if malformed.key != "space" {
+			query.Set("space", target.Space)
+		}
+		query.Set(malformed.key, malformed.value)
+		if _, err := r.formsQuery(query); err == nil {
+			return fmt.Errorf(
+				"forms accepted %s=%q; a malformed filter value is invalid_argument, never an empty result",
+				malformed.key, malformed.value,
+			)
+		}
+	}
 	r.complete("forms-route-enumerates")
 	return nil
 }
@@ -349,7 +435,7 @@ func (r *v3Runner) checkAvailabilityTruthConditions(target probeTarget) error {
 // stopping point is REFUSED and keeps running. A host that treated cancel as
 // advisory would answer 200 and leave the operation running, and a client
 // would believe it had stopped something it had not.
-func (r *v3Runner) checkCancelOutcomesClosed() error {
+func (r *v3Runner) checkCancelOutcomesClosed(cancelTarget probeTarget) error {
 	id := r.cancelledOperationID
 	if id == "" {
 		return errors.New(
@@ -401,8 +487,10 @@ func (r *v3Runner) checkCancelOutcomesClosed() error {
 		return errors.New("re-cancelling a terminal operation changed its record; it replays unchanged")
 	}
 
-	// Outcome three's error shape, on an id no tenant holds: the closed answer
-	// is operation_not_found, never a success and never a different code.
+	// An id no tenant holds is operation_not_found. This is not one of the
+	// three outcomes — it is the answer for an operation that does not exist —
+	// and it is checked here because a host that answered it for a live
+	// operation would look like a refusal.
 	missing, err := r.request(
 		http.MethodPost, r.apiBase+"/operations/op_no_such_operation_here/cancel",
 		map[string]string{"Idempotency-Key": "key-cancel-outcomes-missing"}, nil,
@@ -416,7 +504,110 @@ func (r *v3Runner) checkCancelOutcomesClosed() error {
 			missing.Status,
 		)
 	}
+
+	// Outcome three, the one that needs a LIVE operation: a cancel that
+	// arrives past the operation's safe stopping point is REFUSED over HTTP
+	// with operation_cancelled, and the operation goes on to its own terminal
+	// state. A host that cancels everything it is asked to cancel passes every
+	// other assertion here and fails this one, which is the point: a caller
+	// must be able to tell a cancellation that took from one that arrived too
+	// late.
+	if err := r.checkCancelPastSafeStop(cancelTarget); err != nil {
+		return err
+	}
+
 	r.complete("cancel-outcomes-closed")
+	return nil
+}
+
+// checkCancelPastSafeStop drives one accepted mutation to the point where its
+// work is underway and proves the refusal, then proves the operation still
+// reaches its OWN terminal state rather than a cancelled one.
+func (r *v3Runner) checkCancelPastSafeStop(target probeTarget) error {
+	probe := target
+	probe.Name = "cancel-past-safe-stop-probe"
+	response, err := r.apply(probe, applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-cancel-past-safe-stop",
+		ExtraHeaders:   map[string]string{ErrorProbeHeader: ProbeAsync},
+	})
+	if err != nil {
+		return fmt.Errorf("accepting the mutation to cancel too late: %w", err)
+	}
+	if response.Status != http.StatusAccepted {
+		return fmt.Errorf("the mutation to cancel too late answered HTTP %d, want 202", response.Status)
+	}
+	var envelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(response, &envelope); err != nil {
+		return err
+	}
+	accepted := envelope.Operation.ID
+
+	// Advance the operation until one more poll would settle it. A host whose
+	// stopping point is elsewhere is not wrong; what it may not do is accept a
+	// cancel it cannot honour, so the loop stops at the first refusal and the
+	// check fails only if the refusal never comes.
+	refused := false
+	for poll := 0; poll < asyncOperationPolls+2 && !refused; poll++ {
+		record, err := r.operationRecord(accepted)
+		if err != nil {
+			return err
+		}
+		if record.Done {
+			break
+		}
+		response, err := r.request(
+			http.MethodPost, r.apiBase+"/operations/"+url.PathEscape(accepted)+"/cancel",
+			map[string]string{"Idempotency-Key": fmt.Sprintf("key-cancel-past-safe-stop-%d", poll)}, nil,
+		)
+		if err != nil {
+			return err
+		}
+		switch response.Status {
+		case http.StatusOK:
+			continue
+		case http.StatusConflict:
+			if err := r.expectStableError(response, "operation_cancelled"); err != nil {
+				return fmt.Errorf("a cancel refused past the safe stopping point: %w", err)
+			}
+			refused = true
+		default:
+			return fmt.Errorf(
+				"cancelling a live operation answered HTTP %d; the closed answers are 200 (it took) "+
+					"and 409 operation_cancelled (it arrived too late)",
+				response.Status,
+			)
+		}
+	}
+	if !refused {
+		return errors.New(
+			"no cancel was ever refused: this host cancelled an operation at every point in its life, " +
+				"so it states no safe stopping point and a caller cannot know when a cancel still stops the work",
+		)
+	}
+
+	// It ran to its own terminal state, not to a cancellation.
+	var terminal wireOperation
+	for poll := 0; poll < asyncOperationPolls+3; poll++ {
+		terminal, err = r.operationRecord(accepted)
+		if err != nil {
+			return err
+		}
+		if terminal.Done {
+			break
+		}
+	}
+	if !terminal.Done {
+		return errors.New("an operation past its safe stopping point never settled")
+	}
+	if code, _ := terminal.Error["code"].(string); code == "operation_cancelled" {
+		return errors.New(
+			"an operation whose cancel was refused still terminated as cancelled; " +
+				"the refusal said the work could not be stopped",
+		)
+	}
 	return nil
 }
 
@@ -595,6 +786,11 @@ func (r *v3Runner) formsQuery(query url.Values) ([]formsAvailabilityEntry, error
 // formsExactQuery is the six-key exact-availability probe: the same question
 // v1beta1 asked with five keys, now expressed in the vocabulary that splits an
 // apiVersion the way every path in this lane already splits it.
+// formsExactQuery builds the /forms filter query naming one whole identity.
+// It is NOT exactQuery: the filter vocabulary splits `group` from `version`
+// and takes six keys, while a resource route's exact-Form query carries the
+// apiVersion whole under `group`. Sending one route's spelling to the other
+// answers an empty set rather than an error.
 func (r *v3Runner) formsExactQuery(space string, ref FormRef) url.Values {
 	group, version, _ := splitAPIVersion(ref.APIVersion)
 	query := url.Values{}
@@ -626,7 +822,8 @@ func (r *v3Runner) operationRecord(id string) (wireOperation, error) {
 }
 
 // formsAvailabilityQuery is the exact-availability probe in whichever
-// vocabulary the corpus's lane uses.
+// vocabulary the corpus's lane uses: v1beta2's /forms splits group from
+// version, v1beta1's took the apiVersion whole.
 func (r *v3Runner) formsAvailabilityQuery(space string, ref FormRef) url.Values {
 	if r.contract.lane.FormsResponseEnumerates {
 		return r.formsExactQuery(space, ref)

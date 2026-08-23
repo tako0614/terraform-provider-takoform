@@ -336,7 +336,8 @@ func TestDeleteResourceOperationNotFoundMapsToErrNotFound(t *testing.T) {
 				"apiVersion": OperationAPIVersion, "kind": OperationKind,
 				"id": "op_del1", "done": true,
 				"error": map[string]any{
-					"code": "resource_not_found", "message": "gone", "retryable": false,
+					"code": "resource_not_found", "message": "gone",
+					"requestId": "req-gone", "retryable": false,
 				},
 			})
 			return true

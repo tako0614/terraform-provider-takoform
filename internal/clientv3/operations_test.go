@@ -70,7 +70,8 @@ func TestAwaitOperationTerminalError(t *testing.T) {
 				"apiVersion": OperationAPIVersion, "kind": OperationKind,
 				"id": "op_fail1", "done": true,
 				"error": map[string]any{
-					"code": "policy_denied", "message": "denied by policy", "retryable": false,
+					"code": "policy_denied", "message": "denied by policy",
+					"requestId": "req-denied", "retryable": false,
 				},
 			})
 			return true
@@ -98,7 +99,8 @@ func TestAwaitOperationRejectsResultAndError(t *testing.T) {
 				"id": "op_bad1", "done": true,
 				"result": map[string]any{},
 				"error": map[string]any{
-					"code": "internal_error", "message": "both", "retryable": false,
+					"code": "internal_error", "message": "both",
+					"requestId": "req-both", "retryable": false,
 				},
 			})
 			return true

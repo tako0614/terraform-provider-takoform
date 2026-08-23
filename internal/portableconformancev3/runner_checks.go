@@ -16,6 +16,13 @@ import (
 // run executes the complete ordered v1beta1 matrix. Every named required
 // check is marked completed exactly where its evidence was actually
 // exercised over real HTTP.
+// supportAPIVersion is the Host Support Profile identity of the lane under
+// test. The profile schema moved with the lane, so what a conforming host
+// answers here is a lane fact, not a constant.
+func (r *v3Runner) supportAPIVersion() string {
+	return supportAPIVersionPrefix + r.contract.lane.SupportProfileSchemaVersion
+}
+
 func (r *v3Runner) run() error {
 	// The PINNED Form Definitions come first: every probe spec is materialized
 	// against the declared defaults before it is sent, and those defaults are the
@@ -195,7 +202,7 @@ func (r *v3Runner) run() error {
 			func() error { return r.checkFenceMatrixObserved(kv) },
 			func() error { return r.checkFormsRouteEnumerates(mw) },
 			func() error { return r.checkAvailabilityTruthConditions(kv) },
-			r.checkCancelOutcomesClosed,
+			func() error { return r.checkCancelOutcomesClosed(kv) },
 			func() error { return r.checkExternalServiceSlotsSealed(version) },
 		)
 	}
@@ -303,7 +310,7 @@ func (r *v3Runner) checkDiscovery() error {
 func (r *v3Runner) checkUnauthenticatedRequestRefused() error {
 	probe := r.target(r.contract.RunnerInput.EdgeKvNamespace)
 	probe.Name = "unauthenticated-probe"
-	formsURL := r.apiBase + "/forms?" + r.exactQuery(probe.Space, probe.Ref).Encode()
+	formsURL := r.apiBase + "/forms?" + r.formsAvailabilityQuery(probe.Space, probe.Ref).Encode()
 	prepared, err := r.prepare(probe)
 	if err != nil {
 		return err
@@ -3587,7 +3594,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	}
 	var workerVersionProfile map[string]any
 	for _, profile := range list.Profiles {
-		if profile["apiVersion"] != supportAPIVersion || profile["kind"] != "FormSupport" {
+		if profile["apiVersion"] != r.supportAPIVersion() || profile["kind"] != "FormSupport" {
 			return fmt.Errorf("support profile identity is invalid: %v", profile)
 		}
 		reference, _ := profile["formRef"].(map[string]any)
@@ -3663,7 +3670,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	if err != nil {
 		return err
 	}
-	if err := verifySupportRefProfile(interfaceResponse, "InterfaceSupport", "interfaceRef", probes.Interface); err != nil {
+	if err := verifySupportRefProfile(interfaceResponse, r.supportAPIVersion(), "InterfaceSupport", "interfaceRef", probes.Interface); err != nil {
 		return err
 	}
 	bindingResponse, err := r.request(
@@ -3675,7 +3682,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	if err != nil {
 		return err
 	}
-	if err := verifySupportRefProfile(bindingResponse, "BindingSupport", "bindingRef", probes.Binding); err != nil {
+	if err := verifySupportRefProfile(bindingResponse, r.supportAPIVersion(), "BindingSupport", "bindingRef", probes.Binding); err != nil {
 		return err
 	}
 	for _, body := range [][]byte{listResponse.Body, oneResponse.Body, interfaceResponse.Body, bindingResponse.Body} {
@@ -3743,7 +3750,7 @@ func stringSliceEquals(value any, want []string) bool {
 	return true
 }
 
-func verifySupportRefProfile(response wireResponse, kind, refMember string, want NameVersion) error {
+func verifySupportRefProfile(response wireResponse, supportAPIVersion, kind, refMember string, want NameVersion) error {
 	if response.Status != http.StatusOK {
 		return fmt.Errorf("%s HTTP %d; body=%s", kind, response.Status, strings.TrimSpace(string(response.Body)))
 	}

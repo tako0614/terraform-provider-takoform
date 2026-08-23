@@ -54,10 +54,14 @@ const (
 
 	expectedGenerationHeader = "Takoform-Expected-Generation"
 	operationAPIVersion      = "operations.takoform.com/v1alpha1"
-	supportAPIVersion        = "support.takoform.com/v1alpha1"
-	artifactAPIVersion       = "artifacts.takoform.com/v1alpha1"
-	fixedTransitionTime      = "2026-08-06T00:00:00Z"
-	maxBodyBytes             = 8 * 1024 * 1024
+	// supportAPIVersionPrefix is completed by the lane's support profile
+	// schema version. The identity moved with the profile schema, so a host
+	// serving two lanes answers each with the identity that lane's clients
+	// validate against; a constant here would have made one of the two wrong.
+	supportAPIVersionPrefix = "support.takoform.com/"
+	artifactAPIVersion      = "artifacts.takoform.com/v1alpha1"
+	fixedTransitionTime     = "2026-08-06T00:00:00Z"
+	maxBodyBytes            = 8 * 1024 * 1024
 
 	// asyncOperationPolls is how many operation reads a 202 mutation stays
 	// pending for before the reference host completes it.
@@ -753,9 +757,27 @@ func (h *ReferenceHost) handleFormsEnumerated(w http.ResponseWriter, request *ht
 			return
 		}
 	}
-	if space := query.Get("space"); space != "" && !validSpaceID(space) {
-		h.writeError(w, "invalid_argument", "space is malformed")
-		return
+	// Every filter states a grammar, so every filter refuses a value outside
+	// it. A host that only checked `space` and let the rest fall through to
+	// "no matches" would answer 200 with an empty set to a request that was
+	// wrong — indistinguishable, to a client, from a host that simply has no
+	// such Form.
+	for key, valid := range map[string]func(string) bool{
+		"space":             validSpaceID,
+		"group":             validFormGroup,
+		"version":           validFamilyVersion,
+		"kind":              validFormKind,
+		"definitionVersion": validDefinitionVersion,
+		"schemaDigest":      formpackage.ValidDigest,
+	} {
+		value, present := query[key]
+		if !present {
+			continue
+		}
+		if value[0] == "" || !valid(value[0]) {
+			h.writeError(w, "invalid_argument", key+" is malformed")
+			return
+		}
 	}
 	// A narrowing key is matched against the whole exact identity it names.
 	// `group` and `version` are the two halves of an apiVersion, because the
@@ -930,6 +952,25 @@ func (h *ReferenceHost) resolveResourceWire(body *resourceWire) (*InstalledForm,
 
 // validSpaceID ports $defs/spaceId of
 // spec/schemas/host-api-wire-v1beta1.schema.json into the host: a SpaceID is
+// The grammars the /forms filters state. They are the same grammars the
+// FormRef schema states for the members these filters name, spelled out here
+// because a host validating a query has no FormRef document to validate
+// against — the query is exactly the case where the identity is not yet whole.
+var (
+	formGroupPattern         = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
+	familyVersionPattern     = regexp.MustCompile(`^v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
+	formKindPattern          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,62}$`)
+	definitionVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
+)
+
+func validFormGroup(value string) bool { return formGroupPattern.MatchString(value) }
+
+func validFamilyVersion(value string) bool { return familyVersionPattern.MatchString(value) }
+
+func validFormKind(value string) bool { return formKindPattern.MatchString(value) }
+
+func validDefinitionVersion(value string) bool { return definitionVersionPattern.MatchString(value) }
+
 // valid UTF-8 of 1..255 Unicode code points, carries no leading or trailing
 // Unicode White_Space code point or U+FEFF, and contains no C0/C1 control
 // character and no slash. The value is opaque and case-sensitive: the host
@@ -1231,7 +1272,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	if hostErr := h.validateWorkerVersionAssets(caller, form, scope, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
-	if hostErr := h.validateSQLiteMigrationApplication(caller, form, scope, relations); hostErr != nil {
+	if hostErr := h.validateSQLiteMigrationApplication(caller, form, scope, name, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	// The Worker aggregate rules read the relations this apply just resolved,
@@ -2217,11 +2258,20 @@ func (h *ReferenceHost) completeOperation(operation *hostOperation, result map[s
 	operation.Done = true
 	document := h.renderOperation(operation)
 	if hostErr != nil {
-		document["error"] = map[string]any{
+		failure := map[string]any{
 			"code":      hostErr.Code,
 			"message":   hostErr.Message,
 			"retryable": h.contract.lane.isAutomaticallyRetryable(hostErr.Code),
 		}
+		if h.contract.lane.TerminalErrorIsClosed() {
+			// A terminal operation has stopped: there is nothing to retry, and
+			// a caller who cannot correlate the failure with a host record
+			// cannot report it. Both are the schema's rules, not this host's.
+			h.requestCounter++
+			failure["requestId"] = "ref3-op-" + hostErr.Code + "-" + strconv.Itoa(h.requestCounter)
+			failure["retryable"] = false
+		}
+		document["error"] = failure
 	} else {
 		document["result"] = result
 		operation.CommittedUID = committedResourceUID(result)
@@ -2288,6 +2338,20 @@ func (h *ReferenceHost) handleOperationCancel(w http.ResponseWriter, request *ht
 		return
 	}
 	if !operation.Done {
+		// The third outcome. An accepted mutation reaches a point past which
+		// cancelling cannot stop it, and a host that pretended otherwise would
+		// answer 200 to a cancel and then commit anyway. Here that point is
+		// the last poll before the commit runs: the cancel is REFUSED over
+		// HTTP with operation_cancelled, and the operation goes on to its own
+		// terminal state, which is what a caller must be able to tell apart
+		// from a cancellation that took.
+		if operation.PollsRemaining <= 1 {
+			h.writeHostError(w, &hostError{
+				Code:    "operation_cancelled",
+				Message: "operation is past its safe stopping point and will run to its own terminal state",
+			})
+			return
+		}
 		h.completeOperation(operation, nil, stableError("operation_cancelled", "operation was cancelled before completion"))
 	}
 	h.writeRaw(w, http.StatusOK, "", operation.terminalBody)
@@ -2756,14 +2820,24 @@ func (h *ReferenceHost) collectStagedBlobs(upload *artifactUpload) {
 // answer is a profile rather than a bare boolean because "can you speak
 // postgresql" and "for whom, and under what identity" are the same question,
 // and a bare boolean could not carry the second half.
+// supportAPIVersion is the Host Support Profile identity of the lane this host
+// serves.
+func (h *ReferenceHost) supportAPIVersion() string {
+	return supportAPIVersionPrefix + h.contract.lane.SupportProfileSchemaVersion
+}
+
 func (h *ReferenceHost) handleStandardServiceSupport(w http.ResponseWriter, protocol string) {
 	if !containsString(h.contract.RunnerInput.ExternalServices.Protocols, protocol) {
 		h.writeError(w, "resource_not_found", "standard-service protocol is unknown")
 		return
 	}
 	satisfiable := true
+	// A support profile carries the SUPPORT identity. Answering the Host API
+	// lane's identity here would have handed a client a document its support
+	// validator rejects, and the profile kind is the only thing that made it
+	// look like a profile at all.
 	h.writeJSON(w, http.StatusOK, "", map[string]any{
-		"apiVersion": h.contract.APIVersion,
+		"apiVersion": h.supportAPIVersion(),
 		"kind":       "StandardServiceSupport",
 		"serviceRef": map[string]any{
 			"apiVersion": h.contract.RunnerInput.ExternalServices.ServiceAPIVersion,
@@ -2809,7 +2883,7 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 			return
 		}
 		h.writeJSON(w, http.StatusOK, "", map[string]any{
-			"apiVersion": supportAPIVersion,
+			"apiVersion": h.supportAPIVersion(),
 			"kind":       "InterfaceSupport",
 			"interfaceRef": map[string]any{
 				"apiVersion":   "interfaces.takoform.com/v1alpha1",
@@ -2825,7 +2899,7 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 			return
 		}
 		h.writeJSON(w, http.StatusOK, "", map[string]any{
-			"apiVersion": supportAPIVersion,
+			"apiVersion": h.supportAPIVersion(),
 			"kind":       "BindingSupport",
 			"bindingRef": map[string]any{
 				"apiVersion":   "bindings.takoform.com/v1alpha1",
@@ -2844,7 +2918,7 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 // never appear in this surface.
 func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 	profile := map[string]any{
-		"apiVersion": supportAPIVersion,
+		"apiVersion": h.supportAPIVersion(),
 		"kind":       "FormSupport",
 		"formRef":    refJSON(form.Ref),
 		"operations": form.operations(),

@@ -482,6 +482,11 @@ func (r *v3Runner) resourceURL(ref FormRef, name, action string, query url.Value
 func (r *v3Runner) exactQuery(space string, ref FormRef) url.Values {
 	query := url.Values{}
 	query.Set("space", space)
+	// `group` here is the WHOLE apiVersion. This is the exact-Form query of a
+	// resource route, whose vocabulary is the four FormRef members, and it is
+	// not the /forms filter vocabulary — that one splits group from version
+	// and takes six keys. The two are separate grammars on separate routes;
+	// formsExactQuery builds the other one.
 	query.Set("group", ref.APIVersion)
 	query.Set("kind", ref.Kind)
 	query.Set("definitionVersion", ref.DefinitionVersion)
@@ -765,14 +770,25 @@ type applyOptions struct {
 	// check that the spec it is applying is the spec it prepared.
 	SpecDigestEcho string
 
-	Create             bool
-	ExpectedGeneration string
-	ExpectedUID        string
-	IdempotencyKey     string
-	OmitIdempotencyKey bool
-	OmitPrecondition   bool
-	ExtraHeaders       map[string]string
-	PrepareDigest      string
+	Create bool
+	// BodyGeneration sends the fence through the BODY transport instead of the
+	// header. The lane offers a client both and calls them equal, so a runner
+	// that only ever sent the header would leave half of a published transport
+	// unproven — and a host serving only the header would pass.
+	BodyGeneration string
+	// DisagreeingBodyGeneration sends BOTH transports with different values,
+	// which the lane refuses before either is evaluated.
+	DisagreeingBodyGeneration string
+	// CreateWithGenerationFence sends If-None-Match together with a generation
+	// fence: two contradictory beliefs about whether the resource exists.
+	CreateWithGenerationFence string
+	ExpectedGeneration        string
+	ExpectedUID               string
+	IdempotencyKey            string
+	OmitIdempotencyKey        bool
+	OmitPrecondition          bool
+	ExtraHeaders              map[string]string
+	PrepareDigest             string
 }
 
 func (r *v3Runner) applyRequestParts(target probeTarget, options applyOptions) (string, map[string]string, []byte, error) {
@@ -785,6 +801,12 @@ func (r *v3Runner) applyRequestParts(target probeTarget, options applyOptions) (
 	if options.ExpectedUID != "" {
 		document["expectedUid"] = options.ExpectedUID
 	}
+	if options.BodyGeneration != "" {
+		document["expectedGeneration"] = options.BodyGeneration
+	}
+	if options.DisagreeingBodyGeneration != "" {
+		document["expectedGeneration"] = options.DisagreeingBodyGeneration
+	}
 	body, err := encodeRunnerJSON(document)
 	if err != nil {
 		return "", nil, nil, err
@@ -794,9 +816,16 @@ func (r *v3Runner) applyRequestParts(target probeTarget, options applyOptions) (
 		headers["Idempotency-Key"] = options.IdempotencyKey
 	}
 	if !options.OmitPrecondition {
-		if options.Create {
+		switch {
+		case options.Create:
 			headers["If-None-Match"] = "*"
-		} else {
+			if options.CreateWithGenerationFence != "" {
+				headers[expectedGenerationHeader] = options.CreateWithGenerationFence
+			}
+		case options.BodyGeneration != "":
+			// Body transport only: the header is deliberately absent, which is
+			// what makes this a test of the transport rather than of both.
+		default:
 			headers[expectedGenerationHeader] = options.ExpectedGeneration
 		}
 	}

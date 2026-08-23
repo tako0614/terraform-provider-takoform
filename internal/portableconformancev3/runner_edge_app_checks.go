@@ -1,10 +1,8 @@
 package portableconformancev3
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
@@ -154,16 +152,36 @@ func (r *v3Runner) checkSQLiteMigrationLedgerReadiness() error {
 	}, http.StatusCreated); err != nil {
 		return fmt.Errorf("SQLiteMigrationSet superset apply: %w", err)
 	}
+	// A database has AT MOST ONE live application, over its UID, exactly like
+	// the deployment and consumer rules. A second one against the same
+	// database is refused BEFORE any mutation: two live applications would
+	// each declare the database's whole schema, and a reader would have no
+	// rule for which of them the ledger is supposed to equal.
 	application2 := application
 	application2.Name = "sqlite-migration-application-superset"
 	application2.Spec = map[string]any{
 		"database":     exactReference(database, database.Name),
 		"migrationSet": exactReference(set2, set2.Name),
 	}
-	if _, _, err := r.applyResource(application2, applyOptions{
+	if response, err := r.apply(application2, applyOptions{
 		Create: true, IdempotencyKey: "key-migration-application-superset",
+	}); err != nil {
+		return err
+	} else if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("a second migration application against one database: %w", err)
+	}
+
+	// Advancing the schema is a HANDOVER: delete the application and create
+	// one referencing the longer set. The ledger check makes the new
+	// application resume at the unapplied suffix, so the handover replays
+	// nothing — which is the whole reason the one-live rule costs nothing.
+	if err := r.deleteExisting(application, "key-migration-application-handover"); err != nil {
+		return fmt.Errorf("removing the first application for the handover: %w", err)
+	}
+	if _, _, err := r.applyResource(application2, applyOptions{
+		Create: true, IdempotencyKey: "key-migration-application-superset-after-handover",
 	}, http.StatusCreated); err != nil {
-		return fmt.Errorf("SQLiteMigrationApplication superset apply: %w", err)
+		return fmt.Errorf("SQLiteMigrationApplication superset apply after handover: %w", err)
 	}
 	second, _, err := r.read(application2)
 	if err != nil {
@@ -172,23 +190,12 @@ func (r *v3Runner) checkSQLiteMigrationLedgerReadiness() error {
 	if condition := readyCondition(second); condition.Status != "True" || condition.Reason != "Available" {
 		return fmt.Errorf("superset migration application Ready = %s/%s, want True/Available", condition.Status, condition.Reason)
 	}
-	older, err := r.readRaw(application)
-	if err != nil {
-		return err
-	}
-	if err := requireNotReady(older, r.contract.lane.ConvergingReason()); err != nil {
-		return fmt.Errorf("older migration application after a later superset: %w", err)
-	}
-	if strings.Contains(readyCondition(older).HostReason, "one live") {
-		return errors.New("migration readiness claimed a one-live-application policy")
-	}
 
 	for _, item := range []struct {
 		target probeTarget
 		key    string
 	}{
 		{application2, "key-migration-application-superset-delete"},
-		{application, "key-migration-application-first-delete"},
 		{set2, "key-migration-set-superset-delete"},
 		{set, "key-migration-set-first-delete"},
 		{database, "key-migration-database-delete"},

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -41,9 +42,16 @@ type OperationMeta struct {
 }
 
 // OperationError is the terminal failure of an operation.
+//
+// RequestID is REQUIRED by the operation schema this lane selects: a failure a
+// caller cannot correlate with a host-side record is a failure they cannot
+// report. Decoding uses DisallowUnknownFields, so a field absent from this
+// struct is not merely ignored — a conforming host's terminal error would be
+// rejected as protocol-invalid.
 type OperationError struct {
 	Code      string `json:"code"`
 	Message   string `json:"message"`
+	RequestID string `json:"requestId"`
 	Retryable bool   `json:"retryable"`
 	HostCode  string `json:"hostCode,omitempty"`
 }
@@ -78,6 +86,21 @@ func validateOperation(operation *Operation) error {
 	}
 	if operation.Done && hasResult == hasError {
 		return errors.New("takoform: terminal operation must carry exactly one of result or error")
+	}
+	if hasError {
+		if _, closed := stableErrorHTTPStatusByCode[operation.Error.Code]; !closed {
+			return fmt.Errorf("takoform: terminal operation error code %q is outside this lane's closed taxonomy", operation.Error.Code)
+		}
+		if strings.TrimSpace(operation.Error.RequestID) == "" {
+			return errors.New("takoform: terminal operation error carries no requestId")
+		}
+		if operation.Error.Retryable {
+			// The envelope's own rule: a terminal operation has stopped, so
+			// there is nothing left to retry. Retrying is a NEW request, and a
+			// true here would tell a client to poll a record that will never
+			// move again.
+			return errors.New("takoform: terminal operation error declares itself retryable")
+		}
 	}
 	return nil
 }

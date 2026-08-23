@@ -211,6 +211,15 @@ var beta2Lane = lane{
 	RequiredChecks:                beta2RequiredChecks,
 }
 
+// TerminalErrorIsClosed reports whether this lane's operation schema holds a
+// terminal error to the closed shape: a required requestId and retryable
+// false. v1alpha2 does; v1alpha1 left both open, which is why a host could
+// answer a correlation-less failure and a client had nothing to refuse it
+// with.
+func (l lane) TerminalErrorIsClosed() bool {
+	return l.OperationSchemaVersion == "v1alpha2"
+}
+
 // beta2RequiredChecks is v1beta1's list plus one check per rule this lane
 // introduced. Each addition names a rule the v1beta2 document states and the
 // v1beta1 corpus could not have measured, because the rule did not exist.

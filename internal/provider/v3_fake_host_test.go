@@ -283,7 +283,10 @@ func (h *v3FakeHost) serveOperation(w http.ResponseWriter, id string) {
 		h.writeJSON(w, http.StatusOK, map[string]any{
 			"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
 			"id": id, "done": true,
-			"error": map[string]any{"code": code, "message": "fake host " + code, "retryable": false},
+			"error": map[string]any{
+				"code": code, "message": "fake host " + code,
+				"requestId": "req-op-" + id, "retryable": false,
+			},
 		})
 		return
 	}
