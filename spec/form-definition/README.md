@@ -55,14 +55,12 @@ A definition contains:
 - a title and optional description;
 - inline Draft 2020-12 desired and observed schemas, plus an optional output schema;
 - optional immutable JSON Pointer fields;
-- an explicit subset of `create`, `read`, `update`, `delete`, `import`,
-  `observe`, `refresh`, and `drift`; `drift` means observation evidence can
-  report a current/drifted/missing outcome and does not define a separate host
-  operation;
-- optional portable Interface descriptors with exact `(name, version)`, an
-  exact non-secret document/schema, `required` readiness metadata, and
-  deterministic literal/output input mappings plus an optional host-resolved
-  canonical OAuth `resource_uri` audience input;
+- an explicit subset of `create`, `read`, `update`, `delete`, `import`, and
+  `observe` — the current family's whole capability vocabulary. `refresh` and
+  `drift` belong to the withdrawn lanes and no current schema admits them;
+  the open `(name, version)` Interface descriptors of the withdrawn v1alpha2
+  profile are replaced by exact digest-bound `providedInterfaces`
+  ([`../interface-contract/`](../interface-contract/README.md));
 - optional references to data-only positive desired/observed/output fixtures
   and negative schema fixtures in the same package, with independent maxima of
   32 positive fixtures and 32 negative fixtures.
@@ -90,76 +88,29 @@ closure, closed-object proof, validation-work limits, fixture semantics, and
 the portable data-only vocabulary can reject a document that satisfies the
 outer JSON Schema.
 
-## Connection requests
+## Connections were the withdrawn profile's surface
 
-A desired schema MAY declare a `connections` map whose entries name another
-portable Resource and request permission and projection tokens. Each entry is
-request-only metadata. It grants no access, creates no binding, and conveys no
-credential or token. A host MAY deny a connection because the referenced
-Resource, requested capability, caller authority, or host policy cannot
-satisfy it; a required connection that is denied cannot be reported Ready.
-
-The portable reference is exactly `Kind/name`. It has no Space selector:
-
-```json
-{
-  "connections": {
-    "assets": {
-      "resource": "ObjectBucket/assets",
-      "permissions": ["read"],
-      "projection": "object.binding.v1"
-    }
-  }
-}
-```
-
-The host MUST resolve that pair only in the source Resource's exact
-`metadata.space`. The resulting lookup identity is
-`(source metadata.space, referenced Kind, referenced name)`. It MUST NOT search
-another Space, substitute a unique or caller-visible Resource from another
-Space, or reinterpret any part of `Kind/name` as a Space. A same-named target
-that exists only in another Space is missing for this request. An apply with
-that missing target MUST fail as `resource_not_found` / HTTP 404 before any
-mutation of the source Resource, even when preview previously returned a plan.
-Cross-Space connections are therefore unrepresentable in portable desired
-state.
-
-If a product needs cross-Space composition, a host MAY offer a host-specific
-binding or composition object outside the portable Resource desired state. It
-MUST NOT extend or reinterpret the portable Connection value to express that
-authority.
-
-The host owns connection resolution, bindings and grants, projection
-materialization, token or credential issuance, authorization, write fencing,
-and lifecycle. These host-owned objects and secret values MUST NOT enter a Form
-Definition, portable desired state, provider state, or sanitized output.
-Portable `permissions` and `projection` tokens describe the request only; they
-MUST NOT be interpreted as proof that the host issued a capability.
-
-JSON Schema `$ref` values are limited to the document root (`#`) or a
-document-local JSON Pointer (`#/...`). The closure proof resolves the target
-and rejects missing or cyclic pointers. Anchor, dynamic, network, and package
-path references are rejected, including every `$dynamicRef`, so validation
-cannot fetch another resource or change resolution scope at runtime.
-Inline `$id`, `$anchor`, `$dynamicAnchor`, `$recursiveAnchor`, and
-`$recursiveRef` are also rejected, as is `$vocabulary`; any nested `$schema`
-must still name Draft 2020-12. These limits keep the verifier's JSON Pointer
-proof and the compiler aligned on one resolution base and one dialect.
+The `connections` map — request-only permission/projection tokens naming
+another Resource — was the withdrawn v1alpha2 profile's capability surface.
+The current family replaces it end to end with exact digest-bound typed
+Bindings ([`../binding-contract/`](../binding-contract/README.md)) and
+uid-pinned relations
+([decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md),
+[decision 0022](../decisions/0022-relations-pin-the-target-contract.md));
+no current Definition declares `connections`, and the withdrawn semantics
+stay in git history with their profile.
 
 ## Digest-bound artifact sources
 
-An artifact-backed Form declares one required `source` object with
-`artifactUrl`, `artifactSha256`, and `artifactMediaType`. `artifactUrl` enters
-nonsensitive portable desired state and Terraform/OpenTofu state, so it MUST
-use the credential-free HTTPS grammar: an absolute `https` URL with a dotted
-hostname, optional port and path, and no userinfo, query, or fragment. The
-digest binds those credential-free fetch coordinates to exact immutable
-bytes; a host supplies any fetch authorization through its own credential
-boundary.
-
-This grammar is distinct from the HTTPS grammar used by
-`IdentityClient.redirectUris`; tightening artifact fetching does not narrow
-that separate redirect-URI acceptance surface.
+An artifact-backed Form of the current family declares its bytes as ONE
+member: the content-addressed manifest digest committed through the
+artifact-transport upload API
+([decision 0012](../decisions/0012-artifacts-use-content-addressed-upload.md),
+[`../artifact-transport/`](../artifact-transport/README.md)). No URL enters
+desired state — where bytes are fetched from is a host fact, and the digest
+alone says which bytes. The withdrawn v1alpha2 profile's
+`artifactUrl`/`artifactSha256`/`artifactMediaType` source object and its
+credential-free-HTTPS grammar stay in git history with that profile.
 
 Object schemas are closed by default and MUST set
 `"additionalProperties": false`. A pure typed map is the only open-key

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1beta2/host-discovery.schema.json",
+  "title": "Takoform host discovery v1beta2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "api_versions",
+    "features",
+    "endpoints"
+  ],
+  "properties": {
+    "api_versions": {
+      "const": [
+        "forms.takoform.com/v1beta2"
+      ]
+    },
+    "features": {
+      "type": "object",
+      "required": [
+        "service_forms",
+        "exact_form_ref",
+        "optimistic_concurrency",
+        "idempotent_lifecycle",
+        "operations",
+        "artifact_upload",
+        "support_profiles"
+      ],
+      "properties": {
+        "service_forms": {
+          "const": true
+        },
+        "exact_form_ref": {
+          "const": true
+        },
+        "optimistic_concurrency": {
+          "const": true
+        },
+        "idempotent_lifecycle": {
+          "const": true
+        },
+        "operations": {
+          "const": true
+        },
+        "artifact_upload": {
+          "const": true
+        },
+        "support_profiles": {
+          "const": true
+        }
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api"
+      ],
+      "properties": {
+        "api": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1beta1$"
+            }
+          ]
+        },
+        "oidc_issuer": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https://"
+            }
+          ]
+        }
+      },
+      "description": "The one advertised endpoint. The artifact, operation, and support roots are derived by the client as fixed same-origin suffixes of api ({api}/artifacts, {api}/operations, {api}/support); advertising them separately carried no information and let absence mean nothing."
+    }
+  },
+  "$defs": {
+    "httpEndpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "^[a-z][a-z0-9+.-]*://[^/?#]*@"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[?#]"
+          }
+        }
+      ]
+    }
+  }
+}

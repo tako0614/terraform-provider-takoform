@@ -23,14 +23,26 @@ credential.** The declaration a consuming Form's desired schema embeds is:
   "service": {
     "apiVersion": "standards.takoform.com/v1alpha1",
     "protocol": "s3-compatible"
-  }
+  },
+  "required": true
 }
 ```
 
-- `name` follows the consuming family's binding-name grammar and shares its
-  one runtime namespace: the union of vars keys, sensitive-value names,
-  binding names, and external-service names MUST be unique, and a host MUST
-  refuse the collision before mutation.
+- `name` matches `^[A-Z][A-Z0-9_]*$` (64 characters at most) — the
+  SCREAMING_SNAKE grammar sealed-value slots already use, because the
+  projection mints `NAME_`-prefixed members — and shares the consuming Form's
+  one runtime namespace. Uniqueness is enforced over the PROJECTED closure:
+  the union of vars keys, sensitive-value names, binding names, and every
+  member each slot projects must be collision-free, and a host refuses a
+  collision before mutation (`MEDIA_ENDPOINT` as a var beside an
+  `s3-compatible` slot named `MEDIA` is `invalid_argument`).
+- `required` is an optional boolean defaulting to true. A REQUIRED slot the
+  host cannot satisfy blocks readiness; an optional one the host does not
+  satisfy projects nothing and blocks nothing.
+- The array property embedding the slots carries the
+  `x-takoform-standard-services` annotation so a host holding only the
+  Definition derives every slot it must enforce
+  ([`../host-api/v1beta2.md`](../host-api/v1beta2.md)).
 - `service` validates against
   [`standard-service-ref-v1alpha1.schema.json`](../schemas/standard-service-ref-v1alpha1.schema.json).
   The protocol vocabulary is closed: `s3-compatible`, `postgresql`, `redis`,
@@ -45,9 +57,12 @@ a service that actually speaks the declared protocol. Where that service runs �
 a cloud provider, the host's own infrastructure, a box under a desk — is
 invisible to portable state, exactly as host placement already is. Which slots
 a host satisfies, and with what, is host/operator policy; a REQUIRED slot a
-host cannot or will not satisfy makes the Resource not Ready, and a host that
-knows it cannot satisfy one MUST refuse at plan time with
-`unsupported_capability` rather than at runtime.
+host cannot or will not satisfy makes the Resource not Ready
+(`DependencyMissing`), and a host that knows it cannot satisfy one refuses at
+`prepare` with `unsupported_capability` rather than at runtime — `validate`
+never depends on the tenant, and satisfiability is tenant wiring. A host
+advertises per-protocol satisfiability through the `StandardServiceSupport`
+profile kind on the v1beta2 support surface, never with what would satisfy it.
 
 ## What each protocol projects
 
