@@ -43,13 +43,20 @@ three different things:
 | --- | --- | --- |
 | Reference resolution | `target-formrefs`, `required-interface`, `binding`, `standard-services`, `required-entrypoint` | 3, 7, 1, 1, 4 |
 | Behavioural constraint | `exclusive`, `sum`, `claim`, `host-assigned` | 5, 1, 1, 1 |
-| Declared and unused | `relation-extras`, `equals`, `omitted` | 0, 0, 0 |
+| Declared and unused | `relation-extras` | 0 |
 
 The first kind belongs where it is: it annotates the exact node that IS the
 reference, and moving it elsewhere would mean carrying a JSON Pointer back to
 that node. The second kind is not about the shape of a document at all — it is
 a rule about resources, riding in a schema's extension slots where no standard
-validator will ever see it. The third kind is vocabulary nobody instantiates.
+validator will ever see it. The third is vocabulary nobody instantiates.
+
+An earlier draft of this record counted `equals` and `omittedWhen` in that
+third row. That was a measurement taken in the wrong place: both live in the
+WIRE schema, where they carry envelope mirroring and conditional members, and
+counting Form Definitions is not where a wire annotation would ever appear.
+They are used, they stay, and the correction is recorded rather than quietly
+applied — a count is only evidence if it counted the right thing.
 
 ## Decision
 
@@ -71,17 +78,27 @@ validator will ever see it. The third kind is vocabulary nobody instantiates.
 3. **Reference-resolution annotations stay in the schema**, for the reason
    they were put there: they qualify the node they sit on.
 
-4. **The three unused annotations are removed.** Vocabulary with no
-   instantiation is a promise nobody has kept.
+4. **The unused annotation is removed.** `x-takoform-relation-extras` is
+   emitted by nothing, read by nothing, and has no field on the model, while
+   the lane document described it as the mechanism behind the class-selecting
+   gate — which actually works through a plain sibling property. Vocabulary
+   with no instantiation is a promise nobody has kept, and one described as
+   load-bearing is worse than one merely unused.
 
 ## What this does not do
 
-It does not renumber or withdraw anything already minted. The v1beta1 and
-v1beta2 family generations keep their group versions, because their bytes are
-published and a published identity means what it meant
-([decision 0037](0037-immutability-begins-at-stable.md)). The versionless group
-is a NEW identity for every Form that adopts it, which is the ordinary cost of
-a contract change and the only honest way to make one.
+It does not renumber or withdraw anything already minted — but which
+generations that covers was measured after the first draft asserted it, and the
+answer is narrower. Against takoform.com: the v1beta1 candidate set and
+Definition profile answer **200**; the v1beta2 ones answer **404**. Only
+v1beta1 is published, so only v1beta1 has a meaning
+[decision 0037](0037-immutability-begins-at-stable.md) protects.
+
+**The v1beta2 generation therefore BECOMES the versionless group** rather than
+being frozen beside a third tree. Nothing is served under its name, so nothing
+is being changed out from under a consumer; minting a third family tree to
+avoid touching an unpublished one would have been ceremony of exactly the kind
+this record exists to remove.
 
 It does not make the protocol smaller by pushing rules onto hosts. A second
 implementer still reads one closed constraint grammar rather than one family's
