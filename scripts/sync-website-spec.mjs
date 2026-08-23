@@ -283,6 +283,24 @@ const siteOwnedPages = new Set([
 const projectedPageRoots = ["spec", "proposals", "forms", "conformance", "release"].map(
   (directory) => path.join(websiteRoot, directory),
 );
+function orphanedStatic() {
+  const expected = new Set(staticFiles.map(({ site }) => site));
+  const orphans = [];
+  for (const [, targetRoot] of staticDirectories) {
+    let present;
+    try {
+      present = collect(targetRoot);
+    } catch {
+      continue; // the mirror has not been written yet
+    }
+    for (const file of present) {
+      const sitePath = path.join(targetRoot, file);
+      if (!expected.has(sitePath)) orphans.push(sitePath);
+    }
+  }
+  return orphans.sort();
+}
+
 function orphanedPages() {
   const expected = new Set(pages.map(({ site }) => site));
   const orphans = [];
@@ -301,6 +319,10 @@ const writeProjection = () => {
   for (const site of orphanedPages()) {
     rmSync(site);
     process.stdout.write(`removed orphaned page ${path.relative(repositoryRoot, site)}\n`);
+  }
+  for (const site of orphanedStatic()) {
+    rmSync(site);
+    process.stdout.write(`removed orphaned file ${path.relative(repositoryRoot, site)}\n`);
   }
   for (const { canonical, site } of pages) {
     mkdirSync(path.dirname(site), { recursive: true });
@@ -330,6 +352,11 @@ const checkProjection = () => {
   for (const site of orphanedPages()) {
     drift.push(
       `${path.relative(repositoryRoot, site)}: page on the site that no canonical document projects to`,
+    );
+  }
+  for (const site of orphanedStatic()) {
+    drift.push(
+      `${path.relative(repositoryRoot, site)}: file on the site that no canonical document copies to`,
     );
   }
   for (const { canonical, site } of pages) {
