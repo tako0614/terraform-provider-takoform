@@ -47,9 +47,11 @@ var wantRelations = map[string][]string{
 		"/bundle -> WorkerBundle [-] required exact-form",
 		"/kvBindings/*/resource -> EdgeKVNamespace [module-worker.edge-kv] optional iface:edge.kv@1.0.0",
 		"/queueProducerBindings/*/resource -> AtLeastOnceQueue [module-worker.queue-producer] optional iface:edge.queue@1.0.0",
+		"/actorBindings/*/resource -> ActorNamespace [module-worker.actor] optional iface:worker.actor@1.0.0",
 		"/serviceBindings/*/resource -> ModuleWorker [module-worker.service] optional iface:worker.service@1.0.0",
 		"/sqliteBindings/*/resource -> SQLiteDatabase [module-worker.sqlite] optional iface:edge.sql@1.0.0",
 		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
+		"/workflowBindings/*/resource -> DurableWorkflow [module-worker.workflow] optional iface:worker.workflow@1.0.0",
 	},
 	"WorkerDeployment": {
 		"/versions/*/workerVersion -> WorkerVersion [-] required exact-form",
@@ -76,6 +78,12 @@ var wantRelations = map[string][]string{
 	"QueueConsumer": {
 		"/deadLetterQueue -> AtLeastOnceQueue [-] optional iface:edge.queue@1.0.0",
 		"/queue -> AtLeastOnceQueue [-] required iface:edge.queue@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
+	},
+	"DurableWorkflow": {
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
+	},
+	"ActorNamespace": {
 		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 }
@@ -158,13 +166,13 @@ func TestEveryDeclaredReferenceIsDerived(t *testing.T) {
 	if totalDeclared != totalDerived {
 		t.Fatalf("catalog declares %d reference fields but derives %d relations", totalDeclared, totalDerived)
 	}
-	if totalDerived != 18 {
-		t.Fatalf("family derives %d relations, want the 18 in the relation table", totalDerived)
+	if totalDerived != 22 {
+		t.Fatalf("family derives %d relations, want the 22 in the relation table", totalDerived)
 	}
-	// Five of the fourteen are typed bindings. Every other relation was
+	// Seven of the twenty-two are typed bindings. Every other relation was
 	// completely unvalidated before this lane learned to derive them.
-	if bindings != 5 {
-		t.Fatalf("family derives %d binding relations, want 5", bindings)
+	if bindings != 7 {
+		t.Fatalf("family derives %d binding relations, want 7", bindings)
 	}
 }
 

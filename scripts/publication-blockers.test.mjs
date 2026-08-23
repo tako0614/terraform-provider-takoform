@@ -48,8 +48,12 @@ describe("the committed ledger", () => {
   test("allows the exact provider v2.1 Beta candidate independently", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
+    // The published release's count and the current lane's are separate
+    // facts: 2.1.1 embeds the fifteen identities it shipped with forever,
+    // while the lane carries what the generation now declares.
     expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
       formCount: 15,
+      candidateFormCount: 17,
       version: "2.1.1",
     });
   });

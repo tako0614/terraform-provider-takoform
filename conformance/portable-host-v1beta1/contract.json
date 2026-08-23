@@ -158,9 +158,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "WorkerVersion",
           "definitionVersion": "0.2.0",
-          "schemaDigest": "sha256:8c0e6cbbbf7253f1e3a815dcd1fc22dcc113da1e13a484882c80b9defe758aed"
+          "schemaDigest": "sha256:0c9836b69bcd84c09ed937ed5f4fd251649a7a644ee11ee533e328eef5c0a7a0"
         },
-        "packageDigest": "sha256:d61568f95be72c17df84e6a526de63a86350ba9f9d103cc0c2107eefbb2ce898"
+        "packageDigest": "sha256:fac6d4039adacf2c630566be72033441ad235927c6eae16be60ef0623588ba7e"
       },
       "lifecycleCapabilities": [
         "create",
@@ -198,7 +198,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-version.json",
-        "sha256": "sha256:008292567d79e8f1d5a3c9eea4a5fe98caa80fe5fd8f2d813cca0ce87ff045f0"
+        "sha256": "sha256:80a7d672abf11afdd4f5d3997aad0c9fa8ad8f1ea34a3abebea4ec61f175faaf"
       }
     },
     "workerBundle": {
@@ -220,7 +220,7 @@
         "observe"
       ],
       "desired": {
-        "manifestDigest": "sha256:7894acd88f49071805c5332b013bc0820d59830277767c9d5b68d5ba1a3a26c4"
+        "manifestDigest": "sha256:66cc5d5dce98cc560aabc8089f27bd235b73d4e3200ea549a2dd48924cfea746"
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-bundle.json",
@@ -232,18 +232,22 @@
         "mainModule": "index.js",
         "modules": [
           {
-            "digest": "sha256:4bf3a43e455f12adffd81729008da4854c9b09c97db436d42285fb54197664cc",
+            "digest": "sha256:70db24a4c8ce11e57f0aebe2bb43d4e92cf957a09bd764eff9f623bb261c69d7",
             "mediaType": "application/javascript+module",
             "name": "index.js",
-            "size": 143
+            "size": 296
           }
         ]
       },
-      "moduleSource": "export default {\n  async fetch() { return new Response(\"portable-host-v3 reference module\"); },\n  async scheduled() {},\n  async queue() {},\n};\n",
+      "moduleSource": "export class OrderFulfilment {\n  async run() {}\n}\nexport class ChatRoom {\n  async fetch() { return new Response(\"portable-host-v3 reference actor\"); }\n}\nexport default {\n  async fetch() { return new Response(\"portable-host-v3 reference module\"); },\n  async scheduled() {},\n  async queue() {},\n};\n",
       "exportedHandlers": [
         "fetch",
         "scheduled",
         "queue"
+      ],
+      "exportedClasses": [
+        "ChatRoom",
+        "OrderFulfilment"
       ]
     },
     "staticAssetBundle": {
@@ -376,7 +380,8 @@
       "moduleSource": "export default { async fetch() { return new Response(\"portable-host-v3 fetch-only module\"); } };\n",
       "exportedHandlers": [
         "fetch"
-      ]
+      ],
+      "exportedClasses": []
     },
     "workerDeployment": {
       "name": "worker-deployment-probe",
@@ -385,9 +390,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "WorkerDeployment",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:0b5a2686c791553bd7a8c1187f1ecdae92b712a51e61930f4b5c55d0160213e7"
+          "schemaDigest": "sha256:85c74c35c62f5db6fd9f577dc194cb0907ded7ac1117f8aaa08df34880429d36"
         },
-        "packageDigest": "sha256:7bb5d9f868fb88f37f2319e182d9bb657e62fa4db80e1a303c326e826166f705"
+        "packageDigest": "sha256:0924b2c6f0ad5e00fa42c5ff232eef667706e8ea178f076051ba63649c427d01"
       },
       "lifecycleCapabilities": [
         "create",
@@ -416,7 +421,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-deployment.json",
-        "sha256": "sha256:371860b4d0ad37335254cebd18a0f1fbeca8592b72a4d7e1d51be168e645d887"
+        "sha256": "sha256:79fc1df0365b3ca16db7a57f7f7cb32942a99367eb77764126110a09569221a3"
       }
     },
     "workerCustomDomain": {
@@ -578,6 +583,68 @@
         "sha256": "sha256:e7c0b38be0bfe4dc29d1d98fb8f88750cd5ccbfa8c96886a19a9d76d4726dec1"
       }
     },
+    "durableWorkflow": {
+      "name": "durable-workflow-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1beta2",
+          "kind": "DurableWorkflow",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:44b122c999d839d1dbb67bbb556f37ad4ff114b971e04a83c7678616e500e4c4"
+        },
+        "packageDigest": "sha256:dac92593ef789d372ca45e38c3d221adde039fac30e47d702c074092b6e1df20"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "className": "OrderFulfilment",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1beta2",
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-durable-workflow.json",
+        "sha256": "sha256:4f4edca09d5cbe0c7ba9d6addcd3180afa04628346832cc0d88f1b30716272e1"
+      }
+    },
+    "actorNamespace": {
+      "name": "actor-namespace-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1beta2",
+          "kind": "ActorNamespace",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:338e76b5ac49cd525f0247d6bf9f3f4d4b4206c9af307d4c1285e50015655579"
+        },
+        "packageDigest": "sha256:81eeb5ba1b3ccd4f94f345bbdc6bdf4fc94961b486ae9b3ad5a6bdb56fc1260a"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "className": "ChatRoom",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1beta2",
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-actor-namespace.json",
+        "sha256": "sha256:6da10c2b22c45d9f08658ac24fe5cdc22c6d242c9008ed9895dba9d63eb01042"
+      }
+    },
     "syntheticSecondGroup": {
       "apiVersion": "other.forms.takoform.com/v1alpha1",
       "kind": "EdgeKVNamespace",
@@ -725,6 +792,7 @@
     "deployment-version-duplicate-rejected",
     "attachment-requires-active-deployment",
     "handler-gated-attachments",
+    "class-holder-rules-enforced",
     "binding-name-collision-rejected",
     "deployment-change-preserves-dependents",
     "deployment-delete-blocked-by-dependent",

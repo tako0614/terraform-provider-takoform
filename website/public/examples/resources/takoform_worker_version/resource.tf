@@ -66,6 +66,20 @@ resource "takoform_worker_version" "example" {
     },
   ]
 
+  workflow_bindings = [
+    {
+      name        = "ORDERS"
+      target_name = "durable-workflow"
+    },
+  ]
+
+  actor_bindings = [
+    {
+      name        = "ROOMS"
+      target_name = "actor-namespace"
+    },
+  ]
+
   external_services = [
     {
       name     = "PRIMARY_DB"

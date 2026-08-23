@@ -66,9 +66,10 @@ condition-reason vocabulary, and exact Edge Family probe identities
 (ModuleWorker, EdgeKVNamespace, AtLeastOnceQueue, WorkerVersion, WorkerBundle,
 StaticAssetBundle, SQLiteDatabase, SQLiteMigrationSet,
 SQLiteMigrationApplication, WorkerDeployment, WorkerCustomDomain,
-WorkerEndpoint, WorkerCronTrigger, QueueConsumer) with their registry package
+WorkerEndpoint, WorkerCronTrigger, QueueConsumer, DurableWorkflow,
+ActorNamespace) with their registry package
 digests plus byte-pinned desired-negative fixtures. It pins each of those
-14 Forms' DESIRED SCHEMA as
+16 Forms' DESIRED SCHEMA as
 byte-digested bytes as well, because the runner materializes every probe spec
 against the pin rather than against what the host under test serves: a runner
 that took its defaults from the subject agreed with that subject about every
@@ -79,7 +80,7 @@ what a host serves against those bytes, and a repository test recomputes them
 from the installed Definition at the exact pinned FormRef so the pin cannot
 drift
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
-The family has one additional current Form: `ObjectBucket` is the one 15th Form
+The family has one additional current Form: `ObjectBucket` is the one
 intentionally unprobed by this corpus. Its wire rules remain normative, but
 causal host evidence for that Form requires a separate exact package fixture;
 this corpus makes no coverage claim for it.
@@ -90,7 +91,7 @@ and "a host answers for the kind" are the same behavior and no check can tell
 them apart (same decision).
 `self-test --contract conformance/portable-host-v1beta1`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 116-check matrix over real HTTP: exact discovery and
+drives the complete 117-check matrix over real HTTP: exact discovery and
 availability, a credential that is REQUIRED — an absent `Authorization` header
 and a bearer credential naming nobody are both refused `unauthenticated` on a
 read surface and on a mutating one, and the identical requests under a real

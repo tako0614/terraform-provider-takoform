@@ -32,6 +32,16 @@
       "name": "worker.runtime",
       "version": "1.1.0",
       "schemaDigest": "sha256:41aa3f9cd89ca2ba1d16faf153acfb35521c76168ff7b41dfb910d706b7bfbd9"
+    },
+    {
+      "name": "worker.workflow",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:6b652dd311975da84469a5ec44f48acbc6db2097d1473988bd5424a85fda4294"
+    },
+    {
+      "name": "worker.actor",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:f5428fb587de80261dd7363dc5b8a3f4aab7e469fa1b5fce8441ad9acbec8218"
     }
   ]
 }

@@ -254,6 +254,11 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
 // Beta FormRefs and package digests recorded in the append-only provider
 // identity ledger. Candidate-only is a publication fact, not a prerelease
 // version: the owner deploy changes it only after the real release exists.
+//
+// The two counts below are different facts and only one of them moves: the
+// published release embeds the fifteen identities it shipped with, forever,
+// while the current candidate lane carries whatever the generation now
+// declares (decision 0046).
 export function assertProviderReleaseCandidate(repositoryRoot) {
   const descriptor = JSON.parse(
     readFileSync(path.join(repositoryRoot, "release/version.json"), "utf8"),
@@ -280,9 +285,9 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     candidate.formMaturity !== "experimental" ||
     candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
     candidate.publicationStatus !== "unpublished" ||
-    candidate.forms?.length !== 15
+    candidate.forms?.length !== 17
   ) {
-    fail("the current candidate lane must carry exactly 15 Experimental Beta Forms in v1alpha4 package envelopes");
+    fail("the current candidate lane must carry exactly 17 Experimental Beta Forms in v1alpha4 package envelopes");
   }
   const embedded = identities.releases?.find(
     (entry) => entry.providerVersion === descriptor.version,
@@ -301,7 +306,11 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   ) {
     fail("provider v2.1 embedded Beta FormRefs/digests drifted from the generated family set");
   }
-  return { formCount: candidate.forms.length, version: descriptor.version };
+  return {
+    formCount: embedded.forms.length,
+    candidateFormCount: candidate.forms.length,
+    version: descriptor.version,
+  };
 }
 
 /**
@@ -338,7 +347,8 @@ function main() {
   const summary = [...byPriority.entries()].sort().map(([priority, count]) => `${priority}=${count}`).join(" ");
   const traceability = summarizeTraceability(ledger);
   console.log(
-    `Beta release policy OK: provider v${provider.version} locks ${provider.formCount} exact Experimental Forms; ` +
+    `Beta release policy OK: provider v${provider.version} locks ${provider.formCount} exact Experimental Forms ` +
+      `and the current candidate lane carries ${provider.candidateFormCount}; ` +
       `${open.length} later package/Stable/GA obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ${traceability}`,
   );
 }

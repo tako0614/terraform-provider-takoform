@@ -1,4 +1,14 @@
 {
+  "actorBindings": [
+    {
+      "name": "ROOMS",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "ActorNamespace",
+        "name": "actor-namespace"
+      }
+    }
+  ],
   "assets": {
     "bundle": {
       "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -80,5 +90,15 @@
   ],
   "vars": {
     "LOG_LEVEL": "info"
-  }
+  },
+  "workflowBindings": [
+    {
+      "name": "ORDERS",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "DurableWorkflow",
+        "name": "durable-workflow"
+      }
+    }
+  ]
 }

@@ -1009,13 +1009,15 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
     candidate.publicationStatus !== "unpublished" ||
     !Array.isArray(candidate.forms) ||
-    candidate.forms.length !== current.forms.length
+    candidate.forms.length === 0
   ) {
-    throw new Error("provider Beta candidate set is not the exact 15-entry family set");
+    throw new Error("provider Beta candidate set is not a populated Experimental family set");
   }
   if (candidate.family === current.family) {
     // The candidate lane still builds the generation the descriptor-named
-    // release embeds, so the two must be byte-equal.
+    // release embeds, so the two must be byte-equal — which is also where the
+    // entry count is settled. A MOVED lane is free to carry a different
+    // number of Forms; a lane still building the released generation is not.
     const candidateProjection = candidate.forms.map(
       ({ resourceType, formRef, packageDigest }) => ({
         resourceType,

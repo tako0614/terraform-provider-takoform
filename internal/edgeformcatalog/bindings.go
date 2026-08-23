@@ -7,7 +7,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
-// The five typed Binding contracts of the Edge Platform Family (decision
+// The seven typed Binding contracts of the Edge Platform Family (decision
 // 0010). A Binding grants a capability and a concrete runtime API together,
 // without exposing credentials; outward capability use always belongs to a
 // revision resource.
@@ -161,6 +161,50 @@ var bindingSpecs = []bindingSpec{
 			"backend_unavailable. A response reflects every effect the callee completed before responding.",
 		iface:      "worker.service",
 		targetKind: "ModuleWorker",
+	},
+	{
+		name:  "module-worker.workflow",
+		title: "Module Worker durable workflow binding",
+		description: "Projects the INSTANCE surface of worker.workflow into a Worker Version. The entrypoint " +
+			"half of that contract — run and the step operations — is what the host provides to the workflow " +
+			"CLASS, never to a consumer, so it is deliberately not projected here. " +
+			"Runtime surface: env.NAME is an object with create({id, params}) and get(id), each returning a " +
+			"promise for a WorkflowInstance. create admits an author-chosen instance id and mints one when " +
+			"absent; it rejects with an Error named instance_exists for an id a retained instance still holds, " +
+			"so a retry after a lost response does not silently start a second execution under one name. get " +
+			"rejects with unknown_instance when nothing holds the id. A WorkflowInstance carries id and the " +
+			"methods status(), sendEvent({type, payload}) and terminate(). status resolves to {status, output?, " +
+			"error?} over the closed vocabulary queued, running, sleeping, waiting, complete, errored, " +
+			"terminated — a workflow that THREW is a successful status read reporting errored, not a rejected " +
+			"call. sendEvent resolves once the event is durably retained, which may be before any waitForEvent " +
+			"consumes it, and rejects against a terminal instance. Every rejection carries an Error named for " +
+			"the contract's closed per-operation code; a call rejects only when the operation could not be " +
+			"performed.",
+		iface:      "worker.workflow",
+		targetKind: "DurableWorkflow",
+		operations: []string{"create", "get", "status", "sendEvent", "terminate"},
+	},
+	{
+		name:  "module-worker.actor",
+		title: "Module Worker actor binding",
+		description: "Projects the ADDRESSING and INVOCATION surface of worker.actor into a Worker Version. " +
+			"Storage and the alarm are reachable only from an actor's own execution context, so they are " +
+			"deliberately not projected to callers: an actor whose store any worker could reach would have no " +
+			"single writer, which is the guarantee the whole contract rests on. " +
+			"Runtime surface: env.NAME is an object with idFromName(name), newUniqueId() and get(id). The first " +
+			"two return an actor id SYNCHRONOUSLY — no host round trip — and get returns a stub, also with no " +
+			"host work; an id is an opaque stable string a configuration must not parse. There is no create and " +
+			"no exists: every id addresses an actor, and the first delivery is its creation. " +
+			"stub.fetch(request) takes a Request (or a URL string with an optional init object) and returns a " +
+			"Promise<Response>, streaming both directions exactly like module-worker.service. What differs is " +
+			"where it lands: the host guarantees at most one live execution context per id and delivers one " +
+			"invocation at a time, so concurrent callers observe serialization, never interleaving. An uncaught " +
+			"throw in the actor is its host-generated 500 and this promise RESOLVES with it; it rejects only " +
+			"when the call could not be made, with an Error named backend_unavailable — which is what an " +
+			"unserved namespace produces.",
+		iface:      "worker.actor",
+		targetKind: "ActorNamespace",
+		operations: []string{"idFromName", "newUniqueId", "fetch"},
 	},
 }
 

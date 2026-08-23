@@ -115,6 +115,8 @@ const edgeResourceItems = [
     link: "/docs/resources/at_least_once_queue.html",
   },
   { text: "Queue consumer", link: "/docs/resources/queue_consumer.html" },
+  { text: "Durable workflow", link: "/docs/resources/durable_workflow.html" },
+  { text: "Actor namespace", link: "/docs/resources/actor_namespace.html" },
 ];
 
 const currentStackResourceItems = edgeResourceItems;
@@ -197,6 +199,8 @@ const edgeProposalItems = [
     link: "/proposals/edge/at-least-once-queue.html",
   },
   { text: "Queue consumer", link: "/proposals/edge/queue-consumer.html" },
+  { text: "Durable workflow", link: "/proposals/edge/durable-workflow.html" },
+  { text: "Actor namespace", link: "/proposals/edge/actor-namespace.html" },
 ];
 
 const englishSidebar = {

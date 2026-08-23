@@ -2,7 +2,7 @@
   "providerCurrent": "2.1.1",
   "edgePreviewProvider": "2.1.1-candidate-only",
   "edgeFamilyStatus": "unpublished",
-  "candidateSetDigest": "sha256:21bc30bfbe68edebc327edc133a2f51fb1db8eaa9c0e579f821c98df07001fab",
+  "candidateSetDigest": "sha256:cd045ae93ad7d25411b95ee0bb9626788bc41d4ac54ea820d16e2de7223a3b63",
   "openPublicationBlockers": 12,
   "format": "takoform.site-status@v2",
   "providerPublished": "2.1.1",
@@ -14,7 +14,7 @@
   "formFamilyMaturity": "beta",
   "formPackageApiCurrent": "packages.forms.takoform.com/v1alpha4",
   "formPackageStatus": "unpublished",
-  "currentFormCount": 15,
+  "currentFormCount": 17,
   "formMaturity": "experimental",
   "formPackagePublicationStatus": "unpublished"
 }

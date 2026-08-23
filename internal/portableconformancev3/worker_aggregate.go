@@ -3,6 +3,7 @@ package portableconformancev3
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,6 +30,8 @@ const (
 	workerEndpointKind     = "WorkerEndpoint"
 	workerCronTriggerKind  = "WorkerCronTrigger"
 	queueConsumerKind      = "QueueConsumer"
+	durableWorkflowKind    = "DurableWorkflow"
+	actorNamespaceKind     = "ActorNamespace"
 
 	// workerRelationPointer is the concrete instance pointer of the `/worker`
 	// reference every member of the aggregate declares. It is both the derived
@@ -90,6 +93,23 @@ var attachmentHandler = map[string]string{
 	workerEndpointKind:     fetchHandler,
 	workerCronTriggerKind:  scheduledHandler,
 	queueConsumerKind:      queueHandler,
+}
+
+// classHolderKinds are the members of the aggregate that name a CLASS the
+// serving module must export, rather than a handler.
+//
+// They are deliberately not in attachmentHandler, and the difference is not
+// cosmetic. An attachment refuses to exist at all until the deployment serves
+// its handler, because an activation with nothing to activate is a promise no
+// host can keep. A workflow or an actor namespace is the other way round: its
+// own worker's deployment cannot exist before the version that deployment
+// weights, so refusing before any deployment would make the ordinary
+// self-bound wiring unconstructible in a single apply. What it refuses is a
+// LIVE deployment that visibly lacks the class; with no deployment at all it
+// stores and reports Provisioning.
+var classHolderKinds = map[string]bool{
+	durableWorkflowKind: true,
+	actorNamespaceKind:  true,
 }
 
 // sortedResources returns every stored resource of EVERY tenant in a stable key
@@ -208,6 +228,9 @@ type workerDependent struct {
 	Kind    string
 	Name    string
 	Handler string
+	// Class is set instead of Handler when the dependent needs a class export
+	// rather than a module handler. Exactly one of the two is ever set.
+	Class string
 	// Detail names the exact reason, e.g. the inbound binding pointer.
 	Detail string
 }
@@ -232,6 +255,16 @@ func (h *ReferenceHost) workerDependents(scope resourceScope, workerUID string) 
 				out = append(out, workerDependent{
 					Kind: candidate.kind(), Name: candidate.Name, Handler: handler,
 					Detail: "attachment",
+				})
+			}
+			continue
+		}
+		if classHolderKinds[candidate.kind()] {
+			if relationTargetUID(candidate.Relations, workerRelationPointer) == workerUID {
+				className, _ := candidate.Spec["className"].(string)
+				out = append(out, workerDependent{
+					Kind: candidate.kind(), Name: candidate.Name, Class: className,
+					Detail: "class holder",
 				})
 			}
 			continue
@@ -282,6 +315,9 @@ func (h *ReferenceHost) validateWorkerAggregate(
 			return hostErr
 		}
 		return h.validateInboundServiceBindings(scope, relations)
+	}
+	if classHolderKinds[form.Ref.Kind] {
+		return h.validateWorkerClassHolder(form, scope, name, spec, relations)
 	}
 	if handler, attachment := attachmentHandler[form.Ref.Kind]; attachment {
 		if hostErr := h.requireServingDeployment(
@@ -396,6 +432,88 @@ func (h *ReferenceHost) requireServingDeployment(
 		subject+" requires every version weighted by WorkerDeployment "+deployment.Name+
 			" to export the "+handler+" handler; "+detail,
 	)
+}
+
+// validateWorkerClassHolder proves both rules a Durable Workflow and an Actor
+// Namespace carry, in the order a host must answer them.
+//
+// One worker carries at most one holder per class name. Two workflows over one
+// class would give one instance history two identities; two namespaces over one
+// class would give one class two disjoint id spaces. It is invalid_argument
+// rather than dependency_in_use for the same reason one-deployment-per-worker
+// is: the request is well formed, and what is untrue is what it says about the
+// worker it points at.
+//
+// Then the class must actually be exported — but only when a deployment is
+// live. Before any deployment there is nothing to contradict, and the resource
+// stores Provisioning.
+func (h *ReferenceHost) validateWorkerClassHolder(
+	form *InstalledForm, scope resourceScope, name string, spec map[string]any, relations []storedRelation,
+) *hostError {
+	workerUID := relationTargetUID(relations, workerRelationPointer)
+	workerName := nestedName(spec, "worker")
+	if workerName == "" || workerUID == "" {
+		return stableError("invalid_argument", form.Ref.Kind+" "+name+" requires a target worker")
+	}
+	className, _ := spec["className"].(string)
+	selfKey := resourceKey(scope, edgeFormsGroup, form.Ref.Kind, name)
+	for _, candidate := range h.scopedResources(scope) {
+		if candidate.group() != edgeFormsGroup || candidate.kind() != form.Ref.Kind ||
+			candidate.key() == selfKey {
+			continue
+		}
+		if relationTargetUID(candidate.Relations, workerRelationPointer) != workerUID {
+			continue
+		}
+		if existing, _ := candidate.Spec["className"].(string); existing == className {
+			return stableError("invalid_argument",
+				form.Ref.Kind+" "+name+" claims class "+strconv.Quote(className)+" of ModuleWorker "+
+					workerName+" at uid "+workerUID+", which "+form.Ref.Kind+" "+candidate.Name+
+					" already holds; one worker carries at most one "+form.Ref.Kind+" per class name")
+		}
+	}
+	deployment := h.activeDeployment(scope, workerUID)
+	if deployment == nil {
+		return nil
+	}
+	offender, exports := h.versionsExportClass(scope, h.weightedVersions(scope, deployment.Relations), className)
+	if exports {
+		return nil
+	}
+	detail := "it weights no resolvable WorkerVersion"
+	if offender != "" {
+		detail = "weighted WorkerVersion " + offender + " runs a module that does not export it"
+	}
+	return stableError("unsupported_capability",
+		form.Ref.Kind+" "+name+" requires every version weighted by WorkerDeployment "+deployment.Name+
+			" to export the class "+strconv.Quote(className)+"; "+detail)
+}
+
+// versionsExportClass reports whether EVERY weighted version's module exports
+// one class, naming the first that does not.
+//
+// Every, not some: traffic is split across the weighted set, so an instance
+// that replays into a version missing the class is an instance the host
+// promised to finish and cannot. A version whose module exports this host does
+// not know at all is treated as exporting it — the same conservative answer
+// exportedHandlerViolation gives, and for the same reason: a reference host
+// that runs no JavaScript must not refuse what it merely cannot see.
+func (h *ReferenceHost) versionsExportClass(
+	scope resourceScope, versions []*storedResource, className string,
+) (offender string, exports bool) {
+	if len(versions) == 0 {
+		return "", false
+	}
+	for _, version := range versions {
+		classes, known := h.bundleModuleClasses(scope, version.Relations)
+		if !known {
+			continue
+		}
+		if !slices.Contains(classes, className) {
+			return version.Name, false
+		}
+	}
+	return "", true
 }
 
 // validateInboundServiceBindings refuses a module-worker.service binding to a
@@ -833,6 +951,61 @@ func (h *ReferenceHost) bundleModuleExports(
 	return nil, false
 }
 
+// bundleMainModuleDigest is the content address of the main module of the
+// bundle one Worker Version references, resolved the way bundleModuleExports
+// resolves it: through the relation the apply already pinned, the bundle's
+// committed manifest digest, and that manifest's own main-module entry. A
+// renamed or replaced bundle is a different answer rather than the same one.
+func (h *ReferenceHost) bundleMainModuleDigest(
+	scope resourceScope, relations []storedRelation,
+) (string, bool) {
+	bundleUID := relationTargetUID(relations, bundleRelationPointer)
+	if bundleUID == "" {
+		return "", false
+	}
+	var bundle *storedResource
+	for _, relation := range relations {
+		if relation.Pointer != bundleRelationPointer {
+			continue
+		}
+		bundle = h.resources[resourceKey(scope, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+	}
+	if bundle == nil || bundle.UID != bundleUID {
+		return "", false
+	}
+	manifestDigest, _ := bundle.Spec["manifestDigest"].(string)
+	raw := h.manifests[manifestDigest]
+	if raw == nil {
+		return "", false
+	}
+	var manifest artifactManifest
+	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
+		return "", false
+	}
+	for _, module := range manifest.Modules {
+		if module.Name == manifest.MainModule {
+			return module.Digest, true
+		}
+	}
+	return "", false
+}
+
+// bundleModuleClasses resolves which CLASSES the main module of the bundle one
+// Worker Version references exports, by the same content-addressed path
+// bundleModuleExports uses for handlers: the fact is a property of the bytes,
+// so the same module uploaded again under any manifest exports the same
+// classes.
+func (h *ReferenceHost) bundleModuleClasses(
+	scope resourceScope, relations []storedRelation,
+) ([]string, bool) {
+	digest, ok := h.bundleMainModuleDigest(scope, relations)
+	if !ok {
+		return nil, false
+	}
+	classes, known := h.moduleClasses[digest]
+	return classes, known
+}
+
 // desiredSchemaEnum reads the item enum of one top-level string-array property
 // of a desired schema. It is the profile's last resort when no runtime contract
 // is installed; it never overrides one.
@@ -939,4 +1112,45 @@ func bindingListProperties(schema map[string]any) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// classHolderUnavailable reports why a Durable Workflow or an Actor Namespace
+// is not Ready.
+//
+// It is the readiness half of the rule validateWorkerClassHolder refuses on,
+// and the two must agree: what the create gate refuses outright is what this
+// reports as a stable Ready=False on a resource that already exists. The
+// difference is only WHEN each applies — before any deployment there is
+// nothing to contradict, so the resource stores and reports Provisioning
+// rather than being refused, and a deployment landing later moves it to Ready
+// with no apply of its own (decision 0016: rendered from other resources, so
+// it moves revision, never generation).
+func (h *ReferenceHost) classHolderUnavailable(resource *storedResource) (reason, hostReason string, unavailable bool) {
+	if resource.group() != edgeFormsGroup || !classHolderKinds[resource.kind()] {
+		return "", "", false
+	}
+	className, _ := resource.Spec["className"].(string)
+	workerUID := relationTargetUID(resource.Relations, workerRelationPointer)
+	deployment := h.activeDeployment(resource.scope(), workerUID)
+	if deployment == nil {
+		return "Provisioning",
+			resource.kind() + " " + resource.Name + " names class " + strconv.Quote(className) +
+				" of a ModuleWorker at uid " + workerUID +
+				" with no active WorkerDeployment, so nothing serves that class yet",
+			true
+	}
+	offender, exports := h.versionsExportClass(
+		resource.scope(), h.weightedVersions(resource.scope(), deployment.Relations), className,
+	)
+	if exports {
+		return "", "", false
+	}
+	detail := "it weights no resolvable WorkerVersion"
+	if offender != "" {
+		detail = "weighted WorkerVersion " + offender + " runs a module that does not export it"
+	}
+	return "UnsupportedCapability",
+		"WorkerDeployment " + deployment.Name + " does not serve class " + strconv.Quote(className) +
+			" for " + resource.kind() + " " + resource.Name + "; " + detail,
+		true
 }

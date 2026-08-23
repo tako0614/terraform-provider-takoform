@@ -122,6 +122,8 @@ consumer など外からの activation は別の attachment resource にしま�
 - [sqlite_migration_application](/docs/resources/sqlite_migration_application.html)
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
+- [durable_workflow](/docs/resources/durable_workflow.html)
+- [actor_namespace](/docs/resources/actor_namespace.html)
 
 provider が compile していない Form を運ぶ generic carrier はありません。typed
 surface が client に検証できる exact FormRef だけを提供するためです

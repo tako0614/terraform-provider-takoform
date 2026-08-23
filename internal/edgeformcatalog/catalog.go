@@ -45,8 +45,6 @@ func ref(kind, name string) map[string]any {
 	return map[string]any{"apiVersion": Family.APIVersion(), "kind": kind, "name": name}
 }
 
-// bindingInstance renders one typed binding instance: the JavaScript
-// identifier the binding is projected under, plus the exact target reference.
 // externalServiceSlot builds one sealed standard-service slot fixture. The
 // apiVersion is the vocabulary's own identity, never an author input
 // (decision 0045).
@@ -60,6 +58,8 @@ func externalServiceSlot(name, protocol string) map[string]any {
 	}
 }
 
+// bindingInstance renders one typed binding instance: the JavaScript
+// identifier the binding is projected under, plus the exact target reference.
 func bindingInstance(bindingName, kind, targetName string) map[string]any {
 	return map[string]any{"name": bindingName, "resource": ref(kind, targetName)}
 }
@@ -201,6 +201,8 @@ var Forms = []model.Form{
 			{Name: "module-worker.sqlite", Version: "1.0.0"},
 			{Name: "module-worker.queue-producer", Version: "1.0.0"},
 			{Name: "module-worker.service", Version: "1.0.0"},
+			{Name: "module-worker.workflow", Version: "1.0.0"},
+			{Name: "module-worker.actor", Version: "1.0.0"},
 		},
 		Fields: []model.Field{
 			// The worker reference states an ABI requirement, not a Form one: what
@@ -308,6 +310,26 @@ var Forms = []model.Form{
 				Default: []any{},
 				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("AUTH", "ModuleWorker", "auth-worker")}},
+			// Neither of these two requires its target Ready at bind time, and
+			// that is a deliberate departure from module-worker.service. A
+			// workflow's or a namespace's readiness follows its OWN worker's
+			// deployment, which cannot exist before the version that deployment
+			// weights — so a Ready gate would make the ordinary self-bound
+			// wiring unconstructible in a single apply. What is required is
+			// existence and the exact Interface; the deployment that lands next
+			// is what makes the target serve.
+			{HCL: "workflow_bindings", Wire: "workflowBindings", Kind: model.KindBindingList,
+				TargetKind: "DurableWorkflow", BindingType: "module-worker.workflow",
+				Target:  requiresInterface("worker.workflow", "1.0.0"),
+				Default: []any{},
+				Doc:     "Typed module-worker.workflow bindings projecting the instance surface — create, get, status, sendEvent, terminate. Omitting it declares no such binding.",
+				Example: []any{bindingInstance("ORDERS", "DurableWorkflow", "durable-workflow")}},
+			{HCL: "actor_bindings", Wire: "actorBindings", Kind: model.KindBindingList,
+				TargetKind: "ActorNamespace", BindingType: "module-worker.actor",
+				Target:  requiresInterface("worker.actor", "1.0.0"),
+				Default: []any{},
+				Doc:     "Typed module-worker.actor bindings projecting addressing and invocation — idFromName, newUniqueId, get. Omitting it declares no such binding.",
+				Example: []any{bindingInstance("ROOMS", "ActorNamespace", "actor-namespace")}},
 			{HCL: "required_sensitive_vars", Wire: "requiredSensitiveVars", Kind: model.KindStringSet,
 				ItemPattern:              model.PatternSensitiveVarName,
 				Default:                  []any{},
@@ -685,6 +707,74 @@ var Forms = []model.Form{
 				Doc:     "Largest number of concurrent batch invocations.",
 				Example: 4},
 		},
+	},
+	{
+		Family: Family,
+		Kind:   "DurableWorkflow", Slug: "durable-workflow", ResourceType: "takoform_durable_workflow",
+		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
+		Title: "Durable Workflow",
+		Description: "Long-lived identity of one code-defined durable workflow: a class the worker's active " +
+			"deployment serves, whose instances survive process death. The Form fixes the execution model by " +
+			"identity — the worker.workflow@1.0.0 contract in its providedInterfaces states memoized replay, " +
+			"at-least-once step execution, the closed status vocabulary, and the two bounds that keep an " +
+			"instance finite. It carries NO implementation snapshot: which code answers is whatever the " +
+			"worker's active Worker Deployment selects, so behavior upgrades and rollback ride the deployment " +
+			"like any other traffic change. Instances are runtime data reached through module-worker.workflow " +
+			"bindings, never Resources. One worker carries at most one Durable Workflow per class name.",
+		Fields: []model.Field{
+			// The reference states an ABI requirement, not a Form one: what a
+			// workflow needs from the identity it belongs to is the runtime
+			// contract that decides a module exists and how the host loads it.
+			moduleWorkerRef("worker", "worker",
+				"Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow.",
+				true, true),
+			// The class name is immutable because the instance history is kept
+			// under this identity while the CODE arrives through the worker's
+			// deployment. Repointing a live identity at a different class would
+			// leave one history replaying into code it was never recorded
+			// against, which is exactly the split decision 0008 forbids.
+			{HCL: "class_name", Wire: "className", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternBindingName,
+				Doc: "Class export name the serving module provides, in the JavaScript identifier grammar. Every " +
+					"weighted version of the active deployment must export it; one that does not keeps this workflow " +
+					"from becoming Ready, and creating an instance against it is refused rather than queued.",
+				Example:        "OrderFulfilment",
+				CounterExample: "1-not-an-identifier"},
+		},
+		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.workflow", Version: "1.0.0"}},
+	},
+	{
+		Family: Family,
+		Kind:   "ActorNamespace", Slug: "actor-namespace", ResourceType: "takoform_actor_namespace",
+		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
+		Title: "Actor Namespace",
+		Description: "Long-lived identity of one addressable-actor id space: a class the worker's active " +
+			"deployment serves, with at most one live execution context per actor id, private durable storage " +
+			"per id, and one alarm per id. The Form fixes that model by identity through the " +
+			"worker.actor@1.0.0 contract in its providedInterfaces; it carries no implementation snapshot, so " +
+			"which code answers is whatever the worker's active Worker Deployment selects. Actors are runtime " +
+			"data reached through module-worker.actor bindings, never Resources: every id addresses an actor " +
+			"and the first delivery is its creation. One worker carries at most one Actor Namespace per class " +
+			"name, because two namespaces over one class would give that class two disjoint id spaces.",
+		Fields: []model.Field{
+			moduleWorkerRef("worker", "worker",
+				"Module Worker identity whose active deployment serves this actor class. Changing it replaces the namespace.",
+				true, true),
+			// Immutable for a harder reason than the workflow's: the id space
+			// and every actor's storage hang off this identity, so repointing
+			// it at another class would hand one set of durable stores to code
+			// that never wrote them.
+			{HCL: "class_name", Wire: "className", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternBindingName,
+				Doc: "Class export name the serving module provides, in the JavaScript identifier grammar. Every " +
+					"weighted version of the active deployment must export it; one that does not keeps this namespace " +
+					"from becoming Ready, and invoking a stub of it is refused rather than queued.",
+				Example:        "ChatRoom",
+				CounterExample: "1-not-an-identifier"},
+		},
+		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.actor", Version: "1.0.0"}},
 	},
 }
 

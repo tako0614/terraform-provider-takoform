@@ -1518,9 +1518,9 @@ function checkConformanceCorpusCounts() {
     )
     .map(([, probe]) => probe.identity.formRef.kind);
   const uniqueDrivenKinds = new Set(drivenKinds);
-  if (drivenKinds.length !== 14 || uniqueDrivenKinds.size !== 14) {
+  if (drivenKinds.length !== 16 || uniqueDrivenKinds.size !== 16) {
     fail(
-      `${hostContractPath}: portable-host-v1beta1 must drive exactly 14 distinct ` +
+      `${hostContractPath}: portable-host-v1beta1 must drive exactly 16 distinct ` +
         `Form probes, found ${drivenKinds.length} (${[...uniqueDrivenKinds].join(", ")})`,
     );
   }
@@ -1535,7 +1535,7 @@ function checkConformanceCorpusCounts() {
     (kind) => !uniqueDrivenKinds.has(kind),
   );
   if (
-    familyKinds.length !== 15 ||
+    familyKinds.length !== 17 ||
     unprobedKinds.length !== 1 ||
     unprobedKinds[0] !== "ObjectBucket"
   ) {
@@ -1708,6 +1708,16 @@ const edgeFamilyRoster = [
     docName: "at_least_once_queue",
   },
   { kind: "QueueConsumer", slug: "queue-consumer", docName: "queue_consumer" },
+  {
+    kind: "DurableWorkflow",
+    slug: "durable-workflow",
+    docName: "durable_workflow",
+  },
+  {
+    kind: "ActorNamespace",
+    slug: "actor-namespace",
+    docName: "actor_namespace",
+  },
 ];
 const edgeFamilyDocNames = edgeFamilyRoster.map(({ docName }) => docName);
 

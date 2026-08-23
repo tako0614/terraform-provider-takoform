@@ -209,10 +209,10 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 		planValues[name] = value
 		defaulted[name] = value
 	}
-	// vars_json, the five binding lists, required_sensitive_vars, and
+	// vars_json, the seven binding lists, required_sensitive_vars, and
 	// external_services.
-	if len(defaulted) != 8 {
-		t.Fatalf("WorkerVersion exercised %d defaulted attributes, want 8", len(defaulted))
+	if len(defaulted) != 10 {
+		t.Fatalf("WorkerVersion exercised %d defaulted attributes, want 10", len(defaulted))
 	}
 
 	plan := v3PlanWith(t, ctx, schemaResponse, planValues)

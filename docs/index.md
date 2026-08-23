@@ -84,6 +84,8 @@ Experimental `0.1.0` Forms:
 - [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
 - [AtLeastOnceQueue](resources/at_least_once_queue.md)
 - [QueueConsumer](resources/queue_consumer.md)
+- [DurableWorkflow](resources/durable_workflow.md)
+- [ActorNamespace](resources/actor_namespace.md)
 
 The Edge `ObjectBucket` registers as `takoform_edge_object_bucket`; the bare
 `takoform_object_bucket` resource type belongs to the withdrawn v1alpha2 lane

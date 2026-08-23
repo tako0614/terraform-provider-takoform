@@ -79,6 +79,8 @@ bytes、handler を宣言する version、traffic deployment、host が割り当
 | [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | 1つの database へ未適用 suffix だけを適用                               |
 | [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)                   | identity   | acknowledgement と retry を持つ at-least-once 配信                      |
 | [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)                             | attachment | batch・retry・dead-letter policy を1つの worker へ向ける                |
+| [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | deployment が供給する class として多段の durable 実行を持つ            |
+| [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | 実行文脈1つ・専用ストレージ・alarm 1つを持つ addressable actor         |
 
 ::: warning Provider distribution boundary
 Provider 2.1.1 は Registry 公開済みの stable distribution です。

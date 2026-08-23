@@ -78,6 +78,8 @@ const forms = [
   ["SQLiteMigrationApplication", "sqlite-migration-application", "attachment"],
   ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
   ["QueueConsumer", "queue-consumer", "attachment"],
+  ["DurableWorkflow", "durable-workflow", "identity"],
+  ["ActorNamespace", "actor-namespace", "identity"],
 ];
 // The interface lane order MUST match edgeformcatalog.InterfaceDefinitions().
 // worker.runtime is the exact ES Module Worker runtime ABI the ModuleWorker
@@ -89,6 +91,8 @@ const interfaceNames = [
   "edge.queue",
   "worker.service",
   "worker.runtime",
+  "worker.workflow",
+  "worker.actor",
 ];
 const bindingNames = [
   "module-worker.edge-kv",
@@ -96,6 +100,8 @@ const bindingNames = [
   "module-worker.sqlite",
   "module-worker.queue-producer",
   "module-worker.service",
+  "module-worker.workflow",
+  "module-worker.actor",
 ];
 
 if (import.meta.main) {
@@ -136,7 +142,7 @@ function main() {
         [stagedRegistryPath, registryPath],
       ]);
       process.stdout.write(
-        `wrote ${forms.length} Edge Platform Family Form candidates, six interface candidates, five binding candidates, and the provider v3 registry\n`,
+        `wrote ${forms.length} Edge Platform Family Form candidates, ${interfaceNames.length} interface candidates, ${bindingNames.length} binding candidates, and the provider v3 registry\n`,
       );
     } finally {
       rmSync(stagingParent, { recursive: true, force: true });

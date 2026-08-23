@@ -51,6 +51,10 @@
         "SQLiteMigrationSet",
         "StaticAssetBundle",
         "WorkerBundle"
+      ],
+      "absentBefore": [
+        "ActorNamespace",
+        "DurableWorkflow"
       ]
     }
   ]

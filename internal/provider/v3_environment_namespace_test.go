@@ -187,6 +187,8 @@ func TestV3EnvironmentNamespaceIsDeclaredOnce(t *testing.T) {
 		"sqliteBindings":        "binding-names",
 		"queueProducerBindings": "binding-names",
 		"serviceBindings":       "binding-names",
+		"workflowBindings":      "binding-names",
+		"actorBindings":         "binding-names",
 		// The slot list's NAMES are not what joins the namespace: each slot
 		// projects a protocol-fixed member set, and the uniqueness rule is
 		// stated over that closure (decision 0045).

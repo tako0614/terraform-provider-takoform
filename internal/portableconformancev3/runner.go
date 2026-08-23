@@ -319,7 +319,12 @@ func (r *v3Runner) target(probe ResourceProbe) probeTarget {
 		Space:         r.contract.RunnerInput.Space,
 		Spec:          r.materialize(probe.Identity.FormRef, probe.Desired),
 		Lifecycle:     append([]string(nil), probe.LifecycleCapabilities...),
-		ReadyOptional: probe.Identity.FormRef.Kind == moduleWorkerKind,
+		// A Module Worker's readiness follows its deployment, and a class
+		// holder's follows the same deployment for the same reason: both
+		// legitimately answer Ready=False until something serves them
+		// (spec/decisions/0016).
+		ReadyOptional: probe.Identity.FormRef.Kind == moduleWorkerKind ||
+			classHolderKinds[probe.Identity.FormRef.Kind],
 	}
 }
 

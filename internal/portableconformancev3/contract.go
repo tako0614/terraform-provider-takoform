@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -196,6 +197,7 @@ var requiredRunnerChecks = []string{
 	"deployment-version-duplicate-rejected",
 	"attachment-requires-active-deployment",
 	"handler-gated-attachments",
+	"class-holder-rules-enforced",
 	"binding-name-collision-rejected",
 	"deployment-change-preserves-dependents",
 	"deployment-delete-blocked-by-dependent",
@@ -575,6 +577,11 @@ type WorkerBundleProbe struct {
 	ModuleSource     string         `json:"moduleSource"`
 	Manifest         map[string]any `json:"manifest"`
 	ExportedHandlers []string       `json:"exportedHandlers"`
+	// ExportedClasses is what the same module's bytes export as CLASSES. A
+	// Durable Workflow and an Actor Namespace name a class rather than a
+	// handler, so a corpus that stated only handlers could not describe a
+	// module that serves one.
+	ExportedClasses []string `json:"exportedClasses"`
 }
 
 // ModuleBundleProbe pins one ADDITIONAL Worker Bundle the lane drives. Its Form
@@ -591,6 +598,7 @@ type ModuleBundleProbe struct {
 	ManifestDigest   string         `json:"manifestDigest"`
 	Manifest         map[string]any `json:"manifest"`
 	ModuleSource     string         `json:"moduleSource"`
+	ExportedClasses  []string       `json:"exportedClasses"`
 	ExportedHandlers []string       `json:"exportedHandlers"`
 }
 
@@ -729,6 +737,8 @@ type RunnerInput struct {
 	WorkerEndpoint                   ResourceProbe            `json:"workerEndpoint"`
 	WorkerCronTrigger                ResourceProbe            `json:"workerCronTrigger"`
 	QueueConsumer                    ResourceProbe            `json:"queueConsumer"`
+	DurableWorkflow                  ResourceProbe            `json:"durableWorkflow"`
+	ActorNamespace                   ResourceProbe            `json:"actorNamespace"`
 	SyntheticSecondGroup             FormRef                  `json:"syntheticSecondGroup"`
 	SyntheticSecondDefinitionVersion SyntheticDefinitionProbe `json:"syntheticSecondDefinitionVersion"`
 	SupportProbes                    SupportProbes            `json:"supportProbes"`
@@ -764,6 +774,8 @@ func probeInventory(input *RunnerInput) []probeEntry {
 		{"workerEndpoint", "WorkerEndpoint", &input.WorkerEndpoint},
 		{"workerCronTrigger", "WorkerCronTrigger", &input.WorkerCronTrigger},
 		{"queueConsumer", "QueueConsumer", &input.QueueConsumer},
+		{"durableWorkflow", "DurableWorkflow", &input.DurableWorkflow},
+		{"actorNamespace", "ActorNamespace", &input.ActorNamespace},
 	}
 }
 
@@ -1465,6 +1477,39 @@ func validateCrossResourceProbes(input RunnerInput) error {
 	}
 	if nestedName(input.QueueConsumer.Desired, "queue") != input.AtLeastOnceQueue.Name {
 		return errors.New("portable host v3 queueConsumer probe must reference the atLeastOnceQueue probe")
+	}
+	// Both class holders must point at the probed worker AND name a class the
+	// probed bundle's module really exports. A corpus that named a class
+	// nothing exports would describe a conforming host as refusing, which is
+	// the same defect as a check no correct host can pass.
+	for _, holder := range []struct {
+		label string
+		probe ResourceProbe
+	}{
+		{"durableWorkflow", input.DurableWorkflow},
+		{"actorNamespace", input.ActorNamespace},
+	} {
+		if nestedName(holder.probe.Desired, "worker") != input.ModuleWorker.Name {
+			return fmt.Errorf("portable host v3 %s probe must reference the moduleWorker probe", holder.label)
+		}
+		className, _ := holder.probe.Desired["className"].(string)
+		if className == "" {
+			return fmt.Errorf("portable host v3 %s probe must name a className", holder.label)
+		}
+		if !slices.Contains(input.WorkerBundle.ExportedClasses, className) {
+			return fmt.Errorf(
+				"portable host v3 %s probe names class %q, which the workerBundle probe's module does not export",
+				holder.label, className,
+			)
+		}
+	}
+	// The fetch-only bundle must export NO class, because that is the whole
+	// negative case: a live deployment weighting it is a deployment whose
+	// versions visibly lack the class a holder names.
+	if len(input.FetchOnlyBundle.ExportedClasses) != 0 {
+		return errors.New(
+			"portable host v3 fetchOnlyBundle probe must export no class; it is the module that proves a missing one is refused",
+		)
 	}
 	if nestedName(input.SQLiteMigrationApplication.Desired, "database") != input.SQLiteDatabase.Name {
 		return errors.New("portable host v3 sqliteMigrationApplication probe must reference the sqliteDatabase probe")
