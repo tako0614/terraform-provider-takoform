@@ -12,6 +12,13 @@ by re-weighting, never by mutating a revision.
 
 ## Observable semantics
 
+`function` is the immutable reference naming the Function this deployment
+governs, and every listed version MUST belong to it: an entry whose version
+resolves to a different function's aggregate is `invalid_argument` before any
+mutation, decided against resolved UIDs, never names — the Edge family's
+deployment-integrity rule verbatim. At most one deployment governs one
+function incarnation.
+
 `versions` lists one or two entries of `functionVersion` plus `weight` in
 basis points. Every weight is positive — a zero-weight entry is not a smaller
 split but a version the deployment does not select, and the Edge family's

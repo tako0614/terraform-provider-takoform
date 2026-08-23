@@ -46,11 +46,16 @@ retryPolicy)` runs `fn` and durably records its JSON result under `name`.
 sleeping — and the host wakes it at-least-once, never early.
 `step.waitForEvent(name, type, timeoutSeconds)` parks the instance until a
 matching sent event resolves it, or fails the step at the timeout. The timeout
-is REQUIRED: with bounded sleeps, retries, and waits, every instance's
-lifetime is bounded by construction, which keeps the delete refusal below a
-delay rather than a deadlock. The contract's `limits` fix the portable
-ceilings — sleep length, wait timeout, params size, retention — so a bound is
-a contract fact, not host tuning.
+is REQUIRED — but per-wait bounds alone do not bound an instance, because
+`run` can mint an unlimited sequence of uniquely named steps. The instance
+itself is therefore bounded twice, and both bounds are contract facts in the
+`limits` member rather than host tuning: a maximum step count per instance
+and a maximum total instance lifetime. An instance that exceeds either is
+terminated by the HOST into the terminal `errored` status with a closed
+reason naming the exceeded bound; nothing runs past it. With per-call bounds
+below and instance bounds above, the delete refusal is a delay with a stated
+ceiling, never a deadlock. The remaining `limits` fix the other portable
+ceilings — sleep length, wait timeout, params size, retention.
 
 Execution is at-least-once per step with memoized replay. An attempt that dies
 after its effect but before its record commits re-executes, so `fn` must be

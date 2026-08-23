@@ -13,6 +13,13 @@ revisions; nothing ever edits a revision in place.
 
 ## Observable semantics
 
+`service` is the immutable reference pinning this revision to its owning
+[ContainerService](container-service.md) identity, resolved and uid-pinned
+like every relation and carrying `x-takoform-target-formrefs` — the same
+parent shape as the Edge family's `WorkerVersion.worker`, and required for
+the same reason: the aggregate rules below are stated over one service's
+revisions, which a host cannot know without the reference.
+
 `image` is one OCI image reference and MUST be digest-pinned
 (`name@sha256:…`). A mutable tag is refused with `invalid_argument` before
 any mutation: the digest is the revision's content identity, in the spirit

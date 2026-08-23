@@ -12,6 +12,12 @@ re-weighting, never by mutating a revision.
 
 ## Observable semantics
 
+`service` is the immutable reference naming the ContainerService this traffic
+resource governs, and every listed revision MUST belong to it: an entry whose
+revision resolves to a different service's aggregate is `invalid_argument`
+before any mutation, decided against resolved UIDs. At most one traffic
+resource governs one service incarnation.
+
 `revisions` lists one to eight entries of `containerRevision` plus `weight`
 in basis points. Weights are positive and must sum to exactly 10000 across
 entries — the same host-validated rule as the Edge family's
