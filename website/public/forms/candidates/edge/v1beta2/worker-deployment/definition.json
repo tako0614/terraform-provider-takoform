@@ -66,7 +66,11 @@
         "maxItems": 8,
         "minItems": 1,
         "type": "array",
-        "uniqueItems": true
+        "uniqueItems": true,
+        "x-takoform-sum": {
+          "member": "weight",
+          "total": 10000
+        }
       },
       "worker": {
         "additionalProperties": false,

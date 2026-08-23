@@ -298,6 +298,11 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			"properties": map[string]any{
 				"versions": map[string]any{
 					"type": "array",
+					// The total is where the rule comes from now: a host reads
+					// it off the Definition rather than knowing this kind.
+					currentformmodel.SumAnnotationKey: map[string]any{
+						"member": "weight", "total": int64(10000),
+					},
 					"default": []any{map[string]any{
 						"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version-probe"},
 						// A plain Go int in the Definition, exactly as an authored
@@ -317,7 +322,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 	if _, ok := entry["weight"].(json.Number); !ok {
 		t.Fatalf("materialized weight is %T, want json.Number", entry["weight"])
 	}
-	if hostErr := validateDeploymentWeightSum(testEdgeFormsGroup, form, materialized); hostErr != nil {
+	if hostErr := validateSummedMembers(form, materialized); hostErr != nil {
 		t.Fatalf("a host semantic rule rejected a materialized value: %+v", hostErr)
 	}
 	// And the rule still rejects a wrong total that arrived the same way.
@@ -326,7 +331,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version-probe"},
 			"weight":        9999,
 		}}
-	if hostErr := validateDeploymentWeightSum(testEdgeFormsGroup, form, form.materialize(nil)); hostErr == nil {
+	if hostErr := validateSummedMembers(form, form.materialize(nil)); hostErr == nil {
 		t.Fatal("a materialized weight total of 9999 was accepted")
 	}
 }

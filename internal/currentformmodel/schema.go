@@ -27,6 +27,11 @@ const (
 	// at most one live resource of this kind. A host reads it and enforces the
 	// cardinality without knowing which Form it is enforcing for.
 	ExclusiveAnnotationKey = "x-takoform-exclusive"
+	// SumAnnotationKey marks the object list whose elements' named integer
+	// member must total an exact value. A schema can bound each element and
+	// cannot add a column, so a host reading only the Definition would
+	// otherwise have no way to know the total is part of the contract.
+	SumAnnotationKey = "x-takoform-sum"
 	// RequiredEntrypointAnnotationKey marks the reference whose inward
 	// activation invokes one entrypoint of the target's runtime contract. The
 	// lane's attachment gate reads it, so a family adds an attachment without
@@ -384,7 +389,14 @@ func (f Field) jsonSchemaShape(group string, resolver TargetContractResolver) (m
 		if err != nil {
 			return nil, err
 		}
-		return f.arraySchema(members), nil
+		list := f.arraySchema(members)
+		if f.Sum != nil {
+			list[SumAnnotationKey] = map[string]any{
+				"member": f.Sum.Member,
+				"total":  f.Sum.Total,
+			}
+		}
+		return list, nil
 	default:
 		panic(fmt.Sprintf("unknown field kind %q", f.Kind))
 	}

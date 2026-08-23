@@ -445,6 +445,10 @@ var Forms = []model.Form{
 				Doc:       "Module Worker identity whose traffic this deployment governs.",
 				Example:   ref("ModuleWorker", "module-worker")},
 			{HCL: "versions", Wire: "versions", Kind: model.KindObjectList, Required: true, MinItems: 1, MaxItems: 8,
+				// The total is declared, not described: a schema bounds each
+				// weight and cannot add a column, so a host reading only this
+				// Definition would otherwise not know 10000 is the contract.
+				Sum: &model.SummedMember{Member: "weight", Total: 10000},
 				Doc: "Active Worker Versions and their traffic weights in basis points. Weights must sum to exactly 10000.",
 				Fields: []model.Field{
 					// A host READS the weighted version's desired state: its /worker

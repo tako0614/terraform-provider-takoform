@@ -155,6 +155,12 @@ type Field struct {
 	// paragraph in the protocol document naming a Form kind, and therefore a
 	// reason the protocol had to change whenever a family gained one.
 	Exclusive *ExclusiveHold
+	// Sum declares that one integer member of this object list's elements
+	// must total an exact value. A schema bounds each element and cannot add
+	// a column, so this was a sentence in the protocol document about one
+	// Form's traffic weights — which is a reason the protocol had to change
+	// whenever a family gained a list that sums.
+	Sum *SummedMember
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
@@ -163,6 +169,15 @@ type Field struct {
 	// CounterExample is a value the desired schema must reject. When nil, one
 	// is derived from the declared constraint where possible.
 	CounterExample any
+}
+
+// SummedMember is the declared cross-element arithmetic of one object list:
+// the member that is added up, and the total it must reach exactly.
+type SummedMember struct {
+	// Member is the wire name of the integer member summed across elements.
+	Member string
+	// Total is the exact value those members must add to.
+	Total int64
 }
 
 // InterfaceRefSource names an exact Interface contract by name and version.
@@ -560,6 +575,33 @@ func validateField(kind string, field Field) error {
 	}
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
+	}
+	if field.Sum != nil {
+		if field.Kind != KindObjectList {
+			return fmt.Errorf(
+				"form %s field %s declares a summed member on kind %q; only an object list has elements to add up",
+				kind, field.Wire, field.Kind,
+			)
+		}
+		summed := false
+		for _, member := range field.Fields {
+			if member.Wire != field.Sum.Member {
+				continue
+			}
+			if member.Kind != KindInteger {
+				return fmt.Errorf(
+					"form %s field %s sums member %s, which is %q rather than an integer",
+					kind, field.Wire, member.Wire, member.Kind,
+				)
+			}
+			summed = true
+		}
+		if !summed {
+			return fmt.Errorf(
+				"form %s field %s sums member %s, which its elements do not declare",
+				kind, field.Wire, field.Sum.Member,
+			)
+		}
 	}
 	if field.RequiredEntrypoint != "" && field.Kind != KindResourceRef {
 		return fmt.Errorf(

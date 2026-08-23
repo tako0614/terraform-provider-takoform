@@ -1250,7 +1250,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 ) ([]storedRelation, *hostError) {
 	// Two pure spec-shape rules first: neither needs another resource, so
 	// neither should depend on one resolving.
-	if hostErr := validateDeploymentWeightSum(form.EnforcedFamily, form, spec); hostErr != nil {
+	if hostErr := validateSummedMembers(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	if hostErr := validateEnvironmentNamespace(form.EnforcedFamily, form, spec); hostErr != nil {
@@ -1298,35 +1298,78 @@ func (h *ReferenceHost) validateDesiredSemantics(
 // weight half of the deployment integrity rule; the ownership, uniqueness, and
 // availability halves need resolved relations and live in
 // validateWorkerDeployment.
-func validateDeploymentWeightSum(familyGroup string, form *InstalledForm, spec map[string]any) *hostError {
-	if form.Ref.APIVersion != familyGroup || form.Ref.Kind != workerDeploymentKind {
-		return nil
+// validateSummedMembers holds every object list that DECLARES a total to it.
+// It knows no Form kind: the list, the member, and the total all come out of
+// the served desired schema's x-takoform-sum annotation, so a family that
+// gains a summed list is covered without a host edit — which is the whole
+// difference between this and the paragraph about traffic weights it replaces.
+func validateSummedMembers(form *InstalledForm, spec map[string]any) *hostError {
+	properties, _ := form.DesiredSchema["properties"].(map[string]any)
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
 	}
-	versions, _ := spec["versions"].([]any)
-	if len(versions) == 0 {
-		return stableError("invalid_argument", "a WorkerDeployment requires at least one weighted version")
-	}
-	total := int64(0)
-	for _, member := range versions {
-		entry, _ := member.(map[string]any)
-		weight, ok := entry["weight"].(json.Number)
-		if !ok {
-			return stableError("invalid_argument", "WorkerDeployment version weight must be an integer")
+	sort.Strings(names)
+	for _, name := range names {
+		node, _ := properties[name].(map[string]any)
+		if node == nil {
+			continue
 		}
-		value, err := strconv.ParseInt(weight.String(), 10, 64)
-		if err != nil {
-			return stableError("invalid_argument", "WorkerDeployment version weight must be an integer")
+		declared, _ := node[currentformmodel.SumAnnotationKey].(map[string]any)
+		if declared == nil {
+			continue
 		}
-		total += value
-	}
-	if total != workerDeploymentWeightTotal {
-		return stableError(
-			"invalid_argument",
-			"WorkerDeployment traffic weights must sum to exactly "+
-				strconv.Itoa(workerDeploymentWeightTotal)+" basis points",
-		)
+		member, _ := declared["member"].(string)
+		want, ok := jsonInteger(declared["total"])
+		if member == "" || !ok {
+			return stableError("invalid_argument", "the installed Definition declares an unreadable summed member")
+		}
+		elements, present := spec[name].([]any)
+		if !present {
+			continue
+		}
+		total := int64(0)
+		for _, element := range elements {
+			entry, _ := element.(map[string]any)
+			value, ok := jsonInteger(entry[member])
+			if !ok {
+				return stableError(
+					"invalid_argument",
+					name+" element "+strconv.Quote(member)+" must be an integer",
+				)
+			}
+			total += value
+		}
+		if total != want {
+			return stableError(
+				"invalid_argument",
+				name+" "+strconv.Quote(member)+" values total "+strconv.FormatInt(total, 10)+
+					", and the Definition declares they must total exactly "+strconv.FormatInt(want, 10),
+			)
+		}
 	}
 	return nil
+}
+
+// jsonInteger reads an integer that may have decoded as json.Number or as one
+// of the numeric types a schema-derived document can carry.
+func jsonInteger(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case json.Number:
+		parsed, err := strconv.ParseInt(typed.String(), 10, 64)
+		return parsed, err == nil
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	case float64:
+		if typed != float64(int64(typed)) {
+			return 0, false
+		}
+		return int64(typed), true
+	default:
+		return 0, false
+	}
 }
 
 // mutationFence carries the exact precondition headers of one mutation. The
