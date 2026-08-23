@@ -232,6 +232,19 @@ const englishSidebar = {
       text: "Current design target — Edge Form Family v1beta1 proposals",
       items: [{ text: "Overview", link: "/proposals/" }, ...edgeProposalItems],
     },
+    {
+      text: "New family proposals (decision 0043)",
+      collapsed: true,
+      items: [
+        { text: "Function family", link: "/proposals/function/" },
+        { text: "Container family", link: "/proposals/container/" },
+        { text: "Table family", link: "/proposals/table/" },
+        { text: "Pull queue family", link: "/proposals/queue/" },
+        { text: "Topic family", link: "/proposals/topic/" },
+        { text: "Schedule family", link: "/proposals/schedule/" },
+        { text: "Vector family", link: "/proposals/vector/" },
+      ],
+    },
   ],
   "/forms/": [
     { text: "Forms", items: [{ text: "Current inventory", link: "/forms/" }] },
