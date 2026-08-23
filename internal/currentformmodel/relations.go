@@ -1,6 +1,7 @@
 package currentformmodel
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -40,6 +41,11 @@ type Relation struct {
 	// TargetFormRefs is the closed set of exact Form identities this relation
 	// accepts, or nil when the relation states an Interface requirement instead.
 	TargetFormRefs []TargetFormRef
+	// Exclusive is the declared cardinality of this reference, or nil when the
+	// reference states none. A host reads it and enforces "at most one live
+	// holder of this target" without knowing which Form kind it is enforcing
+	// for, which is what keeps the rule out of the protocol document.
+	Exclusive *ExclusiveHold
 	// RequiredInterface is the exact Interface contract the target must
 	// provide, or nil when the relation pins exact Forms instead.
 	//
@@ -61,6 +67,22 @@ type TargetFormRef struct {
 // String renders the identity for a refusal message.
 func (t TargetFormRef) String() string {
 	return t.APIVersion + " " + t.Kind + "@" + t.DefinitionVersion + " " + t.SchemaDigest
+}
+
+// ExclusiveHold is the declared cardinality of a reference: how many live
+// resources of one kind may point at one resolved target.
+//
+// KeyedBy optionally names a sibling property of the desired spec, by JSON
+// Pointer, that joins the target in the key. Without it the target alone is
+// the key — a queue has one consumer. With it the pair is — one worker carries
+// one holder PER CLASS NAME, and two holders of different classes on one
+// worker are not a conflict.
+//
+// It says nothing about what a host does with a conflict beyond refusing it,
+// because there is nothing else to say: the request is well formed and what is
+// untrue is what it says about the target it points at.
+type ExclusiveHold struct {
+	KeyedBy string
 }
 
 // RequiredInterface is the exact Interface contract a relation's target must
@@ -91,11 +113,72 @@ func (r Relation) IsBinding() bool { return r.Binding != "" }
 // "any member literally named resource" rule, it finds every reference a Form
 // declares instead of only the ones inside binding lists.
 func DeriveRelations(schema map[string]any) ([]Relation, error) {
+	return DeriveRelationsWithConstraints(schema, nil)
+}
+
+// DeriveRelationsWithConstraints is DeriveRelations plus the Definition's
+// constraint list, which is where an exclusive hold now lives: it is a rule
+// about resources rather than about the shape of a document, so it no longer
+// rides in the schema (decision 0049). A hold naming a pointer no relation
+// occupies is a Definition that contradicts itself and is refused, because a
+// constraint nothing enforces is worse than one nobody wrote.
+func DeriveRelationsWithConstraints(schema map[string]any, constraints []Constraint) ([]Relation, error) {
 	walker := relationWalker{}
 	if err := walker.walk(schema, "", "", true); err != nil {
 		return nil, err
 	}
 	sort.Slice(walker.out, func(i, j int) bool { return walker.out[i].Pointer < walker.out[j].Pointer })
+	for _, constraint := range constraints {
+		// The vocabulary is CLOSED, and an unreadable entry is refused rather
+		// than skipped. Skipping is what a `continue` on anything that is not
+		// an exclusive hold did, and it meant a Form could declare a rule this
+		// host does not implement, install cleanly, and enforce nothing — the
+		// Definition promising a constraint no one keeps. Whoever calls this
+		// turns the error into unsupported_capability at install time.
+		switch constraint.Kind {
+		case ConstraintExclusive:
+		case ConstraintSum:
+			if constraint.List == "" || constraint.Member == "" {
+				return nil, fmt.Errorf("a summed member names %q in %q, and a sum needs both",
+					constraint.Member, constraint.List)
+			}
+			continue
+		case ConstraintClaim:
+			if constraint.Property == "" {
+				return nil, errors.New("a claim names no property")
+			}
+			continue
+		case ConstraintHostAssigned:
+			if constraint.Output == "" {
+				return nil, errors.New("a host-assigned constraint names no output")
+			}
+			continue
+		default:
+			return nil, fmt.Errorf(
+				"constraint kind %q is not one this host implements; the closed vocabulary is "+
+					"exclusive, sum, claim, hostAssigned",
+				constraint.Kind,
+			)
+		}
+		if constraint.Reference == "" {
+			return nil, errors.New("an exclusive hold names no reference")
+		}
+		attached := false
+		for index := range walker.out {
+			if walker.out[index].Pointer != constraint.Reference {
+				continue
+			}
+			hold := &ExclusiveHold{KeyedBy: constraint.KeyedBy}
+			walker.out[index].Exclusive = hold
+			attached = true
+		}
+		if !attached {
+			return nil, fmt.Errorf(
+				"an exclusive hold names %s, which is not a reference this Form declares",
+				constraint.Reference,
+			)
+		}
+	}
 	return walker.out, nil
 }
 
@@ -127,6 +210,10 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 		if err != nil {
 			return err
 		}
+		exclusive, err := exclusiveHold(node, pointer)
+		if err != nil {
+			return err
+		}
 		w.out = append(w.out, Relation{
 			Pointer:           pointer,
 			TargetAPIVersion:  group,
@@ -135,6 +222,7 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 			Required:          required,
 			TargetFormRefs:    targetRefs,
 			RequiredInterface: requiredInterface,
+			Exclusive:         exclusive,
 		})
 		return nil
 	}
@@ -212,6 +300,38 @@ func referenceConstants(node map[string]any) (string, string, bool) {
 		return "", "", false
 	}
 	return group, kind, true
+}
+
+// exclusiveHold reads the declared cardinality of a reference. A malformed
+// annotation is refused rather than ignored: this is a rule a host enforces
+// before it mutates anything, and an annotation nobody could read would make
+// the Form silently unconstrained.
+func exclusiveHold(node map[string]any, pointer string) (*ExclusiveHold, error) {
+	raw, present := node[ExclusiveAnnotationKey]
+	if !present {
+		return nil, nil
+	}
+	declared, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("reference %s carries a malformed %s", pointer, ExclusiveAnnotationKey)
+	}
+	hold := &ExclusiveHold{}
+	for member, value := range declared {
+		if member != "keyedBy" {
+			return nil, fmt.Errorf(
+				"reference %s carries %s member %q, which the annotation does not define",
+				pointer, ExclusiveAnnotationKey, member,
+			)
+		}
+		key, ok := value.(string)
+		if !ok || !strings.HasPrefix(key, "/") {
+			return nil, fmt.Errorf(
+				"reference %s carries a %s keyedBy that is not a JSON Pointer", pointer, ExclusiveAnnotationKey,
+			)
+		}
+		hold.KeyedBy = key
+	}
+	return hold, nil
 }
 
 // targetContract reads the one target-contract annotation a reference-shaped

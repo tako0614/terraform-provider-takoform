@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 )
 
@@ -71,7 +72,7 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 		t.Fatal("reference host never announced an origin")
 	}
 
-	request, err := http.NewRequest(http.MethodGet, origin+"/.well-known/takoform/v1beta2", nil)
+	request, err := http.NewRequest(http.MethodGet, origin+clientv3.DiscoveryPath, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,10 +96,10 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(discovery.APIVersions) != 1 ||
-		discovery.APIVersions[0] != "forms.takoform.com/v1beta2" {
+		discovery.APIVersions[0] != clientv3.APIVersion {
 		t.Fatalf("api_versions = %v, want exactly the current lane", discovery.APIVersions)
 	}
-	if !strings.HasSuffix(discovery.Endpoints["api"], "/apis/forms.takoform.com/v1beta2") {
+	if !strings.HasSuffix(discovery.Endpoints["api"], clientv3.APIRootPath) {
 		t.Fatalf("endpoints.api = %q", discovery.Endpoints["api"])
 	}
 	for _, feature := range []string{
@@ -125,7 +126,7 @@ func TestReferenceHostDefaultsToTheMeasuredCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const corpus = `"conformance", "portable-host-v1beta2"`
+	const corpus = `"conformance", "portable-host-v1beta4"`
 	if !strings.Contains(string(source), corpus) {
 		t.Fatalf("cmd/reference-host does not default to %s", corpus)
 	}

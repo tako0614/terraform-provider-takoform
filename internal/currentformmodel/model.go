@@ -23,12 +23,23 @@ import (
 // namespaced apiVersion of every member FormRef, for example
 // "edge.forms.takoform.com/v1beta1".
 type Family struct {
-	Group   string
+	Group string
+	// Version is the group's version segment, EMPTY for a family that carries
+	// none. A version here never varied independently of the exact FormRef
+	// that already carries kind, definitionVersion and schemaDigest — its only
+	// effect was to make every member move together (decision 0049). Retained
+	// generations keep theirs because their bytes are published.
 	Version string
 }
 
-// APIVersion renders the DNS-like namespaced group with its version.
-func (f Family) APIVersion() string { return f.Group + "/" + f.Version }
+// APIVersion renders the DNS-like namespaced group, with its version when it
+// has one.
+func (f Family) APIVersion() string {
+	if f.Version == "" {
+		return f.Group
+	}
+	return f.Group + "/" + f.Version
+}
 
 // Role is the closed v1beta1 resource role (decision 0009).
 type Role string
@@ -147,6 +158,33 @@ type Field struct {
 	// host holding only this document knows which export every weighted
 	// version of the target must have.
 	RequiredEntrypoint string
+	// Exclusive declares that at most one LIVE resource of this Form kind may
+	// hold the target this reference resolves to. It is the mechanism four
+	// separate hand-written rules used to be — one active deployment per
+	// worker, one consumer per queue, one live migration application per
+	// database, one class holder per worker and class — each of which was a
+	// paragraph in the protocol document naming a Form kind, and therefore a
+	// reason the protocol had to change whenever a family gained one.
+	Exclusive *ExclusiveHold
+	// Sum declares that one integer member of this object list's elements
+	// must total an exact value. A schema bounds each element and cannot add
+	// a column, so this was a sentence in the protocol document about one
+	// Form's traffic weights — which is a reason the protocol had to change
+	// whenever a family gained a list that sums.
+	Sum *SummedMember
+	// Claimed declares that this property's value is held by at most one live
+	// resource per tenant, across every space, compared on the canonical form
+	// the property's own schema defines. It was a paragraph in the protocol
+	// document about one Form's hostnames — a reason the protocol had to
+	// change whenever a family gained a value that is claimed rather than
+	// merely unique.
+	Claimed bool
+	// HostAssigned marks a declared OUTPUT the host mints: it is immutable for
+	// the lifetime of the resource's UID and no desired property may state it.
+	// It was a paragraph in the protocol document about one Form's endpoint
+	// address, which is a reason the protocol had to change whenever a family
+	// gained an address it hands out.
+	HostAssigned bool
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
@@ -155,6 +193,100 @@ type Field struct {
 	// CounterExample is a value the desired schema must reject. When nil, one
 	// is derived from the declared constraint where possible.
 	CounterExample any
+}
+
+// SummedMember is the declared cross-element arithmetic of one object list:
+// the member that is added up, and the total it must reach exactly.
+type SummedMember struct {
+	// Member is the wire name of the integer member summed across elements.
+	Member string
+	// Total is the exact value those members must add to.
+	Total int64
+}
+
+// Constraint is one entry of a Form Definition's closed constraint list.
+//
+// These are rules about RESOURCES, not about the shape of a document, so they
+// do not belong in a JSON Schema — where they rode in extension slots no
+// standard validator reads (decision 0049). As a first-class list with a
+// closed `Kind` vocabulary, adding a constraint kind is one reviewed change in
+// one place instead of a new `x-` key that may appear anywhere in a schema
+// tree, and the desired schema goes back to being plain JSON Schema.
+//
+// Every pointer is an RFC 6901 JSON Pointer into the DESIRED instance (or, for
+// a host-assigned member, into the outputs), which is the same addressing the
+// lane already uses for relations.
+type Constraint struct {
+	Kind ConstraintKind `json:"kind"`
+	// Reference is the relation an exclusive hold is taken through.
+	Reference string `json:"reference,omitempty"`
+	// KeyedBy narrows an exclusive hold to one value of a sibling member, so
+	// one target may carry one holder per key rather than one in total.
+	KeyedBy string `json:"keyedBy,omitempty"`
+	// List, Member and Total carry a summed list: which list, which integer
+	// member of its elements, and the exact figure they must reach.
+	List   string `json:"list,omitempty"`
+	Member string `json:"member,omitempty"`
+	Total  int64  `json:"total,omitempty"`
+	// Property is the claimed desired member.
+	Property string `json:"property,omitempty"`
+	// Output is the declared output member the host mints.
+	Output string `json:"output,omitempty"`
+}
+
+// ConstraintKind is the closed vocabulary. A kind outside it is not a
+// constraint this lane knows, and a host refuses a Definition carrying one
+// rather than ignoring it — an ignored constraint is an unenforced rule.
+type ConstraintKind string
+
+const (
+	// ConstraintExclusive: at most one LIVE resource of this Form's kind may
+	// hold the target its reference resolves to.
+	ConstraintExclusive ConstraintKind = "exclusive"
+	// ConstraintSum: the named integer member of a list's elements totals
+	// exactly the stated figure.
+	ConstraintSum ConstraintKind = "sum"
+	// ConstraintClaim: at most one live resource per tenant holds this value,
+	// compared on the canonical form the property's own schema admits.
+	ConstraintClaim ConstraintKind = "claim"
+	// ConstraintHostAssigned: the host mints this output; no desired property
+	// states it and no configuration reconstructs it.
+	ConstraintHostAssigned ConstraintKind = "hostAssigned"
+)
+
+// Constraints derives the Form's constraint list from what its fields and
+// outputs declare. Authoring stays on the member the rule is about — which is
+// where a reader looks for it — and the PUBLISHED document carries one list,
+// which is where an implementer looks for it.
+func (f Form) Constraints() []Constraint {
+	out := []Constraint{}
+	for _, field := range f.Fields {
+		if field.Exclusive != nil {
+			entry := Constraint{Kind: ConstraintExclusive, Reference: "/" + field.Wire}
+			if field.Exclusive.KeyedBy != "" {
+				entry.KeyedBy = field.Exclusive.KeyedBy
+			}
+			out = append(out, entry)
+		}
+		if field.Sum != nil {
+			out = append(out, Constraint{
+				Kind: ConstraintSum, List: "/" + field.Wire,
+				Member: field.Sum.Member, Total: field.Sum.Total,
+			})
+		}
+		if field.Claimed {
+			out = append(out, Constraint{Kind: ConstraintClaim, Property: "/" + field.Wire})
+		}
+	}
+	for _, output := range f.Outputs {
+		if output.HostAssigned {
+			out = append(out, Constraint{Kind: ConstraintHostAssigned, Output: "/" + output.Wire})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // InterfaceRefSource names an exact Interface contract by name and version.
@@ -400,7 +532,10 @@ func (f Form) Validate() error {
 	// A reference names its target group as a constant, so a Form that declares
 	// one must know which group it belongs to. Without it the emitted schema
 	// would pin an empty apiVersion and every reference would be unresolvable.
-	if f.declaresReference() && (f.Family.Group == "" || f.Family.Version == "") {
+	// The GROUP is what must be present; the version segment is optional,
+	// because a group carries one only while it has a published generation to
+	// keep apart (decision 0049).
+	if f.declaresReference() && f.Family.Group == "" {
 		return fmt.Errorf("form %s declares a cross-resource reference without a Family group", f.Kind)
 	}
 	return nil
@@ -552,6 +687,46 @@ func validateField(kind string, field Field) error {
 	}
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
+	}
+	if field.HostAssigned && field.Kind != KindString {
+		return fmt.Errorf(
+			"form %s output %s is host-assigned on kind %q; a minted address is a string",
+			kind, field.Wire, field.Kind,
+		)
+	}
+	if field.Claimed && field.Kind != KindString {
+		return fmt.Errorf(
+			"form %s field %s is claimed on kind %q; a claim is compared on a canonical STRING, "+
+				"and a value with no canonical spelling has nothing to compare",
+			kind, field.Wire, field.Kind,
+		)
+	}
+	if field.Sum != nil {
+		if field.Kind != KindObjectList {
+			return fmt.Errorf(
+				"form %s field %s declares a summed member on kind %q; only an object list has elements to add up",
+				kind, field.Wire, field.Kind,
+			)
+		}
+		summed := false
+		for _, member := range field.Fields {
+			if member.Wire != field.Sum.Member {
+				continue
+			}
+			if member.Kind != KindInteger {
+				return fmt.Errorf(
+					"form %s field %s sums member %s, which is %q rather than an integer",
+					kind, field.Wire, member.Wire, member.Kind,
+				)
+			}
+			summed = true
+		}
+		if !summed {
+			return fmt.Errorf(
+				"form %s field %s sums member %s, which its elements do not declare",
+				kind, field.Wire, field.Sum.Member,
+			)
+		}
 	}
 	if field.RequiredEntrypoint != "" && field.Kind != KindResourceRef {
 		return fmt.Errorf(

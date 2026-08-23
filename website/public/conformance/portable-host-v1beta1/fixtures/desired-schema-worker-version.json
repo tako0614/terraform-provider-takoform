@@ -197,7 +197,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {
@@ -245,7 +245,7 @@
           "description": "Static Asset Bundle whose exact manifest inventory this version serves.",
           "properties": {
             "apiVersion": {
-              "const": "edge.forms.takoform.com/v1beta2",
+              "const": "edge.forms.takoform.com",
               "type": "string"
             },
             "kind": {
@@ -267,10 +267,10 @@
           "type": "object",
           "x-takoform-target-formrefs": [
             {
-              "apiVersion": "edge.forms.takoform.com/v1beta2",
+              "apiVersion": "edge.forms.takoform.com",
               "definitionVersion": "0.1.0",
               "kind": "StaticAssetBundle",
-              "schemaDigest": "sha256:a6bf24517afa91917789c599f14c2717dfbfa2942651b1d0f17a907afba4ce78"
+              "schemaDigest": "sha256:e98de5d89381411bc5eaf8d6daf870d7a085fc79ffa4c06a89ddcae614a4d515"
             }
           ]
         },
@@ -309,7 +309,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {
@@ -353,7 +353,7 @@
       "description": "Worker Bundle carrying the exact module bytes this version executes.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta2",
+          "const": "edge.forms.takoform.com",
           "type": "string"
         },
         "kind": {
@@ -375,10 +375,10 @@
       "type": "object",
       "x-takoform-target-formrefs": [
         {
-          "apiVersion": "edge.forms.takoform.com/v1beta2",
+          "apiVersion": "edge.forms.takoform.com",
           "definitionVersion": "0.1.0",
           "kind": "WorkerBundle",
-          "schemaDigest": "sha256:d9fadb910964b9c260b8ebc9e2f9af3567d23de099b215cb1e1d585e01fde7c2"
+          "schemaDigest": "sha256:116f7ee99bf2472e497ee10e894cb13a5bc9a7b9b1f82d4d32d7e840ecbf3ae0"
         }
       ]
     },
@@ -459,7 +459,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {
@@ -513,7 +513,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {
@@ -577,7 +577,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {
@@ -631,7 +631,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {
@@ -689,7 +689,7 @@
       "description": "Module Worker identity this version belongs to.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta2",
+          "const": "edge.forms.takoform.com",
           "type": "string"
         },
         "kind": {
@@ -731,7 +731,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta2",
+                "const": "edge.forms.takoform.com",
                 "type": "string"
               },
               "kind": {

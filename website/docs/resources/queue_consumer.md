@@ -2,7 +2,7 @@
 page_title: "takoform_queue_consumer Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Queue Consumer (edge.forms.takoform.com/v1beta2, role attachment).
+  Queue Consumer (edge.forms.takoform.com, role attachment).
 ---
 
 # takoform_queue_consumer
@@ -11,7 +11,7 @@ Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, inv
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com identity is not yet carried by any
 Registry-published provider release: it ships with the next provider release
 (decision 0046). Registry-published provider v2.1.1 serves this resource type
 under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
@@ -93,7 +93,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_queue_consumer.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"QueueConsumer","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"QueueConsumer","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

@@ -3,9 +3,9 @@ package formpackage
 // namespaced_group_test.go pins the Go Form-group guard against the normative
 // grammar it mirrors. spec/schemas/form-ref-v1alpha3.schema.json excludes
 // exactly two enum values; the Go guard is deliberately a strict superset and
-// additionally refuses every version of the bare forms.takoform.com group and
-// the reserved packages./trust. envelope namespaces. Anything accepted here
-// therefore also satisfies the normative schema.
+// additionally refuses the bare forms.takoform.com group and the reserved
+// packages./trust. envelope namespaces, in every version and with none.
+// Anything accepted here therefore also satisfies the normative schema.
 
 import "testing"
 
@@ -21,6 +21,13 @@ func TestNamespacedFormGroupIsAStrictSupersetOfTheSchemaExclusions(t *testing.T)
 		"forms.takoform.com/v1alpha4": false,
 		"forms.takoform.com/v1":       false,
 		"forms.takoform.com/v2beta1":  false,
+		// And the bare group with no version at all. Decision 0049 made a
+		// versionless group legal, which is exactly what a reserved name would
+		// use to slip past a guard that only read the reserved list when a
+		// version followed the slash.
+		"forms.takoform.com":          false,
+		"packages.forms.takoform.com": false,
+		"trust.forms.takoform.com":    false,
 		// The reserved envelope namespaces: package indexes and trust statements
 		// live there, so a Form Definition never can.
 		"packages.forms.takoform.com/v1alpha1": false,
@@ -28,15 +35,18 @@ func TestNamespacedFormGroupIsAStrictSupersetOfTheSchemaExclusions(t *testing.T)
 		"packages.forms.takoform.com/v1alpha4": false,
 		"trust.forms.takoform.com/v1alpha1":    false,
 		"trust.forms.takoform.com/v1":          false,
-		// Official families are subdomains of forms.takoform.com.
+		// Official families are subdomains of forms.takoform.com, and since
+		// decision 0049 they carry no version.
+		"edge.forms.takoform.com":          true,
 		"edge.forms.takoform.com/v1alpha1": true,
 		// Third-party families are any other DNS-like group.
+		"forms.example.com":          true,
 		"forms.example.com/v1alpha1": true,
 		"forms.example.com/v1":       true,
 		// Grammar failures stay grammar failures.
 		"forms/v1":                   false,
+		"forms":                      false,
 		"Forms.Example.com/v1alpha":  false,
-		"forms.example.com":          false,
 		"forms.example.com/version1": false,
 	} {
 		apiVersion, want := apiVersion, want
@@ -73,6 +83,11 @@ func TestFamilyLanesRejectTheReservedNamespacesEndToEnd(t *testing.T) {
 		"forms.takoform.com/v1alpha3",
 		"packages.forms.takoform.com/v1alpha1",
 		"trust.forms.takoform.com/v1alpha1",
+		// The versionless spellings the same lanes must refuse, since a group
+		// with no version is a legal shape rather than a grammar failure.
+		"forms.takoform.com",
+		"packages.forms.takoform.com",
+		"trust.forms.takoform.com",
 	} {
 		group := group
 		t.Run(group, func(t *testing.T) {

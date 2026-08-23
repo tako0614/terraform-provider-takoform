@@ -26,7 +26,11 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
-const v3TestAPIRoot = "/apis/forms.takoform.com/v1beta2"
+// v3TestAPIRoot is bound to the client's own constant rather than spelled
+// out again. A duplicated lane root is how this fake ended up advertising a
+// lane the client no longer speaks, and the failure surfaced as a 404 on
+// discovery rather than as a stale string.
+const v3TestAPIRoot = clientv3.APIRootPath
 
 // v3ExpectedGenerationHeader is the desired-state fence every mutation of this
 // lane carries, deletes included.
@@ -496,21 +500,22 @@ func (h *v3FakeHost) serveUploadStart(w http.ResponseWriter, r *http.Request) {
 // to decode a percent-encoded slash (spec/decisions/0018).
 func (h *v3FakeHost) serveResource(w http.ResponseWriter, r *http.Request, remainder string) {
 	segments := strings.Split(remainder, "/")
-	if len(segments) < 4 {
-		h.t.Errorf("unexpected resource path %q", remainder)
-		http.NotFound(w, r)
-		return
-	}
 	for _, segment := range segments {
 		if _, err := unescapeSegment(segment); err != nil {
 			h.t.Errorf("resource path segment %q: %v", segment, err)
 		}
 	}
-	groupName, _ := unescapeSegment(segments[0])
-	groupVersion, _ := unescapeSegment(segments[1])
-	group := groupName + "/" + groupVersion
-	kind := segments[2]
-	name := segments[3]
+	// The group is split by the client's own rule rather than by counting two
+	// segments: since decision 0049 a group carries a version or does not, and
+	// a fake that counted read the versionless shape as a group plus a kind.
+	group, tail, ok := clientv3.SplitGroupPath(segments)
+	if !ok || len(tail) < 2 {
+		h.t.Errorf("unexpected resource path %q", remainder)
+		http.NotFound(w, r)
+		return
+	}
+	kind := tail[0]
+	name := tail[1]
 	key := h.resourceKey(kind, name)
 	switch r.Method {
 	case http.MethodPut:

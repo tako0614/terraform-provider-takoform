@@ -1,5 +1,5 @@
 // Package edgeformcatalog declares, as data, the Edge Platform Family:
-// the current public Beta Form Family (edge.forms.takoform.com/v1beta2,
+// the current public Beta Form Family (edge.forms.takoform.com,
 // decisions 0009 and 0035) together with its exact Interface and Binding
 // contracts (decision 0010). Every member fixes the application-visible
 // semantics of one proven
@@ -17,7 +17,10 @@ import (
 )
 
 // Family is the Edge Platform Family group.
-var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1beta2"}
+// The group is the whole family identity: no version segment, because one
+// never varied independently of the exact FormRef and its only effect was to
+// make every member move together (decision 0049).
+var Family = model.Family{Group: "edge.forms.takoform.com"}
 
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"
@@ -40,13 +43,17 @@ const (
 	// second Beta lane added: create, read, update, delete, import, observe,
 	// fences, relations, and the attachment gate all predate it.
 	firstBetaLane = "forms.takoform.com/v1beta1"
-	// secondBetaLane is required by the members whose contract uses a rule
-	// that lane introduced — the sealed external standard-service slot
+	// currentBetaLane is required by the members whose contract uses a rule a
+	// later lane introduced — the sealed external standard-service slot
 	// (decision 0045) and the annotated class-export gate a class-selecting
 	// identity is admitted by. An earlier host would install these and then
 	// have no rule to enforce them with, which is exactly what the
 	// requirement exists to refuse.
-	secondBetaLane = "forms.takoform.com/v1beta2"
+	//
+	// It names v1beta4 rather than the withdrawn lane that first introduced
+	// those rules, because a requirement is a lower bound on a lane a host can
+	// actually serve, and a withdrawn identity is not one (decision 0051).
+	currentBetaLane = "forms.takoform.com/v1beta4"
 )
 
 // laneRequirements names the members that need more than firstBetaLane. A Form
@@ -54,9 +61,9 @@ const (
 // is a deliberate statement that its contract cannot be served by an older
 // host — never something a generation move does to a whole family at once.
 var laneRequirements = map[string]string{
-	"WorkerVersion":   secondBetaLane,
-	"DurableWorkflow": secondBetaLane,
-	"ActorNamespace":  secondBetaLane,
+	"WorkerVersion":   currentBetaLane,
+	"DurableWorkflow": currentBetaLane,
+	"ActorNamespace":  currentBetaLane,
 }
 
 // requiredLane is the lane one member declares.
@@ -147,6 +154,17 @@ func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Fiel
 func activatingWorkerRef(doc, entrypoint string) model.Field {
 	field := moduleWorkerRef("worker", "worker", doc, true, true)
 	field.RequiredEntrypoint = entrypoint
+	return field
+}
+
+// classHolderWorkerRef is the worker reference of an identity that SELECTS a
+// class. It is exclusive over the pair, not the worker: two holders of
+// different classes on one worker are not a conflict, and two of the same
+// class would give one class two identities — a workflow's instance history
+// two homes, or an actor class two disjoint id spaces.
+func classHolderWorkerRef(doc string) model.Field {
+	field := moduleWorkerRef("worker", "worker", doc, true, true)
+	field.Exclusive = &model.ExclusiveHold{KeyedBy: "/className"}
 	return field
 }
 
@@ -426,9 +444,18 @@ var Forms = []model.Form{
 			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
 				Target:   requiresExactForm,
 				Required: true, Immutable: true,
-				Doc:     "Module Worker identity whose traffic this deployment governs.",
-				Example: ref("ModuleWorker", "module-worker")},
+				// One worker, one deployment. Two would leave "which one
+				// serves" undefined, and no rule chosen after the fact —
+				// newest, lowest name, highest weight — is one an author can
+				// predict.
+				Exclusive: &model.ExclusiveHold{},
+				Doc:       "Module Worker identity whose traffic this deployment governs.",
+				Example:   ref("ModuleWorker", "module-worker")},
 			{HCL: "versions", Wire: "versions", Kind: model.KindObjectList, Required: true, MinItems: 1, MaxItems: 8,
+				// The total is declared, not described: a schema bounds each
+				// weight and cannot add a column, so a host reading only this
+				// Definition would otherwise not know 10000 is the contract.
+				Sum: &model.SummedMember{Member: "weight", Total: 10000},
 				Doc: "Active Worker Versions and their traffic weights in basis points. Weights must sum to exactly 10000.",
 				Fields: []model.Field{
 					// A host READS the weighted version's desired state: its /worker
@@ -468,6 +495,10 @@ var Forms = []model.Form{
 		Fields: []model.Field{
 			activatingWorkerRef("Module Worker served on this hostname.", "fetch"),
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString, Required: true, Immutable: true,
+				// One DNS hostname has one answer, so the value is CLAIMED:
+				// at most one live resource per tenant holds it, compared on
+				// the canonical spelling this property's own pattern admits.
+				Claimed: true,
 				Pattern: model.PatternHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern " +
 					"admits the spellings DNS treats as one name — an uppercase letter, a trailing root dot — because " +
@@ -511,7 +542,11 @@ var Forms = []model.Form{
 		// portability boundary forbids.
 		Outputs: []model.Field{
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString,
-				Pattern: model.PatternCanonicalHostname, MaxLength: 253,
+				// The host mints this address; nothing an author wrote decides
+				// it, and a configuration that reconstructed it from the
+				// resource name would be guessing.
+				HostAssigned: true,
+				Pattern:      model.PatternCanonicalHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where " +
 					"DNS is case-insensitive and no trailing root dot. The GRAMMAR admits exactly that form, so the " +
 					"rule and the pattern say one thing. An author's hostname admits both variant spellings because a " +
@@ -523,7 +558,8 @@ var Forms = []model.Form{
 					"detail, so a portable configuration never parses it, never asserts a suffix, and never " +
 					"reconstructs it from the resource name."},
 			{HCL: "url", Wire: "url", Kind: model.KindString,
-				Pattern: `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
+				HostAssigned: true,
+				Pattern:      `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
 				// The value IS "https://" + the assigned hostname + "/", so its
 				// bound is that construction and nothing else: 8 + 253 + 1. A
 				// looser number would admit a url this Form cannot produce,
@@ -650,8 +686,13 @@ var Forms = []model.Form{
 		Fields: []model.Field{
 			{HCL: "database", Wire: "database", Kind: model.KindResourceRef, TargetKind: "SQLiteDatabase",
 				Target: requiresExactForm, Required: true, Immutable: true,
-				Doc:     "Exact SQLite Database whose durable migration ledger and schema this application advances.",
-				Example: ref("SQLiteDatabase", "sqlite-database")},
+				// One database, one live application. Two would each declare
+				// the whole schema of one database, and "Ready means the
+				// ledger equals the exact ordered set" would name two
+				// different sets with no rule for which one it must match.
+				Exclusive: &model.ExclusiveHold{},
+				Doc:       "Exact SQLite Database whose durable migration ledger and schema this application advances.",
+				Example:   ref("SQLiteDatabase", "sqlite-database")},
 			{HCL: "migration_set", Wire: "migrationSet", Kind: model.KindResourceRef, TargetKind: "SQLiteMigrationSet",
 				Target: requiresExactForm, Required: true, Immutable: true,
 				Doc:     "Exact immutable SQLite Migration Set whose ordered manifest must extend the database ledger.",
@@ -716,8 +757,12 @@ var Forms = []model.Form{
 			{HCL: "queue", Wire: "queue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
 				Target:   requiresInterface("edge.queue", "1.0.0"),
 				Required: true, Immutable: true,
-				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
-				Example: ref("AtLeastOnceQueue", "at-least-once-queue")},
+				// One queue, one consumer. Two would split the stream between
+				// two retry policies and two dead-letter destinations, which
+				// leaves the queue's own behavior unstatable.
+				Exclusive: &model.ExclusiveHold{},
+				Doc:       "Queue this consumer drains. Changing it replaces the attachment.",
+				Example:   ref("AtLeastOnceQueue", "at-least-once-queue")},
 			activatingWorkerRef("Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", "queue"),
 			// Batching, retry, and concurrency decide throughput, duplicate
 			// exposure, and downstream load together. No single value is portable
@@ -776,9 +821,8 @@ var Forms = []model.Form{
 			// The reference states an ABI requirement, not a Form one: what a
 			// workflow needs from the identity it belongs to is the runtime
 			// contract that decides a module exists and how the host loads it.
-			moduleWorkerRef("worker", "worker",
-				"Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow.",
-				true, true),
+			classHolderWorkerRef(
+				"Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow."),
 			// The class name is immutable because the instance history is kept
 			// under this identity while the CODE arrives through the worker's
 			// deployment. Repointing a live identity at a different class would
@@ -809,9 +853,8 @@ var Forms = []model.Form{
 			"and the first delivery is its creation. One worker carries at most one Actor Namespace per class " +
 			"name, because two namespaces over one class would give that class two disjoint id spaces.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker",
-				"Module Worker identity whose active deployment serves this actor class. Changing it replaces the namespace.",
-				true, true),
+			classHolderWorkerRef(
+				"Module Worker identity whose active deployment serves this actor class. Changing it replaces the namespace."),
 			// Immutable for a harder reason than the workflow's: the id space
 			// and every actor's storage hang off this identity, so repointing
 			// it at another class would hand one set of durable stores to code

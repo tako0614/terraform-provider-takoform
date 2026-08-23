@@ -15,7 +15,7 @@ Machine authority is scoped by identity family. The withdrawn central
 epochs' lifecycle ledger went with them (decision 0042) and stays in git
 history. Current family maturity and exact identity are recorded in the
 generated family candidate set; for the Beta Edge family that is
-[`../forms/candidates/edge/v1beta2/candidate-set.json`](../forms/candidates/edge/v1beta2/candidate-set.json).
+[`../forms/candidates/edge.forms.takoform.com/candidate-set.json`](../forms/candidates/edge.forms.takoform.com/candidate-set.json).
 The provider compatibility copy is independently locked in
 [`../release/provider-form-identities.json`](../release/provider-form-identities.json).
 

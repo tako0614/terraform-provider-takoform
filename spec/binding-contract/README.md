@@ -22,7 +22,7 @@ retained v1alpha2 lane
 Definition bytes. The normative shapes are
 [`../schemas/binding-ref-v1alpha1.schema.json`](../schemas/binding-ref-v1alpha1.schema.json)
 and
-[`../schemas/binding-definition-v1alpha1.schema.json`](../schemas/binding-definition-v1alpha1.schema.json).
+[`../schemas/binding-definition-v1alpha2.schema.json`](../schemas/binding-definition-v1alpha2.schema.json).
 
 ## Binding Definition
 
@@ -194,7 +194,7 @@ prove a laxer host fails the lane.
 ## Binding distribution
 
 Binding Definitions are distributed **with this repository**, as digest-bound
-documents under `bindings/candidates/v1alpha1`. They are NOT independently
+documents under `bindings/candidates/v1alpha2`. They are NOT independently
 installable third-party artifacts, and there is no Binding Package envelope:
 no such identity is specified, published, or planned for this generation
 ([decision 0021](../decisions/0021-third-party-forms-and-contract-distribution.md)).

@@ -28,13 +28,18 @@ const (
 	// in this lane use DNS-like groups, so there is no single Form apiVersion
 	// constant; validation accepts any namespaced group outside the two frozen
 	// central epochs.
-	FamilyPackageAPIVersion  = "packages.forms.takoform.com/v1alpha4"
-	PackageKind              = "FormPackage"
-	TrustAPIVersion          = "trust.forms.takoform.com/v1alpha1"
-	RevocationKind           = "FormPackageRevocation"
-	RevocationCheckpointKind = "FormPackageRevocationCheckpoint"
-	PackageIndexFilename     = "package-index.json"
-	DefinitionMediaType      = "application/vnd.takoform.form-definition.v1+json"
+	FamilyPackageAPIVersion = "packages.forms.takoform.com/v1alpha4"
+	// VersionlessFamilyPackageAPIVersion identifies content-addressed packages
+	// whose family group carries no version segment (decision 0049). It exists
+	// only because v1alpha4's index schema refers to a FormRef schema that
+	// requires one, and that schema is published.
+	VersionlessFamilyPackageAPIVersion = "packages.forms.takoform.com/v1alpha5"
+	PackageKind                        = "FormPackage"
+	TrustAPIVersion                    = "trust.forms.takoform.com/v1alpha1"
+	RevocationKind                     = "FormPackageRevocation"
+	RevocationCheckpointKind           = "FormPackageRevocationCheckpoint"
+	PackageIndexFilename               = "package-index.json"
+	DefinitionMediaType                = "application/vnd.takoform.form-definition.v1+json"
 )
 
 // FormRef is the exact portable identity of one immutable Form Definition.
@@ -44,6 +49,20 @@ type FormRef struct {
 	Kind              string `json:"kind"`
 	DefinitionVersion string `json:"definitionVersion"`
 	SchemaDigest      string `json:"schemaDigest"`
+}
+
+// FormConstraint is one entry of a Form Definition's closed constraint list.
+// Every pointer is an RFC 6901 JSON Pointer into the desired instance, or into
+// the outputs for a host-assigned member.
+type FormConstraint struct {
+	Kind      string `json:"kind"`
+	Reference string `json:"reference,omitempty"`
+	KeyedBy   string `json:"keyedBy,omitempty"`
+	List      string `json:"list,omitempty"`
+	Member    string `json:"member,omitempty"`
+	Total     int64  `json:"total,omitempty"`
+	Property  string `json:"property,omitempty"`
+	Output    string `json:"output,omitempty"`
 }
 
 type FormDefinition struct {
@@ -64,8 +83,13 @@ type FormDefinition struct {
 	// dependency every Form has and the only one that used to travel by
 	// convention, which is why a family and a lane could never move apart.
 	// Empty on the epochs whose frozen schemas forbid it.
-	RequiresHostAPI string         `json:"requiresHostApi,omitempty"`
-	DesiredSchema   map[string]any `json:"desiredSchema"`
+	RequiresHostAPI string `json:"requiresHostApi,omitempty"`
+	// Constraints is the closed list of rules about RESOURCES this Form
+	// declares (decision 0049). They are not shape, so they are not in the
+	// desired schema, where they rode in extension slots no standard validator
+	// reads. Empty on the epochs whose frozen schemas forbid the member.
+	Constraints   []FormConstraint `json:"constraints,omitempty"`
+	DesiredSchema map[string]any   `json:"desiredSchema"`
 	// ObservedSchema is required by the frozen v1alpha1/v1alpha2 schemas and
 	// optional in the family lanes, where the envelope owns status.
 	ObservedSchema        map[string]any        `json:"observedSchema,omitempty"`

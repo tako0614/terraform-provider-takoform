@@ -268,7 +268,62 @@ for (const [sourceRoot, targetRoot, include] of staticDirectories) {
   }
 }
 
+// The projection is one-directional, and for three generations nothing asked
+// the reverse question: is there a page on the site that no canonical document
+// projects to? Nine per-Form proposal pages outlived the move to family trees
+// and stayed served, and two Host API lanes collapsed into one kept their old
+// pages beside it. A mirror that only ever adds is not a mirror.
+//
+// Site-owned pages are named here rather than inferred, so that exempting one
+// is a reviewed change and not a filename that happened not to collide.
+const siteOwnedPages = new Set([
+  // the curated contract map at /spec/; spec/README.md projects to overview.md
+  path.join(websiteRoot, "spec", "index.md"),
+]);
+const projectedPageRoots = ["spec", "proposals", "forms", "conformance", "release"].map(
+  (directory) => path.join(websiteRoot, directory),
+);
+function orphanedStatic() {
+  const expected = new Set(staticFiles.map(({ site }) => site));
+  const orphans = [];
+  for (const [, targetRoot] of staticDirectories) {
+    let present;
+    try {
+      present = collect(targetRoot);
+    } catch {
+      continue; // the mirror has not been written yet
+    }
+    for (const file of present) {
+      const sitePath = path.join(targetRoot, file);
+      if (!expected.has(sitePath)) orphans.push(sitePath);
+    }
+  }
+  return orphans.sort();
+}
+
+function orphanedPages() {
+  const expected = new Set(pages.map(({ site }) => site));
+  const orphans = [];
+  for (const root of projectedPageRoots) {
+    for (const file of collect(root)) {
+      const sitePath = path.join(root, file);
+      if (!file.endsWith(".md")) continue;
+      if (expected.has(sitePath) || siteOwnedPages.has(sitePath)) continue;
+      orphans.push(sitePath);
+    }
+  }
+  return orphans.sort();
+}
+
 const writeProjection = () => {
+  for (const site of orphanedPages()) {
+    rmSync(site);
+    process.stdout.write(`removed orphaned page ${path.relative(repositoryRoot, site)}\n`);
+  }
+  for (const site of orphanedStatic()) {
+    rmSync(site);
+    process.stdout.write(`removed orphaned file ${path.relative(repositoryRoot, site)}\n`);
+  }
   for (const { canonical, site } of pages) {
     mkdirSync(path.dirname(site), { recursive: true });
     const transformed = transformMarkdown(readFileSync(canonical, "utf8"));
@@ -294,6 +349,16 @@ const writeProjection = () => {
 
 const checkProjection = () => {
   const drift = [];
+  for (const site of orphanedPages()) {
+    drift.push(
+      `${path.relative(repositoryRoot, site)}: page on the site that no canonical document projects to`,
+    );
+  }
+  for (const site of orphanedStatic()) {
+    drift.push(
+      `${path.relative(repositoryRoot, site)}: file on the site that no canonical document copies to`,
+    );
+  }
   for (const { canonical, site } of pages) {
     const expected = transformMarkdown(readFileSync(canonical, "utf8"));
     const output = expected.endsWith("\n") ? expected : `${expected}\n`;

@@ -459,11 +459,34 @@ func resourceKey(scope resourceScope, group, kind, name string) string {
 	return strings.Join([]string{scope.Tenant, scope.Space, group, kind, name}, "\x00")
 }
 
-// groupOf rejoins the two ordinary path segments a namespaced Form group
-// travels as — {formGroup}/{formVersion} — into the exact FormRef apiVersion
-// string the wire, the queries, and the stored identities use unchanged
-// (spec/decisions/0018).
-func groupOf(name, version string) string { return name + "/" + version }
+// kindSegmentPattern is the Kind grammar the lane states. No segment of a Form
+// group can match it — a DNS-like label is lowercase and a version segment
+// begins with a lowercase "v" — which is what lets a host tell a group's own
+// path segments from the kind that follows them without counting segments.
+var kindSegmentPattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+
+// splitGroupPath consumes the leading segments a namespaced Form group travels
+// as and rejoins them into the exact FormRef apiVersion string the wire, the
+// queries, and the stored identities use unchanged. A group carries a version
+// segment only while it has a published generation to keep apart, so one group
+// is one segment and another is two (spec/decisions/0049); this is the one
+// place that decides which, and it decides by grammar rather than by arity so
+// that neither shape has to be special-cased anywhere else.
+//
+// No path segment ever percent-encodes a slash (spec/decisions/0018), so the
+// segments are rejoined exactly as they arrived.
+func splitGroupPath(parts []string) (string, []string, bool) {
+	for index, part := range parts {
+		if !kindSegmentPattern.MatchString(part) {
+			continue
+		}
+		if index == 0 {
+			return "", nil, false
+		}
+		return strings.Join(parts[:index], "/"), parts[index:], true
+	}
+	return "", nil, false
+}
 
 type hostAuthContext struct {
 	Tenant    string
@@ -625,11 +648,21 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 		}
 		parts[index] = part
 	}
+	// The group's own segments are consumed before the switch, because how many
+	// there are is a property of the group rather than of the route.
+	var (
+		groupPath  string
+		groupTail  []string
+		groupSplit bool
+	)
+	if len(parts) > 1 && (parts[0] == "resources" || parts[0] == "form-definitions") {
+		groupPath, groupTail, groupSplit = splitGroupPath(parts[1:])
+	}
 	switch {
 	case parts[0] == "forms" && len(parts) == 1 && request.Method == http.MethodGet:
 		h.handleForms(w, request)
-	case parts[0] == "form-definitions" && len(parts) == 4 && request.Method == http.MethodGet:
-		h.handleFormDefinition(w, request, groupOf(parts[1], parts[2]), parts[3])
+	case parts[0] == "form-definitions" && groupSplit && len(groupTail) == 1 && request.Method == http.MethodGet:
+		h.handleFormDefinition(w, request, groupPath, groupTail[0])
 	case parts[0] == "resources" && len(parts) == 2 && parts[1] == "validate" && request.Method == http.MethodPost:
 		h.handleValidate(w, request)
 	case parts[0] == "resources" && len(parts) == 2 && parts[1] == "prepare" && request.Method == http.MethodPost:
@@ -643,16 +676,16 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 	// v1beta1 lane — observe is the one fenced read-only re-observation — so
 	// /refresh reaches no entry and is an unknown operation, exactly like any
 	// other action the lane does not define.
-	case parts[0] == "resources" && len(parts) == 5:
-		group, kind, name := groupOf(parts[1], parts[2]), parts[3], parts[4]
+	case parts[0] == "resources" && groupSplit && len(groupTail) == 2:
+		group, kind, name := groupPath, groupTail[0], groupTail[1]
 		handler, defined := resourcePlaneHandlers[resourcePlaneRoute{Method: request.Method}]
 		if !defined {
 			h.writeError(w, "resource_not_found", "unknown operation")
 			return
 		}
 		handler(h, w, request, group, kind, name)
-	case parts[0] == "resources" && len(parts) == 6 && request.Method == http.MethodPost:
-		group, kind, name, action := groupOf(parts[1], parts[2]), parts[3], parts[4], parts[5]
+	case parts[0] == "resources" && groupSplit && len(groupTail) == 3 && request.Method == http.MethodPost:
+		group, kind, name, action := groupPath, groupTail[0], groupTail[1], groupTail[2]
 		handler, defined := resourcePlaneHandlers[resourcePlaneRoute{Method: http.MethodPost, Action: action}]
 		if !defined {
 			h.writeError(w, "resource_not_found", "unknown operation")
@@ -749,9 +782,13 @@ func (h *ReferenceHost) handleForms(w http.ResponseWriter, request *http.Request
 // which made a route named "forms" unable to tell anyone which Forms existed.
 func (h *ReferenceHost) handleFormsEnumerated(w http.ResponseWriter, request *http.Request) {
 	query := request.URL.Query()
+	wholeGroup := h.contract.lane.FormsFilterGroupIsWhole
 	allowed := map[string]bool{
-		"space": true, "group": true, "version": true, "kind": true,
+		"space": true, "group": true, "kind": true,
 		"definitionVersion": true, "schemaDigest": true,
+	}
+	if !wholeGroup {
+		allowed["version"] = true
 	}
 	for key, values := range query {
 		if !allowed[key] || len(values) != 1 {
@@ -764,9 +801,13 @@ func (h *ReferenceHost) handleFormsEnumerated(w http.ResponseWriter, request *ht
 	// "no matches" would answer 200 with an empty set to a request that was
 	// wrong — indistinguishable, to a client, from a host that simply has no
 	// such Form.
+	groupFilterGrammar := validFormGroupName
+	if wholeGroup {
+		groupFilterGrammar = validFormGroup
+	}
 	for key, valid := range map[string]func(string) bool{
 		"space":             validSpaceID,
-		"group":             validFormGroup,
+		"group":             groupFilterGrammar,
 		"version":           validFamilyVersion,
 		"kind":              validFormKind,
 		"definitionVersion": validDefinitionVersion,
@@ -782,15 +823,19 @@ func (h *ReferenceHost) handleFormsEnumerated(w http.ResponseWriter, request *ht
 		}
 	}
 	// A narrowing key is matched against the whole exact identity it names.
-	// `group` and `version` are the two halves of an apiVersion, because the
-	// path shape already splits them and a client that had to rejoin them
-	// would be re-deriving what the lane took apart.
+	// On this lane `group` IS the group; on v1beta1 it is the group's name and
+	// `version` its generation, which is the split the path shape used to make
+	// and this lane no longer does.
 	group, version := query.Get("group"), query.Get("version")
 	matches := make([]map[string]any, 0, len(h.catalog.Forms))
 	for _, form := range h.catalog.sortedForms() {
-		formGroup, formVersion, split := splitAPIVersion(form.Ref.APIVersion)
-		if !split {
-			continue
+		formGroup, formVersion := form.Ref.APIVersion, ""
+		if !wholeGroup {
+			name, generation, split := splitAPIVersion(form.Ref.APIVersion)
+			if !split {
+				continue
+			}
+			formGroup, formVersion = name, generation
 		}
 		switch {
 		case group != "" && group != formGroup,
@@ -851,6 +896,12 @@ func (h *ReferenceHost) handleFormDefinition(w http.ResponseWriter, request *htt
 	}
 	if form.Description != "" {
 		response["description"] = form.Description
+	}
+	// The constraints travel with the Definition. They are rules a client must
+	// be able to read — a host that enforced a hold it never published would
+	// refuse an apply for a reason nothing in the contract stated.
+	if len(form.Constraints) != 0 {
+		response["constraints"] = form.Constraints
 	}
 	h.writeJSON(w, http.StatusOK, "", response)
 }
@@ -959,13 +1010,19 @@ func (h *ReferenceHost) resolveResourceWire(body *resourceWire) (*InstalledForm,
 // because a host validating a query has no FormRef document to validate
 // against — the query is exactly the case where the identity is not yet whole.
 var (
-	formGroupPattern         = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
+	formGroupNamePattern     = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
+	formGroupPattern         = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:/v[0-9]+(?:(?:alpha|beta)[0-9]+)?)?$`)
 	familyVersionPattern     = regexp.MustCompile(`^v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
 	formKindPattern          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,62}$`)
 	definitionVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
 )
 
+// validFormGroup admits a whole group, with or without its version segment.
+// validFormGroupName admits only the DNS-like name, which is what the v1beta1
+// filter's `group` key means when `version` carries the other half.
 func validFormGroup(value string) bool { return formGroupPattern.MatchString(value) }
+
+func validFormGroupName(value string) bool { return formGroupNamePattern.MatchString(value) }
 
 func validFamilyVersion(value string) bool { return familyVersionPattern.MatchString(value) }
 
@@ -1250,7 +1307,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 ) ([]storedRelation, *hostError) {
 	// Two pure spec-shape rules first: neither needs another resource, so
 	// neither should depend on one resolving.
-	if hostErr := validateDeploymentWeightSum(form.EnforcedFamily, form, spec); hostErr != nil {
+	if hostErr := validateSummedMembers(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	if hostErr := validateEnvironmentNamespace(form.EnforcedFamily, form, spec); hostErr != nil {
@@ -1274,6 +1331,12 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	if hostErr := h.validateWorkerVersionAssets(caller, form, scope, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
+	// Declared reference cardinality, enforced without knowing a Form kind.
+	// It runs before the family's own semantics because a second holder is
+	// untrue about the target regardless of anything else the spec says.
+	if hostErr := h.validateExclusiveHolds(form, scope, name, spec, relations); hostErr != nil {
+		return nil, hostErr
+	}
 	if hostErr := h.validateSQLiteMigrationApplication(caller, form, scope, name, relations); hostErr != nil {
 		return nil, hostErr
 	}
@@ -1292,35 +1355,67 @@ func (h *ReferenceHost) validateDesiredSemantics(
 // weight half of the deployment integrity rule; the ownership, uniqueness, and
 // availability halves need resolved relations and live in
 // validateWorkerDeployment.
-func validateDeploymentWeightSum(familyGroup string, form *InstalledForm, spec map[string]any) *hostError {
-	if form.Ref.APIVersion != familyGroup || form.Ref.Kind != workerDeploymentKind {
-		return nil
-	}
-	versions, _ := spec["versions"].([]any)
-	if len(versions) == 0 {
-		return stableError("invalid_argument", "a WorkerDeployment requires at least one weighted version")
-	}
-	total := int64(0)
-	for _, member := range versions {
-		entry, _ := member.(map[string]any)
-		weight, ok := entry["weight"].(json.Number)
-		if !ok {
-			return stableError("invalid_argument", "WorkerDeployment version weight must be an integer")
+// validateSummedMembers holds every object list that DECLARES a total to it.
+// It knows no Form kind: the list, the member, and the total all come out of
+// the served desired schema's x-takoform-sum annotation, so a family that
+// gains a summed list is covered without a host edit — which is the whole
+// difference between this and the paragraph about traffic weights it replaces.
+func validateSummedMembers(form *InstalledForm, spec map[string]any) *hostError {
+	for _, constraint := range form.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintSum) {
+			continue
 		}
-		value, err := strconv.ParseInt(weight.String(), 10, 64)
-		if err != nil {
-			return stableError("invalid_argument", "WorkerDeployment version weight must be an integer")
+		name := strings.TrimPrefix(constraint.List, "/")
+		if name == "" || constraint.Member == "" {
+			return stableError("invalid_argument", "the installed Definition declares an unreadable summed list")
 		}
-		total += value
-	}
-	if total != workerDeploymentWeightTotal {
-		return stableError(
-			"invalid_argument",
-			"WorkerDeployment traffic weights must sum to exactly "+
-				strconv.Itoa(workerDeploymentWeightTotal)+" basis points",
-		)
+		elements, present := spec[name].([]any)
+		if !present {
+			continue
+		}
+		total := int64(0)
+		for _, element := range elements {
+			entry, _ := element.(map[string]any)
+			value, ok := jsonInteger(entry[constraint.Member])
+			if !ok {
+				return stableError(
+					"invalid_argument",
+					name+" element "+strconv.Quote(constraint.Member)+" must be an integer",
+				)
+			}
+			total += value
+		}
+		if total != constraint.Total {
+			return stableError(
+				"invalid_argument",
+				name+" "+strconv.Quote(constraint.Member)+" values total "+strconv.FormatInt(total, 10)+
+					", and the Definition declares they must total exactly "+
+					strconv.FormatInt(constraint.Total, 10),
+			)
+		}
 	}
 	return nil
+}
+
+// jsonInteger reads an integer that may have decoded as json.Number or as one
+// of the numeric types a schema-derived document can carry.
+func jsonInteger(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case json.Number:
+		parsed, err := strconv.ParseInt(typed.String(), 10, 64)
+		return parsed, err == nil
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	case float64:
+		if typed != float64(int64(typed)) {
+			return 0, false
+		}
+		return int64(typed), true
+	default:
+		return 0, false
+	}
 }
 
 // mutationFence carries the exact precondition headers of one mutation. The
@@ -2863,6 +2958,14 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 		h.writeError(w, "resource_not_found", "unknown support operation")
 		return
 	}
+	var (
+		supportGroup      string
+		supportTail       []string
+		supportGroupSplit bool
+	)
+	if len(parts) > 2 && parts[1] == "forms" {
+		supportGroup, supportTail, supportGroupSplit = splitGroupPath(parts[2:])
+	}
 	switch {
 	case len(parts) == 2 && parts[1] == "forms":
 		// Every installed identity gets its own profile. Two definition versions
@@ -2874,12 +2977,12 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 			profiles = append(profiles, h.formSupportProfile(form))
 		}
 		h.writeJSON(w, http.StatusOK, "", map[string]any{"profiles": profiles})
-	case len(parts) == 6 && parts[1] == "forms":
+	case len(parts) > 4 && parts[1] == "forms" && supportGroupSplit && len(supportTail) == 2:
 		// The published path carries the definition version and no digest, so the
 		// exact identity is resolved through the line index — which refuses to
 		// hold two definitions that agree on the version and differ on the bytes.
 		// The profile then answers about that one identity and echoes it.
-		form := h.catalog.line(groupOf(parts[2], parts[3]), parts[4], parts[5])
+		form := h.catalog.line(supportGroup, supportTail[0], supportTail[1])
 		if form == nil {
 			h.writeError(w, "form_unknown", "exact Form line is unknown")
 			return

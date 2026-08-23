@@ -79,7 +79,7 @@ func TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState(t *testing.T) {
 		t.Fatalf("future stable create target = %#v (err %v)", got, err)
 	}
 	codec, ok := future.forStateKey(beta.ExactKey())
-	if !ok || codec.Ref != beta || codec.Form.Family.APIVersion() != "edge.forms.takoform.com/v1beta2" {
+	if !ok || codec.Ref != beta || codec.Form.Family.APIVersion() != "edge.forms.takoform.com" {
 		t.Fatalf("Beta state implicitly upgraded: codec=%#v ok=%t", codec, ok)
 	}
 }
@@ -359,7 +359,7 @@ func TestV3ImportIdentityForms(t *testing.T) {
 		for _, id := range []string{
 			"",
 			"{",
-			`{"name":"module-worker","apiVersion":"edge.forms.takoform.com/v1beta2"}`,
+			`{"name":"module-worker","apiVersion":"edge.forms.takoform.com"}`,
 			`{"name":"Module-Worker"}`,
 			`{"name":"module-worker","space":"bad/space"}`,
 			`{"name":"module-worker","unknown":"member"}`,

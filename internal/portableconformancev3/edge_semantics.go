@@ -3,6 +3,7 @@ package portableconformancev3
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -222,51 +223,8 @@ func (h *ReferenceHost) validateSQLiteMigrationApplication(
 	name string,
 	relations []storedRelation,
 ) *hostError {
-	if hostErr := h.validateSingleMigrationApplication(form, scope, name, relations); hostErr != nil {
-		return hostErr
-	}
 	_, _, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
 	return hostErr
-}
-
-// validateSingleMigrationApplication holds a database to AT MOST ONE live
-// application, over its UID, exactly like one-deployment-per-worker and
-// one-consumer-per-queue. Two live applications would each declare the whole
-// schema of one database, and "Ready means the ledger equals the exact ordered
-// set" would then name two different sets with no rule for which one the
-// database is supposed to match.
-//
-// It is invalid_argument rather than dependency_in_use because the request is
-// well formed and what is untrue is what it says about the database it points
-// at. Advancing a schema is a handover — delete, then create against the
-// longer set — and the ledger prefix check makes that resume at the unapplied
-// suffix, so the rule costs no replay.
-func (h *ReferenceHost) validateSingleMigrationApplication(
-	form *InstalledForm, scope resourceScope, name string, relations []storedRelation,
-) *hostError {
-	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != sqliteMigrationApplicationKind {
-		return nil
-	}
-	databaseUID := relationTargetUID(relations, migrationDatabasePointer)
-	if databaseUID == "" {
-		return nil
-	}
-	selfKey := resourceKey(scope, h.edgeGroup(), form.Ref.Kind, name)
-	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != h.edgeGroup() ||
-			candidate.kind() != sqliteMigrationApplicationKind ||
-			candidate.key() == selfKey {
-			continue
-		}
-		if relationTargetUID(candidate.Relations, migrationDatabasePointer) == databaseUID {
-			return stableError("invalid_argument",
-				"SQLiteMigrationApplication "+name+" applies to the SQLiteDatabase at uid "+databaseUID+
-					", which SQLiteMigrationApplication "+candidate.Name+" already applies to; "+
-					"a database carries at most one live migration application, and advancing its schema "+
-					"is deleting that application and creating one referencing the longer set")
-		}
-	}
-	return nil
 }
 
 // sqliteMigrationApplicationUnavailable is the derived readiness half of the
@@ -403,36 +361,49 @@ func canonicalizeEdgeSpec(familyGroup string, form *InstalledForm, spec map[stri
 // already names one resource inside one tenant; a hostname is a name DNS owns,
 // so the comparison carries no boundary of its own and a scan over the store
 // alone would silently enforce the rule host-wide (spec/decisions/0026).
-func (h *ReferenceHost) validateSingleHostnameClaim(
+func (h *ReferenceHost) validateClaimedValues(
+	form *InstalledForm,
 	scope resourceScope,
 	name string,
 	spec map[string]any,
 ) *hostError {
-	hostname, _ := spec["hostname"].(string)
-	if hostname == "" {
-		return stableError("invalid_argument", "a WorkerCustomDomain requires a hostname")
+	claimed := make([]string, 0, len(form.Constraints))
+	for _, constraint := range form.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintClaim) {
+			continue
+		}
+		claimed = append(claimed, strings.TrimPrefix(constraint.Property, "/"))
 	}
-	selfKey := resourceKey(scope, h.edgeGroup(), workerCustomDomainKind, name)
-	for _, candidate := range h.sortedResources() {
-		if candidate.Tenant != scope.Tenant {
-			continue
+	sort.Strings(claimed)
+	selfKey := resourceKey(scope, form.Ref.APIVersion, form.Ref.Kind, name)
+	for _, property := range claimed {
+		value, _ := spec[property].(string)
+		if value == "" {
+			return stableError("invalid_argument", "a claimed "+property+" is required")
 		}
-		if candidate.group() != h.edgeGroup() || candidate.kind() != workerCustomDomainKind {
-			continue
+		for _, candidate := range h.sortedResources() {
+			// The scan stops at the TENANT. What one tenant may claim is a
+			// question about who controls the value — authority this contract
+			// does not answer — so a value another tenant holds is none of
+			// this scan's business (spec/decisions/0026). Every OTHER
+			// cross-resource rule is decided on a host-issued uid, which
+			// already names one resource inside one tenant; a claimed value
+			// carries no boundary of its own.
+			if candidate.Tenant != scope.Tenant || candidate.key() == selfKey {
+				continue
+			}
+			if candidate.group() != form.Ref.APIVersion || candidate.kind() != form.Ref.Kind {
+				continue
+			}
+			if held, _ := candidate.Spec[property].(string); held == value {
+				return stableError(
+					"invalid_argument",
+					property+" "+quoteText(value)+" is already held by "+form.Ref.Kind+" "+candidate.Name+
+						" in space "+quoteText(candidate.Space)+
+						"; a claimed value has one holder per tenant, and the comparison is on the canonical spelling",
+				)
+			}
 		}
-		if candidate.key() == selfKey {
-			continue
-		}
-		claimed, _ := candidate.Spec["hostname"].(string)
-		if claimed != hostname {
-			continue
-		}
-		return stableError(
-			"invalid_argument",
-			"hostname "+quoteText(hostname)+" is already served by WorkerCustomDomain "+candidate.Name+
-				" in space "+quoteText(candidate.Space)+
-				"; one DNS hostname has one answer, and the comparison is on the canonical spelling",
-		)
 	}
 	return nil
 }
@@ -600,24 +571,10 @@ func (h *ReferenceHost) validateSingleQueueConsumer(
 	if queueUID == "" {
 		return stableError("invalid_argument", "a QueueConsumer requires a target queue")
 	}
-	selfKey := resourceKey(scope, h.edgeGroup(), queueConsumerKind, name)
-	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != h.edgeGroup() || candidate.kind() != queueConsumerKind {
-			continue
-		}
-		if candidate.key() == selfKey {
-			continue
-		}
-		if relationTargetUID(candidate.Relations, queueRelationPointer) != queueUID {
-			continue
-		}
-		return stableError(
-			"invalid_argument",
-			"the AtLeastOnceQueue at uid "+queueUID+" is already drained by QueueConsumer "+candidate.Name+
-				"; a queue has at most one consumer, because two would split it between two retry policies "+
-				"and two dead-letter destinations",
-		)
-	}
+	// One consumer per queue is no longer written here: the Form declares it
+	// as an exclusive hold on its queue reference, and validateExclusiveHolds
+	// enforces it. What remains of this function is the check that the
+	// reference resolved at all.
 	return nil
 }
 

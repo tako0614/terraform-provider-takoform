@@ -103,6 +103,17 @@ func (r *v3Runner) run() error {
 			}
 			return r.checkClassHolderRules()
 		},
+		// The third lane's own addition, here because this is where the
+		// resources its declarations are about are live: every exclusive hold
+		// the installed family declares is driven, discovered from the served
+		// Definitions rather than from a list. On an earlier lane's corpus the
+		// step is a no-op and its required-check list does not name it.
+		func() error {
+			if !r.contract.lane.requires("declared-exclusive-holds-enforced") {
+				return nil
+			}
+			return r.checkDeclaredExclusiveHoldsEnforced()
+		},
 		// The two attachment rules a schema cannot state: a cron expression is a
 		// schedule rather than a shape, and one queue has one consumer
 		// (spec/decisions/0020). Both run against the worker the gate check just
@@ -205,7 +216,7 @@ func (r *v3Runner) run() error {
 	// They are appended rather than interleaved because each measures a rule
 	// that exists only in this lane: on a v1beta1 corpus the list is empty and
 	// the run is exactly what it always was.
-	if r.contract.lane.APIVersion == beta2Lane.APIVersion {
+	if r.contract.lane.requires("fence-matrix-observed") {
 		steps = append(steps,
 			func() error { return r.checkFenceMatrixObserved(kv) },
 			func() error { return r.checkFormsRouteEnumerates(mw) },
@@ -542,6 +553,7 @@ func (r *v3Runner) checkFormDefinitions() error {
 		ref           FormRef
 		packageDigest string
 		schema        map[string]any
+		constraints   []formpackage.FormConstraint
 	}
 	inventory := declaredProbes(&input)
 	pinned := make([]pinnedDefinition, 0, len(inventory)+1)
@@ -550,10 +562,15 @@ func (r *v3Runner) checkFormDefinitions() error {
 			ref:           entry.Probe.Identity.FormRef,
 			packageDigest: entry.Probe.Identity.PackageDigest,
 			schema:        entry.Probe.DesiredSchema.Schema,
+			constraints:   entry.Probe.Constraints,
 		})
 	}
 	if second := input.SyntheticSecondDefinitionVersion; second.Definition != nil {
-		pinned = append(pinned, pinnedDefinition{ref: second.FormRef, schema: second.Definition.DesiredSchema})
+		pinned = append(pinned, pinnedDefinition{
+			ref:         second.FormRef,
+			schema:      second.Definition.DesiredSchema,
+			constraints: second.Definition.Constraints,
+		})
 	}
 	for _, want := range pinned {
 		definition, err := r.formDefinition(want.ref)
@@ -583,6 +600,31 @@ func (r *v3Runner) checkFormDefinitions() error {
 					"exact FormRef; a client materializing the pinned defaults would compute a different specDigest "+
 					"and have every prepare refused\nserved: %s\npinned: %s",
 				want.ref.Kind, want.ref.DefinitionVersion, served, declared,
+			)
+		}
+		// The constraint list is compared for the same reason the schema is,
+		// and the reason it must be compared HERE is that the check driving
+		// the holds discovers its subjects from what the host serves. A host
+		// omitting a hold would shrink that inventory rather than fail it.
+		// Wrapped in an object because RFC 8785 canonicalizes a document, and
+		// a Form that declares no constraint has a nil list rather than an
+		// empty one. Comparing "no list" against "empty list" as text would
+		// make their agreement depend on which of two spellings each side
+		// happened to marshal.
+		servedConstraints, err := canonicalJSON(map[string]any{"constraints": want.constraints})
+		if err != nil {
+			return err
+		}
+		declaredConstraints, err := canonicalJSON(map[string]any{"constraints": definition.Constraints})
+		if err != nil {
+			return err
+		}
+		if servedConstraints != declaredConstraints {
+			return fmt.Errorf(
+				"form-definition for %s@%s served a constraint list that is not the one the corpus pins at that "+
+					"exact FormRef; a host serving fewer rules than the Form declares enforces fewer, and the "+
+					"resources it then accepts are ones this Form says are unrepresentable\nserved: %s\npinned: %s",
+				want.ref.Kind, want.ref.DefinitionVersion, declaredConstraints, servedConstraints,
 			)
 		}
 	}

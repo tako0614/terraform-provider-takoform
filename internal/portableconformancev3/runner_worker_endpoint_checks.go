@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 // The worker the endpoint group builds for itself, and the deployment that
@@ -63,6 +65,27 @@ const (
 // that branch exists to prevent: a host that accepts the endpoint and then
 // answers with an address it did not assign, an incomplete one, or a plaintext
 // one fails here rather than being discovered by whoever tried the URL.
+// hostAssignedOutputs names the declared output members the installed
+// Definition marks as minted by the host, in a stable order.
+func (r *v3Runner) hostAssignedOutputs(ref FormRef) ([]string, error) {
+	// Read from the SERVED Definition, not from the corpus: what a client can
+	// obey is what the host published, so a host that enforced a minted output
+	// it never declared would be holding callers to an unstated rule.
+	definition, err := r.formDefinition(ref)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(definition.Constraints))
+	for _, constraint := range definition.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintHostAssigned) {
+			continue
+		}
+		out = append(out, strings.TrimPrefix(constraint.Output, "/"))
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func (r *v3Runner) checkWorkerEndpointAddressIsHostAssigned() error {
 	input := r.contract.RunnerInput
 	endpoint := r.target(input.WorkerEndpoint)
@@ -72,9 +95,31 @@ func (r *v3Runner) checkWorkerEndpointAddressIsHostAssigned() error {
 	if err != nil {
 		return fmt.Errorf("a WorkerEndpoint on a worker whose deployment serves fetch: %w", err)
 	}
-	// The stored desired state must still be only the worker: a host that
-	// answered the address by writing it into the spec would have turned a
-	// host decision into desired state the next plan compares against.
+	// Which members the host mints is READ from the Definition, not known
+	// here: a family that marks another output host-assigned is held to the
+	// same rule without this check learning its name.
+	assigned, err := r.hostAssignedOutputs(endpoint.Ref)
+	if err != nil {
+		return err
+	}
+	if len(assigned) == 0 {
+		return fmt.Errorf(
+			"%s declares no host-assigned output, so this check would assert nothing",
+			endpoint.Ref.Kind,
+		)
+	}
+	// The stored desired state must still be only the worker, and in
+	// particular must carry none of the minted members: a host that answered
+	// the address by writing it into the spec would have turned a host
+	// decision into desired state the next plan compares against.
+	for _, member := range assigned {
+		if _, stated := created.Spec[member]; stated {
+			return fmt.Errorf(
+				"the host wrote its assigned %s into desired state; a minted value is status, never spec",
+				member,
+			)
+		}
+	}
 	if len(created.Spec) != 1 || nestedName(created.Spec, "worker") != input.ModuleWorker.Name {
 		return fmt.Errorf(
 			"the host rewrote the endpoint's desired state to %v; the assigned address is status, never spec",

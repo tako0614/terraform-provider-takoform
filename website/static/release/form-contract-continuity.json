@@ -29,10 +29,10 @@
     },
     {
       "from": "edge.forms.takoform.com/v1beta1",
-      "to": "edge.forms.takoform.com/v1beta2",
+      "to": "edge.forms.takoform.com",
       "fromCommit": "f9e337978e4b1e8f32f35089cb5782551130164f",
       "fromTree": "forms/candidates/edge/v1beta1",
-      "toTree": "forms/candidates/edge/v1beta2",
+      "toTree": "forms/candidates/edge.forms.takoform.com",
       "contractChanged": [
         "AtLeastOnceQueue",
         "EdgeKVNamespace",

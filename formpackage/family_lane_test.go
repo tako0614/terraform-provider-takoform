@@ -181,9 +181,13 @@ func TestFamilyFormRefAcceptsNamespacedGroups(t *testing.T) {
 	for name, invalid := range map[string]string{
 		"dotless group":       "forms/v1",
 		"uppercase group":     "Forms.Example.com/v1alpha1",
-		"missing version":     "forms.example.com",
 		"malformed version":   "forms.example.com/version1",
 		"frozen legacy group": LegacyFormAPIVersion + "x",
+		// A versionless group is legal since decision 0049, so what a reserved
+		// name must not gain from that is a way in without a version.
+		"bare host api domain":   "forms.takoform.com",
+		"bare package namespace": "packages.forms.takoform.com",
+		"bare trust namespace":   "trust.forms.takoform.com",
 	} {
 		candidate := map[string]any{
 			"apiVersion":        invalid,

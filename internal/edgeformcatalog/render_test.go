@@ -13,11 +13,11 @@ import (
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
-// TestRenderedFormsVerifyAsV1Alpha4Packages proves the complete authoring
+// TestRenderedFormsVerifyAsV1Alpha5Packages proves the complete authoring
 // pipeline end to end: every catalog Form renders to a definition whose
 // staged package — definition, canonical fixture, and negative fixtures —
-// passes formpackage.VerifyDirectory under the v1alpha4 index profile.
-func TestRenderedFormsVerifyAsV1Alpha4Packages(t *testing.T) {
+// passes formpackage.VerifyDirectory under the v1alpha5 index profile.
+func TestRenderedFormsVerifyAsV1Alpha5Packages(t *testing.T) {
 	t.Parallel()
 	forms, err := RenderForms()
 	if err != nil {
@@ -67,7 +67,7 @@ func TestRenderedFormsVerifyAsV1Alpha4Packages(t *testing.T) {
 				t.Fatal(err)
 			}
 			index := map[string]any{
-				"apiVersion": formpackage.FamilyPackageAPIVersion,
+				"apiVersion": formpackage.VersionlessFamilyPackageAPIVersion,
 				"kind":       formpackage.PackageKind,
 				"formRef": map[string]any{
 					"apiVersion":        Family.APIVersion(),
@@ -221,7 +221,7 @@ func TestContractDefinitionsSatisfyNormativeSchemas(t *testing.T) {
 	ids := map[string]string{
 		"https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json":        "interface-ref-v1alpha1.schema.json",
 		"https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-definition.schema.json": "interface-definition-v1alpha1.schema.json",
-		"https://forms.takoform.com/schemas/bindings/v1alpha1/binding-definition.schema.json":     "binding-definition-v1alpha1.schema.json",
+		"https://forms.takoform.com/schemas/bindings/v1alpha2/binding-definition.schema.json":     "binding-definition-v1alpha2.schema.json",
 	}
 	for id, file := range ids {
 		raw, err := os.ReadFile(filepath.Join("..", "..", "spec", "schemas", file))
@@ -240,7 +240,7 @@ func TestContractDefinitionsSatisfyNormativeSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bindingSchema, err := compiler.Compile("https://forms.takoform.com/schemas/bindings/v1alpha1/binding-definition.schema.json")
+	bindingSchema, err := compiler.Compile("https://forms.takoform.com/schemas/bindings/v1alpha2/binding-definition.schema.json")
 	if err != nil {
 		t.Fatal(err)
 	}

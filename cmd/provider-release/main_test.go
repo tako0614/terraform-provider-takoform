@@ -88,7 +88,7 @@ func TestProviderIdentityLedgerRejectsDigestDrift(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(fixture, "release", "keys"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(fixture, "forms", "candidates", "edge", "v1beta2"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(fixture, "forms", "candidates", "edge.forms.takoform.com"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	copyFile(t, filepath.Join(repo, descriptorPath), filepath.Join(fixture, descriptorPath))

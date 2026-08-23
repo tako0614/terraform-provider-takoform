@@ -32,7 +32,7 @@ import (
 const (
 	descriptorPath             = "release/version.json"
 	providerIdentityLedgerPath = "release/provider-form-identities.json"
-	providerCandidateSetPath   = "forms/candidates/edge/v1beta2/candidate-set.json"
+	providerCandidateSetPath   = "forms/candidates/edge.forms.takoform.com/candidate-set.json"
 	providerFamilyAPIVersion   = "edge.forms.takoform.com/v1beta1"
 	providerHostAPIVersion     = "forms.takoform.com/v1beta1"
 )
@@ -1285,7 +1285,7 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 		return ledger, fmt.Errorf("decode provider Beta candidate set: %w", err)
 	}
 	if candidate.Format != "takoform.form-family-candidates@v1" ||
-		candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha4" ||
+		candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha5" ||
 		candidate.PublicationStatus != "unpublished" {
 		return ledger, errors.New("provider Beta candidate set is not an unpublished Experimental family set")
 	}

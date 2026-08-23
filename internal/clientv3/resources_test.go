@@ -50,14 +50,11 @@ func TestApplyResourceCreateHappyPath(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == APIRootPath+"/forms":
 			q := r.URL.Query()
-			// The availability route carries the group's two segments as two
-			// keys; testGroup is the whole apiVersion, so it is split here the
-			// same way the client splits it.
-			wantGroup, wantVersion := testGroup, ""
-			if cut := strings.LastIndex(testGroup, "/"); cut > 0 {
-				wantGroup, wantVersion = testGroup[:cut], testGroup[cut+1:]
-			}
-			if q.Get("group") != wantGroup || q.Get("version") != wantVersion ||
+			// On this lane the availability route qualifies on the WHOLE
+			// apiVersion under one key, so there is no `version` key at all —
+			// and sending an empty one would be refused by the lane's closed
+			// filter vocabulary rather than ignored.
+			if q.Get("group") != testGroup || q.Has("version") ||
 				q.Get("kind") != testKind ||
 				q.Get("definitionVersion") != "1.0.0" || q.Get("schemaDigest") != testSchemaDigest ||
 				q.Get("space") != testSpace {

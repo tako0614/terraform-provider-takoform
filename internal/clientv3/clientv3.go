@@ -1,6 +1,6 @@
-// Package clientv3 is the Host API v1beta2 client lane
-// (forms.takoform.com/v1beta2, spec/host-api/v1beta2.md, decisions 0039 and
-// 0046). It is deliberately
+// Package clientv3 is the Host API v1beta4 client lane
+// (forms.takoform.com/v1beta4, spec/host-api/v1beta4.md, decisions 0039,
+// 0046, 0047 and 0048). It is deliberately
 // transport-only: it speaks the v1beta1 resource envelope
 // (apiVersion/kind/form/metadata/spec/status) over I-JSON, carries the
 // UID/generation/revision identity fences of spec/decisions/0011, polls
@@ -10,12 +10,12 @@
 //
 // # Namespaced groups travel as two ordinary path segments
 //
-// Form groups are namespaced apiVersions such as
-// "edge.forms.takoform.com/v1beta2", which contain a slash. Wherever a URL
-// path template names a group, this client sends the group NAME and the group
-// VERSION as two separate, ordinary path segments:
+// Form groups are namespaced apiVersions. A group carries a version only
+// while it has published generations to keep apart (decision 0049), so a group
+// travels as one path segment or as two, and this client sends whichever the
+// apiVersion actually has:
 //
-//	/apis/forms.takoform.com/v1beta2/resources/edge.forms.takoform.com/v1beta2/ModuleWorker/app
+//	/apis/forms.takoform.com/v1beta4/resources/edge.forms.takoform.com/ModuleWorker/app
 //
 // No path segment this client builds ever percent-encodes a slash. Proxies,
 // gateways, and web frameworks disagree about whether %2F inside a path
@@ -23,7 +23,7 @@
 // required it could not be deployed behind ordinary infrastructure
 // (spec/decisions/0018). The exact FormRef apiVersion string is unchanged
 // everywhere else: request bodies, responses, and the "group" query key still
-// carry "edge.forms.takoform.com/v1beta2" verbatim.
+// carry "edge.forms.takoform.com" verbatim.
 //
 // The retained v1alpha2 client in internal/client is frozen; this lane
 // shares its proven mechanics (strict I-JSON decoding, same-origin endpoint
@@ -43,26 +43,27 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// API constants for the v1beta2 lane. Older lanes keep their own discovery
-// paths; a v1beta2 client can never select one accidentally, and a host that
+// API constants for the v1beta4 lane. Older lanes keep their own discovery
+// paths; a v1beta4 client can never select one accidentally, and a host that
 // serves only v1beta1 is not silently spoken to in a vocabulary it does not
 // have.
 const (
-	APIVersion    = "forms.takoform.com/v1beta2"
-	DiscoveryPath = "/.well-known/takoform/v1beta2"
-	APIRootPath   = "/apis/forms.takoform.com/v1beta2"
+	APIVersion    = "forms.takoform.com/v1beta4"
+	DiscoveryPath = "/.well-known/takoform/v1beta4"
+	APIRootPath   = "/apis/forms.takoform.com/v1beta4"
 
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
 )
 
-// requiredFeatures are the discovery capabilities every v1beta2 host must
+// requiredFeatures are the discovery capabilities every v1beta4 host must
 // advertise as true.
 var requiredFeatures = []string{
 	"service_forms",
@@ -316,18 +317,53 @@ func (c *Client) requireReady() error {
 	return nil
 }
 
-// groupPathSegments renders a namespaced Form group as the TWO ordinary path
-// segments the lane's URL templates declare — {formGroup}/{formVersion} — so
-// the slash inside the apiVersion is a real path separator and never a
-// percent-encoded character inside one segment (see package comment and
-// spec/decisions/0018). A group carrying no version separator cannot reach
-// here: ValidateFormRef rejects it before any URL is built.
+// groupPathSegments renders a namespaced Form group as the ordinary path
+// segments the lane's URL templates declare — {formGroup}, optionally followed
+// by {formVersion} — so the slash inside a versioned apiVersion is a real path
+// separator and never a percent-encoded character inside one segment (see
+// package comment and spec/decisions/0018). Since decision 0049 a group may
+// carry no version at all, and then it is simply one segment; the host tells
+// the two shapes apart by grammar rather than by counting.
 func groupPathSegments(group string) string {
 	name, version, split := strings.Cut(group, "/")
 	if !split {
 		return url.PathEscape(group)
 	}
 	return url.PathEscape(name) + "/" + url.PathEscape(version)
+}
+
+// KindSegmentPattern is the Kind grammar the lane states. No segment of a Form
+// group can match it — a DNS-like label is lowercase and a version segment
+// begins with a lowercase "v" — which is what lets a reader tell a group's own
+// path segments from the kind that follows them without counting segments.
+var KindSegmentPattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+
+// SplitGroupPath is the exact inverse of groupPathSegments: it consumes the
+// leading segments a Form group travelled as and rejoins them into the FormRef
+// apiVersion string, returning the segments that follow. It decides by grammar
+// rather than by arity, because since decision 0049 a group is one segment or
+// two and counting would silently mis-read whichever shape it was not written
+// for. It is exported so a reader of this client's URLs shares the encoder's
+// own rule instead of reimplementing it.
+func SplitGroupPath(parts []string) (string, []string, bool) {
+	for index, part := range parts {
+		if !KindSegmentPattern.MatchString(part) {
+			continue
+		}
+		if index == 0 {
+			return "", nil, false
+		}
+		group := make([]string, 0, index)
+		for _, segment := range parts[:index] {
+			decoded, err := url.PathUnescape(segment)
+			if err != nil {
+				return "", nil, false
+			}
+			group = append(group, decoded)
+		}
+		return strings.Join(group, "/"), parts[index:], true
+	}
+	return "", nil, false
 }
 
 // exactFormQuery carries the exact FormRef and Space on read/lifecycle URLs.
@@ -348,20 +384,20 @@ func exactFormQuery(space string, ref FormRef) url.Values {
 	return query
 }
 
-// formsAvailabilityQuery is the six-key exact-availability probe of the
-// enumerating /forms route: `group` and `version` are separate keys, matching
-// the two path segments every route in this lane already splits an apiVersion
-// into. All six present narrows the enumeration to zero entries or one, which
-// is the same question the five-key v1beta1 probe asked.
+// formsAvailabilityQuery is the five-key exact-availability probe of the
+// enumerating /forms route. On this lane `group` is the WHOLE apiVersion, so
+// the probe is the same five keys the resource routes qualify on and there is
+// no separate `version` key to send.
+//
+// The earlier shape split the apiVersion into `group` and `version` to mirror
+// two path segments. Once a group could carry no version (decision 0049) that
+// split had no second half to send, and sending an empty one is not the same
+// request as not sending it: the lane's filter vocabulary is closed, so an
+// empty-valued key is refused rather than ignored.
 func formsAvailabilityQuery(space string, ref FormRef) url.Values {
-	group, version := ref.APIVersion, ""
-	if cut := strings.LastIndex(ref.APIVersion, "/"); cut > 0 {
-		group, version = ref.APIVersion[:cut], ref.APIVersion[cut+1:]
-	}
 	query := url.Values{}
 	query.Set("space", space)
-	query.Set("group", group)
-	query.Set("version", version)
+	query.Set("group", ref.APIVersion)
 	query.Set("kind", ref.Kind)
 	query.Set("definitionVersion", ref.DefinitionVersion)
 	query.Set("schemaDigest", ref.SchemaDigest)

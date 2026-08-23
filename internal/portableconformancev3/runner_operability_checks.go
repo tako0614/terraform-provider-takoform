@@ -57,49 +57,77 @@ func requireOrdinaryPathSegments(target string) error {
 	return nil
 }
 
-// checkNamespacedGroupPathSegments proves the host serves the split path shape.
-// The three URL templates that name a Form group — resources, form-definitions,
-// and support/forms — each carry the group NAME and the group VERSION as two
-// separate segments, so "edge.forms.takoform.com/v1beta2" travels as
-// "edge.forms.takoform.com/v1beta2" and nothing on the wire has to survive a
-// percent-encoded slash. The exact FormRef apiVersion string is unchanged
-// everywhere else, which the exact-form query on the same requests proves.
+// checkNamespacedGroupPathSegments proves the host serves a Form group as its
+// own ordinary path segments. The three URL templates that name a group —
+// resources, form-definitions, and support/forms — carry the group written
+// literally, so nothing on the wire has to survive a percent-encoded slash.
+//
+// The lane admits groups of either length (decision 0049), and both are driven
+// here, because a host that split by counting segments rather than by grammar
+// passes on whichever length it guessed and fails on the other. The probe's own
+// group supplies one length and the corpus's synthetic second group the other;
+// which is which is read from the identities rather than assumed, so the check
+// keeps measuring the difference if a corpus ever swaps them.
+//
+// The exact FormRef apiVersion string is unchanged everywhere else, which the
+// exact-form query on the same requests proves.
 func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {
 	ref := kv.Ref
-	groupName, groupVersion, split := strings.Cut(ref.APIVersion, "/")
-	if !split || groupName == "" || groupVersion == "" {
-		return fmt.Errorf("probe apiVersion %q is not a namespaced group/version", ref.APIVersion)
+	if !strings.Contains(ref.APIVersion, ".") {
+		return fmt.Errorf("probe apiVersion %q is not a namespaced group", ref.APIVersion)
 	}
+	second := r.contract.RunnerInput.SyntheticSecondGroup
+	if segmentCount(ref.APIVersion) == segmentCount(second.APIVersion) {
+		return fmt.Errorf(
+			"the probe group %q and the synthetic second group %q travel as the same number of "+
+				"path segments, so this run cannot tell a host that splits by grammar from one "+
+				"that splits by counting",
+			ref.APIVersion, second.APIVersion,
+		)
+	}
+
 	query := r.exactQuery(kv.Space, ref)
 	resourceTarget := fmt.Sprintf(
-		"%s/resources/%s/%s/%s/%s?%s",
-		r.apiBase, url.PathEscape(groupName), url.PathEscape(groupVersion),
+		"%s/resources/%s/%s/%s?%s",
+		r.apiBase, literalGroupPath(ref.APIVersion),
 		url.PathEscape(ref.Kind), url.PathEscape(kv.Name), query.Encode(),
 	)
-	// The literal split path above and the runner's own builder must be one
-	// string. A client that packed the group into a single segment would address
-	// a different resource here, and every other check would still pass.
+	// The literal path above and the runner's own builder must be one string. A
+	// client that packed the group into a single escaped segment would address a
+	// different resource here, and every other check would still pass.
 	if built := r.resourceURL(ref, kv.Name, "", query); built != resourceTarget {
 		return fmt.Errorf(
-			"the runner builds %q for the resource route; the split-segment shape is %q",
+			"the runner builds %q for the resource route; the literal-segment shape is %q",
 			built, resourceTarget,
 		)
 	}
-	definitionTarget := fmt.Sprintf(
-		"%s/form-definitions/%s/%s/%s?%s",
-		r.apiBase, url.PathEscape(groupName), url.PathEscape(groupVersion),
-		url.PathEscape(ref.Kind), query.Encode(),
-	)
-	supportTarget := fmt.Sprintf(
-		"%s/support/forms/%s/%s/%s/%s",
-		r.apiBase, url.PathEscape(groupName), url.PathEscape(groupVersion),
-		url.PathEscape(ref.Kind), url.PathEscape(ref.DefinitionVersion),
-	)
-	for _, entry := range []struct{ label, target string }{
+
+	targets := []struct{ label, target string }{
 		{"resource", resourceTarget},
-		{"form-definition", definitionTarget},
-		{"support profile", supportTarget},
-	} {
+		{"form-definition", fmt.Sprintf(
+			"%s/form-definitions/%s/%s?%s",
+			r.apiBase, literalGroupPath(ref.APIVersion), url.PathEscape(ref.Kind), query.Encode(),
+		)},
+		{"support profile", fmt.Sprintf(
+			"%s/support/forms/%s/%s/%s",
+			r.apiBase, literalGroupPath(ref.APIVersion),
+			url.PathEscape(ref.Kind), url.PathEscape(ref.DefinitionVersion),
+		)},
+		// The second group is installed but holds no resource of its own at this
+		// point in the run, so it is driven through the two routes that answer
+		// about an installed Form rather than about a materialized one.
+		{"second-group form-definition", fmt.Sprintf(
+			"%s/form-definitions/%s/%s?%s",
+			r.apiBase, literalGroupPath(second.APIVersion), url.PathEscape(second.Kind),
+			r.exactQuery(kv.Space, second).Encode(),
+		)},
+		{"second-group support profile", fmt.Sprintf(
+			"%s/support/forms/%s/%s/%s",
+			r.apiBase, literalGroupPath(second.APIVersion),
+			url.PathEscape(second.Kind), url.PathEscape(second.DefinitionVersion),
+		)},
+	}
+	for _, entry := range targets {
 		if err := requireOrdinaryPathSegments(entry.target); err != nil {
 			return fmt.Errorf("%s route: %w", entry.label, err)
 		}
@@ -109,13 +137,13 @@ func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {
 		}
 		if response.Status != http.StatusOK {
 			return fmt.Errorf(
-				"%s route with the group split across two path segments: HTTP %d; body=%s",
+				"%s route with the group as its own path segments: HTTP %d; body=%s",
 				entry.label, response.Status, strings.TrimSpace(string(response.Body)),
 			)
 		}
 	}
-	// The split path addresses the SAME resource the rest of the run drives, and
-	// the host answers it under the whole apiVersion the two segments spell.
+	// The literal path addresses the SAME resource the rest of the run drives,
+	// and the host answers it under the whole apiVersion those segments spell.
 	response, err := r.request(http.MethodGet, resourceTarget, nil, nil)
 	if err != nil {
 		return err
@@ -125,17 +153,32 @@ func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {
 		return err
 	}
 	if err := r.contract.lane.verifyResourceIdentity(resource, kv); err != nil {
-		return fmt.Errorf("split-segment resource read: %w", err)
+		return fmt.Errorf("literal-segment resource read: %w", err)
 	}
 	if resource.APIVersion != ref.APIVersion {
 		return fmt.Errorf(
-			"split-segment read answered apiVersion %q; the two path segments name %q",
+			"literal-segment read answered apiVersion %q; the path segments name %q",
 			resource.APIVersion, ref.APIVersion,
 		)
 	}
-	r.complete("namespaced-group-travels-as-two-path-segments")
+	r.complete(r.contract.lane.GroupPathCheck)
 	return nil
 }
+
+// literalGroupPath renders a Form group as the path segments it travels as:
+// each segment escaped on its own, the separators intact. It is deliberately
+// not resourceURL's helper — this check exists to compare an independently
+// built path against the one the runner builds, and sharing the builder would
+// make the comparison compare a value with itself.
+func literalGroupPath(group string) string {
+	segments := strings.Split(group, "/")
+	for index, segment := range segments {
+		segments[index] = url.PathEscape(segment)
+	}
+	return strings.Join(segments, "/")
+}
+
+func segmentCount(group string) int { return strings.Count(group, "/") + 1 }
 
 // checkOperationOwnership proves an operation id is a resumption handle bound to
 // the caller that created it. A stranger holding the id gets the ordinary

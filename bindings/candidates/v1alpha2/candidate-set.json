@@ -1,0 +1,42 @@
+{
+  "format": "takoform.binding-candidates@v1",
+  "publicationStatus": "unpublished",
+  "authoringSource": "internal/edgeformcatalog",
+  "bindings": [
+    {
+      "name": "module-worker.edge-kv",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:ca7ea8945f6f0f51949a152bee2a340e5926709f2238bb0cfc8b4d84cb006471"
+    },
+    {
+      "name": "module-worker.object-bucket",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:cfe928cb93f856500c2a5592a8f4992e986b0f66edf52ede6a9ef62fca1741ed"
+    },
+    {
+      "name": "module-worker.sqlite",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:d5413bcc910a22de14da87b2f2416446f3d9813c415b48126ae701975658b7c2"
+    },
+    {
+      "name": "module-worker.queue-producer",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:141f7413ff4dced8e379d9726100f66b584e76135156fb5a74a54e7b83edba1d"
+    },
+    {
+      "name": "module-worker.service",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:79c3a23e506ffc4607ea2921e3dbe76c7d44b20c76e6181e65c611239b9c51aa"
+    },
+    {
+      "name": "module-worker.workflow",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:208349ee6f07981bde09e4b9ee2020b86a76887540965657ed07590bc2ad5a0e"
+    },
+    {
+      "name": "module-worker.actor",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:51f447536158b393b0afb61850d69567db8de91e3a82fa9b9ebc5ab6f87f2c5d"
+    }
+  ]
+}

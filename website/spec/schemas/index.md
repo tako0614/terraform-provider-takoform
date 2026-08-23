@@ -19,7 +19,9 @@ wins.
 | [`interface-ref-v1alpha1.schema.json`](interface-ref-v1alpha1.schema.json) | the exact digest-bound Interface reference |
 | [`interface-definition-v1alpha1.schema.json`](interface-definition-v1alpha1.schema.json) | the exact data-only Interface Definition with operations, semantics, and behavior fixtures |
 | [`binding-ref-v1alpha1.schema.json`](binding-ref-v1alpha1.schema.json) | the exact digest-bound Binding reference |
-| [`binding-definition-v1alpha1.schema.json`](binding-definition-v1alpha1.schema.json) | the typed Binding Definition: source role, target Interface, runtime projection |
+| [`binding-definition-v1alpha1.schema.json`](binding-definition-v1alpha1.schema.json) | the retained typed Binding Definition, whose target groups all carry a version |
+| [`binding-definition-v1alpha2.schema.json`](binding-definition-v1alpha2.schema.json) | the current typed Binding Definition: source role, target Interface, runtime projection, and a target group that may carry no version |
+| [`binding-ref-v1alpha2.schema.json`](binding-ref-v1alpha2.schema.json) | the exact BindingRef into the current Binding envelope |
 | [`artifact-manifest-v1alpha1.schema.json`](artifact-manifest-v1alpha1.schema.json) | the content-addressed artifact manifest for uploaded bundles |
 | [`operation-v1alpha1.schema.json`](operation-v1alpha1.schema.json) | the long-running Operation envelope |
 | [`host-support-profile-v1alpha1.schema.json`](host-support-profile-v1alpha1.schema.json) | the Host Support Profile: supported refs, capability subsets, and limits |

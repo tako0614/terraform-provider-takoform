@@ -90,21 +90,13 @@ function verifyOneCopy(document, relativePath, facts, failures) {
   // longer pass merely because the candidate set still says its definitions
   // are Experimental.
   //
-  // formFamilyMaturity is deliberately NOT pinned to a literal here. The loop
-  // above already requires it to equal what the repository derives, which is
-  // the stronger statement; adding "and that value must be beta" froze today's
-  // channel into the check that reports where the family is, so advancing the
-  // family would have meant editing this file to permit it.
+  // There is no family maturity to check against the definition maturity any
+  // more: the axis was retired with the generation it was read out of
+  // (decision 0049), and what is left is per-Form.
   if (document.formMaturity !== "experimental") {
     failures.push(
       `${relativePath}: formMaturity must be "experimental" for the current ` +
         "15 Form definitions",
-    );
-  }
-  if (document.formFamilyMaturity === document.formMaturity) {
-    failures.push(
-      `${relativePath}: formFamilyMaturity and formMaturity are conflated; ` +
-        "the family and its definitions are independent axes",
     );
   }
   if (

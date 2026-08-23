@@ -352,7 +352,7 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		case workerCustomDomainKind:
 			// One DNS hostname has one answer, per tenant, on the canonical
 			// spelling this host stored.
-			return h.validateSingleHostnameClaim(scope, name, spec)
+			return h.validateClaimedValues(form, scope, name, spec)
 		}
 		if form.Ref.Kind == workerEndpointKind {
 			return h.validateSingleWorkerEndpoint(scope, name, relations)
@@ -466,22 +466,10 @@ func (h *ReferenceHost) validateWorkerClassHolder(
 		return stableError("invalid_argument", form.Ref.Kind+" "+name+" requires a target worker")
 	}
 	className, _ := spec["className"].(string)
-	selfKey := resourceKey(scope, h.edgeGroup(), form.Ref.Kind, name)
-	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != h.edgeGroup() || candidate.kind() != form.Ref.Kind ||
-			candidate.key() == selfKey {
-			continue
-		}
-		if relationTargetUID(candidate.Relations, workerRelationPointer) != workerUID {
-			continue
-		}
-		if existing, _ := candidate.Spec["className"].(string); existing == className {
-			return stableError("invalid_argument",
-				form.Ref.Kind+" "+name+" claims class "+strconv.Quote(className)+" of ModuleWorker "+
-					workerName+" at uid "+workerUID+", which "+form.Ref.Kind+" "+candidate.Name+
-					" already holds; one worker carries at most one "+form.Ref.Kind+" per class name")
-		}
-	}
+	// One holder per worker AND class is no longer written here: the Form
+	// declares it as an exclusive hold keyed by /className, and
+	// validateExclusiveHolds enforces it. Two holders of DIFFERENT classes on
+	// one worker were never a conflict, which is exactly what the key says.
 	deployment := h.activeDeployment(scope, workerUID)
 	if deployment == nil {
 		return nil
@@ -566,21 +554,11 @@ func (h *ReferenceHost) validateWorkerDeployment(
 	if workerUID == "" {
 		return stableError("invalid_argument", "a WorkerDeployment requires a target worker")
 	}
-	selfKey := resourceKey(scope, h.edgeGroup(), workerDeploymentKind, name)
-	// A. One active deployment per worker. Two deployments of one worker leave
-	//    "which one serves" undefined, and no rule chosen after the fact — newest,
-	//    lowest name, highest weight — is a rule an author can predict.
-	if existing := h.activeDeployment(scope, workerUID); existing != nil {
-		key := existing.key()
-		if key != selfKey {
-			return stableError(
-				"invalid_argument",
-				"ModuleWorker at uid "+workerUID+" already has the active WorkerDeployment "+
-					existing.Name+"; a worker has exactly one, and traffic moves by re-weighting it",
-			)
-		}
-	}
-	// B. Deployment integrity: ownership, uniqueness, and runnable versions.
+	// One active deployment per worker is no longer written here: the Form
+	// DECLARES it, as an exclusive hold on its worker reference, and
+	// validateExclusiveHolds enforces it without knowing what a deployment is.
+	//
+	// Deployment integrity: ownership, uniqueness, and runnable versions.
 	seen := map[string]string{}
 	weighted := 0
 	for _, relation := range relations {

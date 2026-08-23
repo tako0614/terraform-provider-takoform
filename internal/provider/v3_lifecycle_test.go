@@ -82,7 +82,7 @@ func TestV3ModuleWorkerCreateReadDeleteRoundTrip(t *testing.T) {
 	}
 	for name, want := range map[string]string{
 		"uid": "uid-1", "generation": "1", "revision": "1",
-		"form_api_version": "edge.forms.takoform.com/v1beta2", "form_kind": "ModuleWorker",
+		"form_api_version": "edge.forms.takoform.com", "form_kind": "ModuleWorker",
 		"outputs_json": "{}",
 	} {
 		if got := v3StateString(t, ctx, createResponse.State, name).ValueString(); got != want {

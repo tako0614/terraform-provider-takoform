@@ -308,6 +308,12 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			},
 		},
 	}
+	// The total is where the rule comes from now, and it is a CONSTRAINT rather
+	// than a schema annotation: a rule about resources is not shape.
+	form.Constraints = []formpackage.FormConstraint{{
+		Kind: string(currentformmodel.ConstraintSum), List: "/versions",
+		Member: "weight", Total: 10000,
+	}}
 	materialized := form.materialize(nil)
 	versions, _ := materialized["versions"].([]any)
 	if len(versions) != 1 {
@@ -317,7 +323,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 	if _, ok := entry["weight"].(json.Number); !ok {
 		t.Fatalf("materialized weight is %T, want json.Number", entry["weight"])
 	}
-	if hostErr := validateDeploymentWeightSum(testEdgeFormsGroup, form, materialized); hostErr != nil {
+	if hostErr := validateSummedMembers(form, materialized); hostErr != nil {
 		t.Fatalf("a host semantic rule rejected a materialized value: %+v", hostErr)
 	}
 	// And the rule still rejects a wrong total that arrived the same way.
@@ -326,7 +332,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version-probe"},
 			"weight":        9999,
 		}}
-	if hostErr := validateDeploymentWeightSum(testEdgeFormsGroup, form, form.materialize(nil)); hostErr == nil {
+	if hostErr := validateSummedMembers(form, form.materialize(nil)); hostErr == nil {
 		t.Fatal("a materialized weight total of 9999 was accepted")
 	}
 }

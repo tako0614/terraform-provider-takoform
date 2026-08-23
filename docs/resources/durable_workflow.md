@@ -2,7 +2,7 @@
 page_title: "takoform_durable_workflow Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Durable Workflow (edge.forms.takoform.com/v1beta2, role identity).
+  Durable Workflow (edge.forms.takoform.com, role identity).
 ---
 
 # takoform_durable_workflow
@@ -11,7 +11,7 @@ Long-lived identity of one code-defined durable workflow: a class the worker's a
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com identity is not yet carried by any
 Registry-published provider release: it ships with the next provider release
 (decision 0046). Registry-published provider v2.1.1 serves this resource type
 under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
@@ -91,7 +91,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_durable_workflow.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"DurableWorkflow","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"DurableWorkflow","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

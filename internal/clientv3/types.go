@@ -110,8 +110,12 @@ type PrepareResult struct {
 }
 
 var (
+	// The version segment is OPTIONAL. A family group carries one only while
+	// it has a published generation to keep apart; a group minted without one
+	// is a whole identity on its own, because kind, definitionVersion and
+	// schemaDigest already say which contract it is (decision 0049).
 	groupVersionPattern = regexp.MustCompile(
-		`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`,
+		`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:/v[0-9]+(?:(?:alpha|beta)[0-9]+)?)?$`,
 	)
 	kindPattern              = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
 	definitionVersionPattern = regexp.MustCompile(

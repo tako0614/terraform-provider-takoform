@@ -78,7 +78,12 @@ let pinnedForms = 0;
 // corpus deliberately installs a second group, and rewriting that one would
 // erase the very thing it exists to prove.
 function repointFamilyReferences(node, family) {
-  const groupName = family.slice(0, family.lastIndexOf("/"));
+  // A family that carries no version segment IS its own group name
+  // (decision 0049). Slicing at a separator that is not there would drop the
+  // last character and match nothing, so every nested reference would keep
+  // naming the generation the corpus just stopped installing.
+  const separator = family.lastIndexOf("/");
+  const groupName = separator === -1 ? family : family.slice(0, separator);
   const walk = (value) => {
     if (Array.isArray(value)) {
       for (const item of value) walk(item);
@@ -125,6 +130,21 @@ for (const probe of Object.values(contract.runnerInput)) {
   // correctly, and which looks like a host bug rather than a corpus one.
   repointFamilyReferences(probe.desired, forms.family);
   pinnedForms++;
+
+  // The constraint list is pinned beside the schema, and for the same reason.
+  // A rule about resources is not shape, so it is not in the desiredSchema the
+  // corpus already pins, and a corpus that pinned only the shape let a host
+  // serve a Definition declaring FEWER holds than the family publishes. The
+  // declared-holds check then discovered only what the host chose to admit and
+  // graded it against itself.
+  const declaredConstraints = readJSON(
+    path.join(repositoryRoot, candidate.path, "definition.json"),
+  ).constraints;
+  if (declaredConstraints === undefined || declaredConstraints.length === 0) {
+    delete probe.constraints;
+  } else {
+    probe.constraints = structuredClone(declaredConstraints);
+  }
 
   if (probe.desiredSchema === undefined) continue;
   const relativeFixture = probe.desiredSchema.path;

@@ -75,6 +75,10 @@ type InstalledForm struct {
 	// installing a Form whose rules the served protocol does not have means
 	// accepting desired state nothing will ever enforce.
 	RequiresHostAPI string
+	// Constraints is the Definition's closed constraint list — the rules about
+	// resources this Form declares. A host reads them here rather than out of
+	// the desired schema's extension slots (decision 0049).
+	Constraints []formpackage.FormConstraint
 	// Relations are DERIVED from DesiredSchema at install time, never read
 	// from a wire member. A host has the desired schema by construction, so
 	// deriving costs nothing and removes the second source of truth a declared
@@ -108,7 +112,22 @@ func (form *InstalledForm) providesInterface(want formpackage.InterfaceRef) bool
 
 // deriveRelations computes and caches the Form's cross-resource relations.
 func (form *InstalledForm) deriveRelations() error {
-	relations, err := currentformmodel.DeriveRelations(form.DesiredSchema)
+	// The constraint list is part of the derivation now: an exclusive hold is
+	// declared there, not annotated on the schema node.
+	constraints := make([]currentformmodel.Constraint, 0, len(form.Constraints))
+	for _, entry := range form.Constraints {
+		constraints = append(constraints, currentformmodel.Constraint{
+			Kind:      currentformmodel.ConstraintKind(entry.Kind),
+			Reference: entry.Reference,
+			KeyedBy:   entry.KeyedBy,
+			List:      entry.List,
+			Member:    entry.Member,
+			Total:     entry.Total,
+			Property:  entry.Property,
+			Output:    entry.Output,
+		})
+	}
+	relations, err := currentformmodel.DeriveRelationsWithConstraints(form.DesiredSchema, constraints)
 	if err != nil {
 		return fmt.Errorf("takoform: derive %s relations: %w", form.Ref.Kind, err)
 	}
@@ -320,9 +339,12 @@ func newCatalog(served string) *Catalog {
 // laneOrder ranks the Host API lanes by publication order, which is what makes
 // "at least this lane" answerable. A lane absent from it is unknown to this
 // host, and an unknown REQUIREMENT is refused rather than assumed satisfied.
+// The withdrawn v1beta2 and v1beta3 lanes are absent (decision 0051): they were
+// never served, so no published Form can require one, and listing a rank for a
+// lane that does not exist would let a corpus require it and be satisfied.
 var laneOrder = map[string]int{
 	"forms.takoform.com/v1beta1": 1,
-	"forms.takoform.com/v1beta2": 2,
+	"forms.takoform.com/v1beta4": 2,
 }
 
 // satisfiesRequirement reports whether a host serving `served` may install a
@@ -601,6 +623,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			ProvidedInterfaces: definition.ProvidedInterfaces,
 			AcceptedBindings:   definition.AcceptedBindings,
 			RequiresHostAPI:    definition.RequiresHostAPI,
+			Constraints:        definition.Constraints,
 		}
 		if err := catalog.install(form); err != nil {
 			return nil, err
@@ -679,7 +702,11 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		}
 	}
 	var bindings bindingCandidateSet
-	bindingsPath := filepath.Join(repoRoot, "bindings", "candidates", "v1alpha1", "candidate-set.json")
+	if contract.BindingCandidateSet == "" {
+		return nil, errors.New("takoform: the corpus does not say which Binding envelope generation it installs")
+	}
+	bindingsRoot := filepath.Join(repoRoot, filepath.FromSlash(contract.BindingCandidateSet))
+	bindingsPath := filepath.Join(bindingsRoot, "candidate-set.json")
 	if err := decodeStrictFile(bindingsPath, &bindings); err != nil {
 		return nil, err
 	}
@@ -690,7 +717,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		// the required target Interface, or the source role, and would have to
 		// take every declared binding on trust.
 		var document bindingDefinitionDocument
-		path := filepath.Join(repoRoot, "bindings", "candidates", "v1alpha1", candidate.Name, "definition.json")
+		path := filepath.Join(bindingsRoot, candidate.Name, "definition.json")
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
@@ -980,6 +1007,7 @@ func (catalog *Catalog) installSyntheticSecondDefinitionVersion(contract Contrac
 		ProvidedInterfaces: definition.ProvidedInterfaces,
 		AcceptedBindings:   definition.AcceptedBindings,
 		RequiresHostAPI:    definition.RequiresHostAPI,
+		Constraints:        definition.Constraints,
 	})
 }
 

@@ -18,13 +18,14 @@
     "apiVersion": {
       "type": "string",
       "maxLength": 320,
-      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:/v[0-9]+(?:(?:alpha|beta)[0-9]+)?)?$",
       "not": {
         "enum": [
           "forms.takoform.com/v1alpha1",
           "forms.takoform.com/v1alpha2"
         ]
-      }
+      },
+      "description": "Namespaced DNS-like Form group, and OPTIONALLY a group version. A group carries one only while it has a published generation to keep apart (decision 0049)."
     },
     "kind": {
       "type": "string",
@@ -57,6 +58,99 @@
       "type": "string",
       "pattern": "^forms\\.takoform\\.com/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
       "description": "The earliest Host API lane whose rules this contract needs. It is a LOWER BOUND, not a pin: a lane's compatibility across its own generations is the lane's obligation, and pinning would re-mint every Form whenever the protocol moved. A host serving an earlier lane refuses this Form with unsupported_capability at install time, naming both identities (decision 0047)."
+    },
+    "constraints": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 32,
+      "description": "The closed list of rules about RESOURCES this Form declares. These are not the shape of a document, so they are not in the desired schema \u2014 where they rode in extension slots no standard validator reads. As a first-class list with a closed kind vocabulary, adding a constraint kind is one reviewed change in one place (decision 0049). Every pointer is an RFC 6901 JSON Pointer into the desired instance, or into the outputs for a host-assigned member.",
+      "items": {
+        "description": "One constraint. The kind decides which members the entry carries: a branch requires exactly what its rule needs and forbids every member belonging to another kind, so a host reading a valid Definition can always read the rule out of it. A single flat object with one required `kind` accepted {\"kind\":\"sum\"} and a `claim` carrying a sum's members, which a package gate passed and a host could only fail on.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reference"
+            ],
+            "properties": {
+              "kind": {
+                "const": "exclusive"
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              },
+              "keyedBy": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "list",
+              "member",
+              "total"
+            ],
+            "properties": {
+              "kind": {
+                "const": "sum"
+              },
+              "list": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              },
+              "member": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "property"
+            ],
+            "properties": {
+              "kind": {
+                "const": "claim"
+              },
+              "property": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "output"
+            ],
+            "properties": {
+              "kind": {
+                "const": "hostAssigned"
+              },
+              "output": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              }
+            }
+          }
+        ]
+      }
     },
     "desiredSchema": {
       "$ref": "#/$defs/jsonSchema"
@@ -104,7 +198,7 @@
       "maxItems": 64,
       "uniqueItems": true,
       "items": {
-        "$ref": "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
+        "$ref": "https://forms.takoform.com/schemas/bindings/v1alpha2/binding-ref.schema.json"
       },
       "description": "Exact Binding contracts resources of this Form may hold as a source. Only revision-role Forms hold capability bindings."
     },

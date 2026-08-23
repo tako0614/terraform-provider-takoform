@@ -6,11 +6,23 @@
       "apiVersion": "forms.takoform.com/v1beta1"
     },
     {
-      "path": "conformance/portable-host-v1beta1/fixtures/synthetic-module-worker-second-definition-v1beta2.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
+      "path": "conformance/portable-host-v1beta1/fixtures/synthetic-module-worker-second-definition-edge-family.json",
+      "apiVersion": "edge.forms.takoform.com"
     },
     {
       "path": "conformance/portable-host-v1beta1/fixtures/synthetic-module-worker-second-definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "conformance/portable-host-v1beta4/contract.json",
+      "apiVersion": "forms.takoform.com/v1beta4"
+    },
+    {
+      "path": "conformance/portable-host-v1beta4/fixtures/synthetic-module-worker-second-definition-edge-family.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "conformance/portable-host-v1beta4/fixtures/synthetic-module-worker-second-definition.json",
       "apiVersion": "edge.forms.takoform.com/v1beta1"
     },
     {
@@ -28,6 +40,142 @@
     {
       "path": "conformance/revocation-checkpoint-v1/positive/statement-2.json",
       "apiVersion": "trust.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/actor-namespace/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/actor-namespace/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/at-least-once-queue/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/at-least-once-queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/durable-workflow/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/durable-workflow/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/edge-kv-namespace/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/edge-kv-namespace/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/module-worker/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/module-worker/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/object-bucket/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/queue-consumer/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/queue-consumer/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/sqlite-database/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/sqlite-database/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/sqlite-migration-application/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/sqlite-migration-application/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/sqlite-migration-set/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/sqlite-migration-set/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/static-asset-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/static-asset-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-cron-trigger/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-cron-trigger/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-custom-domain/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-custom-domain/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-deployment/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-deployment/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-endpoint/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-version/definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/worker-version/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
     },
     {
       "path": "forms/candidates/edge/v1beta1/at-least-once-queue/definition.json",
@@ -147,126 +295,6 @@
     },
     {
       "path": "forms/candidates/edge/v1beta1/worker-version/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/at-least-once-queue/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/at-least-once-queue/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/edge-kv-namespace/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/edge-kv-namespace/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/module-worker/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/module-worker/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/object-bucket/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/object-bucket/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/queue-consumer/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/queue-consumer/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/sqlite-database/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/sqlite-database/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/sqlite-migration-application/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/sqlite-migration-application/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/sqlite-migration-set/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/sqlite-migration-set/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/static-asset-bundle/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/static-asset-bundle/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-bundle/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-bundle/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-cron-trigger/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-cron-trigger/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-custom-domain/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-custom-domain/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-deployment/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-deployment/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-endpoint/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-endpoint/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha4"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-version/definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1beta2"
-    },
-    {
-      "path": "forms/candidates/edge/v1beta2/worker-version/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4"
     }
   ],
@@ -677,6 +705,11 @@
       "retiredBecause": "withdrawn with the Legacy v1alpha1 epoch (decision 0042)"
     },
     {
+      "path": "conformance/portable-host-v1beta1/fixtures/synthetic-module-worker-second-definition-v1beta2.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "renamed with its corpus when the family stopped carrying a generation to name (decision 0049)"
+    },
+    {
       "path": "conformance/portable-host-v2/contract.json",
       "apiVersion": "forms.takoform.com/v1alpha2",
       "retiredBecause": "withdrawn with the v1alpha2 epoch (decision 0042)"
@@ -845,6 +878,156 @@
       "path": "forms/candidates/edge/v1alpha1/worker-version/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
       "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/at-least-once-queue/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/at-least-once-queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/edge-kv-namespace/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/edge-kv-namespace/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/module-worker/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/module-worker/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/object-bucket/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/queue-consumer/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/queue-consumer/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/sqlite-database/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/sqlite-database/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/sqlite-migration-application/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/sqlite-migration-application/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/sqlite-migration-set/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/sqlite-migration-set/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/static-asset-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/static-asset-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-cron-trigger/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-cron-trigger/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-custom-domain/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-custom-domain/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-deployment/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-deployment/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-endpoint/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-version/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta2/worker-version/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4",
+      "retiredBecause": "withdrawn with the never-served v1beta2 Edge generation, which became the versionless group (decisions 0049 and 0051)"
     },
     {
       "path": "forms/candidates/v1alpha2/container-service/definition.json",

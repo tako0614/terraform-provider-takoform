@@ -336,6 +336,15 @@ type ResourceProbe struct {
 	// contract document a reader has to scan, for bytes no reader reads. The
 	// digest chain is the same either way — manifest to contract to fixture.
 	DesiredSchema PinnedSchema `json:"desiredSchema"`
+	// Constraints is this Form's declared constraint list at the exact pinned
+	// FormRef, or absent when it declares none.
+	//
+	// It is pinned for the same reason DesiredSchema is, and its absence was
+	// the same defect one layer over: the declared-holds check DISCOVERED the
+	// holds from whatever the host served, so a host serving a Definition with
+	// two of the family's five holds was graded on two and passed. An oracle
+	// that lets the subject choose its own inventory measures nothing.
+	Constraints []formpackage.FormConstraint `json:"constraints,omitempty"`
 	// DeclaredOutputSchema is this Form's `outputSchema` — the WHOLE closed
 	// Draft 2020-12 contract its Definition declares — or absent when it
 	// declares none.
@@ -774,6 +783,13 @@ type Contract struct {
 	// (decision 0047). Conflating them is how a Host API v1beta1 corpus came
 	// to install the v1beta2 family.
 	FamilyCandidateSet string `json:"familyCandidateSet"`
+	// BindingCandidateSet is the typed Binding envelope generation this corpus
+	// installs, on the same footing and for the same reason. The Binding
+	// envelope moved to bindings.takoform.com/v1alpha2 when a Form group
+	// stopped carrying a version (decision 0049) and allowedTargetForms had to
+	// admit one that does not, while the retained generation keeps resolving
+	// the v1alpha1 Bindings its published Forms name.
+	BindingCandidateSet string `json:"bindingCandidateSet"`
 
 	// root is the verified corpus directory; it is derived, never decoded.
 	root string

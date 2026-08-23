@@ -23,6 +23,23 @@ const (
 	// or $-bearing name would make those unpronounceable
 	// (spec/standard-services).
 	PatternExternalServiceName = `^[A-Z][A-Z0-9_]*$`
+	// ExclusiveAnnotationKey marks the reference whose target may be held by
+	// at most one live resource of this kind. A host reads it and enforces the
+	// cardinality without knowing which Form it is enforcing for.
+	ExclusiveAnnotationKey = "x-takoform-exclusive"
+	// SumAnnotationKey marks the object list whose elements' named integer
+	// member must total an exact value. A schema can bound each element and
+	// cannot add a column, so a host reading only the Definition would
+	// otherwise have no way to know the total is part of the contract.
+	SumAnnotationKey = "x-takoform-sum"
+	// ClaimAnnotationKey marks the property whose value at most one live
+	// resource per tenant may hold. The canonical form is the property's own
+	// schema's to define; that the comparison happens on it is the lane's.
+	ClaimAnnotationKey = "x-takoform-claim"
+	// HostAssignedAnnotationKey marks the declared output the host mints. A
+	// client reads it to know the value is not derivable from anything it
+	// wrote and must not be reconstructed from a resource name.
+	HostAssignedAnnotationKey = "x-takoform-host-assigned"
 	// RequiredEntrypointAnnotationKey marks the reference whose inward
 	// activation invokes one entrypoint of the target's runtime contract. The
 	// lane's attachment gate reads it, so a family adds an attachment without
@@ -380,7 +397,8 @@ func (f Field) jsonSchemaShape(group string, resolver TargetContractResolver) (m
 		if err != nil {
 			return nil, err
 		}
-		return f.arraySchema(members), nil
+		list := f.arraySchema(members)
+		return list, nil
 	default:
 		panic(fmt.Sprintf("unknown field kind %q", f.Kind))
 	}

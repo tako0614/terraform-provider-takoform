@@ -34,7 +34,10 @@ func run(args []string, stdout io.Writer) error {
 	// generation, a pairing decision 0047 makes invalid, and restoring the
 	// valid one needs frozen interface and binding trees this repository has no
 	// writer for (conformance/README.md).
-	contractPath := flags.String("contract", "conformance/portable-host-v1beta2", "portable host contract directory")
+	// No default: a run states which corpus it drives. Defaulting to one of
+	// several runnable lanes is how the newest lane went unmeasured — the gate
+	// invoked the command without --contract and never saw it.
+	contractPath := flags.String("contract", "", "portable host contract directory (required)")
 	endpoint := flags.String("endpoint", "", "disposable conformance endpoint origin")
 	tokenEnv := flags.String("token-env", "", "environment variable containing the bearer token")
 	alternateTokenEnv := flags.String(
@@ -61,6 +64,9 @@ func run(args []string, stdout io.Writer) error {
 	// One lane. The retained v1alpha1/v1alpha2 corpora and their runner were
 	// withdrawn with their epochs (decision 0042); this command verifies the
 	// manifest identity and refuses anything that is not the current corpus.
+	if strings.TrimSpace(*contractPath) == "" {
+		return errors.New("--contract is required: a run states which corpus it drives")
+	}
 	format, err := manifestFormat(*contractPath)
 	if err != nil {
 		return err
