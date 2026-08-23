@@ -95,8 +95,11 @@ func run(args []string, stdout io.Writer) error {
 	origin := "http://" + listener.Addr().String()
 
 	fmt.Fprintf(stdout, "Takoform reference host listening on %s\n", origin)
-	fmt.Fprintf(stdout, "  lane      %s\n", portableconformancev3.APIVersion)
-	fmt.Fprintf(stdout, "  discovery %s%s\n", origin, portableconformancev3.DiscoveryPath)
+	// From the CORPUS, not from the package constants: those name the retained
+	// lane, so a host serving the current corpus announced an address that
+	// answers 404 and told its operator to point a provider at it.
+	fmt.Fprintf(stdout, "  lane      %s\n", contract.Lane())
+	fmt.Fprintf(stdout, "  discovery %s%s\n", origin, contract.LaneDiscoveryPath())
 	fmt.Fprintf(stdout, "\nPoint a provider at it:\n")
 	fmt.Fprintf(stdout, "  export TAKOFORM_ENDPOINT=%s\n", origin)
 	fmt.Fprintf(stdout, "  export TAKOFORM_SPACE=dev\n")

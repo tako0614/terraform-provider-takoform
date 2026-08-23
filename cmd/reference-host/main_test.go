@@ -52,8 +52,13 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 		done <- run([]string{"--addr", "127.0.0.1:0", "--repo-root", root}, announced)
 	}()
 
-	var origin string
-	for attempt := 0; attempt < 200 && origin == ""; attempt++ {
+	// Both banner fields are waited for, not just the first. The origin and the
+	// discovery URL are written on separate lines, so a loop that stopped at
+	// "listening on" could snapshot the buffer between the two and read an
+	// empty discovery URL — a flake that would look like the defect this test
+	// exists to catch.
+	var origin, announcedDiscovery string
+	for attempt := 0; attempt < 200 && (origin == "" || announcedDiscovery == ""); attempt++ {
 		select {
 		case err := <-done:
 			t.Fatalf("reference host exited before serving: %v", err)
@@ -63,16 +68,35 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 			if _, address, found := strings.Cut(line, "listening on "); found {
 				origin = strings.TrimSpace(address)
 			}
+			if _, address, found := strings.Cut(line, "discovery "); found {
+				announcedDiscovery = strings.TrimSpace(address)
+			}
 		}
-		if origin == "" {
+		if origin == "" || announcedDiscovery == "" {
 			time.Sleep(25 * time.Millisecond)
 		}
 	}
 	if origin == "" {
 		t.Fatal("reference host never announced an origin")
 	}
+	if announcedDiscovery == "" {
+		t.Fatal("reference host never announced a discovery URL")
+	}
 
-	request, err := http.NewRequest(http.MethodGet, origin+clientv3.DiscoveryPath, nil)
+	// The banner is the operator-facing surface: it is what a reader copies to
+	// point a provider at this host. It named the RETAINED lane's address while
+	// the host served the current one, so the URL it printed answered 404 —
+	// which is why the address is driven from the banner here rather than
+	// composed from a constant the banner does not use.
+	if announcedDiscovery != origin+clientv3.DiscoveryPath {
+		t.Fatalf(
+			"the banner announces %q, but this host serves its discovery at %q; an operator "+
+				"following the banner reaches a lane that does not answer",
+			announcedDiscovery, origin+clientv3.DiscoveryPath,
+		)
+	}
+
+	request, err := http.NewRequest(http.MethodGet, announcedDiscovery, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
