@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1beta2",
     "kind": "WorkerCronTrigger",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:439de47151e5c5f26f387dccfb03f426a4a92a1caa9ce38ad2b6a1720bcc8f84"
+    "schemaDigest": "sha256:815907dece1b261257c7115ee2974b8dde0e282a3e818aa6a1905209dc676bc7"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 6159,
-      "digest": "sha256:08234915f70da8db4b7d811bff9ad58fc264395e909bc0732cfc7627382ec163"
+      "size": 6225,
+      "digest": "sha256:ea3405fee83abf58f26f9dc4da5dc83a546281e51699c7b2edd3af51d7a2c769"
     },
     {
       "path": "fixtures/desired.json",

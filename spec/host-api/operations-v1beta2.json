@@ -16,12 +16,7 @@
   "requiredEndpoints": [
     "api"
   ],
-  "optionalEndpoints": [
-    "artifacts",
-    "operations",
-    "support",
-    "oidc_issuer"
-  ],
+  "optionalEndpoints": [],
   "pathShape": {
     "namespacedGroup": "two-ordinary-path-segments-formGroup-then-formVersion",
     "percentEncodedSlash": "never-in-any-path-segment",
@@ -438,7 +433,7 @@
       "successStatus": [
         200
       ],
-      "responseSchema": "https://forms.takoform.com/schemas/operations/v1alpha1/operation.schema.json"
+      "responseSchema": "https://forms.takoform.com/schemas/operations/v1alpha2/operation.schema.json"
     },
     {
       "name": "operation-cancel",
@@ -451,7 +446,7 @@
       "successStatus": [
         200
       ],
-      "responseSchema": "https://forms.takoform.com/schemas/operations/v1alpha1/operation.schema.json",
+      "responseSchema": "https://forms.takoform.com/schemas/operations/v1alpha2/operation.schema.json",
       "requestBody": "empty",
       "outcomes": {
         "cancelled": "200 with the operation now terminal: done true, error.code operation_cancelled",
@@ -624,7 +619,6 @@
       "form_unknown",
       "form_not_installed",
       "form_unavailable",
-      "form_identity_conflict",
       "resource_not_found",
       "resource_busy",
       "import_conflict",
@@ -636,7 +630,6 @@
       "operation_cancelled",
       "operation_not_found",
       "dependency_in_use",
-      "deletion_protected",
       "artifact_missing",
       "artifact_invalid",
       "unsupported_capability",
@@ -658,8 +651,7 @@
       "permission_denied": 403,
       "form_unknown": 404,
       "form_not_installed": 409,
-      "form_unavailable": 409,
-      "form_identity_conflict": 409,
+      "form_unavailable": 503,
       "resource_not_found": 404,
       "resource_busy": 409,
       "import_conflict": 409,
@@ -671,7 +663,6 @@
       "operation_cancelled": 409,
       "operation_not_found": 404,
       "dependency_in_use": 409,
-      "deletion_protected": 409,
       "artifact_missing": 404,
       "artifact_invalid": 400,
       "unsupported_capability": 422,
@@ -722,8 +713,8 @@
     }
   },
   "identifierGrammars": {
-    "operationId": "^op_[a-z0-9]{8,64}$ (as the operation schema pins)",
-    "uploadId": "^up_[a-z0-9]{8,64}$ (as the wire schema pins)",
+    "operationId": "^op_[A-Za-z0-9][A-Za-z0-9._-]{0,124}$ (the operation schema's pattern, quoted)",
+    "uploadId": "^up_[A-Za-z0-9][A-Za-z0-9._-]{0,124}$ (the wire schema's pattern, quoted)",
     "idempotencyKey": "1..255 visible ASCII characters (0x21-0x7E)"
   },
   "exactFormQueryMeaning": "true on an operation whose request addresses one exact installed FormRef through its path segments plus the queryParameters listed for it; the host answers only under that exact identity and a mismatched or partial exact query is resource_not_found after validation"

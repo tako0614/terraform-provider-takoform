@@ -28,9 +28,12 @@ and
 
 A Binding Definition fixes, as data only:
 
-- `sourceRole`: the Form role allowed to hold this binding (normally
-  `revision`; a deployment or identity resource never holds capability
-  bindings);
+- `sourceRole`: the ONE Form role allowed to hold this binding. Enforcement is
+  equality against the source Form's declared role, and nothing else: the
+  Definition decides which role that is, and no rule elsewhere narrows the
+  choice. Every binding of the current family happens to declare `revision`,
+  because that family puts outward capability on revisions — a fact about that
+  family's shapes, not a constraint this contract imposes;
 - `targetInterface`: the exact InterfaceRef the target must provide;
 - `allowedTargetForms[]`: exact Form kinds (by group and kind) this binding
   may point at;
@@ -159,9 +162,10 @@ In order:
    Definition whose `schemaDigest` the source accepts. Otherwise
    `unsupported_capability` (422): the host cannot perform the capability at
    all, so this is not a malformed request.
-3. **Source role matches `sourceRole`.** Otherwise `invalid_argument` (400).
-   Outward capability belongs to revision resources; an identity or deployment
-   resource never holds one.
+3. **Source role equals `sourceRole`.** Otherwise `invalid_argument` (400).
+   The comparison is equality with the role the Binding Definition declares;
+   which role that is belongs to the Definition, so this check reads one value
+   and never consults a table of roles that may or may not hold capability.
 4. **Target Form is listed in `allowedTargetForms`.** The resolved target's
    exact group and kind must appear there. Otherwise `invalid_argument` (400).
 5. **Target Form provides `targetInterface`.** The target Form Definition's

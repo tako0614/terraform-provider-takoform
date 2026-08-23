@@ -103,6 +103,16 @@ func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Fiel
 	}
 }
 
+// activatingWorkerRef is the reference of an inward-activation attachment: it
+// says WHICH runtime entrypoint the attachment's events invoke, so the gate
+// that admits the attachment reads the Definition instead of a table of Form
+// kinds kept somewhere else. A host holding only this document can enforce it.
+func activatingWorkerRef(doc, entrypoint string) model.Field {
+	field := moduleWorkerRef("worker", "worker", doc, true, true)
+	field.RequiredEntrypoint = entrypoint
+	return field
+}
+
 // Forms is the complete Edge Platform Family MVP set, in a stable order.
 var Forms = []model.Form{
 	{
@@ -419,7 +429,7 @@ var Forms = []model.Form{
 			"A second attachment claiming a hostname a live one already serves is refused before any " +
 			"mutation; releasing the holder makes the claim representable (decision 0026).",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker", "Module Worker served on this hostname.", true, true),
+			activatingWorkerRef("Module Worker served on this hostname.", "fetch"),
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString, Required: true, Immutable: true,
 				Pattern: model.PatternHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern " +
@@ -453,9 +463,9 @@ var Forms = []model.Form{
 			"host that needs to change the address deletes the endpoint and the author creates a new one, which " +
 			"is a new attachment with a new UID.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker",
+			activatingWorkerRef(
 				"Module Worker whose active deployment answers requests at the assigned address. Changing it replaces the endpoint.",
-				true, true),
+				"fetch"),
 		},
 		// The two observable facts, and only those. `hostname` is what the host
 		// assigned; `url` is the one address a client uses. Both are published
@@ -476,8 +486,12 @@ var Forms = []model.Form{
 					"detail, so a portable configuration never parses it, never asserts a suffix, and never " +
 					"reconstructs it from the resource name."},
 			{HCL: "url", Wire: "url", Kind: model.KindString,
-				Pattern:   `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
-				MaxLength: 264,
+				Pattern: `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
+				// The value IS "https://" + the assigned hostname + "/", so its
+				// bound is that construction and nothing else: 8 + 253 + 1. A
+				// looser number would admit a url this Form cannot produce,
+				// which is the one thing a derived bound must not do.
+				MaxLength: 262,
 				Doc: "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + " +
 					"`/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and " +
 					"no port, so a consumer composes deeper paths onto this value rather than deriving an origin. It " +
@@ -506,7 +520,7 @@ var Forms = []model.Form{
 			"idempotent. An uncaught exception in the handler is a failed invocation reported to host " +
 			"diagnostics; it is not retried within the matched minute and it never becomes an HTTP response.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker", "Module Worker whose scheduled handler this trigger invokes.", true, true),
+			activatingWorkerRef("Module Worker whose scheduled handler this trigger invokes.", "scheduled"),
 			{HCL: "cron", Wire: "cron", Kind: model.KindString, Required: true,
 				Pattern: model.PatternCron, MaxLength: 64,
 				Doc: "Portable five-field cron expression, interpreted in UTC only. The pattern bounds the shape; a host " +
@@ -667,7 +681,7 @@ var Forms = []model.Form{
 				Required: true, Immutable: true,
 				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
 				Example: ref("AtLeastOnceQueue", "at-least-once-queue")},
-			moduleWorkerRef("worker", "worker", "Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", true, true),
+			activatingWorkerRef("Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", "queue"),
 			// Batching, retry, and concurrency decide throughput, duplicate
 			// exposure, and downstream load together. No single value is portable
 			// across workloads, so the consumer states all five rather than

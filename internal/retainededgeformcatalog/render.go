@@ -148,6 +148,15 @@ func newTargetContractResolver() *targetContractResolver {
 // The family declares one definition version per Form, so the accepted set is
 // exactly one identity; the annotation is a LIST because a Form line that
 // carried two live definition versions would accept either.
+// ResourceNamePattern is the grammar the released v1beta1 generation
+// published, spelled out here rather than shared. It admits a trailing hyphen,
+// which the envelope refused even then; that defect belongs to these frozen
+// bytes and is corrected in the successor generation, because a published
+// identity means what it meant when it was published (decision 0037).
+func (r *targetContractResolver) ResourceNamePattern() string {
+	return `^[a-z][a-z0-9-]{0,62}$`
+}
+
 func (r *targetContractResolver) TargetFormRefs(targetKind string) ([]currentformmodel.TargetFormRef, error) {
 	if ref, known := r.refs[targetKind]; known {
 		return []currentformmodel.TargetFormRef{ref}, nil

@@ -1277,12 +1277,16 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	}
 	if candidate.Format != "takoform.form-family-candidates@v1" ||
 		candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha4" ||
-		candidate.PublicationStatus != "unpublished" || len(candidate.Forms) != len(current.Forms) {
-		return ledger, errors.New("provider Beta candidate set is not the exact 15-entry family set")
+		candidate.PublicationStatus != "unpublished" {
+		return ledger, errors.New("provider Beta candidate set is not an unpublished Experimental family set")
 	}
 	if candidate.Family == current.Family {
 		// The candidate lane still builds the generation the descriptor-named
-		// release embeds, so the two must be byte-equal.
+		// release embeds, so the two must be byte-equal — which subsumes the
+		// count. Comparing counts ACROSS generations would be wrong rather
+		// than merely redundant: a later generation adds Forms by design
+		// (decision 0043), and requiring it to keep the released one's
+		// cardinality would forbid exactly that.
 		if !reflect.DeepEqual(candidate.Forms, current.Forms) {
 			return ledger, errors.New("provider v2.1 identity ledger differs from the exact Beta candidate set")
 		}

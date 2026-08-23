@@ -25,7 +25,7 @@
           "name": {
             "maxLength": 63,
             "minLength": 1,
-            "pattern": "^[a-z][a-z0-9-]{0,62}$",
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
             "type": "string"
           }
         },
@@ -35,6 +35,7 @@
           "name"
         ],
         "type": "object",
+        "x-takoform-required-entrypoint": "fetch",
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "worker.runtime",
@@ -62,7 +63,7 @@
       },
       "url": {
         "description": "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + `/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and no port, so a consumer composes deeper paths onto this value rather than deriving an origin. It admits exactly the hostnames the hostname member admits, and it is immutable for exactly as long, because it IS that hostname.",
-        "maxLength": 264,
+        "maxLength": 262,
         "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$",
         "type": "string"
       }

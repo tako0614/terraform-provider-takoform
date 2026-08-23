@@ -214,7 +214,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },
@@ -262,7 +262,7 @@
               "name": {
                 "maxLength": 63,
                 "minLength": 1,
-                "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                 "type": "string"
               }
             },
@@ -326,7 +326,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },
@@ -370,7 +370,7 @@
           "name": {
             "maxLength": 63,
             "minLength": 1,
-            "pattern": "^[a-z][a-z0-9-]{0,62}$",
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
             "type": "string"
           }
         },
@@ -476,7 +476,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },
@@ -530,7 +530,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },
@@ -594,7 +594,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },
@@ -648,7 +648,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },
@@ -706,7 +706,7 @@
           "name": {
             "maxLength": 63,
             "minLength": 1,
-            "pattern": "^[a-z][a-z0-9-]{0,62}$",
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
             "type": "string"
           }
         },
@@ -748,7 +748,7 @@
                 "name": {
                   "maxLength": 63,
                   "minLength": 1,
-                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
                   "type": "string"
                 }
               },

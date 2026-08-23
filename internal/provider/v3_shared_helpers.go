@@ -95,9 +95,10 @@ func effectiveSpace(value types.String, fallback string) string {
 }
 
 // portableNamePattern is the portable resource-name grammar the wire schema
-// states: `^[a-z][a-z0-9-]{0,62}$`. It used to be imported from the withdrawn
-// central-epoch catalog; the grammar itself is lane-neutral and unchanged.
-var portableNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+// states: `^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$`. A provider that accepted a
+// trailing hyphen would plan a name the host refuses, turning a local typo
+// into a failed apply instead of a refused plan.
+var portableNamePattern = regexp.MustCompile(`^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // portableMapKeyPattern is the key grammar every portable typed map uses,
 // stated by the wire schema and lane-neutral. It used to be imported from the

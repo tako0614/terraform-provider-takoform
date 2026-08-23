@@ -105,13 +105,13 @@
     },
     {
       "id": "https://forms.takoform.com/schemas/v1beta2/host-api-wire.schema.json",
-      "sha256": "sha256:4edc73f164eaa42c26f0a4f84adfc80501f6e23412caa3b2c57bd220fe4e412d",
+      "sha256": "sha256:ca18b8a265f5af752b7b10f8bb552f68a37ead114b5b0b86965b5061039ea49b",
       "source": "spec/schemas/host-api-wire-v1beta2.schema.json",
       "public": "website/public/schemas/v1beta2/host-api-wire.schema.json"
     },
     {
       "id": "https://forms.takoform.com/schemas/v1beta2/host-discovery.schema.json",
-      "sha256": "sha256:4d49724112d7d6577b398c82039edc340e0162822f0bb0e6e120c5df57bd39a9",
+      "sha256": "sha256:b5220a17f7d22862fa66cd0ceddcdd561612662a3336e3063f910166a0b96cac",
       "source": "spec/schemas/host-discovery-v1beta2.schema.json",
       "public": "website/public/schemas/v1beta2/host-discovery.schema.json"
     }

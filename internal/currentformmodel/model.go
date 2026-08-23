@@ -139,6 +139,13 @@ type Field struct {
 	// agree only on `name`, and no keyword reaches across sibling properties at
 	// all (spec/decisions/0016).
 	ProjectsEnvironmentNames bool
+	// RequiredEntrypoint names the entrypoint of the target's runtime
+	// Interface that this reference's inward activation invokes. It is what
+	// makes the lane's attachment gate derivable from a Definition instead of
+	// from a table of Form kinds the protocol document would have to carry: a
+	// host holding only this document knows which export every weighted
+	// version of the target must have.
+	RequiredEntrypoint string
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
@@ -528,6 +535,12 @@ func validateField(kind string, field Field) error {
 	}
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
+	}
+	if field.RequiredEntrypoint != "" && field.Kind != KindResourceRef {
+		return fmt.Errorf(
+			"form %s field %s requires entrypoint %q on kind %q; only a reference activates a target",
+			kind, field.Wire, field.RequiredEntrypoint, field.Kind,
+		)
 	}
 	if field.ProjectsEnvironmentNames {
 		switch field.Kind {

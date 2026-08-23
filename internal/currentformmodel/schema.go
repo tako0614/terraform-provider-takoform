@@ -12,14 +12,22 @@ import (
 // are declared locally on purpose: the v1alpha2 catalog is retained prior art
 // and the family lane must not inherit silent edits from it.
 const (
-	// PatternResourceName is the metadata.name grammar of the v1beta1
-	// envelope, reused wherever a Form references another resource by name.
-	PatternResourceName = `^[a-z][a-z0-9-]{0,62}$`
+	// PatternResourceName is the envelope's metadata.name grammar, reused
+	// wherever a Form references another resource by name. It is the lane's
+	// grammar exactly: a name that ends in a hyphen is not a DNS label, and a
+	// Form that accepted one would accept a reference to a name the envelope
+	// can never carry — a hole that only ever opens on the reference side.
+	PatternResourceName = `^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$`
 	// PatternExternalServiceName is the SCREAMING_SNAKE grammar sealed-value
 	// slots use: the projection mints NAME_-prefixed members, so a lowercase
 	// or $-bearing name would make those unpronounceable
 	// (spec/standard-services).
 	PatternExternalServiceName = `^[A-Z][A-Z0-9_]*$`
+	// RequiredEntrypointAnnotationKey marks the reference whose inward
+	// activation invokes one entrypoint of the target's runtime contract. The
+	// lane's attachment gate reads it, so a family adds an attachment without
+	// the protocol document — or a host — learning a new Form kind.
+	RequiredEntrypointAnnotationKey = "x-takoform-required-entrypoint"
 	// StandardServiceAnnotationKey marks the array property embedding sealed
 	// external-service slots, exactly parallel to BindingAnnotationKey, so a
 	// host holding only the Definition derives every slot it must enforce.
@@ -127,6 +135,12 @@ type TargetContractResolver interface {
 	TargetFormRefs(targetKind string) ([]TargetFormRef, error)
 	// RequiredInterface returns the exact identity of one Interface contract.
 	RequiredInterface(name, version string) (RequiredInterface, error)
+	// ResourceNamePattern is the name grammar THIS generation's references
+	// admit. It is asked for rather than read from a constant because a
+	// published generation renders the grammar it published: a shared constant
+	// would let a later generation's correction silently rewrite frozen bytes,
+	// which is the one thing a retained declaration set must never do.
+	ResourceNamePattern() string
 }
 
 // DesiredSchema derives the Draft 2020-12 closed desired schema of a Form.
@@ -459,13 +473,19 @@ func (f Field) resourceRefSchema(group string, resolver TargetContractResolver) 
 				"type":      "string",
 				"minLength": 1,
 				"maxLength": ResourceNameMaxLength,
-				"pattern":   PatternResourceName,
 			},
 		},
 	}
 	switch {
 	case resolver == nil:
 		return nil, errors.New("a reference-shaped field needs a target-contract resolver")
+	}
+	pattern := resolver.ResourceNamePattern()
+	if pattern == "" {
+		return nil, errors.New("a reference-shaped field needs its generation's resource-name grammar")
+	}
+	node["properties"].(map[string]any)["name"].(map[string]any)["pattern"] = pattern
+	switch {
 	case f.Target.ExactForm && f.Target.Interface != nil:
 		return nil, errors.New("a reference states either an exact Form contract or an Interface, never both")
 	case f.Target.ExactForm:
@@ -502,6 +522,9 @@ func (f Field) resourceRefSchema(group string, resolver TargetContractResolver) 
 		}
 	default:
 		return nil, errors.New("a reference must state either an exact Form contract or a required Interface")
+	}
+	if f.RequiredEntrypoint != "" {
+		node[RequiredEntrypointAnnotationKey] = f.RequiredEntrypoint
 	}
 	return node, nil
 }

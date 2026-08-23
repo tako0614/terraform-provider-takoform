@@ -78,21 +78,31 @@ const (
 	sensitiveVarsProperty = "requiredSensitiveVars"
 )
 
-// attachmentHandler maps each inward-activation Form to the module handler its
-// events invoke. A custom domain and a host-assigned endpoint both send HTTP
-// requests to `fetch`, a cron trigger fires `scheduled`, and a queue consumer
-// delivers batches to `queue`.
+// requiredEntrypoint reports which module handler an inward-activation Form's
+// events invoke, READ OUT OF the installed Definition's
+// `x-takoform-required-entrypoint` annotation rather than out of a table kept
+// here. A custom domain and a host-assigned endpoint both send HTTP requests to
+// `fetch`, a cron trigger fires `scheduled`, and a queue consumer delivers
+// batches to `queue` — but this host does not know that, and a family adding a
+// fifth attachment is covered without a host edit, exactly as a sixth binding
+// list already is.
 //
-// A Worker Endpoint is in this map for the same reason the other three are, and
-// every consequence follows from being here rather than from an endpoint-shaped
-// special case: it is gated on the active deployment serving `fetch`, it is a
-// dependent that blocks a deployment change that would stop serving `fetch`,
-// and it blocks that deployment's deletion.
-var attachmentHandler = map[string]string{
-	workerCustomDomainKind: fetchHandler,
-	workerEndpointKind:     fetchHandler,
-	workerCronTriggerKind:  scheduledHandler,
-	queueConsumerKind:      queueHandler,
+// A Worker Endpoint carries the annotation for the same reason the other three
+// do, and every consequence follows from carrying it rather than from an
+// endpoint-shaped special case: it is gated on the active deployment serving
+// `fetch`, it is a dependent that blocks a deployment change that would stop
+// serving `fetch`, and it blocks that deployment's deletion.
+func requiredEntrypoint(form *InstalledForm) (string, bool) {
+	if form == nil {
+		return "", false
+	}
+	properties, _ := form.DesiredSchema["properties"].(map[string]any)
+	node, _ := properties["worker"].(map[string]any)
+	if node == nil {
+		return "", false
+	}
+	entrypoint, _ := node[currentformmodel.RequiredEntrypointAnnotationKey].(string)
+	return entrypoint, entrypoint != ""
 }
 
 // classHolderKinds are the members of the aggregate that name a CLASS the
@@ -250,7 +260,7 @@ func (h *ReferenceHost) workerDependents(scope resourceScope, workerUID string) 
 		if candidate.group() != edgeFormsGroup {
 			continue
 		}
-		if handler, attachment := attachmentHandler[candidate.kind()]; attachment {
+		if handler, attachment := requiredEntrypoint(h.catalog.exact(candidate.Ref)); attachment {
 			if relationTargetUID(candidate.Relations, workerRelationPointer) == workerUID {
 				out = append(out, workerDependent{
 					Kind: candidate.kind(), Name: candidate.Name, Handler: handler,
@@ -319,7 +329,7 @@ func (h *ReferenceHost) validateWorkerAggregate(
 	if classHolderKinds[form.Ref.Kind] {
 		return h.validateWorkerClassHolder(form, scope, name, spec, relations)
 	}
-	if handler, attachment := attachmentHandler[form.Ref.Kind]; attachment {
+	if handler, attachment := requiredEntrypoint(form); attachment {
 		if hostErr := h.requireServingDeployment(
 			scope,
 			nestedName(spec, "worker"),

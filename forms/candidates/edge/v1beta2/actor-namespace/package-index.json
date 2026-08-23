@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1beta2",
     "kind": "ActorNamespace",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:338e76b5ac49cd525f0247d6bf9f3f4d4b4206c9af307d4c1285e50015655579"
+    "schemaDigest": "sha256:09461d93782f053ef489dab0179a96548d972ec6fea2f4fd201296a73a57542e"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4888,
-      "digest": "sha256:6608c670f95db6ccf21b21ce34bc3874ab054854ebdb1b3da67055c685dfbcfa"
+      "size": 4899,
+      "digest": "sha256:94e0ea02e5d044c31c28637f1be0fc609e478c15c92a17634c38e6d2b973881e"
     },
     {
       "path": "fixtures/desired.json",
