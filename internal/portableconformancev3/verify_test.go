@@ -15,7 +15,9 @@ import (
 
 func corpusRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", "conformance", "portable-host-v1beta1"))
+	// The current lane's corpus. The v1beta1 one is retained for its bytes and
+	// is not runnable by this build (conformance/README.md).
+	root, err := filepath.Abs(filepath.Join("..", "..", "conformance", "portable-host-v1beta2"))
 	if err != nil {
 		t.Fatalf("resolve corpus root: %v", err)
 	}
@@ -27,18 +29,25 @@ func TestVerifyCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verify: %v", err)
 	}
-	if contract.Format != ContractFormat || contract.APIVersion != APIVersion ||
-		contract.DiscoveryPath != DiscoveryPath || contract.APIPath != APIPath {
-		t.Fatalf("contract identity drifted: %+v", contract)
+	// The corpus states which lane it is, and the lane states its own
+	// identity. Comparing against package constants would pin this test to
+	// whichever lane those constants happened to name.
+	lane := contract.lane
+	if contract.Format != lane.ContractFormat || contract.APIVersion != lane.APIVersion ||
+		contract.DiscoveryPath != lane.DiscoveryPath || contract.APIPath != lane.APIPath {
+		t.Fatalf("contract identity drifted from its declared lane: %s", contract.APIVersion)
 	}
-	if len(contract.ErrorEnvelope.Codes) != 26 {
-		t.Fatalf("error taxonomy carries %d codes, want 26", len(contract.ErrorEnvelope.Codes))
+	if len(contract.ErrorEnvelope.Codes) != len(lane.ErrorHTTPStatus) {
+		t.Fatalf(
+			"error taxonomy carries %d codes, want the lane's %d",
+			len(contract.ErrorEnvelope.Codes), len(lane.ErrorHTTPStatus),
+		)
 	}
 	if len(contract.ErrorEnvelope.AutomaticallyRetryable) != 4 {
 		t.Fatalf("retryable set carries %d codes, want 4", len(contract.ErrorEnvelope.AutomaticallyRetryable))
 	}
-	if len(contract.RequiredRunnerChecks) != len(beta1RequiredChecks) {
-		t.Fatalf("required checks = %d, want %d", len(contract.RequiredRunnerChecks), len(beta1RequiredChecks))
+	if len(contract.RequiredRunnerChecks) != len(lane.RequiredChecks) {
+		t.Fatalf("required checks = %d, want the lane's %d", len(contract.RequiredRunnerChecks), len(lane.RequiredChecks))
 	}
 	if contract.RunnerInput.Space == contract.RunnerInput.AlternateSpace {
 		t.Fatalf("runner spaces must differ")
@@ -162,7 +171,7 @@ func TestVerifyRejectsDriftedRequiredChecks(t *testing.T) {
 	}
 	digest := sha256.Sum256(updated)
 	manifest := map[string]string{
-		"format":   ManifestFormat,
+		"format":   beta2Lane.ManifestFormat,
 		"contract": "contract.json",
 		"sha256":   hex.EncodeToString(digest[:]),
 	}
@@ -269,7 +278,7 @@ func repinCorpus(t *testing.T, root string, mutate func(input map[string]json.Ra
 	}
 	digest := sha256.Sum256(updated)
 	manifestRaw, err := json.Marshal(map[string]string{
-		"format":   ManifestFormat,
+		"format":   beta2Lane.ManifestFormat,
 		"contract": "contract.json",
 		"sha256":   hex.EncodeToString(digest[:]),
 	})

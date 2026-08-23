@@ -270,7 +270,7 @@
               "apiVersion": "edge.forms.takoform.com/v1beta2",
               "definitionVersion": "0.1.0",
               "kind": "StaticAssetBundle",
-              "schemaDigest": "sha256:9dd6ad8235ab7bc65c457fb119b67dcddf3d5f1f0a0062a4363c634214befb6a"
+              "schemaDigest": "sha256:a6bf24517afa91917789c599f14c2717dfbfa2942651b1d0f17a907afba4ce78"
             }
           ]
         },
@@ -378,7 +378,7 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "definitionVersion": "0.1.0",
           "kind": "WorkerBundle",
-          "schemaDigest": "sha256:34952a4003122ea40f394dccc7bd0dc711f2d241036c11ef86ef6cf2782def36"
+          "schemaDigest": "sha256:d9fadb910964b9c260b8ebc9e2f9af3567d23de099b215cb1e1d585e01fde7c2"
         }
       ]
     },

@@ -37,7 +37,7 @@ func newAggregateFixture(t *testing.T) *aggregateFixture {
 		t:      t,
 		host:   NewReferenceHost(contract, catalog),
 		caller: referencePrimaryAuth,
-		group:  edgeFormsGroup,
+		group:  testEdgeFormsGroup,
 		space:  contract.RunnerInput.Space,
 	}
 }

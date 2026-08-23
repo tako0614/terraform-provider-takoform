@@ -5,6 +5,7 @@
   "title": "Edge KV Namespace",
   "description": "Globally replicated key/value namespace of opaque BYTES with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form, and this one promises no read-your-writes, in any session, at any location. Values are byte strings carried in the family's encoded-bytes shape, so the declared byte limit and the structural string ceiling measure the same thing (decision 0020).",
   "role": "identity",
+  "requiresHostApi": "forms.takoform.com/v1beta1",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,

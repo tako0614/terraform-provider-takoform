@@ -14,6 +14,7 @@ package currentformmodel
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -204,8 +205,13 @@ type Form struct {
 	Slug         string // kebab-case package directory
 	ResourceType string // takoform_* Terraform resource type
 	Role         Role
-	Title        string
-	Description  string
+	// RequiresHostAPI is the earliest Host API lane this Form's contract needs
+	// (decision 0047). It is declared per FORM, not per family: what a Form
+	// needs from the substrate is a property of its own contract, so one
+	// generation may hold members with different requirements.
+	RequiresHostAPI string
+	Title           string
+	Description     string
 	// DefinitionVersion is the SemVer of this Form's definition.
 	DefinitionVersion string
 
@@ -324,7 +330,18 @@ func (f Form) FixtureName() string { return f.Slug }
 
 // Validate proves the structural rules a Form must satisfy before any surface
 // is derived from it.
+// hostAPILanePattern is the Host API lane identity grammar a Form states its
+// substrate requirement in (decision 0047).
+var hostAPILanePattern = regexp.MustCompile(`^forms\.takoform\.com/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
+
 func (f Form) Validate() error {
+	// Every Form states the substrate it needs. It is the one dependency a
+	// Form has always had and the only one that used to travel by convention,
+	// which is what let a family and a lane move only together (decision
+	// 0047).
+	if !hostAPILanePattern.MatchString(f.RequiresHostAPI) {
+		return fmt.Errorf("form %s declares requiresHostApi %q, which is not a Host API lane identity", f.Kind, f.RequiresHostAPI)
+	}
 	if f.Kind == "" || f.Slug == "" || f.ResourceType == "" || f.Title == "" || f.DefinitionVersion == "" {
 		return fmt.Errorf("form %q is missing identity fields", f.Kind)
 	}

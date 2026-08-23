@@ -67,9 +67,11 @@ const (
 	// pending for before the reference host completes it.
 	asyncOperationPolls = 2
 
-	// edgeFormsGroup is the one namespaced group whose cross-resource
-	// semantics this reference host enforces.
-	edgeFormsGroup                 = "edge.forms.takoform.com/v1beta2"
+	// The kinds below are the family's own vocabulary. The GROUP they belong
+	// to is not a constant: it is read from the candidate set this host
+	// installed (ReferenceHost.edgeGroup), because every guard keyed to it is
+	// a silent early return, and a host compiled against one generation would
+	// load another, pass every structural check, and enforce nothing.
 	workerBundleKind               = "WorkerBundle"
 	staticAssetBundleKind          = "StaticAssetBundle"
 	sqliteMigrationSetKind         = "SQLiteMigrationSet"
@@ -1027,7 +1029,7 @@ func (h *ReferenceHost) specDiagnostics(form *InstalledForm, spec map[string]any
 	// The cron grammar is decided by a parser rather than by the pattern the
 	// Definition carries, for the same reason: a structural minimum admits
 	// shapes that name no schedule (decision 0020).
-	if violation := cronExpressionViolation(form, spec); violation != "" {
+	if violation := cronExpressionViolation(form.EnforcedFamily, form, spec); violation != "" {
 		return []map[string]any{{"severity": "error", "message": violation}}, nil
 	}
 	return []map[string]any{}, nil
@@ -1248,10 +1250,10 @@ func (h *ReferenceHost) validateDesiredSemantics(
 ) ([]storedRelation, *hostError) {
 	// Two pure spec-shape rules first: neither needs another resource, so
 	// neither should depend on one resolving.
-	if hostErr := validateDeploymentWeightSum(form, spec); hostErr != nil {
+	if hostErr := validateDeploymentWeightSum(form.EnforcedFamily, form, spec); hostErr != nil {
 		return nil, hostErr
 	}
-	if hostErr := validateEnvironmentNamespace(form, spec); hostErr != nil {
+	if hostErr := validateEnvironmentNamespace(form.EnforcedFamily, form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	if hostErr := h.validateDeclaredHandlers(form, spec); hostErr != nil {
@@ -1290,8 +1292,8 @@ func (h *ReferenceHost) validateDesiredSemantics(
 // weight half of the deployment integrity rule; the ownership, uniqueness, and
 // availability halves need resolved relations and live in
 // validateWorkerDeployment.
-func validateDeploymentWeightSum(form *InstalledForm, spec map[string]any) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerDeploymentKind {
+func validateDeploymentWeightSum(familyGroup string, form *InstalledForm, spec map[string]any) *hostError {
+	if form.Ref.APIVersion != familyGroup || form.Ref.Kind != workerDeploymentKind {
 		return nil
 	}
 	versions, _ := spec["versions"].([]any)
@@ -1857,7 +1859,7 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 // is how every Form in the family behaves except the one that declares an
 // output contract.
 func (h *ReferenceHost) resourceOutputs(resource *storedResource) map[string]any {
-	if resource.group() != edgeFormsGroup {
+	if resource.group() != h.edgeGroup() {
 		return nil
 	}
 	if resource.kind() == workerEndpointKind {
@@ -2822,6 +2824,15 @@ func (h *ReferenceHost) collectStagedBlobs(upload *artifactUpload) {
 // and a bare boolean could not carry the second half.
 // supportAPIVersion is the Host Support Profile identity of the lane this host
 // serves.
+// edgeGroup is the Form Family generation this host installed and whose
+// cross-resource semantics it enforces. It comes from the candidate set, not
+// from a constant: the guards that read it are silent early returns, so a host
+// that guessed wrong would enforce nothing and still pass every structural
+// check.
+func (h *ReferenceHost) edgeGroup() string {
+	return h.catalog.family
+}
+
 func (h *ReferenceHost) supportAPIVersion() string {
 	return supportAPIVersionPrefix + h.contract.lane.SupportProfileSchemaVersion
 }

@@ -353,7 +353,7 @@ func (r *v3Runner) materialize(ref FormRef, spec map[string]any) map[string]any 
 func (r *v3Runner) pinDesiredSchemas() {
 	input := r.contract.RunnerInput
 	r.desiredSchemas = map[FormRef]map[string]any{}
-	for _, entry := range probeInventory(&input) {
+	for _, entry := range declaredProbes(&input) {
 		r.desiredSchemas[entry.Probe.Identity.FormRef] = entry.Probe.DesiredSchema.Schema
 	}
 }

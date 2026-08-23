@@ -53,6 +53,71 @@ contract.errorEnvelope.httpStatusByCode = Object.fromEntries(
     .map(([code, status]) => [code, code === "form_unavailable" ? 503 : status]),
 );
 
+const CLASS_HOLDER_PROBES = {
+  "durableWorkflow": {
+    "name": "durable-workflow-probe",
+    "identity": {
+      "formRef": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "DurableWorkflow",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:e9877db1715576bfe04c1c24a360feeb2328dcb64ab55811d52e7dc2cdd4b532"
+      },
+      "packageDigest": "sha256:d39942a48673121b99702002af9321a35aec1e59162856afb4cac45549422a92"
+    },
+    "lifecycleCapabilities": [
+      "create",
+      "read",
+      "delete",
+      "import",
+      "observe"
+    ],
+    "desired": {
+      "className": "OrderFulfilment",
+      "worker": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "ModuleWorker",
+        "name": "module-worker-probe"
+      }
+    },
+    "desiredSchema": {
+      "path": "fixtures/desired-schema-durable-workflow.json",
+      "sha256": "sha256:7af4978075fcacebc546133923e4680878795d684bee0166c0d74e4a79c473dd"
+    }
+  },
+  "actorNamespace": {
+    "name": "actor-namespace-probe",
+    "identity": {
+      "formRef": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "ActorNamespace",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:f0ee0929b20ac7eef5333c48ad6a38da7af9314600444ada4545fd4083f1031b"
+      },
+      "packageDigest": "sha256:081d89bc31002602b3f8a3dba4d40a7ef54f397ac4675947304ab705d0a221dd"
+    },
+    "lifecycleCapabilities": [
+      "create",
+      "read",
+      "delete",
+      "import",
+      "observe"
+    ],
+    "desired": {
+      "className": "ChatRoom",
+      "worker": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "ModuleWorker",
+        "name": "module-worker-probe"
+      }
+    },
+    "desiredSchema": {
+      "path": "fixtures/desired-schema-actor-namespace.json",
+      "sha256": "sha256:568924a8f33c902115eabe55e2fd8b9c6983115784e34fa90e72bea8621f316a"
+    }
+  }
+};
+
 // The sealed external standard-service slot (decision 0045). Its two specs are
 // the whole point of the probe: one the host must accept and one it must refuse
 // before any mutation, so the vocabulary is closed rather than advisory.
@@ -91,6 +156,23 @@ contract.runnerInput.externalServices = {
 // One check per rule the lane introduced. The list is the corpus's copy of what
 // internal/portableconformancev3 requires of a v1beta2 run; the two are compared
 // at verify time, so neither can grow a check the other does not know about.
+// The lane delta carries the family axis too: this corpus drives the second
+// protocol lane against the second family generation, and inheriting the
+// source corpus's tree would silently re-conflate the two axes.
+contract.familyCandidateSet = "forms/candidates/edge/v1beta2";
+
+// The synthetic second definition belongs to the family generation this corpus
+// installs, so the source corpus's v1beta1-group document is not it.
+contract.runnerInput.syntheticSecondDefinitionVersion.path =
+  "fixtures/synthetic-module-worker-second-definition-v1beta2.json";
+
+// The class-selecting identities exist only in the generation this corpus
+// installs. They are added HERE rather than carried by the source corpus,
+// because a corpus measures the generation it declares — the v1beta1 family
+// has no DurableWorkflow to probe.
+contract.runnerInput.durableWorkflow = CLASS_HOLDER_PROBES.durableWorkflow;
+contract.runnerInput.actorNamespace = CLASS_HOLDER_PROBES.actorNamespace;
+
 contract.requiredRunnerChecks = [
   ...source.requiredRunnerChecks,
   "fence-matrix-observed",
@@ -99,6 +181,9 @@ contract.requiredRunnerChecks = [
   "cancel-outcomes-closed",
   "external-service-slots-sealed",
   "portable-defaults-materialized",
+  // The class-export gate, measurable only where the class-selecting
+  // identities exist.
+  "class-holder-rules-enforced",
 ];
 
 // ---- write or check ----

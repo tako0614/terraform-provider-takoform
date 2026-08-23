@@ -91,7 +91,7 @@ and "a host answers for the kind" are the same behavior and no check can tell
 them apart (same decision).
 `self-test --contract conformance/portable-host-v1beta1`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 117-check matrix over real HTTP: exact discovery and
+drives the complete 116-check matrix over real HTTP: exact discovery and
 availability, a credential that is REQUIRED — an absent `Authorization` header
 and a bearer credential naming nobody are both refused `unauthenticated` on a
 read surface and on a mutating one, and the identical requests under a real
@@ -526,3 +526,33 @@ Publication blocker V3-008 closes on a passed
 `deployed-runtime-conformance-run` with its load lane measured, against a
 runtime this repository does not own; a self-test never closes it, and each
 report repeats that sentence in its own `blockerEvidence` member.
+
+## `portable-host-v1beta1` is retained, not runnable by this build
+
+This corpus drives the Host API `v1beta1` lane against the
+`edge.forms.takoform.com/v1beta2` family generation. That pairing was created
+when the family moved and the corpus was re-pinned along with it — at a time
+when nothing in the specification said the protocol lane and the family
+generation were separate axes, so nothing noticed.
+
+[Decision 0047](../spec/decisions/0047-the-host-api-is-the-substrate-a-form-declares-against.md)
+says they are separate, and it makes this pairing **invalid**: three members of
+that generation declare `requiresHostApi: forms.takoform.com/v1beta2`, and a
+host serving the first lane refuses to install them rather than accept desired
+state it has no rules for. The refusal is the mechanism working.
+
+The valid pairing — the first lane against the first family generation — is
+what Registry-published provider 2.1.1 actually speaks, and the frozen
+`forms/candidates/edge/v1beta1/` tree is still on disk. What is missing is the
+rest of that generation: its Interface and Binding candidate trees are
+regenerated from the CURRENT catalog, so `worker.runtime` there is 1.1.0 and
+the frozen Definitions reference 1.0.0. Restoring the pairing therefore needs a
+writer for the retained generation's contracts, which `internal/retainededgeformcatalog`
+could feed but no `cmd/` entry point drives today.
+
+Until that writer exists this corpus is kept for its bytes and is not run; the
+current lane's corpus is the one the gate drives. The retained generation's own
+protection is elsewhere and is not weakened by this:
+`TestV3CodecTableCoversEverySupportedRef` proves every published v1beta1
+identity still resolves a codec of its own generation, and the frozen ledger
+digests refuse any drift in its published bytes.

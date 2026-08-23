@@ -10,6 +10,7 @@
     "definitionVersion",
     "title",
     "role",
+    "requiresHostApi",
     "desiredSchema",
     "lifecycleCapabilities"
   ],
@@ -19,7 +20,10 @@
       "maxLength": 320,
       "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
       "not": {
-        "enum": ["forms.takoform.com/v1alpha1", "forms.takoform.com/v1alpha2"]
+        "enum": [
+          "forms.takoform.com/v1alpha1",
+          "forms.takoform.com/v1alpha2"
+        ]
       }
     },
     "kind": {
@@ -40,8 +44,19 @@
       "maxLength": 4096
     },
     "role": {
-      "enum": ["identity", "revision", "deployment", "attachment", "policy"],
+      "enum": [
+        "identity",
+        "revision",
+        "deployment",
+        "attachment",
+        "policy"
+      ],
       "description": "Closed resource role. Revisions are immutable snapshots and never declare the update capability; attachments and policies reference a parent resource; deleting an attachment or policy never deletes the parent."
+    },
+    "requiresHostApi": {
+      "type": "string",
+      "pattern": "^forms\\.takoform\\.com/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
+      "description": "The earliest Host API lane whose rules this contract needs. It is a LOWER BOUND, not a pin: a lane's compatibility across its own generations is the lane's obligation, and pinning would re-mint every Form whenever the protocol moved. A host serving an earlier lane refuses this Form with unsupported_capability at install time, naming both identities (decision 0047)."
     },
     "desiredSchema": {
       "$ref": "#/$defs/jsonSchema"
@@ -65,7 +80,14 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "enum": ["create", "read", "update", "delete", "import", "observe"]
+        "enum": [
+          "create",
+          "read",
+          "update",
+          "delete",
+          "import",
+          "observe"
+        ]
       }
     },
     "providedInterfaces": {
@@ -93,7 +115,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "desiredPath"],
+        "required": [
+          "name",
+          "desiredPath"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -118,14 +143,23 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "stage", "inputPath", "expectedFailure"],
+        "required": [
+          "name",
+          "stage",
+          "inputPath",
+          "expectedFailure"
+        ],
         "properties": {
           "name": {
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
           },
           "stage": {
-            "enum": ["desired", "observed", "output"]
+            "enum": [
+              "desired",
+              "observed",
+              "output"
+            ]
           },
           "inputPath": {
             "$ref": "#/$defs/packagePath"
@@ -146,13 +180,21 @@
             "const": "revision"
           }
         },
-        "required": ["role"]
+        "required": [
+          "role"
+        ]
       },
       "then": {
         "properties": {
           "lifecycleCapabilities": {
             "items": {
-              "enum": ["create", "read", "delete", "import", "observe"]
+              "enum": [
+                "create",
+                "read",
+                "delete",
+                "import",
+                "observe"
+              ]
             }
           }
         }
@@ -162,7 +204,10 @@
   "$defs": {
     "jsonSchema": {
       "type": "object",
-      "required": ["$schema", "type"],
+      "required": [
+        "$schema",
+        "type"
+      ],
       "properties": {
         "$schema": {
           "const": "https://json-schema.org/draft/2020-12/schema"

@@ -151,7 +151,7 @@ func (h *ReferenceHost) validateWorkerVersionAssets(
 	spec map[string]any,
 	relations []storedRelation,
 ) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != workerVersionKind {
 		return nil
 	}
 	assets, present := spec["assets"].(map[string]any)
@@ -187,7 +187,7 @@ func (h *ReferenceHost) sqliteMigrationPlan(
 	scope resourceScope,
 	relations []storedRelation,
 ) (string, []migrationLedgerEntry, *hostError) {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != sqliteMigrationApplicationKind {
+	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != sqliteMigrationApplicationKind {
 		return "", nil, nil
 	}
 	database := h.relationTargetResource(scope, relations, migrationDatabasePointer)
@@ -244,16 +244,16 @@ func (h *ReferenceHost) validateSQLiteMigrationApplication(
 func (h *ReferenceHost) validateSingleMigrationApplication(
 	form *InstalledForm, scope resourceScope, name string, relations []storedRelation,
 ) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != sqliteMigrationApplicationKind {
+	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != sqliteMigrationApplicationKind {
 		return nil
 	}
 	databaseUID := relationTargetUID(relations, migrationDatabasePointer)
 	if databaseUID == "" {
 		return nil
 	}
-	selfKey := resourceKey(scope, edgeFormsGroup, form.Ref.Kind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), form.Ref.Kind, name)
 	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != edgeFormsGroup ||
+		if candidate.group() != h.edgeGroup() ||
 			candidate.kind() != sqliteMigrationApplicationKind ||
 			candidate.key() == selfKey {
 			continue
@@ -281,7 +281,7 @@ func (h *ReferenceHost) validateSingleMigrationApplication(
 func (h *ReferenceHost) sqliteMigrationApplicationUnavailable(
 	resource *storedResource,
 ) (reason, hostReason string, unavailable bool) {
-	if resource.group() != edgeFormsGroup || resource.kind() != sqliteMigrationApplicationKind {
+	if resource.group() != h.edgeGroup() || resource.kind() != sqliteMigrationApplicationKind {
 		return "", "", false
 	}
 	database := h.relationTargetResource(resource.scope(), resource.Relations, migrationDatabasePointer)
@@ -354,8 +354,8 @@ func (h *ReferenceHost) applySQLiteMigrationSuffix(
 // at the comparison is what makes the claim decidable at all: the stored value
 // is the identity, so uniqueness is an equality test on stored specs and a
 // re-apply under any other spelling moves nothing (spec/decisions/0026).
-func canonicalizeEdgeSpec(form *InstalledForm, spec map[string]any) map[string]any {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerCustomDomainKind {
+func canonicalizeEdgeSpec(familyGroup string, form *InstalledForm, spec map[string]any) map[string]any {
+	if form.Ref.APIVersion != familyGroup || form.Ref.Kind != workerCustomDomainKind {
 		return spec
 	}
 	written, present := spec["hostname"].(string)
@@ -412,12 +412,12 @@ func (h *ReferenceHost) validateSingleHostnameClaim(
 	if hostname == "" {
 		return stableError("invalid_argument", "a WorkerCustomDomain requires a hostname")
 	}
-	selfKey := resourceKey(scope, edgeFormsGroup, workerCustomDomainKind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), workerCustomDomainKind, name)
 	for _, candidate := range h.sortedResources() {
 		if candidate.Tenant != scope.Tenant {
 			continue
 		}
-		if candidate.group() != edgeFormsGroup || candidate.kind() != workerCustomDomainKind {
+		if candidate.group() != h.edgeGroup() || candidate.kind() != workerCustomDomainKind {
 			continue
 		}
 		if candidate.key() == selfKey {
@@ -494,13 +494,13 @@ func (h *ReferenceHost) validateDeadLetterAcyclic(
 	}
 	// The consumer under test supersedes whatever it previously declared, so
 	// its own stored edge is replaced rather than walked.
-	selfKey := resourceKey(scope, edgeFormsGroup, queueConsumerKind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), queueConsumerKind, name)
 	successor := map[string]string{origin: destination}
 	for _, candidate := range h.sortedResources() {
 		if candidate.Tenant != scope.Tenant {
 			continue
 		}
-		if candidate.group() != edgeFormsGroup || candidate.kind() != queueConsumerKind ||
+		if candidate.group() != h.edgeGroup() || candidate.kind() != queueConsumerKind ||
 			candidate.key() == selfKey {
 			continue
 		}
@@ -548,8 +548,8 @@ func (h *ReferenceHost) validateDeadLetterAcyclic(
 // It is a property of the spec ALONE — no other resource has to resolve — so it
 // is reported as a desired-spec diagnostic and therefore reaches the advisory
 // `validate` surface, the binding `prepare` surface, and `apply` alike.
-func cronExpressionViolation(form *InstalledForm, spec map[string]any) string {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerCronTriggerKind {
+func cronExpressionViolation(familyGroup string, form *InstalledForm, spec map[string]any) string {
+	if form.Ref.APIVersion != familyGroup || form.Ref.Kind != workerCronTriggerKind {
 		return ""
 	}
 	expression, _ := spec["cron"].(string)
@@ -565,7 +565,7 @@ func cronExpressionViolation(form *InstalledForm, spec map[string]any) string {
 // commit re-derive every precondition, long after the diagnostics of the
 // accepting request were computed.
 func validateCronExpression(form *InstalledForm, spec map[string]any) *hostError {
-	if violation := cronExpressionViolation(form, spec); violation != "" {
+	if violation := cronExpressionViolation(form.EnforcedFamily, form, spec); violation != "" {
 		return stableError("invalid_argument", violation)
 	}
 	return nil
@@ -600,9 +600,9 @@ func (h *ReferenceHost) validateSingleQueueConsumer(
 	if queueUID == "" {
 		return stableError("invalid_argument", "a QueueConsumer requires a target queue")
 	}
-	selfKey := resourceKey(scope, edgeFormsGroup, queueConsumerKind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), queueConsumerKind, name)
 	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != edgeFormsGroup || candidate.kind() != queueConsumerKind {
+		if candidate.group() != h.edgeGroup() || candidate.kind() != queueConsumerKind {
 			continue
 		}
 		if candidate.key() == selfKey {

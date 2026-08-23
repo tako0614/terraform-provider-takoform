@@ -105,7 +105,7 @@
     },
     {
       "id": "https://forms.takoform.com/schemas/v1beta2/form-definition.schema.json",
-      "sha256": "sha256:edfedda61d224df6d22d50bf100b871492b33cf613e5508d5b3918d601ad407b",
+      "sha256": "sha256:f756bff62172fa78a805ae7d9340016a6c4f3474d1f8c5ebce200e25c8364c32",
       "source": "spec/schemas/form-definition-v1beta2.schema.json",
       "public": "website/public/schemas/v1beta2/form-definition.schema.json"
     },

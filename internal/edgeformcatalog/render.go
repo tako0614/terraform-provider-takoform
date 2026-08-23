@@ -272,6 +272,7 @@ func renderForm(form currentformmodel.Form, resolver currentformmodel.TargetCont
 		Title:                 form.Title,
 		Description:           form.Description,
 		Role:                  string(form.Role),
+		RequiresHostAPI:       form.RequiresHostAPI,
 		DesiredSchema:         desiredSchema,
 		OutputSchema:          outputSchema,
 		ImmutableFields:       form.ImmutableFields(),

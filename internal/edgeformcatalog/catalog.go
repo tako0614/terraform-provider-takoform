@@ -30,6 +30,43 @@ const edgeDefinitionVersion = "0.1.0"
 // contract, re-addressed", and this one does not (decision 0046).
 const workerVersionDefinitionVersion = "0.2.0"
 
+// The Host API lanes this family's members require (decision 0047). They are
+// LOWER BOUNDS and they are not all the same, which is the point: what a Form
+// needs from the substrate is a property of its own contract, so a generation
+// holds members with different requirements and the family stops having to
+// move whenever the lane does.
+const (
+	// firstBetaLane serves every member whose contract needs nothing the
+	// second Beta lane added: create, read, update, delete, import, observe,
+	// fences, relations, and the attachment gate all predate it.
+	firstBetaLane = "forms.takoform.com/v1beta1"
+	// secondBetaLane is required by the members whose contract uses a rule
+	// that lane introduced — the sealed external standard-service slot
+	// (decision 0045) and the annotated class-export gate a class-selecting
+	// identity is admitted by. An earlier host would install these and then
+	// have no rule to enforce them with, which is exactly what the
+	// requirement exists to refuse.
+	secondBetaLane = "forms.takoform.com/v1beta2"
+)
+
+// laneRequirements names the members that need more than firstBetaLane. A Form
+// absent from this map requires the first Beta lane, so adding a member here
+// is a deliberate statement that its contract cannot be served by an older
+// host — never something a generation move does to a whole family at once.
+var laneRequirements = map[string]string{
+	"WorkerVersion":   secondBetaLane,
+	"DurableWorkflow": secondBetaLane,
+	"ActorNamespace":  secondBetaLane,
+}
+
+// requiredLane is the lane one member declares.
+func requiredLane(kind string) string {
+	if lane, declared := laneRequirements[kind]; declared {
+		return lane
+	}
+	return firstBetaLane
+}
+
 // generationDefinitionVersions enumerates every member whose definition
 // version deliberately differs from the generation line, with the version it
 // must carry. A Form cannot drift off the line by accident, and one that is
@@ -794,6 +831,16 @@ var Forms = []model.Form{
 
 // Validate proves every structural catalog rule: per-form model rules, the
 // open-token guard, unique identities, and resolvable contract references.
+// Every member's lane requirement is filled from the one table above rather
+// than repeated on seventeen literals, so the set of members that need more
+// than the first Beta lane is readable in one place and adding to it is an
+// edit somebody has to justify.
+func init() {
+	for index := range Forms {
+		Forms[index].RequiresHostAPI = requiredLane(Forms[index].Kind)
+	}
+}
+
 func Validate() error {
 	if err := model.ValidateNoOpenTokens(Forms); err != nil {
 		return err

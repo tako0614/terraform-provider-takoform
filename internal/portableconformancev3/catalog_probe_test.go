@@ -43,7 +43,7 @@ func (h *ReferenceHost) probeForm(kind string) *InstalledForm {
 	}
 	var found *InstalledForm
 	for _, form := range h.catalog.sortedForms() {
-		if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != kind {
+		if form.Ref.APIVersion != testEdgeFormsGroup || form.Ref.Kind != kind {
 			continue
 		}
 		if found != nil {

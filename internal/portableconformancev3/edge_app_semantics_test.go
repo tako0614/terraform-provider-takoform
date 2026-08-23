@@ -26,7 +26,7 @@ func edgeAppForm(t *testing.T, catalog *Catalog, kind string) *InstalledForm {
 	// diverged from the generation line do not sit at it (decision 0046), so
 	// this resolves by kind and takes whatever single line the catalog
 	// installs for it.
-	form := catalog.onlyLine(edgeFormsGroup, kind)
+	form := catalog.onlyLine(testEdgeFormsGroup, kind)
 	if form == nil {
 		t.Fatalf("%s candidate is not installed", kind)
 	}
@@ -241,8 +241,12 @@ func TestSQLiteMigrationApplicationReadinessTracksExactLedgerSet(t *testing.T) {
 	if condition := hMigrationReadyCondition(host, app2); condition["status"] != "True" || condition["reason"] != "Available" {
 		t.Fatalf("second application condition = %+v, want Ready=True/Available", condition)
 	}
-	if condition := hMigrationReadyCondition(host, app1); condition["status"] != "False" || condition["reason"] != "Reconciling" {
-		t.Fatalf("older application condition = %+v, want Ready=False/Reconciling", condition)
+	// The converging reason is the LANE's: v1beta2's type-reason matrix gives
+	// Reconciling to a condition TYPE, so a Ready condition may no longer
+	// borrow it as a reason.
+	converging := host.contract.lane.ConvergingReason()
+	if condition := hMigrationReadyCondition(host, app1); condition["status"] != "False" || condition["reason"] != converging {
+		t.Fatalf("older application condition = %+v, want Ready=False/%s", condition, converging)
 	}
 	if host.resources[app1.key()] == nil || host.resources[app2.key()] == nil {
 		t.Fatal("a later migration application removed the older application resource")

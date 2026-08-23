@@ -5,6 +5,7 @@
   "title": "Durable Workflow",
   "description": "Long-lived identity of one code-defined durable workflow: a class the worker's active deployment serves, whose instances survive process death. The Form fixes the execution model by identity — the worker.workflow@1.0.0 contract in its providedInterfaces states memoized replay, at-least-once step execution, the closed status vocabulary, and the two bounds that keep an instance finite. It carries NO implementation snapshot: which code answers is whatever the worker's active Worker Deployment selects, so behavior upgrades and rollback ride the deployment like any other traffic change. Instances are runtime data reached through module-worker.workflow bindings, never Resources. One worker carries at most one Durable Workflow per class name.",
   "role": "identity",
+  "requiresHostApi": "forms.takoform.com/v1beta2",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,

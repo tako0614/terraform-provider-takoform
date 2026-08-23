@@ -243,6 +243,11 @@ var beta2RequiredChecks = append(append([]string{}, beta1RequiredChecks...),
 	// probe is materialized locally, so without this the whole portable
 	// defaults section was unmeasured while reporting green.
 	"portable-defaults-materialized",
+	// The class-export gate. It lives here rather than in the shared list
+	// because the Forms it gates exist only in the generation this lane's
+	// corpus installs — a check is required of a corpus that can drive it,
+	// and the family axis decides that (decision 0047).
+	"class-holder-rules-enforced",
 )
 
 // ConvergingReason is what a lane calls the state "the host is actively

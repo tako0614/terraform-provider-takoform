@@ -172,7 +172,7 @@ func (h *ReferenceHost) activeDeployment(scope resourceScope, workerUID string) 
 		return nil
 	}
 	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != edgeFormsGroup || candidate.kind() != workerDeploymentKind {
+		if candidate.group() != h.edgeGroup() || candidate.kind() != workerDeploymentKind {
 			continue
 		}
 		if relationTargetUID(candidate.Relations, workerRelationPointer) == workerUID {
@@ -257,7 +257,7 @@ type workerDependent struct {
 func (h *ReferenceHost) workerDependents(scope resourceScope, workerUID string) []workerDependent {
 	var out []workerDependent
 	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != edgeFormsGroup {
+		if candidate.group() != h.edgeGroup() {
 			continue
 		}
 		if handler, attachment := requiredEntrypoint(h.catalog.exact(candidate.Ref)); attachment {
@@ -314,7 +314,7 @@ func (h *ReferenceHost) validateWorkerAggregate(
 	spec map[string]any,
 	relations []storedRelation,
 ) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup {
+	if form.Ref.APIVersion != h.edgeGroup() {
 		return nil
 	}
 	switch form.Ref.Kind {
@@ -385,9 +385,9 @@ func (h *ReferenceHost) validateSingleWorkerEndpoint(
 	if workerUID == "" {
 		return stableError("invalid_argument", "a WorkerEndpoint requires a target worker")
 	}
-	selfKey := resourceKey(scope, edgeFormsGroup, workerEndpointKind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), workerEndpointKind, name)
 	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != edgeFormsGroup ||
+		if candidate.group() != h.edgeGroup() ||
 			candidate.kind() != workerEndpointKind || candidate.key() == selfKey {
 			continue
 		}
@@ -466,9 +466,9 @@ func (h *ReferenceHost) validateWorkerClassHolder(
 		return stableError("invalid_argument", form.Ref.Kind+" "+name+" requires a target worker")
 	}
 	className, _ := spec["className"].(string)
-	selfKey := resourceKey(scope, edgeFormsGroup, form.Ref.Kind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), form.Ref.Kind, name)
 	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != edgeFormsGroup || candidate.kind() != form.Ref.Kind ||
+		if candidate.group() != h.edgeGroup() || candidate.kind() != form.Ref.Kind ||
 			candidate.key() == selfKey {
 			continue
 		}
@@ -566,7 +566,7 @@ func (h *ReferenceHost) validateWorkerDeployment(
 	if workerUID == "" {
 		return stableError("invalid_argument", "a WorkerDeployment requires a target worker")
 	}
-	selfKey := resourceKey(scope, edgeFormsGroup, workerDeploymentKind, name)
+	selfKey := resourceKey(scope, h.edgeGroup(), workerDeploymentKind, name)
 	// A. One active deployment per worker. Two deployments of one worker leave
 	//    "which one serves" undefined, and no rule chosen after the fact — newest,
 	//    lowest name, highest weight — is a rule an author can predict.
@@ -713,7 +713,7 @@ func (h *ReferenceHost) deletionPending(key string) bool {
 // action into a fan-out of broken resources whose repair order the author has
 // to work out. Removing the dependents first is a decision the author states.
 func (h *ReferenceHost) deploymentDeleteBlocked(resource *storedResource) *hostError {
-	if resource.group() != edgeFormsGroup || resource.kind() != workerDeploymentKind {
+	if resource.group() != h.edgeGroup() || resource.kind() != workerDeploymentKind {
 		return nil
 	}
 	workerUID := relationTargetUID(resource.Relations, workerRelationPointer)
@@ -742,7 +742,7 @@ func (h *ReferenceHost) deploymentDeleteBlocked(resource *storedResource) *hostE
 // deployed versions export no `fetch` is deployed but cannot answer a request,
 // which is `UnsupportedCapability`.
 func (h *ReferenceHost) workerServiceUnavailable(resource *storedResource) (reason, hostReason string, unavailable bool) {
-	if resource.group() != edgeFormsGroup || resource.kind() != moduleWorkerKind {
+	if resource.group() != h.edgeGroup() || resource.kind() != moduleWorkerKind {
 		return "", "", false
 	}
 	deployment := h.activeDeployment(resource.scope(), resource.UID)
@@ -826,7 +826,7 @@ func (h *ReferenceHost) runtimeContract() (interfaceContract, bool) {
 // `validate` surface, the binding `prepare` surface, and `apply` alike. A client
 // learns the version is unrunnable while planning, not after a failed apply.
 func (h *ReferenceHost) declaredHandlerViolation(form *InstalledForm, spec map[string]any) string {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != workerVersionKind {
 		return ""
 	}
 	contract, installed := h.runtimeContract()
@@ -891,7 +891,7 @@ func (h *ReferenceHost) validateDeclaredHandlers(form *InstalledForm, spec map[s
 func (h *ReferenceHost) exportedHandlerViolation(
 	form *InstalledForm, scope resourceScope, spec map[string]any, relations []storedRelation,
 ) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != workerVersionKind {
 		return nil
 	}
 	exported, known := h.bundleModuleExports(scope, relations)
@@ -1050,8 +1050,8 @@ func desiredSchemaEnum(schema map[string]any, property string) []string {
 // a sixth binding list is covered without a host edit. The two non-binding
 // sources are named, because nothing in the schema distinguishes a data map
 // that projects environment names from one that does not.
-func validateEnvironmentNamespace(form *InstalledForm, spec map[string]any) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+func validateEnvironmentNamespace(familyGroup string, form *InstalledForm, spec map[string]any) *hostError {
+	if form.Ref.APIVersion != familyGroup || form.Ref.Kind != workerVersionKind {
 		return nil
 	}
 	claimed := map[string]string{}
@@ -1136,7 +1136,7 @@ func bindingListProperties(schema map[string]any) []string {
 // with no apply of its own (decision 0016: rendered from other resources, so
 // it moves revision, never generation).
 func (h *ReferenceHost) classHolderUnavailable(resource *storedResource) (reason, hostReason string, unavailable bool) {
-	if resource.group() != edgeFormsGroup || !classHolderKinds[resource.kind()] {
+	if resource.group() != h.edgeGroup() || !classHolderKinds[resource.kind()] {
 		return "", "", false
 	}
 	className, _ := resource.Spec["className"].(string)
