@@ -60,10 +60,11 @@ func run(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if format != portableconformancev3.ManifestFormat {
+	if !portableconformancev3.DrivesManifestFormat(format) {
 		return fmt.Errorf(
-			"contract %s declares manifest format %q; this runner drives %q only",
-			*contractPath, format, portableconformancev3.ManifestFormat,
+			"contract %s declares manifest format %q; this runner drives %s",
+			*contractPath, format,
+			strings.Join(portableconformancev3.DrivenManifestFormats(), " and "),
 		)
 	}
 	return runV3(

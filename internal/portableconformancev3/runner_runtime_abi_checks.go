@@ -60,7 +60,7 @@ func (r *v3Runner) checkRuntimeContractAdvertised() error {
 	if err := decodeStrictResponse(response, &profile); err != nil {
 		return err
 	}
-	if profile["apiVersion"] != supportAPIVersion || profile["kind"] != "InterfaceSupport" {
+	if profile["apiVersion"] != r.supportAPIVersion() || profile["kind"] != "InterfaceSupport" {
 		return errors.New("runtime contract support profile identity is invalid")
 	}
 	reference, _ := profile["interfaceRef"].(map[string]any)
@@ -101,7 +101,7 @@ func (r *v3Runner) checkRuntimeContractAdvertised() error {
 	if err := decodeStrictResponse(workerResponse, &workerProfile); err != nil {
 		return err
 	}
-	if workerProfile["apiVersion"] != supportAPIVersion || workerProfile["kind"] != "FormSupport" {
+	if workerProfile["apiVersion"] != r.supportAPIVersion() || workerProfile["kind"] != "FormSupport" {
 		return errors.New("ModuleWorker support profile identity is invalid")
 	}
 	operations, _ := workerProfile["operations"].([]any)

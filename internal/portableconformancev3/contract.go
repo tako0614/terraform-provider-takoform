@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -37,49 +36,6 @@ const (
 	APIPath        = "/apis/forms.takoform.com/v1beta1"
 )
 
-// stableErrorHTTPStatusByCode is the closed 26-code v1beta1 taxonomy,
-// exactly spec/host-api/operations-v1beta1.json errorEnvelope.
-var stableErrorHTTPStatusByCode = map[string]int{
-	"invalid_argument":       http.StatusBadRequest,
-	"unauthenticated":        http.StatusUnauthorized,
-	"permission_denied":      http.StatusForbidden,
-	"form_unknown":           http.StatusNotFound,
-	"form_not_installed":     http.StatusConflict,
-	"form_unavailable":       http.StatusConflict,
-	"form_identity_conflict": http.StatusConflict,
-	"resource_not_found":     http.StatusNotFound,
-	"resource_busy":          http.StatusConflict,
-	"import_conflict":        http.StatusConflict,
-	"policy_denied":          http.StatusForbidden,
-	"backend_unavailable":    http.StatusServiceUnavailable,
-	"internal_error":         http.StatusInternalServerError,
-	"rate_limited":           http.StatusTooManyRequests,
-	"deadline_exceeded":      http.StatusGatewayTimeout,
-	"operation_cancelled":    http.StatusConflict,
-	"operation_not_found":    http.StatusNotFound,
-	"dependency_in_use":      http.StatusConflict,
-	"deletion_protected":     http.StatusConflict,
-	"artifact_missing":       http.StatusNotFound,
-	"artifact_invalid":       http.StatusBadRequest,
-	"unsupported_capability": http.StatusUnprocessableEntity,
-	"migration_required":     http.StatusConflict,
-	"uid_mismatch":           http.StatusConflict,
-	"revision_conflict":      http.StatusPreconditionFailed,
-	"generation_conflict":    http.StatusPreconditionFailed,
-}
-
-// stableErrorCodeOrder is the canonical contract ordering of the taxonomy.
-var stableErrorCodeOrder = []string{
-	"invalid_argument", "unauthenticated", "permission_denied", "form_unknown",
-	"form_not_installed", "form_unavailable", "form_identity_conflict",
-	"resource_not_found", "resource_busy", "import_conflict", "policy_denied",
-	"backend_unavailable", "internal_error", "rate_limited",
-	"deadline_exceeded", "operation_cancelled", "operation_not_found",
-	"dependency_in_use", "deletion_protected", "artifact_missing",
-	"artifact_invalid", "unsupported_capability", "migration_required",
-	"uid_mismatch", "revision_conflict", "generation_conflict",
-}
-
 // automaticallyRetryableCodes are the only codes that may carry
 // retryable: true.
 var automaticallyRetryableCodes = []string{
@@ -95,38 +51,10 @@ func isAutomaticallyRetryable(code string) bool {
 	return false
 }
 
-// portableConditionReasons is the closed portable condition reason
-// vocabulary of $defs/condition/properties/reason in
-// spec/schemas/host-api-wire-v1beta1.schema.json. Two conforming hosts must
-// name the same state with the same reason; host-specific detail belongs in
-// the free-form hostReason.
-var portableConditionReasons = []string{
-	"Available",
-	"Provisioning",
-	"Reconciling",
-	"Failed",
-	"BackendUnavailable",
-	"SpecDrift",
-	"ExternalChange",
-	"DependencyMissing",
-	"DependencyInUse",
-	"PolicyDenied",
-	"UnsupportedCapability",
-	"Deleting",
-}
-
-func isPortableConditionReason(reason string) bool {
-	for _, candidate := range portableConditionReasons {
-		if candidate == reason {
-			return true
-		}
-	}
-	return false
-}
-
-// requiredRunnerChecks is the closed 116-entry executed-check list every v3
-// runner invocation must complete.
-var requiredRunnerChecks = []string{
+// beta1RequiredChecks is the closed executed-check list a v1beta1 runner
+// invocation must complete. It is the lane's, not the package's: v1beta2
+// requires every one of these and more, and a shared list could not say so.
+var beta1RequiredChecks = []string{
 	"discovery-exact",
 	"unauthenticated-request-refused",
 	"forms-exact-availability",
@@ -743,6 +671,23 @@ type RunnerInput struct {
 	SyntheticSecondDefinitionVersion SyntheticDefinitionProbe `json:"syntheticSecondDefinitionVersion"`
 	SupportProbes                    SupportProbes            `json:"supportProbes"`
 	NegativeFixtures                 []NegativeFixture        `json:"negativeFixtures"`
+	// ExternalServices is the v1beta2 sealed-slot probe. It is optional
+	// because the v1beta1 corpus predates the contract it measures; a lane
+	// whose required checks name the slot check cannot omit it, which is where
+	// the requirement is actually enforced.
+	ExternalServices ExternalServiceProbe `json:"externalServices,omitzero"`
+}
+
+// ExternalServiceProbe pins what a run needs to measure decision 0045's sealed
+// slots: the property carrying them, the vocabulary's own identity, the closed
+// protocol list, and two specs — one the host must accept and one it must
+// refuse before any mutation.
+type ExternalServiceProbe struct {
+	Property            string         `json:"property"`
+	ServiceAPIVersion   string         `json:"serviceApiVersion"`
+	Protocols           []string       `json:"protocols"`
+	DesiredSpec         map[string]any `json:"desiredSpec"`
+	UnknownProtocolSpec map[string]any `json:"unknownProtocolSpec"`
 }
 
 // probeEntry is one pinned resource probe together with the contract member it
@@ -808,10 +753,18 @@ type Contract struct {
 
 	// root is the verified corpus directory; it is derived, never decoded.
 	root string
+	// lane is the protocol lane this corpus declares, resolved at verify time
+	// from APIVersion. It is derived, never decoded: a corpus states which
+	// lane it is and the runner reads the lane's rules, so the two can never
+	// be given separately and disagree.
+	lane lane
 }
 
 // Root returns the corpus directory this contract was verified from.
 func (c Contract) Root() string { return c.root }
+
+// Lane returns the protocol lane apiVersion this corpus measures.
+func (c Contract) Lane() string { return c.lane.APIVersion }
 
 type manifest struct {
 	Format   string `json:"format"`
@@ -825,15 +778,20 @@ var (
 	spacePattern        = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 )
 
-// Verify loads and fail-closed-verifies a portable-host-v1beta1 corpus: manifest
-// identity, contract byte digest, strict I-JSON decoding, fixture bytes, and
-// the pinned identity/taxonomy/check surfaces.
+// Verify loads and fail-closed-verifies a portable-host corpus of either lane:
+// manifest identity, contract byte digest, strict I-JSON decoding, fixture
+// bytes, and the pinned identity/taxonomy/check surfaces.
+//
+// The lane is READ from the corpus rather than assumed. A corpus states which
+// protocol lane it measures; this resolves that name to the lane's rules and
+// then holds the corpus to them, so a corpus can never declare one lane and
+// carry another's taxonomy.
 func Verify(root string) (Contract, error) {
 	var index manifest
 	if err := decodeStrictFile(filepath.Join(root, "manifest.json"), &index); err != nil {
 		return Contract{}, err
 	}
-	if index.Format != ManifestFormat || index.Contract != "contract.json" {
+	if index.Contract != "contract.json" {
 		return Contract{}, errors.New("portable host v3 conformance manifest identity is invalid")
 	}
 	contractPath := filepath.Join(root, index.Contract)
@@ -850,6 +808,20 @@ func Verify(root string) (Contract, error) {
 		return Contract{}, fmt.Errorf("decode %s: %w", contractPath, err)
 	}
 	contract.root = root
+	resolved, known := laneFor(contract.APIVersion)
+	if !known {
+		return Contract{}, fmt.Errorf(
+			"portable host v3 corpus declares apiVersion %q, which is no lane this runner drives",
+			contract.APIVersion,
+		)
+	}
+	contract.lane = resolved
+	// The manifest names the lane too, and the two must agree: a manifest
+	// pointing at another lane's contract would pass its digest check and then
+	// measure the wrong rules.
+	if index.Format != resolved.ManifestFormat {
+		return Contract{}, errors.New("portable host v3 conformance manifest identity is invalid")
+	}
 	if err := hydrateNegativeFixtures(root, &contract); err != nil {
 		return Contract{}, err
 	}
@@ -866,10 +838,10 @@ func Verify(root string) (Contract, error) {
 }
 
 func validateContract(contract Contract) error {
-	if contract.Format != ContractFormat ||
-		contract.APIVersion != APIVersion ||
-		contract.DiscoveryPath != DiscoveryPath ||
-		contract.APIPath != APIPath {
+	got := contract.lane
+	if contract.Format != got.ContractFormat ||
+		contract.DiscoveryPath != got.DiscoveryPath ||
+		contract.APIPath != got.APIPath {
 		return errors.New("portable host v3 contract identity is invalid")
 	}
 	wantIdentity := IdentityContract{
@@ -881,16 +853,16 @@ func validateContract(contract Contract) error {
 	if contract.Identity != wantIdentity {
 		return errors.New("portable host v3 identity contract drifted")
 	}
-	if !reflect.DeepEqual(contract.ErrorEnvelope.Codes, stableErrorCodeOrder) {
+	if !reflect.DeepEqual(contract.ErrorEnvelope.Codes, got.ErrorCodeOrder) {
 		return errors.New("portable host v3 stable error taxonomy drifted")
 	}
 	if !reflect.DeepEqual(contract.ErrorEnvelope.AutomaticallyRetryable, automaticallyRetryableCodes) {
 		return errors.New("portable host v3 retryable taxonomy drifted")
 	}
-	if !reflect.DeepEqual(contract.ErrorEnvelope.HTTPStatusByCode, stableErrorHTTPStatusByCode) {
+	if !reflect.DeepEqual(contract.ErrorEnvelope.HTTPStatusByCode, got.ErrorHTTPStatus) {
 		return errors.New("portable host v3 error HTTP status map drifted")
 	}
-	if !reflect.DeepEqual(contract.RequiredRunnerChecks, requiredRunnerChecks) {
+	if !reflect.DeepEqual(contract.RequiredRunnerChecks, got.RequiredChecks) {
 		return errors.New("portable host v3 required runner checks drifted")
 	}
 	input := contract.RunnerInput

@@ -1,5 +1,6 @@
-// Package clientv3 is the Host API v1beta1 client lane
-// (forms.takoform.com/v1beta1, spec/decisions/0035). It is deliberately
+// Package clientv3 is the Host API v1beta2 client lane
+// (forms.takoform.com/v1beta2, spec/host-api/v1beta2.md, decisions 0039 and
+// 0046). It is deliberately
 // transport-only: it speaks the v1beta1 resource envelope
 // (apiVersion/kind/form/metadata/spec/status) over I-JSON, carries the
 // UID/generation/revision identity fences of spec/decisions/0011, polls
@@ -9,12 +10,12 @@
 //
 // # Namespaced groups travel as two ordinary path segments
 //
-// v1beta1 Form groups are namespaced apiVersions such as
-// "edge.forms.takoform.com/v1beta1", which contain a slash. Wherever a URL
+// Form groups are namespaced apiVersions such as
+// "edge.forms.takoform.com/v1beta2", which contain a slash. Wherever a URL
 // path template names a group, this client sends the group NAME and the group
 // VERSION as two separate, ordinary path segments:
 //
-//	/apis/forms.takoform.com/v1beta1/resources/edge.forms.takoform.com/v1beta1/ModuleWorker/app
+//	/apis/forms.takoform.com/v1beta2/resources/edge.forms.takoform.com/v1beta2/ModuleWorker/app
 //
 // No path segment this client builds ever percent-encodes a slash. Proxies,
 // gateways, and web frameworks disagree about whether %2F inside a path
@@ -22,7 +23,7 @@
 // required it could not be deployed behind ordinary infrastructure
 // (spec/decisions/0018). The exact FormRef apiVersion string is unchanged
 // everywhere else: request bodies, responses, and the "group" query key still
-// carry "edge.forms.takoform.com/v1beta1" verbatim.
+// carry "edge.forms.takoform.com/v1beta2" verbatim.
 //
 // The retained v1alpha2 client in internal/client is frozen; this lane
 // shares its proven mechanics (strict I-JSON decoding, same-origin endpoint
@@ -48,18 +49,20 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// API constants for the v1beta1 lane. Older lanes keep their own discovery
-// paths; a v1beta1 client can never select one accidentally.
+// API constants for the v1beta2 lane. Older lanes keep their own discovery
+// paths; a v1beta2 client can never select one accidentally, and a host that
+// serves only v1beta1 is not silently spoken to in a vocabulary it does not
+// have.
 const (
-	APIVersion    = "forms.takoform.com/v1beta1"
-	DiscoveryPath = "/.well-known/takoform/v1beta1"
-	APIRootPath   = "/apis/forms.takoform.com/v1beta1"
+	APIVersion    = "forms.takoform.com/v1beta2"
+	DiscoveryPath = "/.well-known/takoform/v1beta2"
+	APIRootPath   = "/apis/forms.takoform.com/v1beta2"
 
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
 )
 
-// requiredFeatures are the discovery capabilities every v1beta1 host must
+// requiredFeatures are the discovery capabilities every v1beta2 host must
 // advertise as true.
 var requiredFeatures = []string{
 	"service_forms",
@@ -330,10 +333,35 @@ func groupPathSegments(group string) string {
 // exactFormQuery carries the exact FormRef and Space on read/lifecycle URLs.
 // The group travels under the query key "group"; the packageDigest is
 // deliberately absent because it is audit evidence, never identity.
+// exactFormQuery is the exact-identity query, used both as the /forms
+// availability probe and as the exact-ref qualifier on resource routes.
+//
+// The group travels as ONE value here because that is what a resource route
+// qualifies on. The availability route splits it; see formsAvailabilityQuery.
 func exactFormQuery(space string, ref FormRef) url.Values {
 	query := url.Values{}
 	query.Set("space", space)
 	query.Set("group", ref.APIVersion)
+	query.Set("kind", ref.Kind)
+	query.Set("definitionVersion", ref.DefinitionVersion)
+	query.Set("schemaDigest", ref.SchemaDigest)
+	return query
+}
+
+// formsAvailabilityQuery is the six-key exact-availability probe of the
+// enumerating /forms route: `group` and `version` are separate keys, matching
+// the two path segments every route in this lane already splits an apiVersion
+// into. All six present narrows the enumeration to zero entries or one, which
+// is the same question the five-key v1beta1 probe asked.
+func formsAvailabilityQuery(space string, ref FormRef) url.Values {
+	group, version := ref.APIVersion, ""
+	if cut := strings.LastIndex(ref.APIVersion, "/"); cut > 0 {
+		group, version = ref.APIVersion[:cut], ref.APIVersion[cut+1:]
+	}
+	query := url.Values{}
+	query.Set("space", space)
+	query.Set("group", group)
+	query.Set("version", version)
 	query.Set("kind", ref.Kind)
 	query.Set("definitionVersion", ref.DefinitionVersion)
 	query.Set("schemaDigest", ref.SchemaDigest)

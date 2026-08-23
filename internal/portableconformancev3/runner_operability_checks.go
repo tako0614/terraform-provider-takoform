@@ -124,7 +124,7 @@ func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyResourceIdentity(resource, kv); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(resource, kv); err != nil {
 		return fmt.Errorf("split-segment resource read: %w", err)
 	}
 	if resource.APIVersion != ref.APIVersion {

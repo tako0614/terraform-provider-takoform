@@ -10,11 +10,19 @@ import (
 )
 
 // SupportProfileAPIVersion is the closed identity of every Host Support
-// Profile (spec/schemas/host-support-profile-v1alpha1.schema.json).
-const SupportProfileAPIVersion = "support.takoform.com/v1alpha1"
+// Profile this lane reads
+// (spec/schemas/host-support-profile-v1alpha2.schema.json). It moved with the
+// lane: a v1beta2 host answers v1alpha2 profiles, and a client still
+// demanding v1alpha1 would refuse a conforming host before any plan could
+// complete.
+const SupportProfileAPIVersion = "support.takoform.com/v1alpha2"
 
 var supportProfileKinds = map[string]struct{}{
 	"FormSupport": {}, "InterfaceSupport": {}, "BindingSupport": {},
+	// Decision 0045's profile kind. It is a support profile like the other
+	// three and carries the same identity, which is the whole reason it can be
+	// read by a client that knows nothing about standard services yet.
+	"StandardServiceSupport": {},
 }
 
 func validateSupportProfile(profile map[string]any) error {

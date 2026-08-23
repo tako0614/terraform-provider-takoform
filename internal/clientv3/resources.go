@@ -49,7 +49,7 @@ func (c *Client) EnsureFormAvailable(ctx context.Context, space string, ref Form
 	if err := ValidateSpaceID(space); err != nil {
 		return fmt.Errorf("takoform: exact FormRef availability has invalid SpaceID: %w", err)
 	}
-	fullURL := c.apiBase + "/forms?" + exactFormQuery(space, ref).Encode()
+	fullURL := c.apiBase + "/forms?" + formsAvailabilityQuery(space, ref).Encode()
 	_, _, data, err := c.do(ctx, http.MethodGet, fullURL, nil, nil, false, http.StatusOK)
 	if err != nil {
 		return err
@@ -60,6 +60,8 @@ func (c *Client) EnsureFormAvailable(ctx context.Context, space string, ref Form
 	if err := decodeBody(data, fullURL, &response); err != nil {
 		return err
 	}
+	// The fully-keyed probe narrows the enumeration to zero entries or one, so
+	// "no entry" is how this lane says the exact Form is not installed here.
 	if len(response.Forms) != 1 || !sameFormRef(ref, response.Forms[0].Identity.FormRef) {
 		return errors.New("takoform: host did not return the requested exact FormRef")
 	}

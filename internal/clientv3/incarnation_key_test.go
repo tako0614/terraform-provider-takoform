@@ -33,7 +33,10 @@ type incarnationProbe struct {
 
 func newIncarnationProbe(t *testing.T) incarnationProbe {
 	t.Helper()
-	contract, err := portableconformancev3.Verify("../../conformance/portable-host-v1beta1")
+	// This client speaks v1beta2, so it is driven against the corpus of that
+	// lane: pointing it at the retained corpus would test a client against a
+	// host serving paths it no longer builds.
+	contract, err := portableconformancev3.Verify("../../conformance/portable-host-v1beta2")
 	if err != nil {
 		t.Fatalf("verify portable host v3 contract: %v", err)
 	}

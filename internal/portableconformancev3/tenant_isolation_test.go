@@ -45,7 +45,7 @@ func declaredNameAddressedSurfaces() []string {
 // none.
 func TestEveryNameAddressedSurfaceIsMeasured(t *testing.T) {
 	required := map[string]bool{}
-	for _, check := range requiredRunnerChecks {
+	for _, check := range beta1RequiredChecks {
 		required[check] = true
 	}
 	seen := map[string]bool{}
@@ -73,7 +73,7 @@ func TestEveryNameAddressedSurfaceIsMeasured(t *testing.T) {
 		}
 		for _, check := range surface.TenantChecks {
 			if !required[check] {
-				t.Fatalf("%s names tenant check %q, which is not in requiredRunnerChecks", key, check)
+				t.Fatalf("%s names tenant check %q, which is not in beta1RequiredChecks", key, check)
 			}
 		}
 	}

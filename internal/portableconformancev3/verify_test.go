@@ -37,8 +37,8 @@ func TestVerifyCorpus(t *testing.T) {
 	if len(contract.ErrorEnvelope.AutomaticallyRetryable) != 4 {
 		t.Fatalf("retryable set carries %d codes, want 4", len(contract.ErrorEnvelope.AutomaticallyRetryable))
 	}
-	if len(contract.RequiredRunnerChecks) != len(requiredRunnerChecks) {
-		t.Fatalf("required checks = %d, want %d", len(contract.RequiredRunnerChecks), len(requiredRunnerChecks))
+	if len(contract.RequiredRunnerChecks) != len(beta1RequiredChecks) {
+		t.Fatalf("required checks = %d, want %d", len(contract.RequiredRunnerChecks), len(beta1RequiredChecks))
 	}
 	if contract.RunnerInput.Space == contract.RunnerInput.AlternateSpace {
 		t.Fatalf("runner spaces must differ")

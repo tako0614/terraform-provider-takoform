@@ -74,9 +74,13 @@ func (h *v3RendezvousHost) serve(w http.ResponseWriter, r *http.Request) {
 		})
 	case escaped == v3TestAPIRoot+"/forms":
 		query := r.URL.Query()
+		apiVersion := query.Get("group")
+		if version := query.Get("version"); version != "" {
+			apiVersion += "/" + version
+		}
 		h.writeJSON(w, http.StatusOK, map[string]any{"forms": []map[string]any{{
 			"identity": map[string]any{"formRef": map[string]any{
-				"apiVersion":        query.Get("group"),
+				"apiVersion":        apiVersion,
 				"kind":              query.Get("kind"),
 				"definitionVersion": query.Get("definitionVersion"),
 				"schemaDigest":      query.Get("schemaDigest"),

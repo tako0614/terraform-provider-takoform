@@ -75,7 +75,7 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 	if err != nil {
 		return nil, err
 	}
-	contract, err := portableconformancev3.Verify(filepath.Join(repoRoot, "conformance", "portable-host-v1beta1"))
+	contract, err := portableconformancev3.Verify(filepath.Join(repoRoot, "conformance", "portable-host-v1beta2"))
 	if err != nil {
 		return nil, fmt.Errorf("verify portable host v3 contract: %w", err)
 	}

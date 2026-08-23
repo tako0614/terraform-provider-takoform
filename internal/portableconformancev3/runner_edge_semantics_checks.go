@@ -67,7 +67,7 @@ func (r *v3Runner) checkEdgeInterfaceContractsAdvertised() error {
 		if err := decodeStrictResponse(response, &profile); err != nil {
 			return err
 		}
-		if profile["apiVersion"] != supportAPIVersion || profile["kind"] != "InterfaceSupport" {
+		if profile["apiVersion"] != r.supportAPIVersion() || profile["kind"] != "InterfaceSupport" {
 			return fmt.Errorf("%s support profile identity is invalid", pinned.Name)
 		}
 		reference, _ := profile["interfaceRef"].(map[string]any)

@@ -50,7 +50,15 @@ func TestApplyResourceCreateHappyPath(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == APIRootPath+"/forms":
 			q := r.URL.Query()
-			if q.Get("group") != testGroup || q.Get("kind") != testKind ||
+			// The availability route carries the group's two segments as two
+			// keys; testGroup is the whole apiVersion, so it is split here the
+			// same way the client splits it.
+			wantGroup, wantVersion := testGroup, ""
+			if cut := strings.LastIndex(testGroup, "/"); cut > 0 {
+				wantGroup, wantVersion = testGroup[:cut], testGroup[cut+1:]
+			}
+			if q.Get("group") != wantGroup || q.Get("version") != wantVersion ||
+				q.Get("kind") != testKind ||
 				q.Get("definitionVersion") != "1.0.0" || q.Get("schemaDigest") != testSchemaDigest ||
 				q.Get("space") != testSpace {
 				t.Errorf("forms query is not the exact FormRef query: %v", q)
@@ -328,7 +336,8 @@ func TestDeleteResourceOperationNotFoundMapsToErrNotFound(t *testing.T) {
 				"apiVersion": OperationAPIVersion, "kind": OperationKind,
 				"id": "op_del1", "done": true,
 				"error": map[string]any{
-					"code": "resource_not_found", "message": "gone", "retryable": false,
+					"code": "resource_not_found", "message": "gone",
+					"requestId": "req-gone", "retryable": false,
 				},
 			})
 			return true

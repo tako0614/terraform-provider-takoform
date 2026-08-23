@@ -22,7 +22,8 @@ func TestCancelOperationRejectsASubstitutedOperationID(t *testing.T) {
 				"apiVersion": OperationAPIVersion, "kind": OperationKind,
 				"id": "op_other", "done": true,
 				"error": map[string]any{
-					"code": "operation_cancelled", "message": "cancelled", "retryable": false,
+					"code": "operation_cancelled", "message": "cancelled",
+					"requestId": "req-cancelled", "retryable": false,
 				},
 			})
 			return true

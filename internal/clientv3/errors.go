@@ -95,16 +95,20 @@ type APIError struct {
 	Details json.RawMessage
 }
 
-// stableErrorHTTPStatusByCode is the closed v1beta1 taxonomy, exactly
-// spec/host-api/operations-v1beta1.json errorEnvelope.httpStatusByCode.
+// stableErrorHTTPStatusByCode is the closed v1beta2 taxonomy, exactly
+// spec/host-api/operations-v1beta2.json errorEnvelope.httpStatusByCode.
+//
+// Two codes are gone from the lane this client speaks: form_identity_conflict
+// was never given a trigger, and deletion_protected claimed a policy surface no
+// Form provides. A host still answering either is answering outside the
+// taxonomy, and this client treats it as it treats any unknown code.
 var stableErrorHTTPStatusByCode = map[string]int{
 	"invalid_argument":       http.StatusBadRequest,
 	"unauthenticated":        http.StatusUnauthorized,
 	"permission_denied":      http.StatusForbidden,
 	"form_unknown":           http.StatusNotFound,
 	"form_not_installed":     http.StatusConflict,
-	"form_unavailable":       http.StatusConflict,
-	"form_identity_conflict": http.StatusConflict,
+	"form_unavailable":       http.StatusServiceUnavailable,
 	"resource_not_found":     http.StatusNotFound,
 	"resource_busy":          http.StatusConflict,
 	"import_conflict":        http.StatusConflict,
@@ -116,7 +120,6 @@ var stableErrorHTTPStatusByCode = map[string]int{
 	"operation_cancelled":    http.StatusConflict,
 	"operation_not_found":    http.StatusNotFound,
 	"dependency_in_use":      http.StatusConflict,
-	"deletion_protected":     http.StatusConflict,
 	"artifact_missing":       http.StatusNotFound,
 	"artifact_invalid":       http.StatusBadRequest,
 	"unsupported_capability": http.StatusUnprocessableEntity,
