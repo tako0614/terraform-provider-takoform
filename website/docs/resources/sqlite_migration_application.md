@@ -2,7 +2,7 @@
 page_title: "takoform_sqlite_migration_application Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  SQLite Migration Application (edge.forms.takoform.com/v1beta1, role attachment).
+  SQLite Migration Application (edge.forms.takoform.com/v1beta2, role attachment).
 ---
 
 # takoform_sqlite_migration_application
@@ -85,7 +85,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_sqlite_migration_application.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"SQLiteMigrationApplication","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"SQLiteMigrationApplication","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

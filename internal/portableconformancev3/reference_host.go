@@ -65,7 +65,7 @@ const (
 
 	// edgeFormsGroup is the one namespaced group whose cross-resource
 	// semantics this reference host enforces.
-	edgeFormsGroup                 = "edge.forms.takoform.com/v1beta1"
+	edgeFormsGroup                 = "edge.forms.takoform.com/v1beta2"
 	workerBundleKind               = "WorkerBundle"
 	staticAssetBundleKind          = "StaticAssetBundle"
 	sqliteMigrationSetKind         = "SQLiteMigrationSet"

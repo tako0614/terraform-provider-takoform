@@ -26,6 +26,32 @@
         "WorkerCustomDomain",
         "WorkerEndpoint"
       ]
+    },
+    {
+      "from": "edge.forms.takoform.com/v1beta1",
+      "to": "edge.forms.takoform.com/v1beta2",
+      "fromCommit": "f9e337978e4b1e8f32f35089cb5782551130164f",
+      "fromTree": "forms/candidates/edge/v1beta1",
+      "toTree": "forms/candidates/edge/v1beta2",
+      "contractChanged": [
+        "SQLiteMigrationApplication",
+        "WorkerDeployment",
+        "WorkerVersion"
+      ],
+      "reIdentifiedOnly": [
+        "AtLeastOnceQueue",
+        "EdgeKVNamespace",
+        "ModuleWorker",
+        "ObjectBucket",
+        "QueueConsumer",
+        "SQLiteDatabase",
+        "SQLiteMigrationSet",
+        "StaticAssetBundle",
+        "WorkerBundle",
+        "WorkerCronTrigger",
+        "WorkerCustomDomain",
+        "WorkerEndpoint"
+      ]
     }
   ]
 }

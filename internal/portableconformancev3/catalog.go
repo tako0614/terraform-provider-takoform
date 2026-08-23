@@ -424,7 +424,7 @@ type bindingCandidateSet struct {
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	catalog := newCatalog()
 	var set candidateSet
-	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1beta1", "candidate-set.json")
+	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1beta2", "candidate-set.json")
 	if err := decodeStrictFile(setPath, &set); err != nil {
 		return nil, err
 	}
@@ -479,8 +479,21 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			return nil, err
 		}
 	}
-	if len(catalog.Forms) != len(registry.SupportedRefs()) {
-		return nil, errors.New("takoform: candidate set does not cover the generated v3 registry")
+	// The registry's supported set spans generations — every RELEASED ref
+	// stays supported for state compatibility — while a candidate set is one
+	// generation. What the host must cover is every identity of ITS
+	// generation: each supported ref whose group matches the candidate
+	// family. Released refs of earlier generations live in the retained
+	// candidate trees, not here.
+	currentFamily := set.Family
+	currentSupported := 0
+	for _, ref := range registry.SupportedRefs() {
+		if ref.APIVersion == currentFamily {
+			currentSupported++
+		}
+	}
+	if len(catalog.Forms) != currentSupported {
+		return nil, errors.New("takoform: candidate set does not cover its generation of the v3 registry")
 	}
 	if err := catalog.installSyntheticSecondGroup(contract); err != nil {
 		return nil, err

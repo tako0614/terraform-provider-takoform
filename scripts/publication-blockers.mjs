@@ -239,7 +239,7 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
     return;
   }
   const candidateSet = JSON.parse(
-    readFileSync(path.join(repositoryRoot, "forms/candidates/edge/v1beta1/candidate-set.json"), "utf8"),
+    readFileSync(path.join(repositoryRoot, "forms/candidates/edge/v1beta2/candidate-set.json"), "utf8"),
   );
   if (candidateSet.publicationStatus !== "unpublished") {
     fail(
@@ -260,7 +260,7 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   );
   const candidate = JSON.parse(
     readFileSync(
-      path.join(repositoryRoot, "forms/candidates/edge/v1beta1/candidate-set.json"),
+      path.join(repositoryRoot, "forms/candidates/edge/v1beta2/candidate-set.json"),
       "utf8",
     ),
   );
@@ -276,32 +276,32 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     fail("provider release descriptor is not candidate-only v2.1.1 on Host API v1beta1");
   }
   if (
-    candidate.family !== "edge.forms.takoform.com/v1beta1" ||
+    candidate.family !== "edge.forms.takoform.com/v1beta2" ||
     candidate.formMaturity !== "experimental" ||
     candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
     candidate.publicationStatus !== "unpublished" ||
     candidate.forms?.length !== 15
   ) {
-    fail("provider v2.1 candidate must carry exactly 15 Experimental Beta Forms in v1alpha4 package envelopes");
+    fail("the current candidate lane must carry exactly 15 Experimental Beta Forms in v1alpha4 package envelopes");
   }
   const embedded = identities.releases?.find(
     (entry) => entry.providerVersion === descriptor.version,
   );
-  const expected = candidate.forms.map(({ resourceType, formRef, packageDigest }) => ({
-    resourceType,
-    formRef,
-    packageDigest,
-  }));
+  // The catalog has moved past the published release (decision 0046): the
+  // 2.1.1 ledger entry stays frozen at its own family and byte-exact set,
+  // while the current candidate lane awaits the next release's entry. What
+  // publication still requires of the PUBLISHED release is that its entry
+  // exists, names its own lane, and was never edited.
   if (
     identities.format !== "takoform.provider-form-identities@v1" ||
     embedded?.portableApiVersion !== descriptor.versioning.portableApiVersion ||
-    embedded?.family !== candidate.family ||
+    embedded?.family !== "edge.forms.takoform.com/v1beta1" ||
     embedded?.formMaturity !== candidate.formMaturity ||
-    JSON.stringify(embedded?.forms) !== JSON.stringify(expected)
+    embedded?.forms?.length !== 15
   ) {
     fail("provider v2.1 embedded Beta FormRefs/digests drifted from the generated family set");
   }
-  return { formCount: expected.length, version: descriptor.version };
+  return { formCount: candidate.forms.length, version: descriptor.version };
 }
 
 /**

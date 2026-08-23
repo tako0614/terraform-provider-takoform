@@ -19,7 +19,7 @@
             "description": "Worker Version receiving this weight.",
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta1",
+                "const": "edge.forms.takoform.com/v1beta2",
                 "type": "string"
               },
               "kind": {
@@ -41,10 +41,10 @@
             "type": "object",
             "x-takoform-target-formrefs": [
               {
-                "apiVersion": "edge.forms.takoform.com/v1beta1",
+                "apiVersion": "edge.forms.takoform.com/v1beta2",
                 "definitionVersion": "0.1.0",
                 "kind": "WorkerVersion",
-                "schemaDigest": "sha256:22fde31c0b695ca59f5c46230c1ed03d6a6f53c01015d4a5acf6bdb0ed70b50c"
+                "schemaDigest": "sha256:f30676be1e801befe9d1f3f02791a7c8e492730cacc0cb915e98ea060fdd52b1"
               }
             ]
           }
@@ -65,7 +65,7 @@
       "description": "Module Worker identity whose traffic this deployment governs.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta1",
+          "const": "edge.forms.takoform.com/v1beta2",
           "type": "string"
         },
         "kind": {
@@ -87,10 +87,10 @@
       "type": "object",
       "x-takoform-target-formrefs": [
         {
-          "apiVersion": "edge.forms.takoform.com/v1beta1",
+          "apiVersion": "edge.forms.takoform.com/v1beta2",
           "definitionVersion": "0.1.0",
           "kind": "ModuleWorker",
-          "schemaDigest": "sha256:6de1d1ff575caf7e6ca10ee6d905df1174bc26943ca95de6ada5f9229507d192"
+          "schemaDigest": "sha256:aa0bf9b4b22012f73a4a607e2c0345d9082c8c01cbc4e14d5643dbdcab750c6e"
         }
       ]
     }

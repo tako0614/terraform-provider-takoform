@@ -60,8 +60,8 @@ func requireOrdinaryPathSegments(target string) error {
 // checkNamespacedGroupPathSegments proves the host serves the split path shape.
 // The three URL templates that name a Form group — resources, form-definitions,
 // and support/forms — each carry the group NAME and the group VERSION as two
-// separate segments, so "edge.forms.takoform.com/v1beta1" travels as
-// "edge.forms.takoform.com/v1beta1" and nothing on the wire has to survive a
+// separate segments, so "edge.forms.takoform.com/v1beta2" travels as
+// "edge.forms.takoform.com/v1beta2" and nothing on the wire has to survive a
 // percent-encoded slash. The exact FormRef apiVersion string is unchanged
 // everywhere else, which the exact-form query on the same requests proves.
 func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {

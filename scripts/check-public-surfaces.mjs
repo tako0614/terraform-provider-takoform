@@ -774,7 +774,7 @@ function checkContractLaneDocumentation() {
     },
     {
       file: path.join(repositoryRoot, "proposals", "README.md"),
-      required: ["forms/candidates/edge/v1beta1/candidate-set.json"],
+      required: ["forms/candidates/edge/v1beta2/candidate-set.json"],
     },
   ];
 

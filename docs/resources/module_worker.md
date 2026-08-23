@@ -2,7 +2,7 @@
 page_title: "takoform_module_worker Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Module Worker (edge.forms.takoform.com/v1beta1, role identity).
+  Module Worker (edge.forms.takoform.com/v1beta2, role identity).
 ---
 
 # takoform_module_worker
@@ -88,7 +88,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_module_worker.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"ModuleWorker","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"ModuleWorker","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

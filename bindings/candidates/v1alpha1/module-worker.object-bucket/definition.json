@@ -14,7 +14,7 @@
   },
   "allowedTargetForms": [
     {
-      "apiVersion": "edge.forms.takoform.com/v1beta1",
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
       "kind": "ObjectBucket"
     }
   ],

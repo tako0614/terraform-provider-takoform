@@ -8,7 +8,7 @@
       "description": "Module Worker whose active deployment answers requests at the assigned address. Changing it replaces the endpoint.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta1",
+          "const": "edge.forms.takoform.com/v1beta2",
           "type": "string"
         },
         "kind": {

@@ -88,7 +88,7 @@ func TestProviderIdentityLedgerRejectsDigestDrift(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(fixture, "release", "keys"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(fixture, "forms", "candidates", "edge", "v1beta1"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(fixture, "forms", "candidates", "edge", "v1beta2"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	copyFile(t, filepath.Join(repo, descriptorPath), filepath.Join(fixture, descriptorPath))
@@ -113,7 +113,7 @@ func TestProviderIdentityLedgerRejectsDigestDrift(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(fixture, providerIdentityLedgerPath), mutated, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadDescriptor(fixture); err == nil || !strings.Contains(err.Error(), "identity ledger differs") {
+	if _, err := loadDescriptor(fixture); err == nil || !strings.Contains(err.Error(), "identity ledger entry changed") {
 		t.Fatalf("expected candidate-set digest drift rejection, got %v", err)
 	}
 }

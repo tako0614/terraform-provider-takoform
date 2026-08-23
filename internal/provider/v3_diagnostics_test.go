@@ -32,7 +32,7 @@ func TestV3DiagnosticRendersEveryRecordedFact(t *testing.T) {
 		Space:        "prod",
 		Name:         "version-6c37aa755eee",
 		Ref: currentformregistry.V3Ref{
-			APIVersion: "edge.forms.takoform.com/v1beta1", Kind: "WorkerVersion",
+			APIVersion: "edge.forms.takoform.com/v1beta2", Kind: "WorkerVersion",
 			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:abc",
 		},
 		Pointer:            "/kvBindings/0/resource",
@@ -56,7 +56,7 @@ func TestV3DiagnosticRendersEveryRecordedFact(t *testing.T) {
 	detail := rendered.Detail()
 	for _, want := range []string{
 		"Resource: takoform_worker_version (prod/version-6c37aa755eee)",
-		"Form: edge.forms.takoform.com/v1beta1 WorkerVersion@0.1.0 schema=sha256:abc",
+		"Form: edge.forms.takoform.com/v1beta2 WorkerVersion@0.1.0 schema=sha256:abc",
 		"Pointer: /kvBindings/0/resource",
 		"Expected UID: uid-old",
 		"Current UID: uid-new",
@@ -207,13 +207,13 @@ func TestV3LaneDiagnosticsCarryTheRecordedError(t *testing.T) {
 func TestV3ParseRelationHostReasonLiftsThePointerAndUIDs(t *testing.T) {
 	t.Parallel()
 	pointer, expected, current := v3ParseRelationHostReason(
-		"relation /kvBindings/0/resource target edge.forms.takoform.com/v1beta1 EdgeKVNamespace cache " +
+		"relation /kvBindings/0/resource target edge.forms.takoform.com/v1beta2 EdgeKVNamespace cache " +
 			"changed incarnation from uid uid-old (formRef a) to uid uid-new (formRef b); re-apply this resource")
 	if pointer != "/kvBindings/0/resource" || expected != "uid-old" || current != "uid-new" {
 		t.Fatalf("parsed %q %q %q", pointer, expected, current)
 	}
 	pointer, expected, current = v3ParseRelationHostReason(
-		"relation /worker target edge.forms.takoform.com/v1beta1 ModuleWorker counter uid uid-3 no longer exists")
+		"relation /worker target edge.forms.takoform.com/v1beta2 ModuleWorker counter uid uid-3 no longer exists")
 	if pointer != "/worker" || expected != "uid-3" || current != "" {
 		t.Fatalf("parsed %q %q %q", pointer, expected, current)
 	}

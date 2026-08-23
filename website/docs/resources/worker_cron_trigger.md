@@ -2,7 +2,7 @@
 page_title: "takoform_worker_cron_trigger Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Worker Cron Trigger (edge.forms.takoform.com/v1beta1, role attachment).
+  Worker Cron Trigger (edge.forms.takoform.com/v1beta2, role attachment).
 ---
 
 # takoform_worker_cron_trigger
@@ -85,7 +85,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_cron_trigger.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"WorkerCronTrigger","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"WorkerCronTrigger","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

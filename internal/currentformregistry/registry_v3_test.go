@@ -9,7 +9,7 @@ import (
 
 func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "candidates", "edge", "v1beta1", "candidate-set.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "candidates", "edge", "v1beta2", "candidate-set.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,12 +25,21 @@ func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Family != "edge.forms.takoform.com/v1beta1" {
+	if manifest.Family != "edge.forms.takoform.com/v1beta2" {
 		t.Fatalf("family = %q", manifest.Family)
 	}
 	registry := V3Current()
-	if len(manifest.Forms) != len(registry.supported) {
-		t.Fatalf("candidate manifest has %d Forms, provider supports %d", len(manifest.Forms), len(registry.supported))
+	// supported spans generations (released refs stay for state
+	// compatibility); the candidate manifest is one generation and must
+	// account for exactly its own supported refs and every create default.
+	currentSupported := 0
+	for key := range registry.supported {
+		if key.APIVersion == manifest.Family {
+			currentSupported++
+		}
+	}
+	if len(manifest.Forms) != currentSupported {
+		t.Fatalf("candidate manifest has %d Forms, provider supports %d of this generation", len(manifest.Forms), currentSupported)
 	}
 	if len(manifest.Forms) != len(registry.defaultCreates) {
 		t.Fatalf("candidate manifest has %d Forms, provider defaults to %d", len(manifest.Forms), len(registry.defaultCreates))
@@ -58,8 +67,22 @@ func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 	t.Parallel()
 	registry := V3Current()
 	supported := registry.SupportedRefs()
-	if len(supported) != len(registry.defaultCreates) {
-		t.Fatalf("supported family FormRefs = %d, want the %d defaults", len(supported), len(registry.defaultCreates))
+	// The supported set spans generations: every ref a RELEASED provider
+	// embedded stays supported forever (the state-compatibility fence), and
+	// the current generation adds its own. Exactly the current generation's
+	// refs are create defaults.
+	if len(supported) < len(registry.defaultCreates) {
+		t.Fatalf("supported family FormRefs = %d, fewer than the %d defaults", len(supported), len(registry.defaultCreates))
+	}
+	currentFamily := "edge.forms.takoform.com/v1beta2"
+	currentCount := 0
+	for _, ref := range supported {
+		if ref.APIVersion == currentFamily {
+			currentCount++
+		}
+	}
+	if currentCount != len(registry.defaultCreates) {
+		t.Fatalf("current-generation supported refs = %d, want the %d defaults", currentCount, len(registry.defaultCreates))
 	}
 	for groupKind := range registry.defaultCreates {
 		want, err := registry.DefaultCreate(groupKind)
@@ -77,7 +100,7 @@ func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 			t.Errorf("family candidate %s/%s is missing from the supported set", groupKind.APIVersion, groupKind.Kind)
 		}
 	}
-	if _, err := V3ForKind("edge.forms.takoform.com/v1beta1", "NoSuchKind"); err == nil {
+	if _, err := V3ForKind("edge.forms.takoform.com/v1beta2", "NoSuchKind"); err == nil {
 		t.Fatal("unknown family kind unexpectedly resolved")
 	}
 }
@@ -131,7 +154,7 @@ func TestProviderV211IdentityLedgerIsEmbedded(t *testing.T) {
 // rewrites the Beta identity that existing state records.
 func TestFutureStableDefaultDoesNotRebindBetaState(t *testing.T) {
 	t.Parallel()
-	beta, err := V3ForKind("edge.forms.takoform.com/v1beta1", "ModuleWorker")
+	beta, err := V3ForKind("edge.forms.takoform.com/v1beta2", "ModuleWorker")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +185,7 @@ func TestFutureStableDefaultDoesNotRebindBetaState(t *testing.T) {
 // naming exactly one of them.
 func TestV3RegistryHoldsTwoDefinitionVersionsOfOneForm(t *testing.T) {
 	t.Parallel()
-	const group = "edge.forms.takoform.com/v1beta1"
+	const group = "edge.forms.takoform.com/v1beta2"
 	groupKind := GroupKind{APIVersion: group, Kind: "ModuleWorker"}
 	base := V3Current()
 	first, err := base.DefaultCreate(groupKind)
@@ -228,7 +251,7 @@ func TestV3RegistryHoldsTwoDefinitionVersionsOfOneForm(t *testing.T) {
 func TestV3RegistryRefusesConflictingProvenance(t *testing.T) {
 	t.Parallel()
 	base := V3Current()
-	existing, err := V3ForKind("edge.forms.takoform.com/v1beta1", "ModuleWorker")
+	existing, err := V3ForKind("edge.forms.takoform.com/v1beta2", "ModuleWorker")
 	if err != nil {
 		t.Fatal(err)
 	}

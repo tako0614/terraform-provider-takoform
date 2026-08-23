@@ -1,0 +1,7 @@
+{
+  "database": {
+    "apiVersion": "edge.forms.takoform.com/v1beta2",
+    "kind": "SQLiteDatabase",
+    "name": "sqlite-database"
+  }
+}

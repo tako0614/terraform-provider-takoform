@@ -2,7 +2,7 @@
 page_title: "takoform_static_asset_bundle Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Static Asset Bundle (edge.forms.takoform.com/v1beta1, role revision).
+  Static Asset Bundle (edge.forms.takoform.com/v1beta2, role revision).
 ---
 
 # takoform_static_asset_bundle
@@ -85,7 +85,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_static_asset_bundle.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"StaticAssetBundle","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"StaticAssetBundle","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

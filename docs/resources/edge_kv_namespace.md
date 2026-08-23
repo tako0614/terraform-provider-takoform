@@ -2,7 +2,7 @@
 page_title: "takoform_edge_kv_namespace Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Edge KV Namespace (edge.forms.takoform.com/v1beta1, role identity).
+  Edge KV Namespace (edge.forms.takoform.com/v1beta2, role identity).
 ---
 
 # takoform_edge_kv_namespace
@@ -87,7 +87,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_edge_kv_namespace.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"EdgeKVNamespace","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"EdgeKVNamespace","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

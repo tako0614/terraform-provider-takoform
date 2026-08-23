@@ -11,7 +11,7 @@ selected by [decision 0043](../spec/decisions/0043-forms-target-popular-vendor-l
 
 - [Edge Platform Family](edge/index.md) — the first family; its candidates
   are tracked by
-  [`../forms/candidates/edge/v1beta1/candidate-set.json`](../forms/candidates/edge/v1beta1/candidate-set.json),
+  [`../forms/candidates/edge/v1beta2/candidate-set.json`](../forms/candidates/edge/v1beta2/candidate-set.json),
   and its Beta 2 additions (`DurableWorkflow`, `ActorNamespace`) are proposed
   in this tree.
 - [Regional Function Family](function/index.md) — regional FaaS.

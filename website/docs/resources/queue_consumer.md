@@ -2,7 +2,7 @@
 page_title: "takoform_queue_consumer Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Queue Consumer (edge.forms.takoform.com/v1beta1, role attachment).
+  Queue Consumer (edge.forms.takoform.com/v1beta2, role attachment).
 ---
 
 # takoform_queue_consumer
@@ -91,7 +91,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_queue_consumer.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"QueueConsumer","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"QueueConsumer","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

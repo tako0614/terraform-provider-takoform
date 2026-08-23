@@ -1,0 +1,80 @@
+{
+  "assets": {
+    "bundle": {
+      "apiVersion": "edge.forms.takoform.com/v1beta2",
+      "kind": "StaticAssetBundle",
+      "name": "static-asset-bundle"
+    },
+    "notFoundHandling": "backend_default",
+    "runWorkerFirst": true
+  },
+  "bucketBindings": [
+    {
+      "name": "MEDIA",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "ObjectBucket",
+        "name": "object-bucket"
+      }
+    }
+  ],
+  "bundle": {
+    "apiVersion": "edge.forms.takoform.com/v1beta2",
+    "kind": "WorkerBundle",
+    "name": "worker-bundle"
+  },
+  "handlers": [
+    "fetch"
+  ],
+  "kvBindings": [
+    {
+      "name": "CACHE",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "EdgeKVNamespace",
+        "name": "edge-kv-namespace"
+      }
+    }
+  ],
+  "queueProducerBindings": [
+    {
+      "name": "EVENTS",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "AtLeastOnceQueue",
+        "name": "at-least-once-queue"
+      }
+    }
+  ],
+  "requiredSensitiveVars": [
+    "API_SIGNING_TOKEN_NAME"
+  ],
+  "serviceBindings": [
+    {
+      "name": "AUTH",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "ModuleWorker",
+        "name": "auth-worker"
+      }
+    }
+  ],
+  "sqliteBindings": [
+    {
+      "name": "DB",
+      "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1beta2",
+        "kind": "SQLiteDatabase",
+        "name": "sqlite-database"
+      }
+    }
+  ],
+  "vars": {
+    "LOG_LEVEL": "info"
+  },
+  "worker": {
+    "apiVersion": "edge.forms.takoform.com/v1beta2",
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}
