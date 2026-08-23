@@ -93,6 +93,7 @@
           "name"
         ],
         "type": "object",
+        "x-takoform-exclusive": {},
         "x-takoform-target-formrefs": [
           {
             "apiVersion": "edge.forms.takoform.com/v1beta2",

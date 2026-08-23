@@ -1274,6 +1274,12 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	if hostErr := h.validateWorkerVersionAssets(caller, form, scope, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
+	// Declared reference cardinality, enforced without knowing a Form kind.
+	// It runs before the family's own semantics because a second holder is
+	// untrue about the target regardless of anything else the spec says.
+	if hostErr := h.validateExclusiveHolds(form, scope, name, spec, relations); hostErr != nil {
+		return nil, hostErr
+	}
 	if hostErr := h.validateSQLiteMigrationApplication(caller, form, scope, name, relations); hostErr != nil {
 		return nil, hostErr
 	}

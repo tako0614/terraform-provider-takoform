@@ -40,6 +40,11 @@ type Relation struct {
 	// TargetFormRefs is the closed set of exact Form identities this relation
 	// accepts, or nil when the relation states an Interface requirement instead.
 	TargetFormRefs []TargetFormRef
+	// Exclusive is the declared cardinality of this reference, or nil when the
+	// reference states none. A host reads it and enforces "at most one live
+	// holder of this target" without knowing which Form kind it is enforcing
+	// for, which is what keeps the rule out of the protocol document.
+	Exclusive *ExclusiveHold
 	// RequiredInterface is the exact Interface contract the target must
 	// provide, or nil when the relation pins exact Forms instead.
 	//
@@ -61,6 +66,22 @@ type TargetFormRef struct {
 // String renders the identity for a refusal message.
 func (t TargetFormRef) String() string {
 	return t.APIVersion + " " + t.Kind + "@" + t.DefinitionVersion + " " + t.SchemaDigest
+}
+
+// ExclusiveHold is the declared cardinality of a reference: how many live
+// resources of one kind may point at one resolved target.
+//
+// KeyedBy optionally names a sibling property of the desired spec, by JSON
+// Pointer, that joins the target in the key. Without it the target alone is
+// the key — a queue has one consumer. With it the pair is — one worker carries
+// one holder PER CLASS NAME, and two holders of different classes on one
+// worker are not a conflict.
+//
+// It says nothing about what a host does with a conflict beyond refusing it,
+// because there is nothing else to say: the request is well formed and what is
+// untrue is what it says about the target it points at.
+type ExclusiveHold struct {
+	KeyedBy string
 }
 
 // RequiredInterface is the exact Interface contract a relation's target must
@@ -127,6 +148,10 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 		if err != nil {
 			return err
 		}
+		exclusive, err := exclusiveHold(node, pointer)
+		if err != nil {
+			return err
+		}
 		w.out = append(w.out, Relation{
 			Pointer:           pointer,
 			TargetAPIVersion:  group,
@@ -135,6 +160,7 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 			Required:          required,
 			TargetFormRefs:    targetRefs,
 			RequiredInterface: requiredInterface,
+			Exclusive:         exclusive,
 		})
 		return nil
 	}
@@ -212,6 +238,38 @@ func referenceConstants(node map[string]any) (string, string, bool) {
 		return "", "", false
 	}
 	return group, kind, true
+}
+
+// exclusiveHold reads the declared cardinality of a reference. A malformed
+// annotation is refused rather than ignored: this is a rule a host enforces
+// before it mutates anything, and an annotation nobody could read would make
+// the Form silently unconstrained.
+func exclusiveHold(node map[string]any, pointer string) (*ExclusiveHold, error) {
+	raw, present := node[ExclusiveAnnotationKey]
+	if !present {
+		return nil, nil
+	}
+	declared, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("reference %s carries a malformed %s", pointer, ExclusiveAnnotationKey)
+	}
+	hold := &ExclusiveHold{}
+	for member, value := range declared {
+		if member != "keyedBy" {
+			return nil, fmt.Errorf(
+				"reference %s carries %s member %q, which the annotation does not define",
+				pointer, ExclusiveAnnotationKey, member,
+			)
+		}
+		key, ok := value.(string)
+		if !ok || !strings.HasPrefix(key, "/") {
+			return nil, fmt.Errorf(
+				"reference %s carries a %s keyedBy that is not a JSON Pointer", pointer, ExclusiveAnnotationKey,
+			)
+		}
+		hold.KeyedBy = key
+	}
+	return hold, nil
 }
 
 // targetContract reads the one target-contract annotation a reference-shaped

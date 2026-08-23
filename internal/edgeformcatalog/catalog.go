@@ -150,6 +150,17 @@ func activatingWorkerRef(doc, entrypoint string) model.Field {
 	return field
 }
 
+// classHolderWorkerRef is the worker reference of an identity that SELECTS a
+// class. It is exclusive over the pair, not the worker: two holders of
+// different classes on one worker are not a conflict, and two of the same
+// class would give one class two identities — a workflow's instance history
+// two homes, or an actor class two disjoint id spaces.
+func classHolderWorkerRef(doc string) model.Field {
+	field := moduleWorkerRef("worker", "worker", doc, true, true)
+	field.Exclusive = &model.ExclusiveHold{KeyedBy: "/className"}
+	return field
+}
+
 // Forms is the complete Edge Platform Family MVP set, in a stable order.
 var Forms = []model.Form{
 	{
@@ -426,8 +437,13 @@ var Forms = []model.Form{
 			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
 				Target:   requiresExactForm,
 				Required: true, Immutable: true,
-				Doc:     "Module Worker identity whose traffic this deployment governs.",
-				Example: ref("ModuleWorker", "module-worker")},
+				// One worker, one deployment. Two would leave "which one
+				// serves" undefined, and no rule chosen after the fact —
+				// newest, lowest name, highest weight — is one an author can
+				// predict.
+				Exclusive: &model.ExclusiveHold{},
+				Doc:       "Module Worker identity whose traffic this deployment governs.",
+				Example:   ref("ModuleWorker", "module-worker")},
 			{HCL: "versions", Wire: "versions", Kind: model.KindObjectList, Required: true, MinItems: 1, MaxItems: 8,
 				Doc: "Active Worker Versions and their traffic weights in basis points. Weights must sum to exactly 10000.",
 				Fields: []model.Field{
@@ -650,8 +666,13 @@ var Forms = []model.Form{
 		Fields: []model.Field{
 			{HCL: "database", Wire: "database", Kind: model.KindResourceRef, TargetKind: "SQLiteDatabase",
 				Target: requiresExactForm, Required: true, Immutable: true,
-				Doc:     "Exact SQLite Database whose durable migration ledger and schema this application advances.",
-				Example: ref("SQLiteDatabase", "sqlite-database")},
+				// One database, one live application. Two would each declare
+				// the whole schema of one database, and "Ready means the
+				// ledger equals the exact ordered set" would name two
+				// different sets with no rule for which one it must match.
+				Exclusive: &model.ExclusiveHold{},
+				Doc:       "Exact SQLite Database whose durable migration ledger and schema this application advances.",
+				Example:   ref("SQLiteDatabase", "sqlite-database")},
 			{HCL: "migration_set", Wire: "migrationSet", Kind: model.KindResourceRef, TargetKind: "SQLiteMigrationSet",
 				Target: requiresExactForm, Required: true, Immutable: true,
 				Doc:     "Exact immutable SQLite Migration Set whose ordered manifest must extend the database ledger.",
@@ -716,8 +737,12 @@ var Forms = []model.Form{
 			{HCL: "queue", Wire: "queue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
 				Target:   requiresInterface("edge.queue", "1.0.0"),
 				Required: true, Immutable: true,
-				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
-				Example: ref("AtLeastOnceQueue", "at-least-once-queue")},
+				// One queue, one consumer. Two would split the stream between
+				// two retry policies and two dead-letter destinations, which
+				// leaves the queue's own behavior unstatable.
+				Exclusive: &model.ExclusiveHold{},
+				Doc:       "Queue this consumer drains. Changing it replaces the attachment.",
+				Example:   ref("AtLeastOnceQueue", "at-least-once-queue")},
 			activatingWorkerRef("Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", "queue"),
 			// Batching, retry, and concurrency decide throughput, duplicate
 			// exposure, and downstream load together. No single value is portable
@@ -776,9 +801,8 @@ var Forms = []model.Form{
 			// The reference states an ABI requirement, not a Form one: what a
 			// workflow needs from the identity it belongs to is the runtime
 			// contract that decides a module exists and how the host loads it.
-			moduleWorkerRef("worker", "worker",
-				"Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow.",
-				true, true),
+			classHolderWorkerRef(
+				"Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow."),
 			// The class name is immutable because the instance history is kept
 			// under this identity while the CODE arrives through the worker's
 			// deployment. Repointing a live identity at a different class would
@@ -809,9 +833,8 @@ var Forms = []model.Form{
 			"and the first delivery is its creation. One worker carries at most one Actor Namespace per class " +
 			"name, because two namespaces over one class would give that class two disjoint id spaces.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker",
-				"Module Worker identity whose active deployment serves this actor class. Changing it replaces the namespace.",
-				true, true),
+			classHolderWorkerRef(
+				"Module Worker identity whose active deployment serves this actor class. Changing it replaces the namespace."),
 			// Immutable for a harder reason than the workflow's: the id space
 			// and every actor's storage hang off this identity, so repointing
 			// it at another class would hand one set of durable stores to code

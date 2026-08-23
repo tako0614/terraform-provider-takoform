@@ -147,6 +147,14 @@ type Field struct {
 	// host holding only this document knows which export every weighted
 	// version of the target must have.
 	RequiredEntrypoint string
+	// Exclusive declares that at most one LIVE resource of this Form kind may
+	// hold the target this reference resolves to. It is the mechanism four
+	// separate hand-written rules used to be — one active deployment per
+	// worker, one consumer per queue, one live migration application per
+	// database, one class holder per worker and class — each of which was a
+	// paragraph in the protocol document naming a Form kind, and therefore a
+	// reason the protocol had to change whenever a family gained one.
+	Exclusive *ExclusiveHold
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any

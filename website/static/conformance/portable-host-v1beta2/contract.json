@@ -329,9 +329,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "SQLiteMigrationApplication",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:73be4af260f71006215d8c63cd69eb87a05651aa51324d26af633abb62fc9c27"
+          "schemaDigest": "sha256:1f284b4ffe11457059c75c07fd73bac82456ea1a9e5ec57c7fe0fe277501cb9d"
         },
-        "packageDigest": "sha256:2e93188ec32f8c21f11f2b7e2a9b7d2155e80b6435b9f15708c1f5594e71780f"
+        "packageDigest": "sha256:c803faef0c9e4fe04fc879e4e8aee832854ab706035aae404148307f7d19648f"
       },
       "lifecycleCapabilities": [
         "create",
@@ -354,7 +354,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-sqlite-migration-application.json",
-        "sha256": "sha256:5a386d973e95443830c4a0346dcd994a79028d0099a53fa3ac92416f95d97b0f"
+        "sha256": "sha256:88fcda6546f34c43c6191f7bf6f3bc0dcdfa96e500614fa2539552838cf3c261"
       }
     },
     "fetchOnlyBundle": {
@@ -386,9 +386,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "WorkerDeployment",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:7d69dc3f5fec4a875300a2a84cca785a9653a97ab10bbbb55eee83ab54f4f6b4"
+          "schemaDigest": "sha256:822bb64b760022f739ace0c1b26e944e3e3109badbb0776524e01b7866ef0143"
         },
-        "packageDigest": "sha256:2afdae5498b46830eeac6bfc723e0cef512d7556593146347174590682c4285b"
+        "packageDigest": "sha256:81960d1dec2f71e06a1533f20ceec49c39f077254a88e10ea333483fea313c87"
       },
       "lifecycleCapabilities": [
         "create",
@@ -417,7 +417,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-deployment.json",
-        "sha256": "sha256:4f36dd9b45e50cb08dd01c266c153a80c075d3b49b9db61aa44ab6646a0e2f11"
+        "sha256": "sha256:ed1a2af31e7bd4f41732b47ad782393e88be9379e41ebeec24846fd922a55fab"
       }
     },
     "workerCustomDomain": {
@@ -545,9 +545,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "QueueConsumer",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:2d6cd63615e06c2a15d9ce53b22131aab46b7ed445ab2b99b3256fdcccfbde56"
+          "schemaDigest": "sha256:7b8a68e3f234985db65fd8cd68d2a6437d596ef803d6a4a9653af5df577fb52c"
         },
-        "packageDigest": "sha256:806cddac841a61771603185a443b0db4b368008e49d86b42255f0d4038522608"
+        "packageDigest": "sha256:2a85ffeb0e64bdfc5ab6d129bdfdb70c1052ae7c60daaac81303418130d45e19"
       },
       "lifecycleCapabilities": [
         "create",
@@ -576,7 +576,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-queue-consumer.json",
-        "sha256": "sha256:3074f83f5c40e8baa272049088404c4bf85a166e1561106982ae3752f4c511bb"
+        "sha256": "sha256:8b36346e4c57253b07d8b0db2c3e93925f1dde55f66cdcb8fe037a47c745fcf0"
       }
     },
     "durableWorkflow": {
@@ -586,9 +586,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "DurableWorkflow",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:e9877db1715576bfe04c1c24a360feeb2328dcb64ab55811d52e7dc2cdd4b532"
+          "schemaDigest": "sha256:80d53080a37e4e8be3090a4fe31756bdd6c0442aba575a32472292dd5fdbcb59"
         },
-        "packageDigest": "sha256:d39942a48673121b99702002af9321a35aec1e59162856afb4cac45549422a92"
+        "packageDigest": "sha256:082973a2778f54bec8eba4095192816842b8b31c157cd1775d6908c420bb634f"
       },
       "lifecycleCapabilities": [
         "create",
@@ -607,7 +607,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-durable-workflow.json",
-        "sha256": "sha256:7af4978075fcacebc546133923e4680878795d684bee0166c0d74e4a79c473dd"
+        "sha256": "sha256:6da3fdcb1d6b7507c38428f4f923e1f8d0c7bd73b18d9365c18ea5771b362d6f"
       }
     },
     "actorNamespace": {
@@ -617,9 +617,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "ActorNamespace",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:f0ee0929b20ac7eef5333c48ad6a38da7af9314600444ada4545fd4083f1031b"
+          "schemaDigest": "sha256:23fc2a0ea4ed633fccaf7e1498614c61685c3955e7e19a7cdb8fd5f48bd17484"
         },
-        "packageDigest": "sha256:081d89bc31002602b3f8a3dba4d40a7ef54f397ac4675947304ab705d0a221dd"
+        "packageDigest": "sha256:92a5d3eb6d68e8ca7206fb9d9252492d17cfe4a9958407ae232b7746ce5c57f8"
       },
       "lifecycleCapabilities": [
         "create",
@@ -638,7 +638,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-actor-namespace.json",
-        "sha256": "sha256:568924a8f33c902115eabe55e2fd8b9c6983115784e34fa90e72bea8621f316a"
+        "sha256": "sha256:3bb022dcd3bef3f07d2fda598fc807adcf087cf023c60b2441829640f76395a8"
       }
     },
     "syntheticSecondGroup": {

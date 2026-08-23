@@ -41,6 +41,9 @@
           "name"
         ],
         "type": "object",
+        "x-takoform-exclusive": {
+          "keyedBy": "/className"
+        },
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "worker.runtime",

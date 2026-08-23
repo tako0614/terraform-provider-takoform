@@ -23,6 +23,10 @@ const (
 	// or $-bearing name would make those unpronounceable
 	// (spec/standard-services).
 	PatternExternalServiceName = `^[A-Z][A-Z0-9_]*$`
+	// ExclusiveAnnotationKey marks the reference whose target may be held by
+	// at most one live resource of this kind. A host reads it and enforces the
+	// cardinality without knowing which Form it is enforcing for.
+	ExclusiveAnnotationKey = "x-takoform-exclusive"
 	// RequiredEntrypointAnnotationKey marks the reference whose inward
 	// activation invokes one entrypoint of the target's runtime contract. The
 	// lane's attachment gate reads it, so a family adds an attachment without
@@ -522,6 +526,13 @@ func (f Field) resourceRefSchema(group string, resolver TargetContractResolver) 
 		}
 	default:
 		return nil, errors.New("a reference must state either an exact Form contract or a required Interface")
+	}
+	if f.Exclusive != nil {
+		hold := map[string]any{}
+		if f.Exclusive.KeyedBy != "" {
+			hold["keyedBy"] = f.Exclusive.KeyedBy
+		}
+		node[ExclusiveAnnotationKey] = hold
 	}
 	if f.RequiredEntrypoint != "" {
 		node[RequiredEntrypointAnnotationKey] = f.RequiredEntrypoint

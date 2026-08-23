@@ -222,51 +222,8 @@ func (h *ReferenceHost) validateSQLiteMigrationApplication(
 	name string,
 	relations []storedRelation,
 ) *hostError {
-	if hostErr := h.validateSingleMigrationApplication(form, scope, name, relations); hostErr != nil {
-		return hostErr
-	}
 	_, _, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
 	return hostErr
-}
-
-// validateSingleMigrationApplication holds a database to AT MOST ONE live
-// application, over its UID, exactly like one-deployment-per-worker and
-// one-consumer-per-queue. Two live applications would each declare the whole
-// schema of one database, and "Ready means the ledger equals the exact ordered
-// set" would then name two different sets with no rule for which one the
-// database is supposed to match.
-//
-// It is invalid_argument rather than dependency_in_use because the request is
-// well formed and what is untrue is what it says about the database it points
-// at. Advancing a schema is a handover — delete, then create against the
-// longer set — and the ledger prefix check makes that resume at the unapplied
-// suffix, so the rule costs no replay.
-func (h *ReferenceHost) validateSingleMigrationApplication(
-	form *InstalledForm, scope resourceScope, name string, relations []storedRelation,
-) *hostError {
-	if form.Ref.APIVersion != h.edgeGroup() || form.Ref.Kind != sqliteMigrationApplicationKind {
-		return nil
-	}
-	databaseUID := relationTargetUID(relations, migrationDatabasePointer)
-	if databaseUID == "" {
-		return nil
-	}
-	selfKey := resourceKey(scope, h.edgeGroup(), form.Ref.Kind, name)
-	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != h.edgeGroup() ||
-			candidate.kind() != sqliteMigrationApplicationKind ||
-			candidate.key() == selfKey {
-			continue
-		}
-		if relationTargetUID(candidate.Relations, migrationDatabasePointer) == databaseUID {
-			return stableError("invalid_argument",
-				"SQLiteMigrationApplication "+name+" applies to the SQLiteDatabase at uid "+databaseUID+
-					", which SQLiteMigrationApplication "+candidate.Name+" already applies to; "+
-					"a database carries at most one live migration application, and advancing its schema "+
-					"is deleting that application and creating one referencing the longer set")
-		}
-	}
-	return nil
 }
 
 // sqliteMigrationApplicationUnavailable is the derived readiness half of the
@@ -600,24 +557,10 @@ func (h *ReferenceHost) validateSingleQueueConsumer(
 	if queueUID == "" {
 		return stableError("invalid_argument", "a QueueConsumer requires a target queue")
 	}
-	selfKey := resourceKey(scope, h.edgeGroup(), queueConsumerKind, name)
-	for _, candidate := range h.scopedResources(scope) {
-		if candidate.group() != h.edgeGroup() || candidate.kind() != queueConsumerKind {
-			continue
-		}
-		if candidate.key() == selfKey {
-			continue
-		}
-		if relationTargetUID(candidate.Relations, queueRelationPointer) != queueUID {
-			continue
-		}
-		return stableError(
-			"invalid_argument",
-			"the AtLeastOnceQueue at uid "+queueUID+" is already drained by QueueConsumer "+candidate.Name+
-				"; a queue has at most one consumer, because two would split it between two retry policies "+
-				"and two dead-letter destinations",
-		)
-	}
+	// One consumer per queue is no longer written here: the Form declares it
+	// as an exclusive hold on its queue reference, and validateExclusiveHolds
+	// enforces it. What remains of this function is the check that the
+	// reference resolved at all.
 	return nil
 }
 
