@@ -744,16 +744,32 @@ func (r *v3Runner) prepareWithFenceAs(token string, target probeTarget, generati
 		result.Resource.Metadata.Space != target.Space {
 		return prepareOutcome{}, errors.New("prepare substituted the requested identity")
 	}
-	wantSpecDigest, err := specCanonicalDigest(target.Spec)
+	// The digest is of the MATERIALIZED spec, which is what the echo carries.
+	// Comparing against the spec as SENT would be wrong for the one request
+	// that omits a defaulted property — and that is not an exception, it is
+	// the rule: a host materializes at the entry point, so the effective spec
+	// is what came back, and a client's own desired state is the echo.
+	echoedSpecDigest, err := specCanonicalDigest(result.Resource.Spec)
 	if err != nil {
 		return prepareOutcome{}, err
 	}
-	gotSpecDigest, err := specCanonicalDigest(result.Resource.Spec)
-	if err != nil {
-		return prepareOutcome{}, err
+	if result.Review.SpecDigest != echoedSpecDigest {
+		return prepareOutcome{}, errors.New(
+			"prepare bound a specDigest that is not the digest of the spec it echoed",
+		)
 	}
-	if gotSpecDigest != wantSpecDigest || result.Review.SpecDigest != wantSpecDigest {
-		return prepareOutcome{}, errors.New("prepare did not bind the exact requested spec digest")
+	// The echo must still be the caller's own desired state: every property
+	// the caller WROTE survives unchanged. Materialization fills absences; it
+	// never rewrites a written value.
+	for key, sent := range target.Spec {
+		got, present := result.Resource.Spec[key]
+		if !present || canonicalScalar(got) != canonicalScalar(sent) {
+			return prepareOutcome{}, fmt.Errorf(
+				"prepare echoed %s as %v, want the written %v; materialization fills absent properties "+
+					"and never rewrites a written one",
+				key, got, sent,
+			)
+		}
 	}
 	if !formpackage.ValidDigest(result.Review.PrepareDigest) {
 		return prepareOutcome{}, errors.New("prepare returned an invalid prepareDigest")

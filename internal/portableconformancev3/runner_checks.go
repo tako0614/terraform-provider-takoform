@@ -204,6 +204,7 @@ func (r *v3Runner) run() error {
 			func() error { return r.checkAvailabilityTruthConditions(kv) },
 			func() error { return r.checkCancelOutcomesClosed(kv) },
 			func() error { return r.checkExternalServiceSlotsSealed(version) },
+			func() error { return r.checkPortableDefaultsMaterialized(queue) },
 		)
 	}
 	for _, step := range steps {

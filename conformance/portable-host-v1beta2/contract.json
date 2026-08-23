@@ -933,6 +933,7 @@
     "forms-route-enumerates",
     "availability-truth-conditions",
     "cancel-outcomes-closed",
-    "external-service-slots-sealed"
+    "external-service-slots-sealed",
+    "portable-defaults-materialized"
   ]
 }

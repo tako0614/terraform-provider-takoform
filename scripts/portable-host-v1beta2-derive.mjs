@@ -98,6 +98,7 @@ contract.requiredRunnerChecks = [
   "availability-truth-conditions",
   "cancel-outcomes-closed",
   "external-service-slots-sealed",
+  "portable-defaults-materialized",
 ];
 
 // ---- write or check ----

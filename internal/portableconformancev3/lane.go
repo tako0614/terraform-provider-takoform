@@ -238,6 +238,11 @@ var beta2RequiredChecks = append(append([]string{}, beta1RequiredChecks...),
 	// Sealed external standard-service slots: the projected closure, the
 	// closed protocol vocabulary, and prepare-time refusal.
 	"external-service-slots-sealed",
+	// The materialization rule, driven by the one request the runner never
+	// otherwise sends: a spec with a defaulted property omitted. Every other
+	// probe is materialized locally, so without this the whole portable
+	// defaults section was unmeasured while reporting green.
+	"portable-defaults-materialized",
 )
 
 // ConvergingReason is what a lane calls the state "the host is actively
