@@ -57,6 +57,7 @@ import (
 
 const (
 	workerBundleKind       = "WorkerBundle"
+	workerVersionKind      = "WorkerVersion"
 	staticAssetBundleKind  = "StaticAssetBundle"
 	sqliteMigrationSetKind = "SQLiteMigrationSet"
 	workerDeploymentKind   = "WorkerDeployment"
@@ -96,6 +97,15 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			attrs[v3AttributeName(field)] = attribute
 		}
 	}
+	// Provider 3 no longer exposes ObjectBucket or bucket bindings as current
+	// desired state. It must nevertheless keep the old attribute TYPE in the
+	// WorkerVersion Terraform state envelope so a retained Provider 2.1.1
+	// WorkerVersion exact codec can decode and refresh the state it wrote. The
+	// attribute is computed-only: configurations cannot author it, current
+	// codecs never send it, and no ObjectBucket resource mapping is restored.
+	if r.form.Kind == workerVersionKind {
+		attrs[v3RetainedBucketBindingsAttribute] = v3RetainedBucketBindingsStateAttribute()
+	}
 	// The Form's declared outputs become typed computed attributes. They are
 	// added last and fail closed on any name already taken: an output silently
 	// overwriting a desired attribute or an envelope attribute would give one
@@ -121,6 +131,27 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 		Version:     v3SchemaVersion,
 		Description: description,
 		Attributes:  attrs,
+	}
+}
+
+const v3RetainedBucketBindingsAttribute = "bucket_bindings"
+
+func v3RetainedBucketBindingsStateAttribute() schema.ListNestedAttribute {
+	return schema.ListNestedAttribute{
+		Computed: true,
+		Description: "Retained Provider 2.1.1 state only. Records the historical ObjectBucket binding list " +
+			"when refreshing a WorkerVersion created under its exact v1beta1 FormRef. Provider 3 does not " +
+			"accept this attribute in configuration and does not expose an ObjectBucket resource.",
+		NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Computed:    true,
+				Description: "Historical JavaScript binding name retained in state.",
+			},
+			"target_name": schema.StringAttribute{
+				Computed:    true,
+				Description: "Historical ObjectBucket resource name retained in state.",
+			},
+		}},
 	}
 }
 

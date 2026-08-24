@@ -560,6 +560,11 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 			)
 		}
 	}
+	if r.form.Kind == workerVersionKind {
+		var value types.List
+		diags.Append(getter.GetAttribute(ctx, path.Root(v3RetainedBucketBindingsAttribute), &value)...)
+		values.Fields[v3RetainedBucketBindingsAttribute] = value
+	}
 	return values, diags
 }
 

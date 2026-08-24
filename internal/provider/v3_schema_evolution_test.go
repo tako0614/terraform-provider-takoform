@@ -138,13 +138,6 @@ func TestV3TerraformSchemaEvolutionRuleHoldsTheSurface(t *testing.T) {
 			was := before.Attributes[name]
 			is, present := after.Attributes[name]
 			if !present {
-				if resourceType == "takoform_worker_version" && name == "bucket_bindings" {
-					// The current ObjectBucket Form, edge.objects Interface, and
-					// projection binding were withdrawn together. Provider 3 is the
-					// major boundary that removes that authoring attribute; Provider
-					// 2.1.1 remains immutable history.
-					continue
-				}
 				t.Errorf(
 					"%s.%s was removed. Removing an attribute requires a NEW Terraform resource type "+
 						"(%s_v2, or a different Form kind); the existing type must keep serving it.",
