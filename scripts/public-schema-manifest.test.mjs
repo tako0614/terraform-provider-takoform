@@ -22,7 +22,7 @@ const STABLE_V1_SCHEMA_IDS = [
 ];
 const OCCUPIED_IDENTITY_COUNT = 24;
 const OCCUPIED_IDENTITIES_SHA256 =
-  "b7a0d545d4ff8bb113991539073c377fe83e63d4f7593b5f901878a8bf889669";
+  "76787c2f738bb774396889274dd9b4236ff0536467770308fa23312f3830c508";
 
 const identity = (id, sha256 = `sha256:${"a".repeat(64)}`) => ({
   id: `https://forms.takoform.com/schemas/${id}.json`,

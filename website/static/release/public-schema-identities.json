@@ -129,7 +129,7 @@
     },
     {
       "id": "https://forms.takoform.com/schemas/v1alpha4/package-index.schema.json",
-      "sha256": "sha256:db35190573e4ce7d9b0256e9ad53ec18d17b816ad4dacda338dc282d440ae756",
+      "sha256": "sha256:ef892ebcad9bb03fa98a9e6e74c557b1d34c235c28549d694c0b588554213f7e",
       "source": "spec/schemas/package-index-v1alpha4.schema.json",
       "public": "website/public/schemas/v1alpha4/package-index.schema.json"
     },
