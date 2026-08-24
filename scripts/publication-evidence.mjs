@@ -8,7 +8,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -1863,6 +1863,54 @@ export function loadPublicationEvidence(repositoryRoot = path.resolve(import.met
   return parseJson(readFileSync(path.join(repositoryRoot, PUBLICATION_EVIDENCE)), PUBLICATION_EVIDENCE);
 }
 
+export function prepareSpecificationEvidence(
+  repositoryRoot = path.resolve(import.meta.dirname, ".."),
+) {
+  const document = loadPublicationEvidence(repositoryRoot);
+  if (
+    Object.values(document.evidence.specification).some((value) => value !== null)
+  ) {
+    fail("Specification evidence is already closed; preparation is create-only");
+  }
+  assertWorktreePathsClean(
+    repositoryRoot,
+    [PUBLICATION_EVIDENCE],
+    "Specification evidence preparation input",
+  );
+  const sourceCommit = git(repositoryRoot, ["rev-parse", "HEAD"]).trim();
+  assertReachableCommit(repositoryRoot, sourceCommit, "Specification source commit");
+  document.candidateBaseline = {
+    repository: "takoform",
+    commit: sourceCommit,
+    familyIndex: {
+      path: FAMILY_INDEX_PATH,
+      sha256: sha256Bytes(
+        gitShowBytes(repositoryRoot, sourceCommit, FAMILY_INDEX_PATH),
+      ),
+    },
+    conformanceSuite: {
+      path: CONFORMANCE_SUITE_PATH,
+      sha256: sha256Bytes(
+        gitShowBytes(repositoryRoot, sourceCommit, CONFORMANCE_SUITE_PATH),
+      ),
+    },
+  };
+  const candidate = deriveCandidateCorpusEvidence(
+    repositoryRoot,
+    document.candidateBaseline,
+  );
+  document.evidence.specification.sourceSnapshot =
+    deriveSpecificationSourceSnapshot(repositoryRoot, sourceCommit);
+  document.evidence.specification.candidateCorpus = candidate;
+  document.evidence.specification.referenceConformance =
+    deriveReferenceConformanceEvidence(repositoryRoot, candidate);
+  writeFileSync(
+    path.join(repositoryRoot, PUBLICATION_EVIDENCE),
+    `${JSON.stringify(document, null, 2)}\n`,
+  );
+  return document;
+}
+
 export function assertPublicationEvidenceReady(report, trackId = null) {
   const selected = trackId === null ? report.tracks : report.tracks.filter((entry) => entry.id === trackId);
   if (selected.length === 0) fail(`unknown release track ${trackId}`);
@@ -1877,6 +1925,7 @@ export function assertPublicationEvidenceReady(report, trackId = null) {
 function main() {
   const mode = process.argv[2];
   const allowed = [
+    "--prepare-specification-v1",
     "--check",
     "--assert-specification-v1",
     "--assert-provider-3",
@@ -1886,6 +1935,13 @@ function main() {
     fail(`usage: bun scripts/publication-evidence.mjs ${allowed.join("|")}`);
   }
   const repositoryRoot = path.resolve(import.meta.dirname, "..");
+  if (mode === "--prepare-specification-v1") {
+    const document = prepareSpecificationEvidence(repositoryRoot);
+    process.stdout.write(
+      `prepared exact Specification 1.0 evidence for ${document.candidateBaseline.commit}; commit the record before assertion\n`,
+    );
+    return;
+  }
   const releaseTrack = mode === "--assert-specification-v1"
     ? SPECIFICATION_TRACK
     : mode === "--assert-provider-3"

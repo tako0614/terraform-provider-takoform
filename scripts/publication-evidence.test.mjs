@@ -38,6 +38,7 @@ import {
   loadPublicationEvidence,
   parseProviderCompatibilityOutput,
   parseProviderMatrixObservations,
+  prepareSpecificationEvidence,
   validateProviderIdentityProjection,
   validatePublicationEvidence,
 } from "./publication-evidence.mjs";
@@ -580,6 +581,7 @@ function buildSourceFixture(options = {}) {
     },
   };
   writeJson(root, CONFORMANCE_SUITE_PATH, suite);
+  writeJson(root, "spec/publication-evidence.json", DOCUMENT);
   git(
     root,
     "add",
@@ -587,6 +589,7 @@ function buildSourceFixture(options = {}) {
     "interfaces/candidates/v1",
     "bindings/candidates/v1",
     "conformance/takoform-v1",
+    "spec/publication-evidence.json",
     "scripts/publication-evidence.mjs",
     runnerPath,
   );
@@ -910,6 +913,25 @@ describe("class-specific anti-false-claim validation", () => {
 });
 
 describe("independent release tracks", () => {
+  test("the create-only writer derives all three Specification records from one exact source commit", () => {
+    const fixture = buildSourceFixture();
+    const prepared = prepareSpecificationEvidence(fixture.root);
+    expect(prepared.candidateBaseline.commit).toBe(fixture.sourceCommit);
+    expect(prepared.candidateBaseline.familyIndex).toEqual(
+      fixture.baseline.familyIndex,
+    );
+    expect(prepared.candidateBaseline.conformanceSuite).toEqual(
+      fixture.baseline.conformanceSuite,
+    );
+    expect(prepared.evidence.specification.sourceSnapshot).not.toBeNull();
+    expect(prepared.evidence.specification.candidateCorpus).not.toBeNull();
+    expect(prepared.evidence.specification.referenceConformance).not.toBeNull();
+    expect(loadPublicationEvidence(fixture.root)).toEqual(prepared);
+    expect(() => prepareSpecificationEvidence(fixture.root)).toThrow(
+      "Specification evidence is already closed; preparation is create-only",
+    );
+  });
+
   test("a fully valid multi-family Specification future passes without Provider or external evidence", () => {
     const report = validatePublicationEvidence(future.document, { repositoryRoot: future.root });
     expect(report.candidate.available).toBe(true);
