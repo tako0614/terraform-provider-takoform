@@ -76,7 +76,7 @@ var providerReferenceTerraformTypes = map[string]map[string]string{
 		"FunctionEndpoint":   "takoform_function_endpoint",
 	},
 	containerformcatalog.Family.APIVersion(): {
-		"ContainerService":      "takoform_container_service",
+		"ContainerService":      "takoform_serverless_container_service",
 		"ContainerRevision":     "takoform_container_revision",
 		"ContainerTraffic":      "takoform_container_traffic",
 		"ContainerEndpoint":     "takoform_container_endpoint",
@@ -93,10 +93,10 @@ var providerReferenceTerraformTypes = map[string]map[string]string{
 		"TopicSubscription": "takoform_topic_subscription",
 	},
 	scheduleformcatalog.Family.APIVersion(): {
-		"Schedule": "takoform_schedule",
+		"Schedule": "takoform_message_schedule",
 	},
 	vectorformcatalog.Family.APIVersion(): {
-		"VectorIndex": "takoform_vector_index",
+		"VectorIndex": "takoform_dense_vector_index",
 	},
 }
 

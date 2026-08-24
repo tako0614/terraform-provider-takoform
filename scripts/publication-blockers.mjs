@@ -17,6 +17,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+import { validateProviderIdentityLedger } from "./release-deploy.mjs";
 import process from "node:process";
 
 export const BLOCKER_LEDGER = "spec/publication-blockers.json";
@@ -79,12 +81,22 @@ function mergedPullRequestNumbers(repositoryRoot) {
  * blocker unenforceable: an unknown status, a closed blocker with no evidence,
  * a duplicate identity, or an entry that names no affected Form.
  */
-export function parseBlockerLedger(document, repositoryRoot = null, knownPullRequests = undefined) {
-  if (document === null || typeof document !== "object" || Array.isArray(document)) {
+export function parseBlockerLedger(
+  document,
+  repositoryRoot = null,
+  knownPullRequests = undefined,
+) {
+  if (
+    document === null ||
+    typeof document !== "object" ||
+    Array.isArray(document)
+  ) {
     fail(`${BLOCKER_LEDGER} must be a JSON object`);
   }
   if (document.format !== LEDGER_FORMAT) {
-    fail(`${BLOCKER_LEDGER} format = ${JSON.stringify(document.format)}, want ${LEDGER_FORMAT}`);
+    fail(
+      `${BLOCKER_LEDGER} format = ${JSON.stringify(document.format)}, want ${LEDGER_FORMAT}`,
+    );
   }
   for (const field of ["lane", "family", "policy"]) {
     if (typeof document[field] !== "string" || document[field].length === 0) {
@@ -110,14 +122,22 @@ export function parseBlockerLedger(document, repositoryRoot = null, knownPullReq
         : mergedPullRequestNumbers(repositoryRoot);
   const blockers = document.blockers.map((blocker, index) => {
     const at = `${BLOCKER_LEDGER} blocker ${index}`;
-    if (blocker === null || typeof blocker !== "object" || Array.isArray(blocker)) {
+    if (
+      blocker === null ||
+      typeof blocker !== "object" ||
+      Array.isArray(blocker)
+    ) {
       fail(`${at} must be an object`);
     }
     const keys = Object.keys(blocker).sort().join(",");
-    const withIssue = "affectedForms,evidence,id,issue,priority,rationale,status,title";
-    const withoutIssue = "affectedForms,evidence,id,priority,rationale,status,title";
+    const withIssue =
+      "affectedForms,evidence,id,issue,priority,rationale,status,title";
+    const withoutIssue =
+      "affectedForms,evidence,id,priority,rationale,status,title";
     if (keys !== withIssue && keys !== withoutIssue) {
-      fail(`${at} has fields ${keys}; a blocker carries id, title, priority, affectedForms, status, rationale, evidence and an optional issue`);
+      fail(
+        `${at} has fields ${keys}; a blocker carries id, title, priority, affectedForms, status, rationale, evidence and an optional issue`,
+      );
     }
     if (typeof blocker.id !== "string" || !BLOCKER_ID.test(blocker.id)) {
       fail(`${at} id must match V3-NNN`);
@@ -129,17 +149,29 @@ export function parseBlockerLedger(document, repositoryRoot = null, knownPullReq
     if (typeof blocker.title !== "string" || blocker.title.length === 0) {
       fail(`${blocker.id} must state a title`);
     }
-    if (typeof blocker.rationale !== "string" || blocker.rationale.length === 0) {
+    if (
+      typeof blocker.rationale !== "string" ||
+      blocker.rationale.length === 0
+    ) {
       fail(`${blocker.id} must state why it blocks publication`);
     }
     if (!PRIORITIES.has(blocker.priority)) {
-      fail(`${blocker.id} priority = ${JSON.stringify(blocker.priority)}, want one of P0, P1, P2`);
+      fail(
+        `${blocker.id} priority = ${JSON.stringify(blocker.priority)}, want one of P0, P1, P2`,
+      );
     }
     if (!STATUSES.has(blocker.status)) {
-      fail(`${blocker.id} status = ${JSON.stringify(blocker.status)}, want open or closed`);
+      fail(
+        `${blocker.id} status = ${JSON.stringify(blocker.status)}, want open or closed`,
+      );
     }
-    if (!Array.isArray(blocker.affectedForms) || blocker.affectedForms.length === 0) {
-      fail(`${blocker.id} must name the Forms it affects, or "*" for every Form`);
+    if (
+      !Array.isArray(blocker.affectedForms) ||
+      blocker.affectedForms.length === 0
+    ) {
+      fail(
+        `${blocker.id} must name the Forms it affects, or "*" for every Form`,
+      );
     }
     if (!Array.isArray(blocker.evidence)) {
       fail(`${blocker.id} evidence must be an array`);
@@ -149,21 +181,40 @@ export function parseBlockerLedger(document, repositoryRoot = null, knownPullReq
     // word — nor by naming evidence that does not exist. An unchecked list
     // would be the same unverified status edit wearing an array.
     for (const [position, entry] of blocker.evidence.entries()) {
-      if (typeof entry !== "string" || entry.trim() !== entry || entry.length === 0) {
-        fail(`${blocker.id} evidence[${position}] must be a non-empty path or https URL with no surrounding whitespace`);
+      if (
+        typeof entry !== "string" ||
+        entry.trim() !== entry ||
+        entry.length === 0
+      ) {
+        fail(
+          `${blocker.id} evidence[${position}] must be a non-empty path or https URL with no surrounding whitespace`,
+        );
       }
       if (entry.startsWith("https://")) {
         continue;
       }
-      if (entry.startsWith("/") || entry.includes("..") || entry.includes("\\")) {
-        fail(`${blocker.id} evidence[${position}] must be a repository-relative path or an https URL, not ${JSON.stringify(entry)}`);
+      if (
+        entry.startsWith("/") ||
+        entry.includes("..") ||
+        entry.includes("\\")
+      ) {
+        fail(
+          `${blocker.id} evidence[${position}] must be a repository-relative path or an https URL, not ${JSON.stringify(entry)}`,
+        );
       }
-      if (repositoryRoot !== null && !existsSync(path.join(repositoryRoot, entry))) {
-        fail(`${blocker.id} evidence[${position}] names ${JSON.stringify(entry)}, which does not exist; a blocker closes on evidence that can be read`);
+      if (
+        repositoryRoot !== null &&
+        !existsSync(path.join(repositoryRoot, entry))
+      ) {
+        fail(
+          `${blocker.id} evidence[${position}] names ${JSON.stringify(entry)}, which does not exist; a blocker closes on evidence that can be read`,
+        );
       }
     }
     if (blocker.status === "closed" && blocker.evidence.length === 0) {
-      fail(`${blocker.id} is closed but names no evidence; a blocker closes by evidence, not by editing its status`);
+      fail(
+        `${blocker.id} is closed but names no evidence; a blocker closes by evidence, not by editing its status`,
+      );
     }
     if (blocker.issue !== undefined) {
       if (!Number.isInteger(blocker.issue) || blocker.issue <= 0) {
@@ -206,7 +257,10 @@ export function parseBlockerLedger(document, repositoryRoot = null, knownPullReq
 
 export function loadBlockerLedger(repositoryRoot) {
   const file = path.join(repositoryRoot, BLOCKER_LEDGER);
-  return parseBlockerLedger(JSON.parse(readFileSync(file, "utf8")), repositoryRoot);
+  return parseBlockerLedger(
+    JSON.parse(readFileSync(file, "utf8")),
+    repositoryRoot,
+  );
 }
 
 /** openBlockers returns every obligation still blocking package/service publication. */
@@ -223,7 +277,9 @@ export function assertPublicationAllowed(ledger) {
   if (open.length === 0) {
     return;
   }
-  const lines = open.map((blocker) => `  ${blocker.id} [${blocker.priority}] ${blocker.title}`);
+  const lines = open.map(
+    (blocker) => `  ${blocker.id} [${blocker.priority}] ${blocker.title}`,
+  );
   fail(
     `Form Package/public-service publication for ${ledger.lane} is blocked: ${open.length} obligation${open.length === 1 ? "" : "s"} open\n` +
       `${lines.join("\n")}\n` +
@@ -241,7 +297,13 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
     return;
   }
   const candidateSet = JSON.parse(
-    readFileSync(path.join(repositoryRoot, "forms/candidates/edge.forms.takoform.com/candidate-set.json"), "utf8"),
+    readFileSync(
+      path.join(
+        repositoryRoot,
+        "forms/candidates/edge.forms.takoform.com/candidate-set.json",
+      ),
+      "utf8",
+    ),
   );
   if (candidateSet.publicationStatus !== "unpublished") {
     fail(
@@ -251,76 +313,91 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
   }
 }
 
-// assertProviderReleaseCandidate preserves the Provider 2.1 historical lane
-// without using package or Specification obligations as a proxy. It locks
-// v2.1.1 to the 15 Experimental
-// Beta FormRefs and package digests recorded in the append-only provider
-// identity ledger. Candidate-only is a publication fact, not a prerelease
-// version: the owner deploy changes it only after the real release exists.
-//
-// The two counts below are different facts and only one of them moves: the
-// published release embeds the fifteen identities it shipped with, forever,
-// while the current candidate lane carries whatever the generation now
-// declares. Decision 0053 supersedes decision 0046 as release authority;
-// neither lane can authorize or block Specification 1.0.
+// assertProviderReleaseCandidate keeps Provider distribution independent from
+// package and Specification obligations. Provider 3 may be a candidate while
+// every Form remains Experimental and unpublished. The append-only ledger also
+// keeps Provider 2.1.1's exact fifteen identities immutable history.
 export function assertProviderReleaseCandidate(repositoryRoot) {
   const descriptor = JSON.parse(
     readFileSync(path.join(repositoryRoot, "release/version.json"), "utf8"),
   );
-  const candidate = JSON.parse(
+  const index = JSON.parse(
     readFileSync(
-      path.join(repositoryRoot, "forms/candidates/edge.forms.takoform.com/candidate-set.json"),
+      path.join(repositoryRoot, "forms/candidates/current-family-index.json"),
       "utf8",
     ),
   );
-  const identities = JSON.parse(
-    readFileSync(path.join(repositoryRoot, "release/provider-form-identities.json"), "utf8"),
-  );
   if (
-    descriptor.version !== "2.1.1" ||
-    descriptor.tag !== "v2.1.1" ||
+    descriptor.version !== "3.0.0" ||
+    descriptor.tag !== "v3.0.0" ||
     descriptor.publicationStatus !== "candidate-only" ||
-    descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1beta1"
-  ) {
-    fail("provider release descriptor is not candidate-only v2.1.1 on Host API v1beta1");
-  }
-  if (
-    candidate.family !== "edge.forms.takoform.com" ||
-    candidate.formMaturity !== "experimental" ||
-    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
-    candidate.publicationStatus !== "unpublished" ||
-    candidate.forms?.length !== 16 ||
-    candidate.forms.some(
-      (entry) =>
-        entry?.kind === "ObjectBucket" ||
-        entry?.formRef?.kind === "ObjectBucket" ||
-        entry?.formRef?.apiVersion === "edge.objects",
-    )
+    descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1"
   ) {
     fail(
-      "the current candidate lane must carry exactly 16 Experimental Forms in unpublished v1alpha5 package envelopes, without ObjectBucket or edge.objects",
+      "provider release descriptor is not candidate-only v3.0.0 on stable Host API v1",
     );
   }
-  const embedded = identities.releases?.find(
+  if (
+    index.format !== "takoform.current-family-index@v1" ||
+    index.families?.length !== 8
+  ) {
+    fail(
+      "the current Provider 3 candidate index must contain the exact eight versionless families",
+    );
+  }
+  let candidateFormCount = 0;
+  for (const family of index.families) {
+    const candidate = JSON.parse(
+      readFileSync(path.join(repositoryRoot, family.candidateSet), "utf8"),
+    );
+    if (
+      candidate.family !== family.group ||
+      candidate.formMaturity !== "experimental" ||
+      candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
+      candidate.publicationStatus !== "unpublished" ||
+      candidate.forms?.length !== family.formCount ||
+      candidate.forms.some(
+        (entry) =>
+          entry?.kind === "ObjectBucket" ||
+          entry?.formRef?.kind === "ObjectBucket" ||
+          entry?.formRef?.apiVersion === "edge.objects",
+      )
+    ) {
+      fail(
+        `the current candidate family ${family.group} is not the exact unpublished Experimental set`,
+      );
+    }
+    candidateFormCount += candidate.forms.length;
+  }
+  if (candidateFormCount !== 31) {
+    fail(
+      `the current Provider 3 candidate index contains ${candidateFormCount} Forms, want 31`,
+    );
+  }
+  const identities = validateProviderIdentityLedger(repositoryRoot, descriptor);
+  const embedded = identities.releases.find(
     (entry) => entry.providerVersion === descriptor.version,
   );
-  // The catalog has moved past the published release (decision 0046): the
-  // 2.1.1 ledger entry stays frozen at its own family and byte-exact set,
-  // while the current candidate lane awaits the next release's entry. What
-  // publication still requires of the PUBLISHED release is that its entry
-  // exists, names its own lane, and was never edited.
+  const retained = identities.releases.find(
+    (entry) => entry.providerVersion === "2.1.1",
+  );
   if (
     identities.format !== "takoform.provider-form-identities@v1" ||
     embedded?.portableApiVersion !== descriptor.versioning.portableApiVersion ||
-    embedded?.family !== "edge.forms.takoform.com/v1beta1" ||
-    embedded?.formMaturity !== candidate.formMaturity ||
-    embedded?.forms?.length !== 15
+    embedded?.families?.length !== 8 ||
+    embedded?.formMaturity !== "experimental" ||
+    embedded?.forms?.length !== 31 ||
+    retained?.family !== "edge.forms.takoform.com/v1beta1" ||
+    retained?.forms?.length !== 15
   ) {
-    fail("provider v2.1 embedded Beta FormRefs/digests drifted from the generated family set");
+    fail(
+      "Provider 3 current identities or Provider 2.1.1 retained identities drifted",
+    );
   }
   return {
     formCount: embedded.forms.length,
-    candidateFormCount: candidate.forms.length,
+    candidateFormCount,
+    retainedFormCount: retained.forms.length,
     version: descriptor.version,
   };
 }
@@ -343,24 +420,34 @@ function main() {
   const ledger = loadBlockerLedger(repositoryRoot);
   if (mode === "--assert-publishable") {
     assertPublicationAllowed(ledger);
-    console.log(`publication blockers: none open; the ${ledger.lane} lane may publish`);
+    console.log(
+      `publication blockers: none open; the ${ledger.lane} lane may publish`,
+    );
     return;
   }
   if (mode !== "--check") {
-    fail(`usage: bun scripts/publication-blockers.mjs [--check|--assert-publishable]`);
+    fail(
+      `usage: bun scripts/publication-blockers.mjs [--check|--assert-publishable]`,
+    );
   }
   const open = openBlockers(ledger);
   assertLaneStillUnpublished(repositoryRoot, ledger, open);
   const provider = assertProviderReleaseCandidate(repositoryRoot);
   const byPriority = new Map();
   for (const blocker of open) {
-    byPriority.set(blocker.priority, (byPriority.get(blocker.priority) ?? 0) + 1);
+    byPriority.set(
+      blocker.priority,
+      (byPriority.get(blocker.priority) ?? 0) + 1,
+    );
   }
-  const summary = [...byPriority.entries()].sort().map(([priority, count]) => `${priority}=${count}`).join(" ");
+  const summary = [...byPriority.entries()]
+    .sort()
+    .map(([priority, count]) => `${priority}=${count}`)
+    .join(" ");
   const traceability = summarizeTraceability(ledger);
   console.log(
-    `retained Provider/Form Package policy OK: provider v${provider.version} locks ${provider.formCount} exact historical Experimental Forms ` +
-      `and the current candidate lane carries ${provider.candidateFormCount}; ` +
+    `retained Provider/Form Package policy OK: Provider v${provider.version} locks ${provider.formCount} exact current Experimental Forms, ` +
+      `the candidate lane carries ${provider.candidateFormCount}, and Provider 2.1.1 retains ${provider.retainedFormCount}; ` +
       `${open.length} separate package/public-service obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ` +
       `none authorizes or blocks a Specification release; ${traceability}`,
   );

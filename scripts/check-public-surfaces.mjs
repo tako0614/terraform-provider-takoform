@@ -1780,21 +1780,51 @@ const edgeFamilyRoster = [
 const currentFamilyIndex = readJson(
   path.join(repositoryRoot, "forms", "candidates", "current-family-index.json"),
 );
+const providerIdentityLedger = readJson(
+  path.join(repositoryRoot, "release", "provider-form-identities.json"),
+);
+const currentProviderIdentity = (providerIdentityLedger.releases ?? []).find(
+  (entry) => entry?.providerVersion === releaseVersion.version,
+);
+if (!currentProviderIdentity) {
+  fail(
+    `release/provider-form-identities.json: missing Provider ${releaseVersion.version} identity projection`,
+  );
+}
+const currentProviderResourceTypes = new Map(
+  (currentProviderIdentity?.forms ?? []).map((entry) => [
+    `${entry?.formRef?.apiVersion ?? ""}\u0000${entry?.formRef?.kind ?? ""}`,
+    entry?.resourceType ?? "",
+  ]),
+);
 const currentFormRoster = (currentFamilyIndex.families ?? []).flatMap((family) => {
   const candidateSet = readJson(path.join(repositoryRoot, family.candidateSet ?? ""));
   return (candidateSet.forms ?? []).map((entry) => {
     const slug = path.posix.basename(typeof entry?.path === "string" ? entry.path : "");
+    const resourceType = currentProviderResourceTypes.get(
+      `${candidateSet.family ?? ""}\u0000${entry?.kind ?? ""}`,
+    );
+    if (typeof resourceType !== "string" || !resourceType.startsWith("takoform_")) {
+      fail(
+        `release/provider-form-identities.json: missing exact Provider resource type for ${candidateSet.family ?? ""}/${entry?.kind ?? ""}`,
+      );
+    }
     return {
       group: candidateSet.family,
       kind: entry?.kind ?? "",
       slug,
-      docName: slug.replaceAll("-", "_"),
+      docName: resourceType.slice("takoform_".length),
     };
   });
 });
 if (currentFamilyIndex.families?.length !== 8 || currentFormRoster.length !== 31) {
   fail(
     "forms/candidates/current-family-index.json: expected the exact 8-family, 31-Form current corpus",
+  );
+}
+if (currentProviderResourceTypes.size !== 31) {
+  fail(
+    `release/provider-form-identities.json: expected 31 exact Provider resource mappings, got ${currentProviderResourceTypes.size}`,
   );
 }
 
@@ -1902,6 +1932,6 @@ if (failures.length > 0) {
   console.log(
     `Public surfaces OK: Specification 1.0 is an open candidate, ` +
       `the 8-family/31-Form corpus remains Experimental, Provider v${releaseVersion.version} ` +
-      "is retained history, and docs, examples, website links, and normative schema URLs are consistent.",
+      "is an unpublished candidate, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );
 }

@@ -215,10 +215,29 @@ func TestProviderV211IdentityLedgerIsEmbedded(t *testing.T) {
 	if err := json.Unmarshal(raw, &ledger); err != nil {
 		t.Fatal(err)
 	}
-	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) != 1 {
+	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) < 1 {
 		t.Fatalf("provider identity ledger = %#v", ledger)
 	}
-	release := ledger.Releases[0]
+	var release *struct {
+		ProviderVersion    string `json:"providerVersion"`
+		PortableAPIVersion string `json:"portableApiVersion"`
+		Family             string `json:"family"`
+		FormMaturity       string `json:"formMaturity"`
+		Forms              []struct {
+			ResourceType  string `json:"resourceType"`
+			FormRef       V3Ref  `json:"formRef"`
+			PackageDigest string `json:"packageDigest"`
+		} `json:"forms"`
+	}
+	for index := range ledger.Releases {
+		if ledger.Releases[index].ProviderVersion == "2.1.1" {
+			release = &ledger.Releases[index]
+			break
+		}
+	}
+	if release == nil {
+		t.Fatal("provider identity ledger no longer retains 2.1.1")
+	}
 	if release.ProviderVersion != "2.1.1" || release.PortableAPIVersion != "forms.takoform.com/v1beta1" ||
 		release.Family != "edge.forms.takoform.com/v1beta1" || release.FormMaturity != "experimental" || len(release.Forms) != 15 {
 		t.Fatalf("provider v2.1 identity set = %#v", release)

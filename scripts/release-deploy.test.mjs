@@ -83,34 +83,44 @@ function memoryIO() {
   };
 }
 
-test("provider v2.1 release body names independent Beta identities and migration boundary", () => {
+test("provider v3 release body names stable independent identities and migration boundary", () => {
   const descriptor = JSON.parse(
     readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
   );
   const body = providerReleaseBody(descriptor);
-  expect(body).toContain("Provider v2.1.1");
-  expect(body).toContain("forms.takoform.com/v1beta1");
-  expect(body).toContain("edge.forms.takoform.com/v1beta1");
-  expect(body).toContain("15 Experimental 0.1.0 FormRefs");
+  expect(body).toContain("Provider v3.0.0");
+  expect(body).toContain("forms.takoform.com/v1");
+  expect(body).toContain("eight versionless current Form families");
+  expect(body).toContain("31 Experimental 0.x FormRefs");
   expect(body).toContain("release/provider-form-identities.json");
   expect(body).toContain("Provider SemVer, Host API, Form Family");
-  expect(body).toContain("Breaking upgrade from provider v1");
-  expect(body).toContain("forms.takoform.com/v1alpha2");
+  expect(body).toContain("Breaking upgrade from Provider v2.1.1");
+  expect(body).toContain("nine withdrawn v1alpha2 Terraform resource types");
+  expect(body).toContain("release/migrations/v2-to-v3.md");
   expect(body).toContain("release/migrations/v1-to-v2.md");
+  expect(body).toContain("Provider v1 remains a separate migration boundary");
+  expect(body).toContain("Provider 2.1.1 identities remain immutable history");
 });
 
-test("provider descriptor and identity ledger are exact Beta release inputs", () => {
-  const descriptor = releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
-  expect(descriptor.version).toBe("2.1.1");
+test("provider descriptor and identity ledger are exact stable release inputs", () => {
+  const descriptor =
+    releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
+  expect(descriptor.version).toBe("3.0.0");
   expect(descriptor.versioning.portableApiVersion).toBe(
-    "forms.takoform.com/v1beta1",
+    "forms.takoform.com/v1",
   );
+  const releases = releaseDeployTestHooks.validateProviderIdentityLedger(
+    repositoryRoot,
+    descriptor,
+  ).releases;
   expect(
-    releaseDeployTestHooks.validateProviderIdentityLedger(
-      repositoryRoot,
-      descriptor,
-    ).releases[0].forms,
+    releases.find((release) => release.providerVersion === "2.1.1")?.forms,
   ).toHaveLength(15);
+  const current = releases.find(
+    (release) => release.providerVersion === "3.0.0",
+  );
+  expect(current?.families).toHaveLength(8);
+  expect(current?.forms).toHaveLength(31);
 });
 
 function context(execFile, overrides = {}) {
@@ -245,10 +255,7 @@ function writeDeepFailureCandidate(
     join(assetsRoot, "release-manifest.json"),
     JSON.stringify(manifest),
   );
-  writeChecksumFixture(assetsRoot, [
-    ...payloadNames,
-    "release-manifest.json",
-  ]);
+  writeChecksumFixture(assetsRoot, [...payloadNames, "release-manifest.json"]);
 
   const metadataAssets = names.map((name) => ({
     name,
@@ -455,8 +462,7 @@ describe("release surface contract and strict parsing", () => {
       tag: "v1.0.1",
       "expected-release-commit": commit,
       "expected-tag-object": "a".repeat(40),
-      "expected-recovery-commit":
-        "89abcdef0123456789abcdef0123456789abcdef",
+      "expected-recovery-commit": "89abcdef0123456789abcdef0123456789abcdef",
       "run-id": "30507374579",
       "run-attempt": "1",
     });
@@ -479,7 +485,12 @@ describe("release surface contract and strict parsing", () => {
         "1",
       ])["release-id"],
     ).toBe("362120999");
-    for (const invalid of ["HEAD", "A".repeat(40), "a".repeat(39), "a".repeat(41)]) {
+    for (const invalid of [
+      "HEAD",
+      "A".repeat(40),
+      "a".repeat(39),
+      "a".repeat(41),
+    ]) {
       expect(() =>
         parseReleaseSurfaceArgs("takoform-provider-release", [
           "recover-tag-only",
@@ -541,9 +552,9 @@ describe("release surface contract and strict parsing", () => {
     );
     expect(releaseDeployTestHooks.verifyChecksumClosure(root).size).toBe(1);
     writeFileSync(join(root, "extra"), "not checksummed\n");
-    expect(() =>
-      releaseDeployTestHooks.verifyChecksumClosure(root),
-    ).toThrow("exact inventory");
+    expect(() => releaseDeployTestHooks.verifyChecksumClosure(root)).toThrow(
+      "exact inventory",
+    );
   });
 
   test("uses the Registry versions authority for exact no-overwrite", () => {
@@ -584,9 +595,7 @@ describe("release surface contract and strict parsing", () => {
     ).toThrow("canonical JSON");
     expect(() =>
       releaseDeployTestHooks.parsePrettyCandidateMetadata(
-        Buffer.from(
-          '{\n  "requestId": "first",\n  "requestId": "second"\n}\n',
-        ),
+        Buffer.from('{\n  "requestId": "first",\n  "requestId": "second"\n}\n'),
         "provider candidate metadata",
       ),
     ).toThrow("two-space pretty JSON");
@@ -690,9 +699,7 @@ describe("workflow dispatch authority and correlation", () => {
     expect(environment.GH_TOKEN).toBeUndefined();
     expect(environment.GITHUB_TOKEN).toBeUndefined();
     expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
-    expect(environment.GH_ENTERPRISE_TOKEN).toBe(
-      "operator-only-test-token",
-    );
+    expect(environment.GH_ENTERPRISE_TOKEN).toBe("operator-only-test-token");
   });
 
   test("scrubs authority from non-gh children and binds one UUID run", () => {
@@ -707,8 +714,7 @@ describe("workflow dispatch authority and correlation", () => {
       headBranch: "main",
       headSha: commit,
       status: "queued",
-      url:
-        "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123",
+      url: "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123",
       workflowName: "Prepare provider release candidate",
     };
     const fake = (executable, args, options) => {
@@ -773,8 +779,7 @@ describe("workflow dispatch authority and correlation", () => {
       headBranch: "main",
       headSha: commit,
       status: "queued",
-      url:
-        `https://github.com/tako0614/terraform-provider-takoform/actions/runs/${id}`,
+      url: `https://github.com/tako0614/terraform-provider-takoform/actions/runs/${id}`,
       workflowName: "Prepare provider release candidate",
     });
     const fake = (_executable, args) => {
@@ -893,8 +898,7 @@ describe("owner gate final fence and pinned release tools", () => {
     ).toBe(false);
     expect(
       calls.some(
-        (call) =>
-          call.executable === "git" && call.args[0] === "push",
+        (call) => call.executable === "git" && call.args[0] === "push",
       ),
     ).toBe(false);
   });
@@ -987,19 +991,19 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
         return "{}\n";
       }
       if (
-        ["cat-file", "merge-base", "diff", "for-each-ref", "ls-remote"].includes(
-          args[0],
-        )
+        [
+          "cat-file",
+          "merge-base",
+          "diff",
+          "for-each-ref",
+          "ls-remote",
+        ].includes(args[0])
       ) {
         return "";
       }
     }
     if (executable === "gh" && isReleaseList(args)) return "[[]]";
-    if (
-      executable === "gh" &&
-      args[0] === "run" &&
-      args[1] === "view"
-    ) {
+    if (executable === "gh" && args[0] === "run" && args[1] === "view") {
       return JSON.stringify({
         databaseId: 123,
         attempt: 1,
@@ -1010,15 +1014,10 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
         status: "completed",
         conclusion: "success",
         displayTitle: requestId,
-        url:
-          "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1",
+        url: "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1",
       });
     }
-    if (
-      executable === "gh" &&
-      args[0] === "run" &&
-      args[1] === "download"
-    ) {
+    if (executable === "gh" && args[0] === "run" && args[1] === "download") {
       writeDeepFailureCandidate(args[args.indexOf("--dir") + 1], {
         tag,
         runId: "123",
@@ -1028,13 +1027,9 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
       });
       return "";
     }
-    if (
-      executable === "go" &&
-      args.includes("verify-revocation-directory")
-    ) {
+    if (executable === "go" && args.includes("verify-revocation-directory")) {
       return JSON.stringify({
-        format:
-          "takoform.form-package-revocation-directory-verification@v1",
+        format: "takoform.form-package-revocation-directory-verification@v1",
         semanticStatus: "rejected",
         cryptographicStatus: "external-required",
         version: "1.0.0",
@@ -1081,9 +1076,7 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
     ),
   ).toBe(true);
   expect(
-    calls.some(
-      (call) => call.executable === "git" && call.args[0] === "push",
-    ),
+    calls.some((call) => call.executable === "git" && call.args[0] === "push"),
   ).toBe(false);
   expect(
     calls.some(
@@ -1175,13 +1168,9 @@ test("top-level public verify cannot emit VERIFIED after deep semantic rejection
       }
       return "";
     }
-    if (
-      executable === "go" &&
-      args.includes("verify-revocation-directory")
-    ) {
+    if (executable === "go" && args.includes("verify-revocation-directory")) {
       return JSON.stringify({
-        format:
-          "takoform.form-package-revocation-directory-verification@v1",
+        format: "takoform.form-package-revocation-directory-verification@v1",
         semanticStatus: "rejected",
         cryptographicStatus: "external-required",
         version: "1.0.0",
@@ -1201,13 +1190,7 @@ test("top-level public verify cannot emit VERIFIED after deep semantic rejection
   expect(() =>
     runReleaseSurface({
       surface: "takoform-form-package-release",
-      args: [
-        "verify-revocation",
-        "--tag",
-        tag,
-        "--expected-commit",
-        commit,
-      ],
+      args: ["verify-revocation", "--tag", tag, "--expected-commit", commit],
       repo,
       stdout: io.stdout,
       stderr: io.stderr,
@@ -1282,7 +1265,10 @@ describe("deterministic revocation tag objects", () => {
         `Takoform Form Package revocation checkpoint ${metadata.tag}`,
         "Wrong title",
       ),
-      exact.replace(`source-commit: ${commit}`, `source-commit: ${"f".repeat(40)}`),
+      exact.replace(
+        `source-commit: ${commit}`,
+        `source-commit: ${"f".repeat(40)}`,
+      ),
       `${exact}extra-message: forbidden\n`,
     ]) {
       writeFileSync(join(root, "tag-object"), changed);
@@ -1312,8 +1298,7 @@ describe("provider 15-asset provenance closure", () => {
     for (const name of names.payload) {
       writeFileSync(join(root, name), `exact provider payload ${name}\n`);
     }
-    const workflowRef =
-      `tako0614/terraform-provider-takoform/.github/workflows/release.yml@refs/tags/${descriptor.tag}`;
+    const workflowRef = `tako0614/terraform-provider-takoform/.github/workflows/release.yml@refs/tags/${descriptor.tag}`;
     const statement = {
       _type: "https://in-toto.io/Statement/v1",
       subject: names.payload.map((name) => {
@@ -1327,8 +1312,7 @@ describe("provider 15-asset provenance closure", () => {
       predicateType: "https://slsa.dev/provenance/v1",
       predicate: {
         buildDefinition: {
-          buildType:
-            "https://takoform.com/buildtypes/provider-release/v1",
+          buildType: "https://takoform.com/buildtypes/provider-release/v1",
           externalParameters: {
             tag: descriptor.tag,
             requestId,
@@ -1361,8 +1345,7 @@ describe("provider 15-asset provenance closure", () => {
             },
             {
               name: "signed-tag-release-tooling",
-              uri:
-                `git+https://${descriptor.sourceRepository}@${commit}`,
+              uri: `git+https://${descriptor.sourceRepository}@${commit}`,
               digest: { gitCommit: commit },
             },
           ],
@@ -1381,7 +1364,10 @@ describe("provider 15-asset provenance closure", () => {
       join(root, names.provenance),
       JSON.stringify(recursivelySorted(statement)),
     );
-    writeFileSync(join(root, names.provenanceSignature), "detached gpg signature\n");
+    writeFileSync(
+      join(root, names.provenanceSignature),
+      "detached gpg signature\n",
+    );
     return { root, statement };
   }
 
@@ -1434,8 +1420,7 @@ describe("provider 15-asset provenance closure", () => {
         tag: descriptor.tag,
         provenance: names.provenance,
         subjectCount: 13,
-        signerFingerprint:
-          "3510E75E05BBCC303B92D77934FC18AC897FB709",
+        signerFingerprint: "3510E75E05BBCC303B92D77934FC18AC897FB709",
         verified: true,
       });
     });
@@ -1458,8 +1443,7 @@ describe("provider 15-asset provenance closure", () => {
       tag: descriptor.tag,
       provenance: names.provenance,
       subjectCount: 13,
-      signerFingerprint:
-        "3510E75E05BBCC303B92D77934FC18AC897FB709",
+      signerFingerprint: "3510E75E05BBCC303B92D77934FC18AC897FB709",
       verified: true,
     });
     expect(calls[0].args).toContain("verify-release-provenance");
@@ -1471,8 +1455,7 @@ describe("provider 15-asset provenance closure", () => {
     [
       "tag",
       (statement) =>
-        (statement.predicate.buildDefinition.externalParameters.tag =
-          "v1.0.1"),
+        (statement.predicate.buildDefinition.externalParameters.tag = "v1.0.1"),
     ],
     [
       "source",
@@ -1495,8 +1478,7 @@ describe("provider 15-asset provenance closure", () => {
     [
       "run id",
       (statement) =>
-        (statement.predicate.buildDefinition.internalParameters.run.id =
-          "124"),
+        (statement.predicate.buildDefinition.internalParameters.run.id = "124"),
     ],
     [
       "run attempt",
@@ -1613,10 +1595,7 @@ describe("local immutable GitHub Release publication", () => {
         throw new Error("mutation must not run");
       };
       expect(() =>
-        releaseDeployTestHooks.assertReleaseAbsent(
-          context(fake),
-          "v1.0.0",
-        ),
+        releaseDeployTestHooks.assertReleaseAbsent(context(fake), "v1.0.0"),
       ).toThrow("already exist");
       expect(mutations).toBe(0);
     }
@@ -1665,9 +1644,7 @@ describe("local immutable GitHub Release publication", () => {
           listCalls += 1;
           return listCalls === 1
             ? "[[]]"
-            : JSON.stringify([
-                [{ id: 7, tag_name: tag, draft: true }],
-              ]);
+            : JSON.stringify([[{ id: 7, tag_name: tag, draft: true }]]);
         }
         if (
           args.includes("POST") &&
@@ -1683,8 +1660,7 @@ describe("local immutable GitHub Release publication", () => {
         }
         if (
           args[0] === "api" &&
-          args[1] ===
-            "repos/tako0614/terraform-provider-takoform/releases/7"
+          args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
         ) {
           return JSON.stringify(draft);
         }
@@ -1740,9 +1716,7 @@ describe("local immutable GitHub Release publication", () => {
         listCalls += 1;
         return listCalls === 1
           ? "[[]]"
-          : JSON.stringify([
-              [{ id: 7, tag_name: tag, draft: true }],
-            ]);
+          : JSON.stringify([[{ id: 7, tag_name: tag, draft: true }]]);
       }
       if (
         args.includes("POST") &&
@@ -1770,8 +1744,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         return JSON.stringify(exactDraft());
       }
@@ -1803,8 +1776,7 @@ describe("local immutable GitHub Release publication", () => {
     expect(patch).toContain("make_latest=false");
     expect(
       calls.some(
-        (args) =>
-          args[0] === "api" && args[1]?.includes("/releases/tags/"),
+        (args) => args[0] === "api" && args[1]?.includes("/releases/tags/"),
       ),
     ).toBe(false);
     expect(calls.some((args) => args[0] === "release")).toBe(false);
@@ -1855,9 +1827,7 @@ describe("local immutable GitHub Release publication", () => {
         temporaryRoot: fixture.root,
       }),
     ).toThrow("already exist");
-    expect(
-      calls.filter((args) => args.includes("POST")).length,
-    ).toBe(1);
+    expect(calls.filter((args) => args.includes("POST")).length).toBe(1);
   });
 
   test("retained draft recovery resumes after a lost upload response and uploads only missing assets", () => {
@@ -1904,14 +1874,11 @@ describe("local immutable GitHub Release publication", () => {
     const fake = (_executable, args) => {
       calls.push([...args]);
       if (isReleaseList(args)) {
-        return JSON.stringify([
-          [{ id: 7, tag_name: tag, draft: !published }],
-        ]);
+        return JSON.stringify([[{ id: 7, tag_name: tag, draft: !published }]]);
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         return JSON.stringify(draft());
       }
@@ -2052,14 +2019,11 @@ describe("local immutable GitHub Release publication", () => {
       const fake = (_executable, args) => {
         calls.push([...args]);
         if (isReleaseList(args)) {
-          return JSON.stringify([
-            [{ id: 7, tag_name: tag, draft: true }],
-          ]);
+          return JSON.stringify([[{ id: 7, tag_name: tag, draft: true }]]);
         }
         if (
           args[0] === "api" &&
-          args[1] ===
-            "repos/tako0614/terraform-provider-takoform/releases/7"
+          args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
         ) {
           return JSON.stringify({
             id: 7,
@@ -2116,8 +2080,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         return JSON.stringify({
           id: 7,
@@ -2219,8 +2182,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         return JSON.stringify({
           id: 7,
@@ -2270,9 +2232,7 @@ describe("local immutable GitHub Release publication", () => {
     expect(uploads[0]).not.toContain("--hostname");
     expect(uploads[0]).toContain(fixture.path);
     expect(
-      calls.some(
-        (args) => args[0] === "release" && args[1] === "upload",
-      ),
+      calls.some((args) => args[0] === "release" && args[1] === "upload"),
     ).toBe(false);
   });
 
@@ -2317,8 +2277,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         return JSON.stringify({
           id: 7,
@@ -2352,10 +2311,7 @@ describe("local immutable GitHub Release publication", () => {
     const fake = (_executable, args) => {
       calls.push([...args]);
       if (isReleaseList(args)) return "[[]]";
-      if (
-        args[0] === "api" &&
-        args[1]?.includes("/releases/tags/")
-      ) {
+      if (args[0] === "api" && args[1]?.includes("/releases/tags/")) {
         throw commandFailure("HTTP 404: Not Found");
       }
       if (
@@ -2381,8 +2337,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         releaseReads += 1;
         return JSON.stringify({
@@ -2414,9 +2369,7 @@ describe("local immutable GitHub Release publication", () => {
         temporaryRoot: fixture.root,
       }),
     ).toThrow("draft API asset identity");
-    expect(
-      calls.some((args) => args.includes("DELETE")),
-    ).toBe(false);
+    expect(calls.some((args) => args.includes("DELETE"))).toBe(false);
   });
 
   test("retains the exact POST-returned release still reread as a draft", () => {
@@ -2453,8 +2406,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         releaseReads += 1;
         return JSON.stringify({
@@ -2507,8 +2459,7 @@ describe("local immutable GitHub Release publication", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/7"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
         return JSON.stringify({
           id: 7,
@@ -2725,9 +2676,7 @@ describe("local immutable GitHub Release publication", () => {
       const start = source.indexOf(`function ${functionName}(`);
       const end = source.indexOf("\nfunction ", start + 1);
       const body = source.slice(start, end);
-      const publication = body.indexOf(
-        `const release = ${publicationCall}(`,
-      );
+      const publication = body.indexOf(`const release = ${publicationCall}(`);
       const preDraftFence = body.indexOf(
         "providerRecoveryMutationFence(context,",
       );
@@ -2766,9 +2715,7 @@ describe("local immutable GitHub Release publication", () => {
         return response;
       };
       expect(() =>
-        releaseDeployTestHooks.assertReleaseImmutabilityEnabled(
-          context(fake),
-        ),
+        releaseDeployTestHooks.assertReleaseImmutabilityEnabled(context(fake)),
       ).toThrow();
       expect(
         calls.some(
@@ -2804,9 +2751,7 @@ describe("local immutable GitHub Release publication", () => {
         "-----BEGIN PGP SIGNATURE-----\n\nZmFrZQ==\n=abcd\n" +
         "-----END PGP SIGNATURE-----\n",
     );
-    const execute = (
-      signer = "3510E75E05BBCC303B92D77934FC18AC897FB709",
-    ) => {
+    const execute = (signer = "3510E75E05BBCC303B92D77934FC18AC897FB709") => {
       const fake = (executable, args) => {
         calls.push({ executable, args: [...args] });
         if (basename(executable) === "gpg" && args.includes("show-only")) {
@@ -2918,10 +2863,7 @@ describe("local immutable GitHub Release publication", () => {
     chmodSync(maliciousGpg, 0o755);
     runGit("config", "gpg.program", maliciousGpg);
     const globalConfig = join(root, "global.gitconfig");
-    writeFileSync(
-      globalConfig,
-      `[gpg]\n\tprogram = ${maliciousGpg}\n`,
-    );
+    writeFileSync(globalConfig, `[gpg]\n\tprogram = ${maliciousGpg}\n`);
     const environmentNames = [
       "GIT_CONFIG_GLOBAL",
       "GIT_CONFIG_COUNT",
@@ -2974,8 +2916,7 @@ describe("local immutable GitHub Release publication", () => {
     expect(existsSync(marker)).toBe(false);
     expect(
       calls.some(
-        (call) =>
-          call.executable === "git" && call.args.includes("verify-tag"),
+        (call) => call.executable === "git" && call.args.includes("verify-tag"),
       ),
     ).toBe(false);
     for (const call of calls.filter((entry) => entry.executable === "git")) {
@@ -3055,11 +2996,19 @@ describe("local immutable GitHub Release publication", () => {
     const assets = new Map([
       [
         "first.txt",
-        { name: "first.txt", path: firstPath, sha256: sha256(readFileSync(firstPath)) },
+        {
+          name: "first.txt",
+          path: firstPath,
+          sha256: sha256(readFileSync(firstPath)),
+        },
       ],
       [
         "second.txt",
-        { name: "second.txt", path: secondPath, sha256: sha256(readFileSync(secondPath)) },
+        {
+          name: "second.txt",
+          path: secondPath,
+          sha256: sha256(readFileSync(secondPath)),
+        },
       ],
     ]);
     const draft = {
@@ -3183,4 +3132,3 @@ describe("local immutable GitHub Release publication", () => {
     ).not.toThrow();
   });
 });
-

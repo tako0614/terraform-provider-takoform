@@ -222,12 +222,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		profile.Provider.Distribution.OverwriteExistingVersion {
 		t.Fatalf("provider distribution is mutable or has the wrong registry")
 	}
-	if release.Version != "2.1.1" || release.Tag != "v2.1.1" ||
+	if release.Version != "3.0.0" || release.Tag != "v3.0.0" ||
 		release.Versioning.ProviderCompatibility != "semver-major" ||
-		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1beta1" ||
+		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1" ||
 		release.Versioning.FormDefinitionVersions != "independent-immutable-semver" ||
 		release.Versioning.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
-		t.Fatalf("provider v2 version streams are not independently locked: %#v", release.Versioning)
+		t.Fatalf("Provider 3 version streams are not independently locked: %#v", release.Versioning)
 	}
 	if profile.RunnerReport.HostFormat != "takoform.standard-runner-report@v1" ||
 		profile.RunnerReport.ProviderFormat != "takoform.standard-provider-runner-report@v2" ||

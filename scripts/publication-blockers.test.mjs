@@ -42,19 +42,21 @@ describe("the committed ledger", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(parsed.blockers.length).toBeGreaterThan(0);
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
-    expect(() => assertPublicationAllowed(parsed)).toThrow(/publication.*blocked/);
+    expect(() => assertPublicationAllowed(parsed)).toThrow(
+      /publication.*blocked/,
+    );
   });
 
-  test("preserves exact Provider 2.1 history independently of the current 16-Form lane", () => {
+  test("preserves exact Provider 2.1 history independently of the current Provider 3 lane", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
-    // The published release's count and the current lane's are separate
-    // facts: 2.1.1 embeds the fifteen identities it shipped with forever,
-    // while the lane carries what the generation now declares.
+    // Provider 3's unpublished candidate and Provider 2.1.1's immutable
+    // published history are separate facts.
     expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
-      formCount: 15,
-      candidateFormCount: 16,
-      version: "2.1.1",
+      formCount: 31,
+      candidateFormCount: 31,
+      retainedFormCount: 15,
+      version: "3.0.0",
     });
   });
 
@@ -77,14 +79,19 @@ describe("closing a blocker", () => {
   // The point of the ledger is that a release cannot be unblocked by editing
   // one word. Closing means naming what was demonstrated.
   test("requires evidence", () => {
-    expect(() => parseBlockerLedger(ledger([blocker({ status: "closed" })]))).toThrow(
-      /closes by evidence/,
-    );
+    expect(() =>
+      parseBlockerLedger(ledger([blocker({ status: "closed" })])),
+    ).toThrow(/closes by evidence/);
   });
 
   test("is accepted once evidence is named", () => {
     const parsed = parseBlockerLedger(
-      ledger([blocker({ status: "closed", evidence: ["conformance/real-host/report.json"] })]),
+      ledger([
+        blocker({
+          status: "closed",
+          evidence: ["conformance/real-host/report.json"],
+        }),
+      ]),
     );
     expect(openBlockers(parsed)).toHaveLength(0);
     expect(() => assertPublicationAllowed(parsed)).not.toThrow();
@@ -93,30 +100,46 @@ describe("closing a blocker", () => {
 
 describe("shapes that would make a blocker unenforceable", () => {
   test("an unknown status is refused", () => {
-    expect(() => parseBlockerLedger(ledger([blocker({ status: "in-progress" })]))).toThrow(/status/);
+    expect(() =>
+      parseBlockerLedger(ledger([blocker({ status: "in-progress" })])),
+    ).toThrow(/status/);
   });
 
   test("a duplicate identity is refused", () => {
-    expect(() => parseBlockerLedger(ledger([blocker(), blocker()]))).toThrow(/repeats blocker/);
-  });
-
-  test("a blocker affecting nothing is refused", () => {
-    expect(() => parseBlockerLedger(ledger([blocker({ affectedForms: [] })]))).toThrow(
-      /must name the Forms/,
+    expect(() => parseBlockerLedger(ledger([blocker(), blocker()]))).toThrow(
+      /repeats blocker/,
     );
   });
 
+  test("a blocker affecting nothing is refused", () => {
+    expect(() =>
+      parseBlockerLedger(ledger([blocker({ affectedForms: [] })])),
+    ).toThrow(/must name the Forms/);
+  });
+
   test("an unexpected field is refused", () => {
-    expect(() => parseBlockerLedger(ledger([{ ...blocker(), waived: true }]))).toThrow(/has fields/);
+    expect(() =>
+      parseBlockerLedger(ledger([{ ...blocker(), waived: true }])),
+    ).toThrow(/has fields/);
   });
 
   test("an empty ledger is refused", () => {
-    expect(() => parseBlockerLedger(ledger([]))).toThrow(/at least one blocker/);
+    expect(() => parseBlockerLedger(ledger([]))).toThrow(
+      /at least one blocker/,
+    );
   });
 });
 
 describe("evidence must be real, not decorative", () => {
-  const bad = [null, "", "   ", " a ", "/etc/passwd", "../outside", "does/not/exist.json"];
+  const bad = [
+    null,
+    "",
+    "   ",
+    " a ",
+    "/etc/passwd",
+    "../outside",
+    "does/not/exist.json",
+  ];
   for (const entry of bad) {
     test(`${JSON.stringify(entry)} does not close a blocker`, () => {
       expect(() =>
@@ -130,7 +153,9 @@ describe("evidence must be real, not decorative", () => {
 
   test("an existing repository path is accepted", () => {
     const parsed = parseBlockerLedger(
-      ledger([blocker({ status: "closed", evidence: ["spec/publication-freeze.md"] })]),
+      ledger([
+        blocker({ status: "closed", evidence: ["spec/publication-freeze.md"] }),
+      ]),
       repositoryRoot,
     );
     expect(() => assertPublicationAllowed(parsed)).not.toThrow();
@@ -138,7 +163,12 @@ describe("evidence must be real, not decorative", () => {
 
   test("an https URL is accepted without a filesystem read", () => {
     const parsed = parseBlockerLedger(
-      ledger([blocker({ status: "closed", evidence: ["https://example.invalid/run/1"] })]),
+      ledger([
+        blocker({
+          status: "closed",
+          evidence: ["https://example.invalid/run/1"],
+        }),
+      ]),
       repositoryRoot,
     );
     expect(openBlockers(parsed)).toHaveLength(0);
@@ -161,7 +191,11 @@ describe("an issue number traces to an issue", () => {
 
   test("a number this repository landed as a pull request is refused", () => {
     expect(() =>
-      parseBlockerLedger(ledger([blocker({ issue: 116 })]), repositoryRoot, landedAsPullRequests),
+      parseBlockerLedger(
+        ledger([blocker({ issue: 116 })]),
+        repositoryRoot,
+        landedAsPullRequests,
+      ),
     ).toThrow(/records #116 as a pull request/);
   });
 
@@ -193,18 +227,26 @@ describe("an issue number traces to an issue", () => {
   test("two blockers may not name one issue", () => {
     expect(() =>
       parseBlockerLedger(
-        ledger([blocker({ id: "V3-001", issue: 900001 }), blocker({ id: "V3-002", issue: 900001 })]),
+        ledger([
+          blocker({ id: "V3-001", issue: 900001 }),
+          blocker({ id: "V3-002", issue: 900001 }),
+        ]),
       ),
     ).toThrow(/one issue tracks one blocker/);
   });
 
   test("a number no commit landed is accepted", () => {
-    const parsed = parseBlockerLedger(ledger([blocker({ issue: 900002 })]), repositoryRoot);
+    const parsed = parseBlockerLedger(
+      ledger([blocker({ issue: 900002 })]),
+      repositoryRoot,
+    );
     expect(parsed.blockers[0].issue).toBe(900002);
   });
 
   test("a non-positive issue is still refused", () => {
-    expect(() => parseBlockerLedger(ledger([blocker({ issue: 0 })]))).toThrow(/positive integer/);
+    expect(() => parseBlockerLedger(ledger([blocker({ issue: 0 })]))).toThrow(
+      /positive integer/,
+    );
   });
 });
 
@@ -215,7 +257,9 @@ describe("the stricter package policy stays scoped", () => {
     const manifest = JSON.parse(
       readFileSync(path.join(repositoryRoot, "package.json"), "utf8"),
     );
-    expect(manifest.scripts["check:release-owner-gate"]).not.toContain("assert:publishable");
+    expect(manifest.scripts["check:release-owner-gate"]).not.toContain(
+      "assert:publishable",
+    );
   });
 
   test("the unpublished package candidate is what the open-obligation check enforces", () => {

@@ -58,23 +58,27 @@ is the published compatibility predecessor and Provider `v1.0.3` is the
 published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
 and canonical Terraform Registry listings exist.
 
-`release/version.json` now describes the stable provider release target
-`v2.1.1`, tag `v2.1.1`, carrying Host API
-`forms.takoform.com/v1beta1`. Its `publicationStatus` remains
-`candidate-only` as descriptor metadata: a source descriptor, local gate, or
-candidate build does not itself establish signed-release or Registry
-publication. The retained owner-flow readback evidence below establishes that
-the Provider 2.1.1 bytes are published; the descriptor value remains
-`candidate-only` by design.
+`release/version.json` describes the next provider release candidate:
+`3.0.0`, tag `v3.0.0`, targeting Host API `forms.takoform.com/v1`. Its
+`publicationStatus` remains `candidate-only`: a source descriptor, local gate,
+candidate build, or compatibility matrix does not establish a signed GitHub
+Release or Terraform Registry publication. Provider 3 can be called published
+only after its own owner flow and exact Registry readback succeed.
 
-Provider v2.1.1 embeds exactly 15 Experimental `0.1.0` Forms in
-`edge.forms.takoform.com/v1beta1`. Their exact FormRefs and definition/package
-digests are locked independently in
-[`provider-form-identities.json`](provider-form-identities.json), even while
-the `packages.forms.takoform.com/v1alpha4` artifacts remain unpublished. Open
-package/public-service and later Stable/GA evidence obligations do not turn
-this stable provider version into a prerelease
-([decision 0035](../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+Provider 3 projects exactly 31 Experimental `0.x` Forms from the eight current
+versionless families. Their exact FormRefs, provider-owned Terraform resource
+types, and definition/package digests are locked in
+[`provider-form-identities.json`](provider-form-identities.json). The
+`packages.forms.takoform.com/v1alpha5` candidate artifacts remain unpublished,
+and publishing the provider neither publishes those packages nor changes Form
+maturity. The same ledger retains Provider 2.1.1's exact 15-Form v1beta1 entry
+byte-for-byte as immutable history.
+
+Provider 3 removes the nine withdrawn v1alpha2 resource types and historical
+ObjectBucket from its current surface. The explicit state and resource-type
+boundary is in [`migrations/v2-to-v3.md`](migrations/v2-to-v3.md); in
+particular, withdrawn Terraform type names are never reoccupied by unrelated
+current Forms.
 
 ## Abandoned v2.1.0 candidate and v2.1.1 forward repair
 
@@ -89,6 +93,7 @@ recreate, or reuse that tag.
 `v2.1.1` is the patch forward repair from the reviewed main commit. It carries
 the exact same 15 Beta FormRefs, schema/package digests, Host API
 `forms.takoform.com/v1beta1`, and family `edge.forms.takoform.com/v1beta1`;
+their retained package envelope is `packages.forms.takoform.com/v1alpha4`;
 only provider release identity and tooling changed. The current
 `provider-form-identities.json` entry is re-keyed to `v2.1.1` without changing
 any nested Form identity or digest. The exact Provider 2.1.1 Registry readback
@@ -253,7 +258,7 @@ its six-file signed closure for `v2.1.1` is retained in
 `release/provider-release-identities.json` and remains the publication
 evidence for that release. The next release (`3.0.0`, per
 [`migrations/v2-to-v3.md`](migrations/v2-to-v3.md)) must bring its own
-readback lane matched to the 15-resource surface before its publication can be
+readback lane matched to the 31-resource surface before its publication can be
 called Registry-verified; a matrix or local report is never
 self-authenticating.
 

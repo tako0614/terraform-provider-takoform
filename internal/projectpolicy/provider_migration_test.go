@@ -69,22 +69,22 @@ type providerMigrationAudit struct {
 	} `json:"providerAddressBoundary"`
 }
 
-func TestCurrentV2MigrationGuideTracksReleaseDescriptor(t *testing.T) {
+func TestCurrentV3MigrationGuideTracksReleaseDescriptor(t *testing.T) {
 	root := repositoryRoot(t)
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
 
-	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v1-to-v2.md"))
+	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v2-to-v3.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	currentTarget := fmt.Sprintf(
-		"v%s is a stable release target whose descriptor remains `candidate-only`",
+		"Provider `%s` is a breaking provider release",
 		release.Version,
 	)
 	if !strings.Contains(string(guideRaw), currentTarget) {
 		t.Fatalf(
-			"v1-to-v2 migration guide does not track release/version.json target %s",
+			"v2-to-v3 migration guide does not track release/version.json target %s",
 			release.Version,
 		)
 	}
@@ -214,10 +214,10 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	}
 	providerPublish := localPublisher[providerPublishStart:providerPublishEnd]
 	if !strings.Contains(providerPublish, "body:") ||
-		!strings.Contains(providerPublish, "Breaking upgrade from provider v1") ||
-		!strings.Contains(providerPublish, "forms.takoform.com/v1alpha2") ||
+		!strings.Contains(providerPublish, "Breaking upgrade from Provider v2.1.1") ||
+		!strings.Contains(providerPublish, "release/migrations/v2-to-v3.md") ||
 		!strings.Contains(providerPublish, "release/migrations/v1-to-v2.md") {
-		t.Fatal("owner-local provider publication does not link the breaking v1-to-v2 migration guide")
+		t.Fatal("owner-local Provider 3 publication does not link both required migration boundaries")
 	}
 
 	resourceDocs, err := filepath.Glob(filepath.Join(root, "docs", "resources", "*.md"))

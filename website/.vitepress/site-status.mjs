@@ -53,7 +53,7 @@ export const SITE_STATUS_PUBLISHED_PATH =
 // This constant pins generated examples to the provider release target. It is
 // deliberately named as a Provider SemVer, not as an API lane: Provider,
 // Host API, Form Family and Form-definition versions are independent axes.
-export const PROVIDER_RELEASE_TARGET_VERSION = "2.1.1";
+export const PROVIDER_RELEASE_TARGET_VERSION = "3.0.0";
 // Retain the legacy field name/value for consumers that still describe the
 // Edge preview descriptor. It is metadata only: providerTargetStatus below is
 // the independent Registry availability fact.

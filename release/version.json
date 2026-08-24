@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "version": "2.1.1",
-  "tag": "v2.1.1",
+  "version": "3.0.0",
+  "tag": "v3.0.0",
   "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
   "providerAddress": "registry.terraform.io/tako0614/takoform",
   "cliMatrix": [
@@ -30,7 +30,7 @@
   "publicationStatus": "candidate-only",
   "versioning": {
     "providerCompatibility": "semver-major",
-    "portableApiVersion": "forms.takoform.com/v1beta1",
+    "portableApiVersion": "forms.takoform.com/v1",
     "formDefinitionVersions": "independent-immutable-semver",
     "formPackageVersions": "content-addressed-current-retained-legacy-semver"
   }

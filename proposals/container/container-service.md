@@ -1,4 +1,8 @@
-# ContainerService — `takoform_container_service`
+# ContainerService — `takoform_serverless_container_service`
+
+The Provider 3 resource type is `takoform_serverless_container_service`.
+The withdrawn v1alpha2 lane used `takoform_container_service`; that name is
+never reoccupied by this different lifecycle contract (decision 0030).
 
 ## Workload and consumer
 
