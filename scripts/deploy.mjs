@@ -614,6 +614,8 @@ try {
     "bun.lock",
     "scripts/check-website-dist.mjs",
     "scripts/frozen-public-identities.mjs",
+    "scripts/website-snapshot-temp.mjs",
+    "scripts/website-snapshot-temp.test.mjs",
     "website",
   ];
   for (const prefix of copiedPrefixes) {
