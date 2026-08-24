@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Host-assigned HTTPS reachability for the active Container Traffic. The address is output, not desired state, and remains stable for the attachment UID.",
+  "properties": {
+    "service": {
+      "additionalProperties": false,
+      "description": "Container Service whose active traffic receives HTTPS requests. Changing it replaces the endpoint.",
+      "properties": {
+        "apiVersion": {
+          "const": "container.forms.takoform.com",
+          "type": "string"
+        },
+        "kind": {
+          "const": "ContainerService",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "name"
+      ],
+      "type": "object",
+      "x-takoform-required-entrypoint": "http",
+      "x-takoform-target-formrefs": [
+        {
+          "apiVersion": "container.forms.takoform.com",
+          "definitionVersion": "0.1.0",
+          "kind": "ContainerService",
+          "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+        }
+      ]
+    }
+  },
+  "required": [
+    "service"
+  ],
+  "title": "Container Endpoint desired state",
+  "type": "object"
+}

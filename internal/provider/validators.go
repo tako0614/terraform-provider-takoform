@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -69,6 +70,30 @@ type stringPatternValidator struct {
 // host remains authoritative for capability availability.
 func StringMatches(pattern, description string) validator.String {
 	return stringPatternValidator{pattern: pattern, description: description}
+}
+
+type stringRuneLengthAtMostValidator struct{ maximum int }
+
+func StringRuneLengthAtMost(maximum int) validator.String {
+	return stringRuneLengthAtMostValidator{maximum: maximum}
+}
+
+func (v stringRuneLengthAtMostValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("value must contain at most %d Unicode code points", v.maximum)
+}
+
+func (v stringRuneLengthAtMostValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v stringRuneLengthAtMostValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if utf8.RuneCountInString(req.ConfigValue.ValueString()) <= v.maximum {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(req.Path, "Value is too long", v.Description(context.Background()))
 }
 
 type stringSpaceIDValidator struct{}

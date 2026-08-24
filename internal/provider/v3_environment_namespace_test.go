@@ -2,10 +2,12 @@ package provider
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -45,6 +47,18 @@ func v3StringSetValue(t *testing.T, members ...string) types.Set {
 		t.Fatalf("string set: %v", diags)
 	}
 	return set
+}
+
+func v3ExternalServiceListValue(t *testing.T, entries ...[2]string) types.List {
+	t.Helper()
+	elementType := v3ExternalServiceObjectType()
+	elements := make([]attr.Value, 0, len(entries))
+	for _, entry := range entries {
+		elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, map[string]attr.Value{
+			"name": types.StringValue(entry[0]), "protocol": types.StringValue(entry[1]), "required": types.BoolValue(true),
+		}))
+	}
+	return types.ListValueMust(elementType, elements)
 }
 
 func v3ConfigWith(
@@ -95,7 +109,7 @@ func TestV3EnvironmentNamespaceRejectedAtPlanTime(t *testing.T) {
 			name: "two binding lists on one name",
 			values: map[string]attr.Value{
 				"kv_bindings":     v3BindingListValue(t, [2]string{"STORE", "cache"}),
-				"bucket_bindings": v3BindingListValue(t, [2]string{"STORE", "media"}),
+				"sqlite_bindings": v3BindingListValue(t, [2]string{"STORE", "database"}),
 			},
 			refused: true, mentions: "STORE",
 		},
@@ -108,10 +122,18 @@ func TestV3EnvironmentNamespaceRejectedAtPlanTime(t *testing.T) {
 			refused: true, mentions: "STORE",
 		},
 		{
+			name: "a sealed standard-service binding against a vars key",
+			values: map[string]attr.Value{
+				"external_services": v3ExternalServiceListValue(t, [2]string{"MEDIA", "com.amazonaws.s3"}),
+				"vars_json":         types.StringValue(`{"MEDIA":"not-the-sealed-binding"}`),
+			},
+			refused: true, mentions: "MEDIA",
+		},
+		{
 			name: "distinct names across every source",
 			values: map[string]attr.Value{
 				"kv_bindings":             v3BindingListValue(t, [2]string{"STORE", "cache"}),
-				"bucket_bindings":         v3BindingListValue(t, [2]string{"MEDIA", "media"}),
+				"sqlite_bindings":         v3BindingListValue(t, [2]string{"DATABASE", "database"}),
 				"vars_json":               types.StringValue(`{"STORE_URL":"https://store.invalid"}`),
 				"required_sensitive_vars": v3StringSetValue(t, "STORE_TOKEN_NAME"),
 			},
@@ -183,16 +205,14 @@ func TestV3EnvironmentNamespaceIsDeclaredOnce(t *testing.T) {
 		"vars":                  "map-keys",
 		"requiredSensitiveVars": "items",
 		"kvBindings":            "binding-names",
-		"bucketBindings":        "binding-names",
 		"sqliteBindings":        "binding-names",
 		"queueProducerBindings": "binding-names",
 		"serviceBindings":       "binding-names",
 		"workflowBindings":      "binding-names",
 		"actorBindings":         "binding-names",
-		// The slot list's NAMES are not what joins the namespace: each slot
-		// projects a protocol-fixed member set, and the uniqueness rule is
-		// stated over that closure (decision 0045).
-		"externalServices": "external-service-projections",
+		// Takoform owns the sealed runtime-native binding key only. Its Host
+		// integration owns internal entries for the opaque protocol.
+		"externalServices": "external-service-names",
 	}
 	if len(declared) != len(want) {
 		t.Fatalf("environment name fields = %v, want %v", declared, want)
@@ -201,5 +221,57 @@ func TestV3EnvironmentNamespaceIsDeclaredOnce(t *testing.T) {
 		if declared[wire] != source {
 			t.Fatalf("%s projects %q, want %q", wire, declared[wire], source)
 		}
+	}
+}
+
+// TestV3UnknownStandardServiceProtocolRoundTrips proves the Terraform adapter
+// consumes the provider-neutral open identifier verbatim. Supporting the
+// protocol is a Host decision; the provider must neither enumerate nor rewrite
+// identifiers it does not know.
+func TestV3UnknownStandardServiceProtocolRoundTrips(t *testing.T) {
+	t.Parallel()
+	resource := v3TestFormResource(t, "WorkerVersion", newV3TestProviderData(t, newV3FakeHost(t)))
+	var fieldFound bool
+	var fieldValue attr.Value
+	for _, field := range resource.form.Fields {
+		if field.Wire != "externalServices" {
+			continue
+		}
+		fieldFound = true
+		input := v3ExternalServiceListValue(t, [2]string{"QUANTUM_CACHE", "dev.example.quantum-cache"})
+		wire, wireDiags := v3FieldToWire(
+			context.Background(), resource.form.Family.APIVersion(), field, "external_services", input,
+		)
+		if wireDiags.HasError() {
+			t.Fatalf("encode unknown namespaced protocol: %v", wireDiags)
+		}
+		want := []any{map[string]any{
+			"name": "QUANTUM_CACHE",
+			"service": map[string]any{
+				"apiVersion": "standards.takoform.com/v1",
+				"protocol":   "dev.example.quantum-cache",
+			},
+			"required": true,
+		}}
+		if !reflect.DeepEqual(wire, want) {
+			t.Fatalf("wire standard-service slot = %#v, want %#v", wire, want)
+		}
+
+		var readDiags diag.Diagnostics
+		fieldValue = v3FieldValueFromSpec(
+			context.Background(), resource.form.Family.APIVersion(), field, wire, &readDiags,
+		)
+		if readDiags.HasError() {
+			t.Fatalf("decode unknown namespaced protocol: %v", readDiags)
+		}
+		break
+	}
+	if !fieldFound {
+		t.Fatal("WorkerVersion has no externalServices field")
+	}
+	list := fieldValue.(types.List)
+	entry := list.Elements()[0].(types.Object).Attributes()
+	if got := entry["protocol"].(types.String).ValueString(); got != "dev.example.quantum-cache" {
+		t.Fatalf("decoded protocol = %q, want opaque identifier preserved", got)
 	}
 }

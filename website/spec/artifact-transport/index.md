@@ -88,7 +88,7 @@ divide into two classes by what the module graph does with them:
 | auxiliary | `application/source-map+json` | nothing: it is never imported |
 
 **Loadable** is the set the module graph may import, and it is exactly the set
-`worker.runtime@1.0.0`'s `loadModule` operation states
+`worker.runtime@1.1.0`'s `loadModule` operation states
 ([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 **Auxiliary** is what a bundle may carry without ever linking it: today, source-map
 evidence about another module. A host MUST refuse an auxiliary module as a

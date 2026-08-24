@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/operations/v1/operation.schema.json",
+  "title": "Takoform long-running Operation wire contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "id",
+    "done"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "operations.takoform.com/v1alpha1"
+    },
+    "kind": {
+      "const": "Operation"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^op_[A-Za-z0-9][A-Za-z0-9._-]{0,124}$"
+    },
+    "done": {
+      "type": "boolean"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Za-z0-9]{0,63}$"
+        },
+        "progress": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "description": "Present only when done is true and the operation succeeded. Contains the terminal representation, for example { \"resource\": { ... } } validated against the owning wire schema."
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "requestId",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_argument",
+            "unauthenticated",
+            "permission_denied",
+            "form_unknown",
+            "form_not_installed",
+            "form_unavailable",
+            "resource_not_found",
+            "resource_busy",
+            "import_conflict",
+            "policy_denied",
+            "backend_unavailable",
+            "internal_error",
+            "rate_limited",
+            "deadline_exceeded",
+            "operation_cancelled",
+            "operation_not_found",
+            "dependency_in_use",
+            "artifact_missing",
+            "artifact_invalid",
+            "unsupported_capability",
+            "migration_required",
+            "uid_mismatch",
+            "revision_conflict",
+            "generation_conflict"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "const": false,
+          "description": "A terminal Operation record is not a live refusal: the mutation it reports is over, so nothing about it is automatically retryable. The caller decides whether to start a NEW operation."
+        },
+        "hostCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Present exactly when done is true and the operation failed. The code vocabulary is the closed wire taxonomy; a stored record never widens it."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "done": {
+            "const": false
+          }
+        },
+        "required": [
+          "done"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "result"
+              ]
+            },
+            {
+              "required": [
+                "error"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "not": {
+        "required": [
+          "result",
+          "error"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "done": {
+            "const": true
+          }
+        },
+        "required": [
+          "done"
+        ]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "required": [
+              "result"
+            ],
+            "not": {
+              "required": [
+                "error"
+              ]
+            }
+          },
+          {
+            "required": [
+              "error"
+            ],
+            "not": {
+              "required": [
+                "result"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

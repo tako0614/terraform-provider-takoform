@@ -41,7 +41,7 @@ queue family's message shape and bound. Each reference is the closed exact
 `{apiVersion, kind, name}` shape carrying its group explicitly, so the
 cross-family target is representable as-is
 ([binding contract](../../spec/binding-contract/README.md)), and is
-uid-pinned: reference-failure semantics follow the v1beta1 relation rules
+UID-pinned: reference-failure semantics follow the Host API v1 relation rules
 (`ExternalChange` / `DependencyMissing`, no automatic re-bind, re-apply
 re-pins).
 
@@ -91,7 +91,7 @@ None.
 Deleting the referenced queue or topic while a Schedule targets it must
 fail with `dependency_in_use`. A target deleted and re-created under the
 same name is a different incarnation: the schedule stays pinned, reports
-the condition per the v1beta1 relation rules, and only a re-apply re-pins
+the condition per the Host API v1 relation rules, and only a re-apply re-pins
 it; while the condition stands, matched windows fire, fail, and are bound
 by the misfire rule — they are never queued for the repaired target.
 

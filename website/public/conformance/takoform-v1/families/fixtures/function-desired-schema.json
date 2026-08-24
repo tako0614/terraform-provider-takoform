@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Logical identity of one regional JavaScript function. Code, configuration, resource bounds, and traffic are represented by the surrounding revision and deployment Forms; this identity carries no desired fields.",
+  "properties": {},
+  "title": "Function desired state",
+  "type": "object"
+}

@@ -11,11 +11,17 @@ wins.
 | --- | --- |
 | [`form-ref-v1beta1.schema.json`](form-ref-v1beta1.schema.json) | the Beta namespaced-group four-field immutable Form reference |
 | [`form-definition-v1beta1.schema.json`](form-definition-v1beta1.schema.json) | the Beta data-only Form Definition with roles, exact Interfaces, and typed Bindings |
-| [`package-index-v1alpha4.schema.json`](package-index-v1alpha4.schema.json) | the content-addressed package profile for namespaced-group FormRefs |
+| [`form-ref-v1beta2.schema.json`](form-ref-v1beta2.schema.json) | the retained transition reference that first admitted versionless groups alongside versioned groups; current Form Definitions use `form-ref-v1` |
+| [`form-definition-v1.schema.json`](form-definition-v1.schema.json) | the stable versionless-group Form Definition profile with closed structural and resolved-UID constraints |
+| [`form-ref-v1.schema.json`](form-ref-v1.schema.json) | the stable exact four-field Form reference for one versionless Form Family group; the referenced Form's own `0.x` or future `1.x` maturity remains independent |
+| [`package-index-v1alpha4.schema.json`](package-index-v1alpha4.schema.json) | the retained Provider 2.1.1 content-addressed package profile for versioned family FormRefs |
+| [`package-index-v1alpha5.schema.json`](package-index-v1alpha5.schema.json) | the current content-addressed package profile for stable versionless-group FormRefs |
 | [`form-package-revocation.schema.json`](form-package-revocation.schema.json) | one append-only revocation statement |
 | [`form-package-revocation-checkpoint.schema.json`](form-package-revocation-checkpoint.schema.json) | the cumulative, hash-chained revocation checkpoint |
 | [`host-discovery-v1beta1.schema.json`](host-discovery-v1beta1.schema.json) | the Beta host discovery document |
 | [`host-api-wire-v1beta1.schema.json`](host-api-wire-v1beta1.schema.json) | the Beta UID/generation/revision Resource, condition, operation, artifact, and error envelopes |
+| [`host-discovery-v1.schema.json`](host-discovery-v1.schema.json) | the stable `forms.takoform.com/v1` Host discovery document |
+| [`host-api-wire-v1.schema.json`](host-api-wire-v1.schema.json) | the stable UID/generation/revision Resource, condition, operation, artifact, and error envelopes |
 | [`interface-ref-v1alpha1.schema.json`](interface-ref-v1alpha1.schema.json) | the exact digest-bound Interface reference |
 | [`interface-definition-v1alpha1.schema.json`](interface-definition-v1alpha1.schema.json) | the exact data-only Interface Definition with operations, semantics, and behavior fixtures |
 | [`binding-ref-v1alpha1.schema.json`](binding-ref-v1alpha1.schema.json) | the exact digest-bound Binding reference |
@@ -24,7 +30,12 @@ wins.
 | [`binding-ref-v1alpha2.schema.json`](binding-ref-v1alpha2.schema.json) | the exact BindingRef into the current Binding envelope |
 | [`artifact-manifest-v1alpha1.schema.json`](artifact-manifest-v1alpha1.schema.json) | the content-addressed artifact manifest for uploaded bundles |
 | [`operation-v1alpha1.schema.json`](operation-v1alpha1.schema.json) | the long-running Operation envelope |
-| [`host-support-profile-v1alpha1.schema.json`](host-support-profile-v1alpha1.schema.json) | the Host Support Profile: supported refs, capability subsets, and limits |
+| [`operation-v1.schema.json`](operation-v1.schema.json) | the stable long-running Operation envelope |
+| [`standard-service-ref-v1alpha1.schema.json`](standard-service-ref-v1alpha1.schema.json) | the retained closed-vocabulary StandardServiceRef identity |
+| [`standard-service-ref-v1.schema.json`](standard-service-ref-v1.schema.json) | the stable provider-neutral StandardServiceRef with an opaque normalized namespaced protocol identifier |
+| [`host-support-profile-v1alpha1.schema.json`](host-support-profile-v1alpha1.schema.json) | the first retained Host Support Profile identity |
+| [`host-support-profile-v1alpha2.schema.json`](host-support-profile-v1alpha2.schema.json) | the retained versionless-Form-group Host Support Profile identity |
+| [`host-support-profile-v1.schema.json`](host-support-profile-v1.schema.json) | the stable Host Support Profile, including exact fail-closed support for opaque standard-service identifiers |
 
 The withdrawn pre-Beta epochs' schemas (the v1alpha1, v1alpha2, and v1alpha3
 FormRef/definition/package/discovery/wire sets) are recorded as retired

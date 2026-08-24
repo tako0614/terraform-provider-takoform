@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fixed-dimension dense vector index with a creation-time distance metric. The vector.index Interface fixes namespaced whole-record upsert, read-after-write fetch, approximate top-k query, closed metadata filtering, and deletion; this identity carries only the embedding dimension and metric.",
+  "properties": {
+    "dimension": {
+      "description": "Embedding vector dimension fixed for the lifetime of this index. Changing it replaces the index and its records.",
+      "maximum": 1536,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "metric": {
+      "description": "Distance metric fixed for the lifetime of this dense index. Changing it replaces the index and its records.",
+      "enum": [
+        "cosine",
+        "euclidean",
+        "dotproduct"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "dimension",
+    "metric"
+  ],
+  "title": "Vector Index desired state",
+  "type": "object"
+}

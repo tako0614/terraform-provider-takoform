@@ -1068,7 +1068,7 @@ func validateEnvironmentNamespace(familyGroup string, form *InstalledForm, spec 
 			}
 		}
 	}
-	for _, property := range bindingListProperties(form.DesiredSchema) {
+	for _, property := range environmentListProperties(form.DesiredSchema) {
 		entries, _ := spec[property].([]any)
 		for index, raw := range entries {
 			entry, _ := raw.(map[string]any)
@@ -1084,9 +1084,12 @@ func validateEnvironmentNamespace(familyGroup string, form *InstalledForm, spec 
 	return nil
 }
 
-// bindingListProperties names every top-level property of one desired schema
-// that carries the Binding contract annotation, in a stable order.
-func bindingListProperties(schema map[string]any) []string {
+// environmentListProperties names every top-level property of one desired
+// schema that projects named bindings into the runtime environment, in a
+// stable order. That includes both FormRef bindings and opaque standard-service
+// slots: their target identities differ, but their slot names share one
+// environment namespace.
+func environmentListProperties(schema map[string]any) []string {
 	properties, _ := schema["properties"].(map[string]any)
 	out := make([]string, 0, len(properties))
 	for name, raw := range properties {
@@ -1094,7 +1097,9 @@ func bindingListProperties(schema map[string]any) []string {
 		if node == nil {
 			continue
 		}
-		if contract, _ := node[currentformmodel.BindingAnnotationKey].(string); contract != "" {
+		bindingContract, _ := node[currentformmodel.BindingAnnotationKey].(string)
+		serviceContract, _ := node[currentformmodel.StandardServiceAnnotationKey].(string)
+		if bindingContract != "" || serviceContract != "" {
 			out = append(out, name)
 		}
 	}

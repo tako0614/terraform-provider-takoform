@@ -654,6 +654,52 @@ type SyntheticDefinitionProbe struct {
 	Definition *formpackage.FormDefinition `json:"-"`
 }
 
+// ConstraintDefinitionProbe pins one conformance-only Form Definition whose
+// declared constraint is exercised by declared-constraint-semantics-enforced.
+// The whole Definition is byte-pinned: deriving a rule from a document made up
+// by the runner would prove only that the host agrees with the runner, while a
+// corpus pin makes both the declaration and the behavior independently fixed.
+type ConstraintDefinitionProbe struct {
+	Name    string  `json:"name"`
+	FormRef FormRef `json:"formRef"`
+	Path    string  `json:"path"`
+	SHA256  string  `json:"sha256"`
+
+	Definition *formpackage.FormDefinition `json:"-"`
+}
+
+// ConstraintSemanticsProbe is the closed synthetic Form inventory for the
+// stable-v1 declared-constraint matrix. Named members are intentional: omitting
+// one mechanism cannot silently shrink an array that the runner then treats as
+// complete, and the second unique-pair version makes exact-Form scope
+// observable rather than merely stated.
+type ConstraintSemanticsProbe struct {
+	Node             ConstraintDefinitionProbe `json:"node"`
+	DistinctPair     ConstraintDefinitionProbe `json:"distinctPair"`
+	UniquePair       ConstraintDefinitionProbe `json:"uniquePair"`
+	UniquePairSecond ConstraintDefinitionProbe `json:"uniquePairSecond"`
+	Member           ConstraintDefinitionProbe `json:"member"`
+	SameTarget       ConstraintDefinitionProbe `json:"sameTarget"`
+	Structural       ConstraintDefinitionProbe `json:"structural"`
+}
+
+type constraintDefinitionEntry struct {
+	label string
+	probe *ConstraintDefinitionProbe
+}
+
+func constraintDefinitionInventory(input *RunnerInput) []constraintDefinitionEntry {
+	return []constraintDefinitionEntry{
+		{"node", &input.ConstraintSemantics.Node},
+		{"distinctPair", &input.ConstraintSemantics.DistinctPair},
+		{"uniquePair", &input.ConstraintSemantics.UniquePair},
+		{"uniquePairSecond", &input.ConstraintSemantics.UniquePairSecond},
+		{"member", &input.ConstraintSemantics.Member},
+		{"sameTarget", &input.ConstraintSemantics.SameTarget},
+		{"structural", &input.ConstraintSemantics.Structural},
+	}
+}
+
 // RunnerInput is the pinned black-box input of one v3 conformance run.
 type RunnerInput struct {
 	Space                            string                   `json:"space"`
@@ -677,6 +723,7 @@ type RunnerInput struct {
 	ActorNamespace                   ResourceProbe            `json:"actorNamespace"`
 	SyntheticSecondGroup             FormRef                  `json:"syntheticSecondGroup"`
 	SyntheticSecondDefinitionVersion SyntheticDefinitionProbe `json:"syntheticSecondDefinitionVersion"`
+	ConstraintSemantics              ConstraintSemanticsProbe `json:"constraintSemantics,omitzero"`
 	SupportProbes                    SupportProbes            `json:"supportProbes"`
 	NegativeFixtures                 []NegativeFixture        `json:"negativeFixtures"`
 	// ExternalServices is the v1beta2 sealed-slot probe. It is optional
@@ -691,11 +738,12 @@ type RunnerInput struct {
 // protocol list, and two specs — one the host must accept and one it must
 // refuse before any mutation.
 type ExternalServiceProbe struct {
-	Property            string         `json:"property"`
-	ServiceAPIVersion   string         `json:"serviceApiVersion"`
-	Protocols           []string       `json:"protocols"`
-	DesiredSpec         map[string]any `json:"desiredSpec"`
-	UnknownProtocolSpec map[string]any `json:"unknownProtocolSpec"`
+	Property                string         `json:"property"`
+	ServiceAPIVersion       string         `json:"serviceApiVersion"`
+	Protocols               []string       `json:"protocols"`
+	DesiredSpec             map[string]any `json:"desiredSpec"`
+	UnknownProtocolSpec     map[string]any `json:"unknownProtocolSpec"`
+	OptionalUnsupportedSpec map[string]any `json:"optionalUnsupportedSpec,omitzero"`
 }
 
 // probeEntry is one pinned resource probe together with the contract member it
@@ -874,6 +922,9 @@ func Verify(root string) (Contract, error) {
 	if err := hydrateSyntheticDefinition(root, &contract); err != nil {
 		return Contract{}, err
 	}
+	if err := hydrateConstraintDefinitions(root, &contract); err != nil {
+		return Contract{}, err
+	}
 	if err := hydrateDesiredSchemas(root, &contract); err != nil {
 		return Contract{}, err
 	}
@@ -920,6 +971,9 @@ func validateContract(contract Contract) error {
 		if err := validateProbe(entry.Label, *entry.Probe, entry.Kind); err != nil {
 			return err
 		}
+		if contract.lane.APIVersion == stableLane.APIVersion && strings.Contains(entry.Probe.Identity.FormRef.APIVersion, "/") {
+			return fmt.Errorf("portable host stable probe %s carries a versioned family group", entry.Label)
+		}
 	}
 	if len(input.AtLeastOnceQueue.Desired) == 0 {
 		return errors.New("portable host v3 queue probe desired must not be empty")
@@ -931,7 +985,7 @@ func validateContract(contract Contract) error {
 	if err := validateRuntimeContractProbe(input.SupportProbes.RuntimeContract); err != nil {
 		return err
 	}
-	if err := validateDataInterfaceProbes(input.SupportProbes); err != nil {
+	if err := validateDataInterfaceProbes(contract.lane, input.SupportProbes); err != nil {
 		return err
 	}
 	if err := validateWorkerBundleProbe(input.WorkerBundle, input.SupportProbes.RuntimeContract); err != nil {
@@ -959,12 +1013,109 @@ func validateContract(contract Contract) error {
 	if err := validateSyntheticDefinitionProbe(input); err != nil {
 		return err
 	}
+	if contract.lane.APIVersion == stableLane.APIVersion &&
+		(strings.Contains(input.SyntheticSecondGroup.APIVersion, "/") ||
+			strings.Contains(input.SyntheticSecondDefinitionVersion.FormRef.APIVersion, "/")) {
+		return errors.New("portable host stable synthetic FormRefs must use versionless family groups")
+	}
+	if err := validateConstraintSemanticsProbe(contract); err != nil {
+		return err
+	}
 	if input.SupportProbes.Interface.Name == "" || input.SupportProbes.Interface.Version == "" ||
 		input.SupportProbes.Binding.Name == "" || input.SupportProbes.Binding.Version == "" {
 		return errors.New("portable host v3 support probes are incomplete")
 	}
 	if err := validateNegativeFixtureInventory(input); err != nil {
 		return err
+	}
+	if err := validateExternalServiceProbe(contract); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateExternalServiceProbe(contract Contract) error {
+	probe := contract.RunnerInput.ExternalServices
+	if contract.lane.APIVersion != stableLane.APIVersion {
+		if len(probe.OptionalUnsupportedSpec) != 0 {
+			return errors.New("portable host v3 optional unsupported standard-service probe is stable-only")
+		}
+		return nil
+	}
+	if probe.Property != "externalServices" ||
+		probe.ServiceAPIVersion != formpackage.StandardServiceAPIVersion ||
+		!reflect.DeepEqual(probe.Protocols, []string{"com.amazonaws.s3"}) ||
+		len(probe.DesiredSpec) == 0 || len(probe.UnknownProtocolSpec) == 0 ||
+		len(probe.OptionalUnsupportedSpec) == 0 {
+		return errors.New("portable host stable standard-service probe is incomplete")
+	}
+	return nil
+}
+
+func validateConstraintSemanticsProbe(contract Contract) error {
+	required := contract.lane.requires("declared-constraint-semantics-enforced")
+	inventory := constraintDefinitionInventory(&contract.RunnerInput)
+	if !required {
+		for _, entry := range inventory {
+			if entry.probe.Name != "" || entry.probe.Path != "" || entry.probe.Definition != nil {
+				return errors.New("portable host v3 constraint semantics probes are present on a lane that does not require them")
+			}
+		}
+		return nil
+	}
+
+	expectedKinds := map[string]string{
+		"node": "ConstraintNode", "distinctPair": "DistinctPairHolder",
+		"uniquePair": "UniquePairHolder", "uniquePairSecond": "UniquePairHolder",
+		"member": "ConstraintMember", "sameTarget": "SameTargetHolder",
+		"structural": "StructuralConstraintHolder",
+	}
+	expectedConstraints := map[string][]formpackage.FormConstraint{
+		"node":             {{Kind: "acyclic", Reference: "/next"}},
+		"distinctPair":     {{Kind: "distinctPair", References: []string{"/left", "/right"}}},
+		"uniquePair":       {{Kind: "uniquePair", References: []string{"/left", "/right"}}},
+		"uniquePairSecond": {{Kind: "uniquePair", References: []string{"/left", "/right"}}},
+		"member":           nil,
+		"sameTarget": {{
+			Kind: "sameResolvedTarget", Anchor: "/anchor", Members: "/members/*", Through: "/through",
+		}},
+		"structural": {
+			{Kind: "orderedPair", References: []string{"/lower", "/upper"}},
+			{Kind: "uniqueBy", List: "/rows", Member: "key"},
+		},
+	}
+	paths := map[string]bool{}
+	refs := map[FormRef]bool{}
+	group := ""
+	for _, entry := range inventory {
+		probe := entry.probe
+		if probe.Name == "" || probe.Path == "" || !formpackage.ValidDigest(probe.SHA256) || probe.Definition == nil {
+			return fmt.Errorf("portable host v3 constraint semantics probe %s is incomplete", entry.label)
+		}
+		if paths[probe.Path] || refs[probe.FormRef] {
+			return errors.New("portable host v3 constraint semantics probes repeat a path or exact FormRef")
+		}
+		paths[probe.Path], refs[probe.FormRef] = true, true
+		if group == "" {
+			group = probe.FormRef.APIVersion
+		}
+		if probe.FormRef.APIVersion != group || probe.FormRef.Kind != expectedKinds[entry.label] {
+			return fmt.Errorf("portable host v3 constraint semantics probe %s has the wrong Form line", entry.label)
+		}
+		if contract.lane.APIVersion == stableLane.APIVersion && strings.Contains(probe.FormRef.APIVersion, "/") {
+			return fmt.Errorf("portable host stable constraint probe %s carries a versioned family group", entry.label)
+		}
+		definition := probe.Definition
+		if definition.RequiresHostAPI != contract.APIVersion ||
+			!reflect.DeepEqual(definition.Constraints, expectedConstraints[entry.label]) {
+			return fmt.Errorf("portable host v3 constraint semantics probe %s drifted from its declared mechanism", entry.label)
+		}
+	}
+	first := contract.RunnerInput.ConstraintSemantics.UniquePair.FormRef
+	second := contract.RunnerInput.ConstraintSemantics.UniquePairSecond.FormRef
+	if first.APIVersion != second.APIVersion || first.Kind != second.Kind ||
+		first.DefinitionVersion == second.DefinitionVersion || first.SchemaDigest == second.SchemaDigest {
+		return errors.New("portable host v3 constraint semantics uniquePair probes do not name two exact Form contracts")
 	}
 	return nil
 }
@@ -1232,12 +1383,13 @@ func validateRuntimeContractProbe(probe RuntimeContractProbe) error {
 // `edge-interface-contracts-advertised` having never asked the host about the
 // contracts it skipped.
 var familyDataInterfaceNames = []string{"edge.kv", "edge.objects", "edge.sql", "edge.queue"}
+var stableFamilyDataInterfaceNames = []string{"edge.kv", "edge.sql", "edge.queue"}
 
 // validateDataInterfaceProbes proves the corpus pins a usable data-plane
 // contract set: every entry names an exact contract at an exact digest, no
 // entry repeats, and none of them is the runtime ABI, which has its own probe
 // and its own check.
-func validateDataInterfaceProbes(probes SupportProbes) error {
+func validateDataInterfaceProbes(lane lane, probes SupportProbes) error {
 	seen := map[string]bool{}
 	pinned := map[string]bool{}
 	for _, probe := range probes.DataInterfaces {
@@ -1259,7 +1411,11 @@ func validateDataInterfaceProbes(probes SupportProbes) error {
 		seen[key] = true
 		pinned[probe.Name] = true
 	}
-	for _, name := range familyDataInterfaceNames {
+	required := familyDataInterfaceNames
+	if lane.APIVersion == stableLane.APIVersion {
+		required = stableFamilyDataInterfaceNames
+	}
+	for _, name := range required {
 		if !pinned[name] {
 			return fmt.Errorf(
 				"portable host v3 must pin the %s data-plane Interface contract; without it the lane records edge-interface-contracts-advertised without ever asking a host about %s",
@@ -1657,6 +1813,36 @@ func hydrateSyntheticDefinition(root string, contract *Contract) error {
 		return fmt.Errorf("portable host v3 synthetic definition %q identity differs from its pinned FormRef", probe.Name)
 	}
 	probe.Definition = &definition
+	return nil
+}
+
+// hydrateConstraintDefinitions loads every byte-pinned Definition in the
+// stable-v1 constraint matrix and binds its canonical bytes to the exact FormRef
+// named by the contract. Earlier lanes carry no such probes and do no work.
+func hydrateConstraintDefinitions(root string, contract *Contract) error {
+	for _, entry := range constraintDefinitionInventory(&contract.RunnerInput) {
+		probe := entry.probe
+		if probe.Name == "" && probe.Path == "" && probe.SHA256 == "" {
+			continue
+		}
+		raw, err := readPinnedCorpusFile(root, "constraint semantics "+entry.label, probe.Path, probe.SHA256)
+		if err != nil {
+			return err
+		}
+		definition, err := formpackage.ValidateDefinition(raw)
+		if err != nil {
+			return fmt.Errorf("portable host v3 constraint definition %q: %w", probe.Name, err)
+		}
+		digest, err := formpackage.DigestCanonicalJSON(raw)
+		if err != nil {
+			return err
+		}
+		if digest != probe.FormRef.SchemaDigest || definition.APIVersion != probe.FormRef.APIVersion ||
+			definition.Kind != probe.FormRef.Kind || definition.DefinitionVersion != probe.FormRef.DefinitionVersion {
+			return fmt.Errorf("portable host v3 constraint definition %q drifted from its exact FormRef", probe.Name)
+		}
+		probe.Definition = &definition
+	}
 	return nil
 }
 

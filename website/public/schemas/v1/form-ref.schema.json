@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1/form-ref.schema.json",
+  "title": "Takoform exact FormRef v1",
+  "description": "The immutable identity of one Form Definition. Every lookup uses all four members; no member is a latest selector and no lookup falls back to another definition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "definitionVersion",
+    "schemaDigest"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
+      "description": "Versionless reverse-DNS Form Family group. A slash and a family-version suffix are invalid in stable v1."
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]{0,63}$"
+    },
+    "definitionVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(\\+([0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "schemaDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

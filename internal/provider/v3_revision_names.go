@@ -53,6 +53,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // v3RevisionNameDigestLength is how much of the content digest the derived name
@@ -157,7 +158,7 @@ func (r *v3FormResource) v3EnsureRevisionName(values *v3Values, spec map[string]
 	if !r.derivesRevisionName() {
 		diags.Append(v3Diagnostic{
 			Summary:      "Unknown " + r.form.Kind + " name",
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/metadata/name",
 			Code:         v3CodeNameUnresolved,
 			Repair:       "Set `name` to a value that is wholly known before this apply runs.",
@@ -173,7 +174,7 @@ func (r *v3FormResource) v3EnsureRevisionName(values *v3Values, spec map[string]
 	if !ok {
 		diags.Append(v3Diagnostic{
 			Summary:      "Cannot derive the " + r.form.Kind + " revision name",
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/metadata/name",
 			Code:         v3CodeNameUnresolved,
 			Repair: "This revision's content did not resolve to a content digest, so no name follows from it. " +
@@ -200,7 +201,7 @@ func (r *v3FormResource) v3EnsureRevisionName(values *v3Values, spec map[string]
 func (r *v3FormResource) v3RevisionOwnerMissing() diag.Diagnostic {
 	return v3Diagnostic{
 		Summary:      "Deriving this " + r.form.Kind + " name needs to know whose revision it is.",
-		ResourceType: r.form.ResourceType,
+		ResourceType: r.resourceTypeName(),
 		Pointer:      "/metadata/name",
 		Code:         v3CodeRevisionOwnerMissing,
 		Detail: "A derived revision name is a function of this revision's CONTENT, and two independent " +
@@ -241,7 +242,7 @@ func (r *v3FormResource) v3PlanRevisionName(
 		if !configuredOwner.IsNull() {
 			resp.Diagnostics.Append(v3Diagnostic{
 				Summary:      "A pinned " + r.form.Kind + " name leaves `" + v3RevisionOwnerAttribute + "` with nothing to decide.",
-				ResourceType: r.form.ResourceType,
+				ResourceType: r.resourceTypeName(),
 				Name:         configured.ValueString(),
 				Pointer:      "/metadata/name",
 				Code:         v3CodeRevisionOwnerIgnored,
@@ -358,7 +359,9 @@ func (r *v3FormResource) v3PlanCodec(ctx context.Context, resp *resource.ModifyP
 		}
 		return v3FormCodec{}, false
 	}
-	codec, err := r.codecTable().defaultCreate(r.form.Kind)
+	codec, err := r.codecTable().defaultCreate(currentformregistry.GroupKind{
+		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
+	})
 	return codec, err == nil
 }
 
@@ -396,7 +399,7 @@ func (r *v3FormResource) v3PlanImmutableRevisionSafety(
 	codec, _ := r.v3PlanCodec(ctx, resp)
 	resp.Diagnostics.Append(v3Diagnostic{
 		Summary:      "This immutable revision cannot be safely replaced under the same host name.",
-		ResourceType: r.form.ResourceType,
+		ResourceType: r.resourceTypeName(),
 		Name:         prior.ValueString(),
 		Ref:          codec.Ref,
 		Pointer:      "/metadata/name",

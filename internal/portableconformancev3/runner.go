@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -84,7 +85,7 @@ type HostRunnerReport struct {
 // candidate catalog and drives the complete runner matrix through real HTTP.
 // It is local implementation evidence only.
 func SelfTest(ctx context.Context, contract Contract) (HostRunnerReport, error) {
-	repoRoot, err := filepath.Abs(filepath.Join(contract.Root(), "..", ".."))
+	repoRoot, err := repositoryRootForContract(contract.Root())
 	if err != nil {
 		return HostRunnerReport{}, err
 	}
@@ -104,6 +105,25 @@ func SelfTest(ctx context.Context, contract Contract) (HostRunnerReport, error) 
 		Classification:       ReferenceHostSelfTest,
 		Subject:              "reference-host",
 	})
+}
+
+func repositoryRootForContract(contractRoot string) (string, error) {
+	current, err := filepath.Abs(contractRoot)
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
+			if info, formsErr := os.Stat(filepath.Join(current, "forms", "candidates")); formsErr == nil && info.IsDir() {
+				return current, nil
+			}
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("portable host v3 cannot locate repository root above %s", contractRoot)
+		}
+		current = parent
+	}
 }
 
 // RunEndpoint executes the complete black-box v1beta1 matrix against a
@@ -355,6 +375,11 @@ func (r *v3Runner) pinDesiredSchemas() {
 	r.desiredSchemas = map[FormRef]map[string]any{}
 	for _, entry := range declaredProbes(&input) {
 		r.desiredSchemas[entry.Probe.Identity.FormRef] = entry.Probe.DesiredSchema.Schema
+	}
+	for _, entry := range constraintDefinitionInventory(&input) {
+		if entry.probe.Definition != nil {
+			r.desiredSchemas[entry.probe.FormRef] = entry.probe.Definition.DesiredSchema
+		}
 	}
 }
 

@@ -224,14 +224,40 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The seventeen Edge Platform Family docs of the Host API v1beta1 channel,
-	// and nothing else: the generic exact-FormRef carrier was withdrawn
-	// (spec/decisions/0021) and the nine retained provider-v2 docs were
-	// withdrawn with their epoch (decision 0042). Every resource document
-	// describes a resource backed by a Form and must state the exact Form
-	// identity fields the state boundary fences on.
-	if len(resourceDocs) != 17 {
-		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 17)
+	var currentIndex struct {
+		Format   string `json:"format"`
+		Families []struct {
+			Group     string `json:"group"`
+			FormCount int    `json:"formCount"`
+		} `json:"families"`
+	}
+	readJSONFile(t, filepath.Join(root, "forms", "candidates", "current-family-index.json"), &currentIndex)
+	if currentIndex.Format != "takoform.current-family-index@v1" || len(currentIndex.Families) != 8 {
+		t.Fatalf("current family index = %q/%d families, want v1/8", currentIndex.Format, len(currentIndex.Families))
+	}
+	wantResourceDocs := 0
+	edgeForms := 0
+	for _, family := range currentIndex.Families {
+		wantResourceDocs += family.FormCount
+		if family.Group == "edge.forms.takoform.com" {
+			edgeForms = family.FormCount
+		}
+	}
+	if wantResourceDocs != 31 || edgeForms != 16 {
+		t.Fatalf("current family index = %d total/%d Edge Forms, want 31/16", wantResourceDocs, edgeForms)
+	}
+	// Every Form in the exact eight-family current Provider 3 projection, and
+	// nothing else. The Edge family contributes sixteen of the thirty-one;
+	// ObjectBucket is retained only in the immutable v1beta1/Provider 2.1.1
+	// history, the generic exact-FormRef carrier was withdrawn (decision 0021),
+	// and the nine retained provider-v2 docs were withdrawn with their epoch
+	// (decision 0042). Every resource document describes a current Form and
+	// must state the exact Form identity fields the state boundary fences on.
+	if len(resourceDocs) != wantResourceDocs {
+		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), wantResourceDocs)
+	}
+	if _, err := os.Stat(filepath.Join(root, "docs", "resources", "object_bucket.md")); !os.IsNotExist(err) {
+		t.Fatal("current Provider 3 docs must not expose ObjectBucket")
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)

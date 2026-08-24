@@ -1,10 +1,9 @@
 package standardforms
 
-// publish_surfaces_v3.go renders the human-facing surfaces of the Host API
-// v1beta1 resource lane — one reference document and one example per Edge
-// Platform Family resource — from the single catalog declaration in
-// internal/edgeformcatalog. Generation and verification share these exact
-// bytes, exactly like the retained v2 renderer above them.
+// publish_surfaces_v3.go renders non-normative official Terraform Provider
+// reference docs and examples for all of its current mappings. Form Definitions
+// do not contain Terraform resource types; the provider-neutral all-family
+// inventory is rendered separately below.
 
 import (
 	"encoding/json"
@@ -17,9 +16,9 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
-// v3DocBasename mirrors docBasename for the family lane.
+// v3DocBasename is provider-reference metadata, not Form identity.
 func v3DocBasename(form model.Form) string {
-	return strings.TrimPrefix(form.ResourceType, "takoform_") + ".md"
+	return providerDocBasename(mustProviderReferenceTerraformType(form))
 }
 
 // v3PublishedSurfaces renders every family-lane doc and example. Every v3-lane
@@ -27,18 +26,21 @@ func v3DocBasename(form model.Form) string {
 // resource surface, because it exposes no resource that is not a Form
 // (spec/decisions/0021).
 func v3PublishedSurfaces() []publishedSurface {
-	surfaces := make([]publishedSurface, 0, len(edgeformcatalog.Forms)*2)
-	for _, form := range edgeformcatalog.Forms {
-		surfaces = append(surfaces,
-			publishedSurface{
-				path:    filepath.ToSlash(filepath.Join("docs", "resources", v3DocBasename(form))),
-				content: []byte(v3ResourceDoc(form)),
-			},
-			publishedSurface{
-				path:    filepath.ToSlash(filepath.Join("examples", "resources", form.ResourceType, "resource.tf")),
-				content: []byte(v3ExampleHCL(form)),
-			},
-		)
+	surfaces := make([]publishedSurface, 0, currentFormCount()*2)
+	for _, family := range currentFamilies() {
+		for _, form := range family.Forms {
+			resourceType := mustProviderReferenceTerraformType(form)
+			surfaces = append(surfaces,
+				publishedSurface{
+					path:    filepath.ToSlash(filepath.Join("docs", "resources", v3DocBasename(form))),
+					content: []byte(v3ResourceDoc(form)),
+				},
+				publishedSurface{
+					path:    filepath.ToSlash(filepath.Join("examples", "resources", resourceType, "resource.tf")),
+					content: []byte(v3ExampleHCL(form)),
+				},
+			)
+		}
 	}
 	return surfaces
 }
@@ -172,15 +174,16 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		name = field.HCL + "_json"
 		doc += " Authored as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object."
 	case model.KindResourceRef:
-		doc += " Set the name of the target `" + field.TargetKind + "` resource."
+		doc += " Set the name of the target `" + v3TargetKind(form, field) + "` resource."
 	case model.KindExternalServiceList:
-		doc += " Each entry declares `name` (SCREAMING_SNAKE, the prefix its projected members carry), " +
-			"`protocol` (one of " + strings.Join(model.ExternalServiceProtocols, ", ") + "), and optional " +
-			"`required` (default true). The wire carries the sealed `service` object; the standards apiVersion " +
-			"is the vocabulary's identity, not an author input."
+		doc += " Each entry declares `name` (SCREAMING_SNAKE, the sealed binding slot), " +
+			"an opaque normalized reverse-DNS `protocol` identifier such as `com.amazonaws.s3`, and optional " +
+			"`required` (default true). Takoform carries no central protocol enum or protocol-specific members. " +
+			"The Host must fail closed unless its support profile exactly supports the identifier, then projects " +
+			"one sealed runtime-native binding under the slot name."
 	case model.KindBindingList:
 		doc += " Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `" +
-			field.TargetKind + "` resource name); the wire carries the typed `resource` reference."
+			v3TargetKind(form, field) + "` resource name); the wire carries the typed `resource` reference."
 	case model.KindObjectList:
 		members := make([]string, 0, len(field.Fields))
 		for _, member := range field.Fields {
@@ -205,6 +208,14 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		name, docType, v3DocRequirement(form, field), doc, v3DocConstraint(field), v3DocDefault(field))
 }
 
+func v3TargetKind(form model.Form, field model.Field) string {
+	target, err := field.EffectiveResourceTarget(form.Family.APIVersion())
+	if err != nil {
+		panic(err)
+	}
+	return target.Kind
+}
+
 // v3NameArgumentDoc renders the `name` bullet, and — on a revision — the
 // `revision_owner` bullet beside it.
 //
@@ -222,38 +233,54 @@ func v3NameArgumentDoc(form model.Form) string {
 	if prefix == "" {
 		prefix = form.Slug
 	}
-	return "- `name` (String, optional, computed, forces replacement) — Portable resource name (`metadata.name`). " +
+	doc := "- `name` (String, optional, computed, forces replacement) — Portable resource name (`metadata.name`). " +
 		"Omit it and set `revision_owner` instead: this Form is an immutable revision, so the provider derives " +
 		"`" + prefix + "-<content digest prefix>-<owner digest prefix>` from this revision's own content and its " +
 		"declared owner. Changed content is then a NEW revision created beside the old one, which is the only way " +
 		"a code change applies at all — a host refuses every update to a revision, and replacing one under a name " +
 		"it still holds completes in neither apply order. Setting it pins the name, which an imported revision " +
 		"needs; the provider then refuses at plan time any change that would replace this revision under it.\n" +
-		"- `revision_owner` (String, optional, forces replacement) — Stable name of whatever owns this revision; " +
-		"the `takoform_module_worker` it belongs to is the usual answer. Required whenever `name` is omitted. " +
+		"- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns " +
+		"this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. " +
 		"Two independent resources built from identical content derive identical content digests, so without an " +
 		"owner they would derive one name and two Terraform resources would manage one host address — where a " +
 		"destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the " +
-		"host never sees it, and it enters only the derived name. The official " +
-		"[`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) " +
-		"sets it for you.\n"
+		"host never sees it, and it enters only the derived name."
+	if form.Family.APIVersion() == edgeformcatalog.Family.APIVersion() {
+		doc += " The official [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you."
+	}
+	return doc + "\n"
 }
 
 // v3RevisionOwnerExample is the owner an example declares for a derived
-// revision name: the Module Worker whose aggregate the revision belongs to.
-func v3RevisionOwnerExample() string {
-	if worker, ok := edgeformcatalog.ByKind("ModuleWorker"); ok {
-		return worker.FixtureName()
+// revision name: its first direct resource relation where one exists, or the
+// Edge ModuleWorker aggregate for legacy bundle-shaped revisions.
+func v3RevisionOwnerExample(form model.Form) string {
+	for _, field := range form.Fields {
+		if field.Kind != model.KindResourceRef {
+			continue
+		}
+		if ref, ok := field.Example.(map[string]any); ok {
+			if name, ok := ref["name"].(string); ok && name != "" {
+				return name
+			}
+		}
 	}
-	return "module-worker"
+	if form.Family.APIVersion() == edgeformcatalog.Family.APIVersion() {
+		if worker, ok := edgeformcatalog.ByKind("ModuleWorker"); ok {
+			return worker.FixtureName()
+		}
+	}
+	return form.Slug
 }
 
 // v3ResourceDoc renders one family resource reference document.
 func v3ResourceDoc(form model.Form) string {
 	var builder strings.Builder
+	resourceType := mustProviderReferenceTerraformType(form)
 	fmt.Fprintf(&builder, `---
 page_title: "%s Resource - takoform"
-subcategory: "Edge Platform Family"
+subcategory: "Current Form Families"
 description: |-
   %s
 ---
@@ -262,17 +289,16 @@ description: |-
 
 %s
 
-`, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
+`, resourceType, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane. Its " +
-		edgeformcatalog.Family.APIVersion() + " identity is not yet carried by any\n" +
-		"Registry-published provider release: it ships with the next provider release\n" +
-		"(decision 0046). Registry-published provider v2.1.1 serves this resource type\n" +
-		"under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains\n" +
-		"candidate-only descriptor metadata after owner publication. The configured host selects and\n" +
+	builder.WriteString("This page documents a non-normative official Terraform Provider mapping for the\n" +
+		"current Experimental Form `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n" +
+		"The mapping name is provider metadata: it is absent from the Form Definition and cannot change\n" +
+		"the Form's canonical bytes or digest. Provider publication and support are versioned separately.\n" +
+		"The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](https://takoform.com/examples/resources/" +
-		form.ResourceType + "/resource.tf).\n")
+		resourceType + "/resource.tf).\n")
 	builder.WriteString("\n## Arguments\n\n")
 	builder.WriteString(v3NameArgumentDoc(form))
 	if form.Kind == "WorkerBundle" {
@@ -332,8 +358,8 @@ description: |-
 		}
 		builder.WriteString("\nOutward capability use is a typed binding held by this revision; inward\nactivation (routes, domains, cron, queue consumption) is a separate\nattachment resource. The two are never merged.\n")
 	}
-	builder.WriteString("\n## Import\n\n```console\nterraform import " + form.ResourceType + ".example NAME\nterraform import " + form.ResourceType + ".example SPACE/NAME\n```\n")
-	builder.WriteString(v3ImportIdentitySection(form.ResourceType, form.Kind))
+	builder.WriteString("\n## Import\n\n```console\nterraform import " + resourceType + ".example NAME\nterraform import " + resourceType + ".example SPACE/NAME\n```\n")
+	builder.WriteString(v3ImportIdentitySection(resourceType, form))
 	if form.Kind == "WorkerBundle" {
 		builder.WriteString("\nAn imported bundle restores `manifest_digest` from the host and leaves\n`main_module` and `modules` null: those are local authoring facts the wire\nnever echoes. The resource is fully manageable afterwards — a configuration\nthat states the same `manifest_digest` plans empty, and adopting the local\nfiles that commit exactly that manifest is not a change either, because the\nbundle's identity is the digest.\n")
 	}
@@ -371,10 +397,11 @@ func v3OutputAttributeSection(form model.Form) string {
 		return ""
 	}
 	var builder strings.Builder
+	resourceType := mustProviderReferenceTerraformType(form)
 	builder.WriteString("\n## Outputs\n\n")
 	builder.WriteString("This Form declares an `outputSchema`, so a conforming host returns exactly these\n" +
 		"values in `status.outputs` and the provider surfaces each one as a typed computed\n" +
-		"attribute. Read `" + form.ResourceType + ".example.<name>` rather than decoding\n" +
+		"attribute. Read `" + resourceType + ".example.<name>` rather than decoding\n" +
 		"`outputs_json`; the JSON document still carries every value under its wire name and\n" +
 		"stays the way to reach an output no schema describes.\n\n")
 	for _, output := range form.Outputs {
@@ -425,14 +452,14 @@ func v3StateContinuitySection(kind string) string {
 // definition version of this Form. Seeding the default there would bind state to
 // a contract the resource was never applied under, so the canonical JSON form
 // exists to name the identity outright (spec/decisions/0017).
-func v3ImportIdentitySection(resourceType, kind string) string {
+func v3ImportIdentitySection(resourceType string, form model.Form) string {
 	return "\nBoth short forms bind state to this provider build's default create\n" +
 		"FormRef. To adopt a resource created under an EARLIER definition version of\n" +
 		"this Form, name the exact identity instead. The import ID is then one JSON\n" +
 		"object — not a delimiter-joined string, because a SpaceID is opaque UTF-8\n" +
 		"whose only forbidden character is `/`, so no separator can escape it safely:\n" +
 		"\n```console\nterraform import " + resourceType + ".example \\\n" +
-		"  '{\"space\":\"prod\",\"apiVersion\":\"" + edgeformcatalog.Family.APIVersion() + "\",\"kind\":\"" + kind + "\",\"definitionVersion\":\"0.1.0\",\"schemaDigest\":\"sha256:…\",\"name\":\"…\"}'\n```\n" +
+		"  '{\"space\":\"prod\",\"apiVersion\":\"" + form.Family.APIVersion() + "\",\"kind\":\"" + form.Kind + "\",\"definitionVersion\":\"" + form.DefinitionVersion + "\",\"schemaDigest\":\"sha256:…\",\"name\":\"…\"}'\n```\n" +
 		"\n`space` is optional and falls back to the provider default; the four FormRef\n" +
 		"members are all-or-nothing. An identity this provider build carries no codec\n" +
 		"for is refused, naming the identities it does carry — it is never silently\n" +
@@ -442,16 +469,16 @@ func v3ImportIdentitySection(resourceType, kind string) string {
 // v3ExampleHCL renders one family resource example configuration.
 func v3ExampleHCL(form model.Form) string {
 	var builder strings.Builder
+	resourceType := mustProviderReferenceTerraformType(form)
 	builder.WriteString(`terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # Provider v2.1.1 is Registry-published; release/version.json remains
-      # candidate-only descriptor metadata after owner publication. v2.1.1
-      # serves this resource type under the retained v1beta1 identities; the
-      # v1beta2 identity this page documents ships with the next release
-      # (decision 0046).
-      version = "= 2.1.1"
+      # This resource type is non-normative official-provider metadata. The
+      # current versionless Form and its digest do not contain this name.
+      # Provider 2.1.1 carries only retained versioned history; use a provider
+      # release whose exact-Form registry includes this current identity.
+      version = ">= 3.0.0"
     }
   }
 }
@@ -462,13 +489,13 @@ provider "takoform" {
 }
 
 `)
-	fmt.Fprintf(&builder, "resource %q \"example\" {\n", form.ResourceType)
+	fmt.Fprintf(&builder, "resource %q \"example\" {\n", resourceType)
 	// A revision shows the shape an author should write: no `name`, and the
 	// owner the derived name needs beside the content digest. Pinning a name
 	// stays legitimate — an imported revision has one — but it is the exception.
 	scalars := [][2]string{{"name", fmt.Sprintf("%q", form.FixtureName())}}
 	if form.Role == model.RoleRevision {
-		scalars = [][2]string{{"revision_owner", fmt.Sprintf("%q", v3RevisionOwnerExample())}}
+		scalars = [][2]string{{"revision_owner", fmt.Sprintf("%q", v3RevisionOwnerExample(form))}}
 	}
 	var blocks []string
 	if form.Kind == "WorkerBundle" {
@@ -497,12 +524,8 @@ provider "takoform" {
 				blocks = append(blocks, v3ObjectHCL(field))
 			case model.KindJSONMap:
 				scalars = append(scalars, [2]string{field.HCL + "_json", v3JSONEncodeHCL(field.Example)})
-			case model.KindResourceRef:
-				ref, _ := field.Example.(map[string]any)
-				name, _ := ref["name"].(string)
-				scalars = append(scalars, [2]string{field.HCL, fmt.Sprintf("%q", name)})
 			default:
-				scalars = append(scalars, [2]string{field.HCL, quoteHCL(field.Example)})
+				scalars = append(scalars, [2]string{field.HCL, quoteHCL(v3ProviderExampleValue(field, field.Example))})
 			}
 		}
 	}
@@ -519,18 +542,18 @@ provider "takoform" {
 		builder.WriteString("\n" + block)
 	}
 	builder.WriteString("}\n\n")
-	prefix := strings.TrimPrefix(form.ResourceType, "takoform_")
+	prefix := strings.TrimPrefix(resourceType, "takoform_")
 	// A Form that declares an outputSchema shows the typed attributes, because
 	// that is what an author should write. outputs_json still holds the same
 	// values and is what the example shows when a Form describes none.
 	if len(form.Outputs) == 0 {
 		fmt.Fprintf(&builder, "output %q {\n  value = %s.example.outputs_json\n}\n",
-			prefix+"_outputs", form.ResourceType)
+			prefix+"_outputs", resourceType)
 		return builder.String()
 	}
 	for _, output := range form.Outputs {
 		fmt.Fprintf(&builder, "output %q {\n  value = %s.example.%s\n}\n\n",
-			prefix+"_"+output.AttributeName(), form.ResourceType, output.AttributeName())
+			prefix+"_"+output.AttributeName(), resourceType, output.AttributeName())
 	}
 	return strings.TrimRight(builder.String(), "\n") + "\n"
 }
@@ -587,14 +610,7 @@ func v3ObjectListHCL(field model.Field) string {
 			if !present {
 				continue
 			}
-			var rendered string
-			if member.Kind == model.KindResourceRef {
-				ref, _ := value.(map[string]any)
-				name, _ := ref["name"].(string)
-				rendered = fmt.Sprintf("%q", name)
-			} else {
-				rendered = quoteHCL(value)
-			}
+			rendered := quoteHCL(v3ProviderExampleValue(member, value))
 			lines = append(lines, [2]string{member.HCL, rendered})
 			if len(member.HCL) > width {
 				width = len(member.HCL)
@@ -618,14 +634,7 @@ func v3ObjectHCL(field model.Field) string {
 		if !present {
 			continue
 		}
-		var rendered string
-		if member.Kind == model.KindResourceRef {
-			ref, _ := value.(map[string]any)
-			name, _ := ref["name"].(string)
-			rendered = fmt.Sprintf("%q", name)
-		} else {
-			rendered = quoteHCL(value)
-		}
+		rendered := quoteHCL(v3ProviderExampleValue(member, value))
 		lines = append(lines, [2]string{member.HCL, rendered})
 		if len(member.HCL) > width {
 			width = len(member.HCL)
@@ -638,6 +647,68 @@ func v3ObjectHCL(field model.Field) string {
 	}
 	builder.WriteString("  }\n")
 	return builder.String()
+}
+
+// v3ProviderExampleValue projects a portable wire fixture into the official
+// Provider's authoring shape. ResourceRefs are full {apiVersion,kind,name}
+// objects on the Host wire, but the Provider exposes only the target name: the
+// exact group and kind come from the source Form's declared ResourceTarget.
+// The projection must recurse because tagged targets such as Schedule carry
+// those refs below the top-level field.
+func v3ProviderExampleValue(field model.Field, value any) any {
+	switch field.Kind {
+	case model.KindResourceRef:
+		ref, _ := value.(map[string]any)
+		name, _ := ref["name"].(string)
+		return name
+	case model.KindResourceRefList:
+		entries, _ := value.([]any)
+		out := make([]any, 0, len(entries))
+		for _, raw := range entries {
+			ref, _ := raw.(map[string]any)
+			name, _ := ref["name"].(string)
+			out = append(out, name)
+		}
+		return out
+	case model.KindObject:
+		return v3ProviderObjectExample(field.Fields, value)
+	case model.KindObjectList:
+		entries, _ := value.([]any)
+		out := make([]any, 0, len(entries))
+		for _, entry := range entries {
+			out = append(out, v3ProviderObjectExample(field.Fields, entry))
+		}
+		return out
+	case model.KindTaggedObject:
+		entry, _ := value.(map[string]any)
+		tag, _ := entry[field.Discriminator].(string)
+		out := map[string]any{field.Discriminator: tag}
+		for _, variant := range field.Variants {
+			if variant.Tag != tag {
+				continue
+			}
+			for key, projected := range v3ProviderObjectExample(variant.Fields, entry) {
+				out[key] = projected
+			}
+			break
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func v3ProviderObjectExample(fields []model.Field, value any) map[string]any {
+	entry, _ := value.(map[string]any)
+	out := make(map[string]any, len(fields))
+	for _, member := range fields {
+		raw, present := entry[member.Wire]
+		if !present {
+			continue
+		}
+		out[member.HCL] = v3ProviderExampleValue(member, raw)
+	}
+	return out
 }
 
 // v3JSONEncodeHCL renders a jsonencode(...) expression for one JSON-map
@@ -656,39 +727,35 @@ func v3JSONEncodeHCL(example any) string {
 	return "jsonencode({ " + strings.Join(parts, ", ") + " })"
 }
 
-// v3FormInventorySection is appended to the generated forms/README.md: the
-// Edge Platform Family members and their roles, rendered from the same
-// catalog the candidates are built from.
+// v3FormInventorySection is the provider-neutral roster rendered from all
+// eight current catalogs. It intentionally has no Terraform resource column.
 func v3FormInventorySection() string {
 	var builder strings.Builder
-	builder.WriteString(`
-## Edge Platform Family (` + edgeformcatalog.Family.APIVersion() + `)
-
-The first official Form Family fixes the shape of a proven edge developer
-platform without naming its vendor (spec/form-families.md). Its members are
-Experimental Forms for the Host API v1beta1 resource lane; their package
-artifacts remain unpublished, and no Registry-published provider release
-carries these identities yet — Registry-published provider v2.1.1 embeds the
-retained edge.forms.takoform.com/v1beta1 generation, and the identities below
-ship with the next release (decision 0046). Roles come from the closed v1beta1 role enum and decide
-lifecycle mechanics: revisions are immutable, deployments move traffic,
-attachments activate inward events.
-
-| Kind | Resource | Role | Version | Portable intent |
-| --- | --- | --- | --- | --- |
-`)
-	for _, form := range edgeformcatalog.Forms {
-		fmt.Fprintf(&builder, "| `%s` | `%s` | `%s` | `%s` | %s |\n",
-			form.Kind, form.ResourceType, form.Role, form.DefinitionVersion, form.Description)
+	families := currentFamilies()
+	total := 0
+	for _, family := range families {
+		total += len(family.Forms)
+		builder.WriteString("\n## `" + family.Group + "`\n\n")
+		builder.WriteString("| Kind | Role | Version | Portable intent |\n")
+		builder.WriteString("| --- | --- | --- | --- |\n")
+		for _, form := range family.Forms {
+			fmt.Fprintf(&builder, "| `%s` | `%s` | `%s` | %s |\n",
+				form.Kind, form.Role, form.DefinitionVersion, form.Description)
+		}
 	}
-	builder.WriteString(`
-The provider exposes exactly these typed resources on the v1beta1 lane, and no
-generic carrier for a Form it was not built against: nothing in the lane lets a
-client verify a FormRef it did not compile in, so a carrier would offer reach
-with no verification behind it (spec/decisions/0021). Family membership grants
-no Stable maturity: the generated family candidate set records all 15 as
-Experimental 0.1.0 Forms, and hosts state their supported subset in their Host
-Support Profiles. Beta is the API/family channel, not Form stability.
-`)
+	fmt.Fprintf(&builder, `
+The current roster is exactly %d Forms in %d versionless families. Edge has
+exactly %d members and intentionally has no current ObjectBucket Form,
+`+"`edge.objects`"+` Interface, or ObjectBucket Binding. Retained versioned
+Provider 2.1.1 packages remain immutable history and are not members of this
+current roster.
+
+The official Terraform Provider reference docs and examples under
+`+"`docs/resources`"+` and `+"`examples/resources`"+` cover only mappings that
+the provider explicitly owns. Their `+"`takoform_*`"+` names are non-normative
+and cannot affect a Form Definition or digest. Missing mappings for other
+families are provider-registration work, not a reason to omit or alter those
+families here.
+`, total, len(families), len(edgeformcatalog.Forms))
 	return builder.String()
 }

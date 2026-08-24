@@ -30,7 +30,7 @@ state, exactly like one-deployment-per-worker.
 ## Observable semantics
 
 Exactly the `worker.workflow@1.0.0` contract, declared the way `ModuleWorker`
-declares `worker.runtime@1.0.0`
+declares `worker.runtime@1.1.0`
 ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)):
 the identity is what a host implements; the class the serving version exports
 is the code that fills it. One contract carries both the entrypoint ABI and

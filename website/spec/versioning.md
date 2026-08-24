@@ -9,8 +9,8 @@ defined in [`project-lifecycle.md`](project-lifecycle.md).
 
 | Concern      | Identifier                                      | Meaning                                                                                    |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Host API     | API group such as current `forms.takoform.com/v1beta1` | Protocol envelope, discovery, and lifecycle compatibility                              |
-| Form group   | DNS-like API group inside an exact `FormRef`    | Namespace boundary between Form Families and withdrawn epochs; versioned per family         |
+| Host API     | API group such as Specification 1.0's `forms.takoform.com/v1` | Protocol envelope, discovery, and lifecycle compatibility                              |
+| Form group   | Versionless reverse-DNS API group inside an exact `FormRef` | Namespace boundary between current Form Families; occupied older groups remain exact history |
 | Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its group                      |
 | Form Package | Exact package identity plus content digest      | Immutable distribution of one exact Form and its fixtures                                  |
 | Interface / Binding contract | Exact ref plus schema digest       | Immutable operation-surface and typed-capability contracts referenced by Forms             |
@@ -50,17 +50,20 @@ So: **a new artifact whose name carries a version word names the lane it
 describes, never its place in a sequence.** Already-published relative names are
 retained history and stay as they are — the rule binds what is minted next.
 
-### `current` is one word again
+### Current source and retained release history
 
-Two things in this repository used to be called current, two generations
-apart: the current Beta lane, and the retained central Form epoch
-(`forms.takoform.com/v1alpha2`) that `formpackage.CurrentFormAPIVersion` and
-the `internal/currentform*` packages meant. The withdrawal of the pre-Beta
-epochs ([decision 0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md))
-removed the second referent: current now names the
-`forms.takoform.com/v1beta1` lane, the `edge.forms.takoform.com/v1beta1`
-family, and nothing else. A future generation move re-creates the ambiguity
-only if a new name reuses the word instead of stating its lane.
+The current Specification 1.0 source uses the literal Host API lane
+`forms.takoform.com/v1`, eight versionless Form Family groups, 31 exact current
+FormRefs, and the `packages.forms.takoform.com/v1alpha5` package envelope. The
+current FormRefs keep their independent `0.x` Definition versions and
+Experimental maturity. A Specification or Host API v1 release does not rewrite
+them as Form `1.0.0`.
+
+Provider 2.1.1 is an independent retained release projection: Host
+`forms.takoform.com/v1beta1`, the versioned
+`edge.forms.takoform.com/v1beta1` family, 15 exact FormRefs, and package
+envelope `packages.forms.takoform.com/v1alpha4`. Both projections are named
+absolutely and must never be inferred from or relabelled as the other.
 
 ### What freezes each value
 
@@ -69,47 +72,50 @@ That is decided by what has already published it.
 
 | Value | Frozen by |
 | --- | --- |
-| Lane `forms.takoform.com/v1beta1`, family `edge.forms.takoform.com/v1beta1`, the 15 exact FormRefs and their digests | Registry-published provider `v2.1.1`, recorded append-only in [`../release/provider-form-identities.json`](../release/provider-form-identities.json) |
+| Retained lane `forms.takoform.com/v1beta1`, family `edge.forms.takoform.com/v1beta1`, the 15 exact FormRefs and their digests | Registry-published provider `v2.1.1`, recorded append-only in [`../release/provider-form-identities.json`](../release/provider-form-identities.json) |
 | Every `spec/schemas/` filename and `$id` | [`../release/public-schema-identities.json`](../release/public-schema-identities.json), enforced append-only across the whole committed history of that ledger |
-| `packages.forms.takoform.com/v1alpha4` | it is inside published schema bytes |
+| Retained `packages.forms.takoform.com/v1alpha4` | it is inside published schema bytes |
 | The lane each published document declares | [`../release/published-document-lanes.json`](../release/published-document-lanes.json) |
 | `forms.takoform.com/v1alpha1`, `/v1alpha2`, `/v1alpha3`, `edge.forms.takoform.com/v1alpha1`, their schemas, corpora, and served documents | **withdrawn** under [decisions 0037](decisions/0037-immutability-begins-at-stable.md)/[0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md); recorded as retired in [`../release/published-document-lanes.json`](../release/published-document-lanes.json) and [`../release/public-schema-identities.json`](../release/public-schema-identities.json), bytes in git history and release tags |
 | Internal package, directory, and script names | nothing; they are free to be made absolute |
 
 Since [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)
-the FormRef group is a namespaced DNS-like identifier. Official families use
-subdomains of `forms.takoform.com` (the first is
-`edge.forms.takoform.com/v1beta1`); third-party groups are valid FormRefs
+the FormRef group is a namespaced DNS-like identifier. Current official
+families use versionless subdomains of `forms.takoform.com` (for example
+`edge.forms.takoform.com`); the published
+`edge.forms.takoform.com/v1beta1` group remains exact retained history.
+Third-party groups are valid FormRefs
 under their own domains. The withdrawn `forms.takoform.com/v1alpha1` and
 `forms.takoform.com/v1alpha2` groups are retired identities; new families
-never reuse them. Each family group versions independently.
+never reuse them. Current family groups do not version; each Form's own
+`definitionVersion` and digest move independently.
 
 Host Support, Form Activation, and Service Offering records refer to exact
 identities but are not version streams. Updating one of those facts MUST NOT
 change a Form or provider version.
 
-Current family packages use the `packages.forms.takoform.com/v1alpha4`
-envelope, which carries namespaced FormRef groups; the three earlier envelope
-identities are retired with their epochs.
+Current family packages use the `packages.forms.takoform.com/v1alpha5`
+envelope, which carries versionless namespaced FormRef groups. Retained
+Provider 2.1.1 packages use the immutable
+`packages.forms.takoform.com/v1alpha4` envelope; the earlier envelope identities
+remain retired or retained with their own epochs.
 
 **The envelope is a manifest format, not a version axis**
 ([decision 0040](decisions/0040-the-package-envelope-is-a-format-not-an-axis.md)).
-Its four published values record one real format change — `v1alpha1` to
-`v1alpha2` introduced content addressing — and two re-mints that followed the
-FormRef grammar they wrap; normalising version words, the `v1alpha2`,
-`v1alpha3` and `v1alpha4` schemas are structurally identical. A new envelope is
-minted only when the manifest format itself changes structurally, never because
-a Form generation moved: `v1alpha4` already admits any namespaced group and has
-carried two family generations without moving, which is the proof it never
-needed to track them. Both halves are checked the same way the Host API lane's
-minting reasons are.
+`v1alpha2` introduced content addressing; `v1alpha3` and `v1alpha4` retained
+the same manifest shape while following earlier FormRef schema identities.
+`v1alpha5` succeeds the occupied v1alpha4 schema because its referenced FormRef
+grammar now accepts versionless family groups. It does not identify a Form
+generation or inherit Specification 1.0 maturity. A later envelope moves only
+when the manifest validation contract changes, never merely because a Form or
+Provider version moves.
 
 **Takoform's own Form Packages publish with the provider release that embeds
 them** ([decision 0041](decisions/0041-form-packages-publish-with-the-provider-release.md)):
 one release train, with each release's exact package digests locked append-only
 in [`../release/provider-form-identities.json`](../release/provider-form-identities.json).
-The identity stays content-addressed and provider-free, because a third-party
-publisher — which the Stable criteria require — publishes under its own cadence. Content-addressed packages have no independent
+The identity stays content-addressed and provider-free; another publisher may
+publish under its own cadence. Content-addressed packages have no independent
 SemVer. Their exact package digest produces the publication artifact ID
 `sha256-<hex>` and therefore the source path and tag. The withdrawn epochs'
 `packageVersion` values and package profiles are retired identities; their
@@ -121,7 +127,7 @@ the v1alpha3 envelope required by the Form epoch reset is recorded in
 [`decisions/0006`](decisions/0006-v1alpha2-restarts-form-lines.md), and the
 family-carrying v1alpha4 envelope was minted by the now-superseded
 [`decision 0013`](decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md), and
-its use by the current Beta family is fixed by
+its use by the retained Provider 2.1.1 Beta family is fixed by
 [`decision 0035`](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)
 (the namespaced family groups it carries are decided in
 [`decisions/0009`](decisions/0009-form-families-and-namespaced-api-versions.md)).
@@ -151,13 +157,18 @@ deprecate a Form. Changing a Form MUST NOT require a provider release when the
 provider can already carry that Form's data and exact identity correctly.
 
 Provider `v2.1.1` is therefore a Registry-published stable provider version
-that targets the Beta Host API `forms.takoform.com/v1beta1` and 15 exact
+that targets the retained Beta Host API `forms.takoform.com/v1beta1` and 15 exact
 Experimental FormRefs in `edge.forms.takoform.com/v1beta1`. The release
 descriptor remains `candidate-only` metadata by design after owner publication;
 that descriptor status does not make the SemVer a prerelease. The exact Beta
 FormRefs and definition and package digests embedded by this provider release
 are immutable provider compatibility data even while their package artifacts
 remain unpublished.
+
+The official Provider 3 work is a separate non-normative sample that may
+target Host API v1 and the exact current `0.x` FormRefs. Its implementation or
+release status cannot close or block Specification 1.0, and Specification 1.0
+does not make Provider 3 published or production-ready.
 
 A later Stable `1.0.0` Form is a new exact identity. Existing Beta state remains
 bound to its Beta FormRef and codec for read, refresh, update, and delete; a
@@ -209,11 +220,13 @@ history and under its immutable tags, and a released provider embeds the schemas
 it needs rather than fetching them, so a withdrawal changes what this project
 serves and not what an installed client can do.
 
-The 15 current Beta family Forms are exactly `0.1.0` and Experimental. A
-breaking correction to the Beta protocol or family contract mints
-`forms.takoform.com/v1beta2` and/or a new
-`edge.forms.takoform.com/v1beta2` FormRef as applicable; it never edits the
-occupied v1beta1 identity or its published-schema bytes.
+The current generator index names 31 exact Experimental Forms across eight
+versionless families; Edge contains 16 and has no `ObjectBucket`. Each Form
+keeps its own `0.x` Definition version. A breaking correction advances only
+that Form's SemVer and digest. It does not mint a family generation, and a
+Specification/Host API v1 release does not promote it. The occupied
+v1beta1/Provider 2.1.1 FormRefs and published-schema bytes remain immutable
+history.
 
 ### Stable `1.x+`
 
@@ -333,20 +346,28 @@ new Form SemVer unless the Form contract itself changed.
 
 ## Host API group
 
-The current Host API wire is `forms.takoform.com/v1beta1`, discovered at
-`/.well-known/takoform/v1beta1` with API base
-`/apis/forms.takoform.com/v1beta1`. It carries namespaced FormRef groups,
-UID/generation/revision identity, long-running Operations, content-addressed
-artifact upload, and Host Support Profiles
-([decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+Specification 1.0 defines the literal stable Host API wire
+`forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` with API base
+`/apis/forms.takoform.com/v1`. It carries versionless family groups, exact
+FormRefs, UID/generation/revision identity, long-running Operations,
+content-addressed artifact upload, declared constraints, standard-service
+support, and Host Support Profiles. The exact normative contract is
+[`host-api/v1.md`](host-api/v1.md).
+
+The v1 source and suite do not by themselves claim that Specification 1.0 has
+been released. The release assertion stays red until one clean committed
+source snapshot closes the exact multi-family candidate/corpus and reference
+conformance evidence in [decision 0053](decisions/0053-specification-and-provider-release-evidence.md).
 
 The three pre-Beta wires — `forms.takoform.com/v1alpha1` at the unversioned
 `/.well-known/takoform`, `/v1alpha2` at `/.well-known/takoform/v1alpha2`, and
 the `/v1alpha3` identities the Beta lane carried forward — are withdrawn
 retired identities ([decision 0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
 Each lane has its own discovery path and API base; a Host
-wire version never implies Form maturity. Breaking protocol changes require a
-new Host API group identity, starting with `v1beta2` for a breaking Beta fix.
+wire version never implies Form maturity. The occupied
+`forms.takoform.com/v1beta1` lane embedded by Provider 2.1.1 remains immutable
+history, and the distinct pre-v1 development documents and corpora are not
+relabelled as v1.
 
 ### A lane is minted for one of exactly two reasons
 
@@ -354,7 +375,8 @@ Two questions were being answered as one, and they are separate
 ([decision 0039](decisions/0039-a-lane-is-minted-for-one-of-two-reasons.md)):
 
 - **What may cause a lane to move.** Only two things. The wire contract changed,
-  or the lane ITSELF advanced a maturity channel on the evidence named below.
+  or the lane itself advanced a maturity channel on evidence owned by that
+  protocol specification.
   A lane MUST NOT be minted because a Form Family moved, because Forms changed,
   or because a provider was released. That prohibition is the paragraph after
   this one, and it is what a generation move most easily violates: everything
@@ -369,49 +391,37 @@ Two questions were being answered as one, and they are separate
 Both halves are checked. A lane minted for a protocol change must have a wire
 contract structurally different from every other protocol lane's, compared with
 version words normalised so a rename cannot present itself as a contract. A lane
-minted for a graduation must say which of the prerequisites below it satisfied,
-because that is not provable from bytes. `forms.takoform.com/v1beta1` is
+minted for a Specification graduation must say which exact source/corpus/
+reference prerequisites it satisfied, because that is not provable from bytes.
+`forms.takoform.com/v1beta1` is
 recorded as a graduation whose lane-specific evidence was never stated — it was
 minted with the family channel move and carries v1alpha3's wire contract
 unchanged ([decision 0038](decisions/0038-a-generation-move-is-measured-not-assumed.md)).
 It is frozen into Registry-published provider `v2.1.1`; the record stands as
 history rather than as a precedent.
 
-The API group MUST NOT graduate based on a Form count, package publication,
-provider major, historical admission, or one host's conformance report. A
-future graduation decision requires, at minimum:
+Specification 1.0 has exactly three release prerequisites: an exact committed
+source snapshot, the complete generator-owned multi-family candidate/corpus
+closure, and execution of the manifest-owned reference suite. A Form count,
+package publication, Provider major, historical admission, external Host,
+backend receipt, production consumer, Takoserver, Takosumi, signer, or operator
+statement cannot add to, close, or block that table
+([decisions 0052](decisions/0052-the-specification-is-released-on-its-own-line.md)
+and [0053](decisions/0053-specification-and-provider-release-evidence.md)).
 
-1. two independent host implementations from distinct codebases — neither
-   derived from the other's host internals — exercising the same lifecycle
-   semantics through the same conformance corpus, at least one operating in
-   production for real consumers; a shared maintainer is permitted and MUST be
-   named in the graduation ADR
-   ([decision 0044](decisions/0044-graduation-evidence-is-implementation-independence.md));
-2. a documented compatibility window with no breaking operation change;
-3. end-to-end materialization of each optional surface the lane declares;
-4. cross-publisher package installation and lifecycle evidence;
-5. a real deprecation/removal exercise and production consumption of the
-   revocation chain.
+Independent Hosts, production workloads, compatibility windows,
+cross-publisher installation, deprecation exercises, and revocation exercises
+remain valuable adoption evidence. Decisions 0044 and 0046 are retained as the
+history of that evidence program, but decision 0053 supersedes them as
+Specification and Provider release authorities.
 
-The graduation evidence is gathered on the **Beta 2 rehearsal generation**
-([decision 0046](decisions/0046-stable-arrives-through-a-stable-grade-beta-2.md)):
-the compatibility window, both host subjects, the optional-surface
-materialization, the cross-publisher installation, and the exercises above are
-all measured against Beta 2 identities. Those identities elect out of the
-pre-Stable withdrawal permission of
-[decision 0037](decisions/0037-immutability-begins-at-stable.md): a published
-Beta 2 identity is treated as immutable from publication, a defect gets a
-successor identity, and a Beta 2 identity is not published before its
-conformance coverage exists. v1 then carries the Beta 2 contracts unchanged.
-
-Takoform's lifecycle authority owns promotion; a provider release or host
-milestone is not a maturity decision. Only Host API and Form contracts that
-have satisfied the applicable qualification above MAY mint stable identities
-and Form `1.0.0` lines; every other contract remains Beta or Experimental. A
-Takosumi host implementation may be one of the two subjects, but a Takosumi
-product GA is neither required nor sufficient evidence. Any graduation is a separate ADR
-and public migration plan. Until then, the project and API MUST NOT be
-described as stable or GA.
+Host API maturity and Form maturity are independent. Releasing
+`forms.takoform.com/v1` does not rename the eight versionless family groups,
+change any current exact `0.x` FormRef, or create a Form `1.0.0` line. A future
+Stable Form identity begins at `1.0.0` only through an explicit per-Form
+decision. Provider 3 is likewise independent and non-normative: it may
+implement the current exact Forms without defining their semantics or blocking
+the Specification.
 
 ## Deprecation, Legacy, and revocation
 

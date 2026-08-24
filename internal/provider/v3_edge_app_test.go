@@ -76,7 +76,16 @@ func TestV3WorkerVersionAssetsIsOneTypedClosedObject(t *testing.T) {
 		"bundle": map[string]any{
 			"apiVersion": edgeformcatalog.Family.APIVersion(), "kind": "WorkerBundle", "name": "worker-bundle",
 		},
-		"handlers": []any{"fetch"},
+		"handlers":              []any{"fetch"},
+		"vars":                  map[string]any{},
+		"requiredSensitiveVars": []any{},
+		"kvBindings":            []any{},
+		"sqliteBindings":        []any{},
+		"queueProducerBindings": []any{},
+		"serviceBindings":       []any{},
+		"workflowBindings":      []any{},
+		"actorBindings":         []any{},
+		"externalServices":      []any{},
 		"assets": map[string]any{
 			"bundle": map[string]any{
 				"apiVersion": edgeformcatalog.Family.APIVersion(), "kind": "StaticAssetBundle", "name": "static-asset-bundle",

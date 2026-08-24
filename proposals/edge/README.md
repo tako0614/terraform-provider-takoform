@@ -1,6 +1,6 @@
 # Edge Platform Family proposals
 
-The Edge Platform Family, `edge.forms.takoform.com/v1beta1`, is the first
+The Edge Platform Family, `edge.forms.takoform.com`, is the first
 official Form Family ([decision 0009](../../spec/decisions/0009-form-families-and-namespaced-api-versions.md)).
 Its members fix, completely, the application-visible semantics of a proven
 edge developer platform without naming its vendor
@@ -15,16 +15,16 @@ No free semantic token is admitted; a difference in semantics is a different
 Form, never a selector value. Outward capability use is a digest-bound
 Binding held by a revision resource; inward activation is an attachment
 resource ([decision 0010](../../spec/decisions/0010-exact-interface-and-binding-contracts.md)).
-Desired schemas carry no `name` or envelope plumbing: the v1beta1 resource
+Desired schemas carry no `name` or envelope plumbing: the Host API v1 resource
 envelope owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
 The catalog source of truth is `internal/edgeformcatalog`; the generated
-candidates live in `forms/candidates/edge/v1beta1`, the exact Interface and
+candidates live in `forms/candidates/edge.forms.takoform.com`, the exact Interface and
 Binding candidates in `interfaces/candidates/v1alpha1` and
 `bindings/candidates/v1alpha2`.
 
-## MVP members
+## Current roster: 16 Forms
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |
@@ -37,14 +37,23 @@ Binding candidates in `interfaces/candidates/v1alpha1` and
 | [WorkerEndpoint](worker-endpoint.md) | attachment | Makes a worker reachable over HTTPS at an address the host assigns and publishes. | A name the author owns is `WorkerCustomDomain`; a chosen label or region is host placement, not a Form. |
 | [WorkerCronTrigger](worker-cron-trigger.md) | attachment | Invokes the scheduled handler on a five-field UTC cron schedule. | Timezone-aware scheduling is a different Form. |
 | [EdgeKVNamespace](edge-kv-namespace.md) | identity | Globally replicated key/value namespace with eventual consistency. | A linearizable or per-key-consistent store is a different Form. |
-| [ObjectBucket](object-bucket.md) | identity | Flat-namespace object store with read-after-write consistency and strong etags. | CORS/lifecycle/lock rules are separate policy Forms. |
 | [SQLiteDatabase](sqlite-database.md) | identity | Embedded SQLite database with safe wire values, rollback-only queries, and serializable transactions. | A Postgres or MySQL database is a different Form. |
 | [SQLiteMigrationSet](sqlite-migration-set.md) | revision | Immutable ordered application/sql migration manifest. | Another dialect or declarative schema model is a different Form. |
 | [SQLiteMigrationApplication](sqlite-migration-application.md) | attachment | Applies only the checksum-safe suffix of one set to one database. | Rollback or destructive reset requires a separate authority-bearing Form. |
 | [AtLeastOnceQueue](at-least-once-queue.md) | identity | Queue with at-least-once delivery and no ordering guarantee. | A FIFO or exactly-once queue is a different Form. |
 | [QueueConsumer](queue-consumer.md) | attachment | Attaches one worker as the batch consumer of one queue, with retry and dead-lettering. | Pull-based consumption over an API is a different Form. |
+| [DurableWorkflow](durable-workflow.md) | identity | Code-defined durable workflow instances with memoized replay and bounded execution. | A generic queue job or scheduler is a different contract. |
+| [ActorNamespace](actor-namespace.md) | identity | Addressable actor id space with per-id execution, storage, and alarms. | A provisioned object-storage bucket is not an actor namespace. |
 
-Designs that differ in these semantics — `PostgresDatabase`,
-`FifoQueue`, `WasiFunction`, `ContainerService`, `TimezoneSchedule` — belong
-to future families and get their own proposals when that work starts, per
-[spec/form-families.md](../../spec/form-families.md).
+[`ObjectBucket`](object-bucket.md), `edge.objects`, and
+`module-worker.object-bucket` are retained Provider 2.1.1/v1beta1 history, not
+members of this current roster. Object storage consumed by current worker code
+is represented, when appropriate, as a sealed `standards.takoform.com/v1` slot
+with an opaque reverse-DNS protocol identifier. That slot creates no bucket
+Resource and Takoform maintains no protocol enum.
+
+Container, Function, Pull Queue, Schedule, Table, Topic, and Vector semantics
+now live in their own versionless current family groups, per
+[spec/form-families.md](../../spec/form-families.md). A prose proposal list is
+not an identity registry; the generated current-family index closes the exact
+candidate corpus.

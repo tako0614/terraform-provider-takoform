@@ -42,6 +42,82 @@
       "apiVersion": "trust.forms.takoform.com/v1alpha1"
     },
     {
+      "path": "conformance/takoform-v1/generic-host/portable-host/contract.json",
+      "apiVersion": "forms.takoform.com/v1"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-distinct-pair.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-member.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-node.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-same-target.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-structural.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-unique-pair-second.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-unique-pair.json",
+      "apiVersion": "constraints.forms.takoform.com"
+    },
+    {
+      "path": "conformance/takoform-v1/generic-host/portable-host/fixtures/synthetic-module-worker-second-definition.json",
+      "apiVersion": "edge.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-custom-domain/definition.json",
+      "apiVersion": "container.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-custom-domain/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-endpoint/definition.json",
+      "apiVersion": "container.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-revision/definition.json",
+      "apiVersion": "container.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-revision/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-service/definition.json",
+      "apiVersion": "container.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-service/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-traffic/definition.json",
+      "apiVersion": "container.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/container.forms.takoform.com/container-traffic/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
       "path": "forms/candidates/edge.forms.takoform.com/actor-namespace/definition.json",
       "apiVersion": "edge.forms.takoform.com"
     },
@@ -79,14 +155,6 @@
     },
     {
       "path": "forms/candidates/edge.forms.takoform.com/module-worker/package-index.json",
-      "apiVersion": "packages.forms.takoform.com/v1alpha5"
-    },
-    {
-      "path": "forms/candidates/edge.forms.takoform.com/object-bucket/definition.json",
-      "apiVersion": "edge.forms.takoform.com"
-    },
-    {
-      "path": "forms/candidates/edge.forms.takoform.com/object-bucket/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha5"
     },
     {
@@ -296,6 +364,86 @@
     {
       "path": "forms/candidates/edge/v1beta1/worker-version/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function-deployment/definition.json",
+      "apiVersion": "function.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function-deployment/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function-endpoint/definition.json",
+      "apiVersion": "function.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function-version/definition.json",
+      "apiVersion": "function.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function-version/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function/definition.json",
+      "apiVersion": "function.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/function.forms.takoform.com/function/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/queue.forms.takoform.com/pull-queue/definition.json",
+      "apiVersion": "queue.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/queue.forms.takoform.com/pull-queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/schedule.forms.takoform.com/schedule/definition.json",
+      "apiVersion": "schedule.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/schedule.forms.takoform.com/schedule/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/table.forms.takoform.com/table/definition.json",
+      "apiVersion": "table.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/table.forms.takoform.com/table/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/topic.forms.takoform.com/topic-subscription/definition.json",
+      "apiVersion": "topic.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/topic.forms.takoform.com/topic-subscription/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/topic.forms.takoform.com/topic/definition.json",
+      "apiVersion": "topic.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/topic.forms.takoform.com/topic/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
+    },
+    {
+      "path": "forms/candidates/vector.forms.takoform.com/vector-index/definition.json",
+      "apiVersion": "vector.forms.takoform.com"
+    },
+    {
+      "path": "forms/candidates/vector.forms.takoform.com/vector-index/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5"
     }
   ],
   "retired": [
@@ -1118,6 +1266,16 @@
       "path": "forms/candidates/v1alpha2/vector-index/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha3",
       "retiredBecause": "withdrawn with the v1alpha2 epoch whose provider served it (decision 0042)"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/object-bucket/definition.json",
+      "apiVersion": "edge.forms.takoform.com",
+      "retiredBecause": "withdrawn when ObjectBucket left the exact current Edge candidate corpus; retained v1beta1 history remains immutable and Specification 1.0 does not promote or redefine a Form (decision 0053)"
+    },
+    {
+      "path": "forms/candidates/edge.forms.takoform.com/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha5",
+      "retiredBecause": "withdrawn with its current ObjectBucket definition; retained v1beta1 history remains immutable and Specification 1.0 does not publish a Form Package (decision 0053)"
     }
   ]
 }

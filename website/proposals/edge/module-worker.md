@@ -16,10 +16,10 @@ resources around it.
 ## Observable semantics
 
 The identity fixes the ES Module Worker ABI, and says exactly what that ABI is:
-the exact Interface contract `worker.runtime@1.0.0`
+the exact Interface contract `worker.runtime@1.1.0`
 ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 That contract fixes the module's default-export shape and that a declared
-handler must exist; the `fetch`, `scheduled`, `queue`, and `tail` signatures and
+handler must exist; the `fetch`, `scheduled`, and `queue` signatures and
 what each event carries; the `env` object (every declared binding, var, and
 sensitive-variable slot, and nothing else portable); `ctx.waitUntil`; exception
 handling; request and response body streaming; the minimum Web API surface; and
@@ -48,7 +48,7 @@ Forms in other families.
 
 ## Provided Interfaces
 
-`worker.runtime@1.0.0` — the runtime ABI a conforming host provides to this
+`worker.runtime@1.1.0` — the runtime ABI a conforming host provides to this
 worker's code. It is held by the IDENTITY because the identity is what a host
 implements; a Worker Version is the code that fills it.
 

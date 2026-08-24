@@ -18,7 +18,6 @@ var orderedKinds = []string{
 	"WorkerEndpoint",
 	"WorkerCronTrigger",
 	"EdgeKVNamespace",
-	"ObjectBucket",
 	"SQLiteDatabase",
 	"SQLiteMigrationSet",
 	"SQLiteMigrationApplication",
@@ -35,7 +34,7 @@ func TestCatalogValidates(t *testing.T) {
 	}
 }
 
-func TestCatalogIsExactSeventeenFormFamily(t *testing.T) {
+func TestCatalogIsExactSixteenFormFamily(t *testing.T) {
 	t.Parallel()
 	if len(Forms) != len(orderedKinds) {
 		t.Fatalf("family has %d forms, want %d", len(Forms), len(orderedKinds))
@@ -73,7 +72,7 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		// not by a token this project has no behavior registry to interpret
 		// (decision 0019).
 		"WorkerVersion": {
-			"actorBindings", "assets", "bucketBindings", "bundle", "externalServices", "handlers", "kvBindings",
+			"actorBindings", "assets", "bundle", "externalServices", "handlers", "kvBindings",
 			"queueProducerBindings", "requiredSensitiveVars", "serviceBindings", "sqliteBindings", "vars",
 			"worker", "workflowBindings",
 		},
@@ -84,7 +83,6 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		"WorkerEndpoint":             {"worker"},
 		"WorkerCronTrigger":          {"cron", "worker"},
 		"EdgeKVNamespace":            {},
-		"ObjectBucket":               {},
 		"SQLiteDatabase":             {},
 		"SQLiteMigrationSet":         {"manifestDigest"},
 		"SQLiteMigrationApplication": {"database", "migrationSet"},
@@ -124,7 +122,6 @@ func TestRoleRules(t *testing.T) {
 		"WorkerEndpoint":             model.RoleAttachment,
 		"WorkerCronTrigger":          model.RoleAttachment,
 		"EdgeKVNamespace":            model.RoleIdentity,
-		"ObjectBucket":               model.RoleIdentity,
 		"SQLiteDatabase":             model.RoleIdentity,
 		"SQLiteMigrationSet":         model.RoleRevision,
 		"SQLiteMigrationApplication": model.RoleAttachment,
@@ -172,7 +169,6 @@ func TestLifecycleCapabilityTable(t *testing.T) {
 		"WorkerEndpoint":             base,
 		"WorkerCronTrigger":          withUpdate,
 		"EdgeKVNamespace":            base,
-		"ObjectBucket":               base,
 		"SQLiteDatabase":             base,
 		"SQLiteMigrationSet":         base,
 		"SQLiteMigrationApplication": base,
@@ -320,8 +316,8 @@ func TestOnlyWorkerVersionAcceptsBindings(t *testing.T) {
 	t.Parallel()
 	for _, form := range Forms {
 		if form.Kind == "WorkerVersion" {
-			if len(form.AcceptedBindings) != 7 {
-				t.Errorf("WorkerVersion accepts %d bindings, want 7", len(form.AcceptedBindings))
+			if len(form.AcceptedBindings) != 6 {
+				t.Errorf("WorkerVersion accepts %d bindings, want 6", len(form.AcceptedBindings))
 			}
 			continue
 		}
@@ -335,7 +331,6 @@ func TestProvidedInterfaceAssignments(t *testing.T) {
 	t.Parallel()
 	want := map[string][]string{
 		"EdgeKVNamespace":  {"edge.kv"},
-		"ObjectBucket":     {"edge.objects"},
 		"SQLiteDatabase":   {"edge.sql"},
 		"AtLeastOnceQueue": {"edge.queue"},
 		// The worker identity carries both directions of its exact contracts.

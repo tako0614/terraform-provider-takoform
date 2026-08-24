@@ -81,12 +81,6 @@ variable "kv_bindings" {
   description = "Binding name to Edge KV namespace resource name."
 }
 
-variable "bucket_bindings" {
-  type        = map(string)
-  default     = {}
-  description = "Binding name to Object Bucket resource name."
-}
-
 variable "sqlite_bindings" {
   type        = map(string)
   default     = {}
@@ -103,6 +97,16 @@ variable "service_bindings" {
   type        = map(string)
   default     = {}
   description = "Binding name to another Module Worker's resource name."
+}
+
+variable "external_services" {
+  type = list(object({
+    name     = string
+    protocol = string
+    required = optional(bool, true)
+  }))
+  default     = []
+  description = "Opaque standard-service slots. Each slot carries only its runtime name, normalized reverse-DNS protocol, and whether the host must satisfy it; endpoints, credentials, and vendor configuration never enter module state."
 }
 
 variable "endpoint" {

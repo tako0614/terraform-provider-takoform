@@ -1,0 +1,103 @@
+{
+  "format": "takoform.family-semantic-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "group": "vector.forms.takoform.com",
+  "candidateSet": {
+    "path": "forms/candidates/vector.forms.takoform.com/candidate-set.json",
+    "sha256": "fef5dc0e5630deb3644fccaaead2a95db2977ee1f022b93cdb396492684f6fe2"
+  },
+  "requiredChecks": [
+    "candidate-desired-schema-validated",
+    "exact-form-ref-lifecycle",
+    "lifecycle-capabilities-preserved"
+  ],
+  "scenarios": [
+    {
+      "check": "candidate-desired-schema-validated",
+      "input": {
+        "operation": "candidate-desired-schema-validated",
+        "exactFormRefs": [
+          {
+            "apiVersion": "vector.forms.takoform.com",
+            "kind": "VectorIndex",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:46e4a807db0a90295c13edd82f03cf81d17df780f5d5cb7758377862205c692b"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "exact-form-ref-lifecycle",
+      "input": {
+        "operation": "exact-form-ref-lifecycle",
+        "exactFormRefs": [
+          {
+            "apiVersion": "vector.forms.takoform.com",
+            "kind": "VectorIndex",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:46e4a807db0a90295c13edd82f03cf81d17df780f5d5cb7758377862205c692b"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "lifecycle-capabilities-preserved",
+      "input": {
+        "operation": "lifecycle-capabilities-preserved",
+        "exactFormRefs": [
+          {
+            "apiVersion": "vector.forms.takoform.com",
+            "kind": "VectorIndex",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:46e4a807db0a90295c13edd82f03cf81d17df780f5d5cb7758377862205c692b"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    }
+  ],
+  "runnerInput": {
+    "vectorIndex": {
+      "name": "vector-index-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "vector.forms.takoform.com",
+          "kind": "VectorIndex",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:46e4a807db0a90295c13edd82f03cf81d17df780f5d5cb7758377862205c692b"
+        },
+        "packageDigest": "sha256:083bba1ed55f1d272df074a420464894d4d04d8afb75c4e7fad68ea6137bc1fc"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "dimension": 1536,
+        "metric": "cosine"
+      },
+      "desiredSchema": {
+        "path": "fixtures/vector-index-desired-schema.json",
+        "sha256": "sha256:510c5606ae9f927f9fbd94bbc49f12ddfe5006316b83c1d1e2f482f8dabfd9d4"
+      }
+    }
+  },
+  "standardServiceFixtures": []
+}

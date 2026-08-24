@@ -2,9 +2,11 @@ package edgeformcatalog
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -12,6 +14,162 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
+
+// TestConstraintsSurviveRenderedDefinitionRoundTrip pins the whole
+// authoring boundary: the rich model renders every kind-specific member, the
+// embedded current schema validates those JSON bytes, and typed decoding
+// returns the same constraint list. A field omitted by either renderer or the
+// Form Package model is therefore observable here instead of becoming an
+// unenforced host promise.
+func TestConstraintsSurviveRenderedDefinitionRoundTrip(t *testing.T) {
+	t.Parallel()
+	wantModel := []model.Constraint{
+		{Kind: model.ConstraintOrderedPair, References: []string{"/minimum", "/maximum"}},
+		{Kind: model.ConstraintUniqueBy, List: "/indexes", Member: "name"},
+		{Kind: model.ConstraintAcyclic, Reference: "/deadLetter/queue"},
+		{Kind: model.ConstraintDistinctPair, References: []string{"/primary", "/alternate"}},
+		{Kind: model.ConstraintUniquePair, References: []string{"/topic", "/primary"}},
+		{
+			Kind:   model.ConstraintSameResolvedTarget,
+			Anchor: "/function", Members: "/versions/*/functionVersion", Through: "/function",
+		},
+	}
+	ref := func(hcl, wire, kind string) model.Field {
+		return model.Field{
+			HCL: hcl, Wire: wire, Kind: model.KindResourceRef, Required: true,
+			Doc:     "Exact resolved-UID constraint participant.",
+			Example: map[string]any{"apiVersion": Family.APIVersion(), "kind": kind, "name": hcl},
+			ResourceTarget: &model.ResourceTarget{
+				Group: Family.APIVersion(), Kind: kind, Contract: model.TargetContract{ExactForm: true},
+			},
+		}
+	}
+	form := model.Form{
+		Family: Family, Kind: "ConstraintProbe", Slug: "constraint-probe",
+		Role: model.RoleIdentity, RequiresHostAPI: "forms.takoform.com/v1",
+		DefinitionVersion: "0.1.0", Title: "Constraint probe", Description: "Round-trip probe.",
+		Fields: []model.Field{
+			{HCL: "minimum", Wire: "minimum", Kind: model.KindInteger, Required: true, Min: model.I64(0), Max: model.I64(100), Doc: "Lower bound.", Example: 1},
+			{HCL: "maximum", Wire: "maximum", Kind: model.KindInteger, Required: true, Min: model.I64(0), Max: model.I64(100), Doc: "Upper bound.", Example: 10},
+			{HCL: "indexes", Wire: "indexes", Kind: model.KindObjectList, Required: true, MinItems: 1, MaxItems: 8, Doc: "Named indexes.",
+				Example: []any{map[string]any{"name": "by-name"}}, Fields: []model.Field{{
+					HCL: "name", Wire: "name", Kind: model.KindString, Required: true,
+					Pattern: model.PatternResourceName, MaxLength: model.ResourceNameMaxLength, Doc: "Index name.", Example: "by-name",
+				}}},
+			{HCL: "dead_letter", Wire: "deadLetter", Kind: model.KindObject, Required: true, Doc: "Dead-letter target.",
+				Example: map[string]any{"queue": map[string]any{"apiVersion": Family.APIVersion(), "kind": "AtLeastOnceQueue", "name": "queue"}},
+				Fields:  []model.Field{ref("queue", "queue", "AtLeastOnceQueue")}},
+			ref("primary", "primary", "AtLeastOnceQueue"),
+			ref("alternate", "alternate", "AtLeastOnceQueue"),
+			ref("topic", "topic", "AtLeastOnceQueue"),
+			ref("function", "function", "ModuleWorker"),
+			{HCL: "versions", Wire: "versions", Kind: model.KindObjectList, Required: true, MinItems: 1, MaxItems: 8,
+				Doc: "Selected versions.", Example: []any{map[string]any{"functionVersion": map[string]any{
+					"apiVersion": Family.APIVersion(), "kind": "WorkerVersion", "name": "version-a",
+				}}}, Fields: []model.Field{ref("function_version", "functionVersion", "WorkerVersion")}},
+		},
+		StructuralConstraints:  wantModel[:2],
+		ResolvedUIDConstraints: wantModel[2:],
+	}
+	rendered, err := renderForm(form, constraintProbeResolver{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := formpackage.ValidateDefinition([]byte(rendered.DefinitionJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []formpackage.FormConstraint{
+		{Kind: "orderedPair", References: []string{"/minimum", "/maximum"}},
+		{Kind: "uniqueBy", List: "/indexes", Member: "name"},
+		{Kind: "acyclic", Reference: "/deadLetter/queue"},
+		{Kind: "distinctPair", References: []string{"/primary", "/alternate"}},
+		{Kind: "uniquePair", References: []string{"/topic", "/primary"}},
+		{Kind: "sameResolvedTarget", Anchor: "/function", Members: "/versions/*/functionVersion", Through: "/function"},
+	}
+	wantConstraints, _ := json.Marshal(want)
+	gotConstraints, _ := json.Marshal(decoded.Constraints)
+	if string(gotConstraints) != string(wantConstraints) {
+		t.Fatalf("decoded constraints = %s, want literal %s", gotConstraints, wantConstraints)
+	}
+	// Compare canonical JSON rather than Go map representation: JSON numbers in
+	// decoded schemas legitimately use a different Go numeric type, while the
+	// contract is equality of the rendered Definition document.
+	wantRaw, err := json.Marshal(rendered.Definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotRaw, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCanonical, err := formpackage.Canonicalize(wantRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotCanonical, err := formpackage.Canonicalize(gotRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotCanonical) != string(wantCanonical) {
+		t.Fatalf("render -> JSON -> validate -> decode changed the Definition\ngot  %s\nwant %s", gotCanonical, wantCanonical)
+	}
+}
+
+func TestTaggedObjectAnnotationSurvivesRuntimeDefinitionValidation(t *testing.T) {
+	t.Parallel()
+	form := model.Form{
+		Family: Family, Kind: "TaggedProbe", Slug: "tagged-probe",
+		Role: model.RoleIdentity, RequiresHostAPI: "forms.takoform.com/v1",
+		DefinitionVersion: "0.1.0", Title: "Tagged probe", Description: "Closed tagged-object probe.",
+		Fields: []model.Field{{
+			HCL: "delivery", Wire: "delivery", Kind: model.KindTaggedObject, Required: true,
+			Doc: "Exactly one closed delivery variant.", Discriminator: "type",
+			Variants: []model.TaggedObjectVariant{
+				{Tag: "direct", Fields: []model.Field{{
+					HCL: "address", Wire: "address", Kind: model.KindString, Required: true,
+					Pattern: `^[a-z][a-z0-9-]{0,31}$`, MaxLength: 32, Doc: "Portable address.", Example: "primary",
+				}}},
+				{Tag: "discard", Fields: []model.Field{{
+					HCL: "reason", Wire: "reason", Kind: model.KindString, Required: true,
+					Pattern: `^[a-z][a-z0-9-]{0,31}$`, MaxLength: 32, Doc: "Portable reason.", Example: "expired",
+				}}},
+			},
+			Example: map[string]any{"type": "direct", "address": "primary"},
+		}},
+	}
+	rendered, err := renderForm(form, constraintProbeResolver{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := formpackage.ValidateDefinition([]byte(rendered.DefinitionJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	properties := decoded.DesiredSchema["properties"].(map[string]any)
+	delivery := properties["delivery"].(map[string]any)
+	if delivery[model.TaggedObjectDiscriminatorAnnotationKey] != "type" {
+		t.Fatalf("tagged discriminator annotation = %#v", delivery[model.TaggedObjectDiscriminatorAnnotationKey])
+	}
+}
+
+type constraintProbeResolver struct{}
+
+func (constraintProbeResolver) ResolveResourceTarget(target model.ResourceTarget) (model.ResolvedResourceTarget, error) {
+	return model.ResolvedResourceTarget{
+		ResourceNamePattern: model.PatternResourceName,
+		TargetFormRefs: []model.TargetFormRef{{
+			APIVersion: target.Group, Kind: target.Kind, DefinitionVersion: "0.1.0",
+			SchemaDigest: "sha256:" + strings.Repeat("a", 64),
+		}},
+	}, nil
+}
+
+func (constraintProbeResolver) ResolveExactFormRelations(model.TargetFormRef) ([]model.Relation, error) {
+	return []model.Relation{{
+		Pointer: "/function", TargetAPIVersion: Family.APIVersion(), TargetKind: "ModuleWorker",
+	}}, nil
+}
 
 // TestRenderedFormsVerifyAsV1Alpha5Packages proves the complete authoring
 // pipeline end to end: every catalog Form renders to a definition whose
@@ -249,8 +407,8 @@ func TestContractDefinitionsSatisfyNormativeSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(interfaces) != 8 {
-		t.Fatalf("interface catalog has %d entries, want 8", len(interfaces))
+	if len(interfaces) != 7 {
+		t.Fatalf("interface catalog has %d entries, want 7", len(interfaces))
 	}
 	for _, contract := range interfaces {
 		value, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(contract.DefinitionJSON)))
@@ -273,8 +431,8 @@ func TestContractDefinitionsSatisfyNormativeSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bindings) != 7 {
-		t.Fatalf("binding catalog has %d entries, want 7", len(bindings))
+	if len(bindings) != 6 {
+		t.Fatalf("binding catalog has %d entries, want 6", len(bindings))
 	}
 	interfaceDigests := map[string]string{}
 	for _, contract := range interfaces {

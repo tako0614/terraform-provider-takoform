@@ -1,6 +1,6 @@
 // Package workerauthoring drives the Edge Platform Family authoring surface —
-// the raw v1beta1 resources and the official `worker-app` module — through a
-// REAL Terraform-compatible CLI against the deterministic v1beta1 reference
+// the current stable resources and the official `worker-app` module — through a
+// REAL Terraform-compatible CLI against the deterministic stable-v1 reference
 // host.
 //
 // It exists because two of the properties the authoring surface promises are
@@ -28,6 +28,10 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 )
+
+// stablePortableHostCorpus is the frozen stable Host API corpus served by this
+// authoring harness. The retained beta corpus is never selected here.
+const stablePortableHostCorpus = "conformance/takoform-v1/generic-host/portable-host"
 
 // ProviderAddress is the one canonical FQN both supported CLIs install the
 // provider under.
@@ -75,7 +79,7 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 	if err != nil {
 		return nil, err
 	}
-	contract, err := portableconformancev3.Verify(filepath.Join(repoRoot, "conformance", "portable-host-v1beta4"))
+	contract, err := portableconformancev3.Verify(filepath.Join(repoRoot, filepath.FromSlash(stablePortableHostCorpus)))
 	if err != nil {
 		return nil, fmt.Errorf("verify portable host v3 contract: %w", err)
 	}

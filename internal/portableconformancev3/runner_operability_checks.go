@@ -77,7 +77,11 @@ func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {
 		return fmt.Errorf("probe apiVersion %q is not a namespaced group", ref.APIVersion)
 	}
 	second := r.contract.RunnerInput.SyntheticSecondGroup
-	if segmentCount(ref.APIVersion) == segmentCount(second.APIVersion) {
+	// The stable FormRef grammar admits only versionless reverse-DNS family
+	// groups, so every group is exactly one ordinary path segment. Retained
+	// beta4 still admits both historical shapes and must drive one of each.
+	if r.contract.lane.APIVersion != stableLane.APIVersion &&
+		segmentCount(ref.APIVersion) == segmentCount(second.APIVersion) {
 		return fmt.Errorf(
 			"the probe group %q and the synthetic second group %q travel as the same number of "+
 				"path segments, so this run cannot tell a host that splits by grammar from one "+

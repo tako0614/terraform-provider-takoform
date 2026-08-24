@@ -1,6 +1,6 @@
 # Vector Family proposals
 
-The Vector Family, `vector.forms.takoform.com/v1beta1`, fixes the
+The Vector Family, `vector.forms.takoform.com`, fixes the
 fixed-dimension dense vector index shape — namespaced records queried by
 top-k similarity — selected by
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md).
@@ -34,13 +34,12 @@ Desired schemas carry no `name` or envelope plumbing: the resource envelope
 owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
-A Form exists only when its proposal, catalog declaration, and candidate
-package exist ([spec/form-families.md](../../spec/form-families.md)); this
-directory carries the proposals, and the `vector.index` Interface candidate
-joins `interfaces/candidates/v1alpha1` with the implementation. Members
-enter as `0.1.0` Experimental; the family channel grants no maturity.
+This prose accompanies the generated Experimental `VectorIndex` candidate
+under `forms/candidates/vector.forms.takoform.com` and its exact
+`vector.index` Interface. The generated candidate bytes, not this proposal,
+own the current identity. Family membership grants no maturity.
 
-## MVP members
+## Current members
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

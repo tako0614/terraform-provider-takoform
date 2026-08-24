@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Logical identity of one request-driven serverless container service. Image, process configuration, resources, scaling, and traffic are represented by immutable revisions and the active traffic Form around this identity.",
+  "properties": {},
+  "title": "Container Service desired state",
+  "type": "object"
+}

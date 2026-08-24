@@ -1,0 +1,1055 @@
+{
+  "format": "takoform.family-semantic-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "group": "edge.forms.takoform.com",
+  "candidateSet": {
+    "path": "forms/candidates/edge.forms.takoform.com/candidate-set.json",
+    "sha256": "8e8599ca3896946dc5ac4e609ce7652f21631bd5e38dddc026db7a3febadf2f8"
+  },
+  "requiredChecks": [
+    "candidate-desired-schema-validated",
+    "exact-form-ref-lifecycle",
+    "lifecycle-capabilities-preserved",
+    "stable-standard-service-support-enforced"
+  ],
+  "scenarios": [
+    {
+      "check": "candidate-desired-schema-validated",
+      "input": {
+        "operation": "candidate-desired-schema-validated",
+        "exactFormRefs": [
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ModuleWorker",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:cb21984a579ae2706bddada8b44a22c0f8390994550c10d7c65df82edfa1141b"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "StaticAssetBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:83142a3f824cf1fa2793fb73f4c32203ae07fb70db789d056aebe4c0ebe9334f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerVersion",
+            "definitionVersion": "0.2.0",
+            "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerDeployment",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCronTrigger",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:5faa838c794b3326d0377d641db6247d4320b6ce39b1b0bb660d4deec18fe5ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "EdgeKVNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1a3f5d50bde53b4f743334dba3b0d0d28c1516727ca76d266beb61c5ee210022"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteDatabase",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationSet",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationApplication",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "AtLeastOnceQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "QueueConsumer",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "DurableWorkflow",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:eed7a1b971e3261df6bc4bafcdfa2fd67e7928f4ec66737d0134df383e7dfc0a"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ActorNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3669f3bebf7b4c6169d5a3cdf7e7ca4e8d1851516702a437be6ef69c2b9b98d7"
+          }
+        ],
+        "candidateCount": 16
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 16
+      }
+    },
+    {
+      "check": "exact-form-ref-lifecycle",
+      "input": {
+        "operation": "exact-form-ref-lifecycle",
+        "exactFormRefs": [
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ModuleWorker",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:cb21984a579ae2706bddada8b44a22c0f8390994550c10d7c65df82edfa1141b"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "StaticAssetBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:83142a3f824cf1fa2793fb73f4c32203ae07fb70db789d056aebe4c0ebe9334f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerVersion",
+            "definitionVersion": "0.2.0",
+            "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerDeployment",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCronTrigger",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:5faa838c794b3326d0377d641db6247d4320b6ce39b1b0bb660d4deec18fe5ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "EdgeKVNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1a3f5d50bde53b4f743334dba3b0d0d28c1516727ca76d266beb61c5ee210022"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteDatabase",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationSet",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationApplication",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "AtLeastOnceQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "QueueConsumer",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "DurableWorkflow",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:eed7a1b971e3261df6bc4bafcdfa2fd67e7928f4ec66737d0134df383e7dfc0a"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ActorNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3669f3bebf7b4c6169d5a3cdf7e7ca4e8d1851516702a437be6ef69c2b9b98d7"
+          }
+        ],
+        "candidateCount": 16
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 16
+      }
+    },
+    {
+      "check": "lifecycle-capabilities-preserved",
+      "input": {
+        "operation": "lifecycle-capabilities-preserved",
+        "exactFormRefs": [
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ModuleWorker",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:cb21984a579ae2706bddada8b44a22c0f8390994550c10d7c65df82edfa1141b"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "StaticAssetBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:83142a3f824cf1fa2793fb73f4c32203ae07fb70db789d056aebe4c0ebe9334f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerVersion",
+            "definitionVersion": "0.2.0",
+            "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerDeployment",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCronTrigger",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:5faa838c794b3326d0377d641db6247d4320b6ce39b1b0bb660d4deec18fe5ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "EdgeKVNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1a3f5d50bde53b4f743334dba3b0d0d28c1516727ca76d266beb61c5ee210022"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteDatabase",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationSet",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationApplication",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "AtLeastOnceQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "QueueConsumer",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "DurableWorkflow",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:eed7a1b971e3261df6bc4bafcdfa2fd67e7928f4ec66737d0134df383e7dfc0a"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ActorNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3669f3bebf7b4c6169d5a3cdf7e7ca4e8d1851516702a437be6ef69c2b9b98d7"
+          }
+        ],
+        "candidateCount": 16
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 16
+      }
+    },
+    {
+      "check": "stable-standard-service-support-enforced",
+      "input": {
+        "operation": "stable-standard-service-support-enforced",
+        "exactFormRefs": [
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ModuleWorker",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:cb21984a579ae2706bddada8b44a22c0f8390994550c10d7c65df82edfa1141b"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "StaticAssetBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:83142a3f824cf1fa2793fb73f4c32203ae07fb70db789d056aebe4c0ebe9334f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerVersion",
+            "definitionVersion": "0.2.0",
+            "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerDeployment",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCronTrigger",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:5faa838c794b3326d0377d641db6247d4320b6ce39b1b0bb660d4deec18fe5ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "EdgeKVNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1a3f5d50bde53b4f743334dba3b0d0d28c1516727ca76d266beb61c5ee210022"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteDatabase",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationSet",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationApplication",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "AtLeastOnceQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "QueueConsumer",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "DurableWorkflow",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:eed7a1b971e3261df6bc4bafcdfa2fd67e7928f4ec66737d0134df383e7dfc0a"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ActorNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3669f3bebf7b4c6169d5a3cdf7e7ca4e8d1851516702a437be6ef69c2b9b98d7"
+          }
+        ],
+        "candidateCount": 16
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 16
+      }
+    }
+  ],
+  "runnerInput": {
+    "moduleWorker": {
+      "name": "module-worker-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+        },
+        "packageDigest": "sha256:931eda33c673a640530b81779a5821ed27b9244c9f13dec9660867173aa69405"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/module-worker-desired-schema.json",
+        "sha256": "sha256:18192dd39a68d01a3e8d673d6fb33692bea4a2a1b4bcd3db61c7a1cd78c6094f"
+      }
+    },
+    "workerBundle": {
+      "name": "worker-bundle-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerBundle",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:cb21984a579ae2706bddada8b44a22c0f8390994550c10d7c65df82edfa1141b"
+        },
+        "packageDigest": "sha256:68d5d9ea27bc044cdda1cfc0d96fa4492e67b328bd84861e2e77699d3c5b06a1"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "manifestDigest": "sha256:6a5cbf24f5d0c86479ae13b9d1731a626a1729f01aef65403c5c8ac82ed85f43"
+      },
+      "desiredSchema": {
+        "path": "fixtures/worker-bundle-desired-schema.json",
+        "sha256": "sha256:4e2c13cee7c98401de522e6caf5b1a3f8f8d4fefffaaaf593e32b73da892d2c5"
+      }
+    },
+    "staticAssetBundle": {
+      "name": "static-asset-bundle-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "StaticAssetBundle",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:83142a3f824cf1fa2793fb73f4c32203ae07fb70db789d056aebe4c0ebe9334f"
+        },
+        "packageDigest": "sha256:14521f2b5a673168344ce1a1af9090a957b56948115e183b578eb449a13db392"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "manifestDigest": "sha256:50ae1f6f1c6b121e8d64c4c5a83a3780c92d3a888765640a07bc20b20d71f4ef"
+      },
+      "desiredSchema": {
+        "path": "fixtures/static-asset-bundle-desired-schema.json",
+        "sha256": "sha256:1a34bb52ccc21fdb7d1155b93b63be6284ac5947fdf8c3b2a6bac281830f4de0"
+      }
+    },
+    "workerVersion": {
+      "name": "worker-version-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerVersion",
+          "definitionVersion": "0.2.0",
+          "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+        },
+        "packageDigest": "sha256:63cf4dd3e96f575d1d1631c87d2e0ff0410ca820e142b8d4fa73e30aaa651025"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "actorBindings": [
+          {
+            "name": "ROOMS",
+            "resource": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "ActorNamespace",
+              "name": "actor-namespace"
+            }
+          }
+        ],
+        "assets": {
+          "bundle": {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "StaticAssetBundle",
+            "name": "static-asset-bundle"
+          },
+          "notFoundHandling": "single_page_application",
+          "runWorkerFirst": true
+        },
+        "bundle": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerBundle",
+          "name": "worker-bundle"
+        },
+        "externalServices": [
+          {
+            "name": "PRIMARY_DB",
+            "service": {
+              "apiVersion": "standards.takoform.com/v1",
+              "protocol": "org.postgresql.wire"
+            }
+          },
+          {
+            "name": "MEDIA",
+            "service": {
+              "apiVersion": "standards.takoform.com/v1",
+              "protocol": "com.amazonaws.s3"
+            }
+          }
+        ],
+        "handlers": [
+          "fetch"
+        ],
+        "kvBindings": [
+          {
+            "name": "CACHE",
+            "resource": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "EdgeKVNamespace",
+              "name": "edge-kv-namespace"
+            }
+          }
+        ],
+        "queueProducerBindings": [
+          {
+            "name": "EVENTS",
+            "resource": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "AtLeastOnceQueue",
+              "name": "at-least-once-queue"
+            }
+          }
+        ],
+        "requiredSensitiveVars": [
+          "API_SIGNING_TOKEN_NAME"
+        ],
+        "serviceBindings": [
+          {
+            "name": "AUTH",
+            "resource": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "ModuleWorker",
+              "name": "auth-worker"
+            }
+          }
+        ],
+        "sqliteBindings": [
+          {
+            "name": "DB",
+            "resource": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "SQLiteDatabase",
+              "name": "sqlite-database"
+            }
+          }
+        ],
+        "vars": {
+          "LOG_LEVEL": "info"
+        },
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        },
+        "workflowBindings": [
+          {
+            "name": "ORDERS",
+            "resource": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "DurableWorkflow",
+              "name": "durable-workflow"
+            }
+          }
+        ]
+      },
+      "desiredSchema": {
+        "path": "fixtures/worker-version-desired-schema.json",
+        "sha256": "sha256:c35c2398f45dc0b73c2e7de8cb44d065ace7de05a5100eccf22ebf3ae1e9e4a8"
+      }
+    },
+    "workerDeployment": {
+      "name": "worker-deployment-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerDeployment",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+        },
+        "packageDigest": "sha256:535133f0a79c2091162f2dc237d177702e5e5db5c558c6c2e5bf5bcd76d6ff17"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "versions": [
+          {
+            "weight": 10000,
+            "workerVersion": {
+              "apiVersion": "edge.forms.takoform.com",
+              "kind": "WorkerVersion",
+              "name": "worker-version"
+            }
+          }
+        ],
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/worker-deployment-desired-schema.json",
+        "sha256": "sha256:7ed8e640cf7ba175ae217bec2b530b118ade59ba5ec9fcfd864dbe0be8dfe731"
+      }
+    },
+    "workerCustomDomain": {
+      "name": "worker-custom-domain-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerCustomDomain",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+        },
+        "packageDigest": "sha256:94453c8f24eccf11e2a7142fb8711b47a8b039a7124a9498c498ec466c0574ed"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "hostname": "app.portable-conformance.invalid",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/worker-custom-domain-desired-schema.json",
+        "sha256": "sha256:fadc0188cb9925206dbc778d3fc78d9272928237a76f06ca83346298e743a4a3"
+      }
+    },
+    "workerEndpoint": {
+      "name": "worker-endpoint-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerEndpoint",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f"
+        },
+        "packageDigest": "sha256:e68431e901e44768b9ceb4a4b95fc0d12a9930decd505c56cfe26ad9f51bdc3a"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/worker-endpoint-desired-schema.json",
+        "sha256": "sha256:a17e0928faf37f6eb25fc86c43b535895985c32fc51ae7a887388d708dce7bc3"
+      }
+    },
+    "workerCronTrigger": {
+      "name": "worker-cron-trigger-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "WorkerCronTrigger",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:5faa838c794b3326d0377d641db6247d4320b6ce39b1b0bb660d4deec18fe5ed"
+        },
+        "packageDigest": "sha256:562df22aa6d3d1ad47f308c6dee65fe242bc5c53f811a3b03344747b67c7dc3c"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "cron": "*/5 * * * *",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/worker-cron-trigger-desired-schema.json",
+        "sha256": "sha256:52baf84e6fb548d19b3074ea4acd69bcf48aaa3444396d435801ed8c081bfc6c"
+      }
+    },
+    "edgeKVNamespace": {
+      "name": "edge-kvnamespace-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "EdgeKVNamespace",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:1a3f5d50bde53b4f743334dba3b0d0d28c1516727ca76d266beb61c5ee210022"
+        },
+        "packageDigest": "sha256:fb7f8a747a06d453d416714d50572ec546a9ec37be014866ea51b3f6e50ef8fd"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/edge-kvnamespace-desired-schema.json",
+        "sha256": "sha256:6ae4b4cc712dbd445a131e0d3a8c464ef48070375ec3432dea599944c4c1bb5e"
+      }
+    },
+    "sQLiteDatabase": {
+      "name": "sqlite-database-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "SQLiteDatabase",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
+        },
+        "packageDigest": "sha256:0d3cce162550bb956ed19ce72b5eb1aeca52d78e7ca80e868d646fd580deef84"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/sqlite-database-desired-schema.json",
+        "sha256": "sha256:20e378ed44dc3b0bb2512400f30d1567a319b54bd01800883c992cef81d55dda"
+      }
+    },
+    "sQLiteMigrationSet": {
+      "name": "sqlite-migration-set-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "SQLiteMigrationSet",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
+        },
+        "packageDigest": "sha256:45a09765392059c0f1f4794885f6a5bc074400490375b46c5a39bfd018f1185a"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "manifestDigest": "sha256:344f4d30e8843b60598889c142ad26a7a9958ead6d26f50d787cd0fc32b02338"
+      },
+      "desiredSchema": {
+        "path": "fixtures/sqlite-migration-set-desired-schema.json",
+        "sha256": "sha256:bea51df95c4f031cba02c0f56c4f21d06f7b56b757f3fecfafc9467f622b29aa"
+      }
+    },
+    "sQLiteMigrationApplication": {
+      "name": "sqlite-migration-application-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "SQLiteMigrationApplication",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
+        },
+        "packageDigest": "sha256:0ae795b0c8a05672817e5e1a365562ecdc2cdeedf3c7477a8ecfc4f3bdf974ca"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "database": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "SQLiteDatabase",
+          "name": "sqlite-database"
+        },
+        "migrationSet": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "SQLiteMigrationSet",
+          "name": "sqlite-migration-set"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/sqlite-migration-application-desired-schema.json",
+        "sha256": "sha256:0fd08736e9ef1999b8e38639cde58d28fc90feef6c5bc3f3cd0ae6978183d121"
+      }
+    },
+    "atLeastOnceQueue": {
+      "name": "at-least-once-queue-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "AtLeastOnceQueue",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+        },
+        "packageDigest": "sha256:6777eacc4ce141342f97f4bb06e2adaeb714461c0f2f91226f7f4c6f1a0c19b9"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "deliveryDelaySeconds": 0,
+        "messageRetentionSeconds": 345600
+      },
+      "desiredSchema": {
+        "path": "fixtures/at-least-once-queue-desired-schema.json",
+        "sha256": "sha256:cde8e7bc22646ca301162cafd9908983a1105c1ae4ac4f8308a847cfddf53a74"
+      }
+    },
+    "queueConsumer": {
+      "name": "queue-consumer-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "QueueConsumer",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+        },
+        "packageDigest": "sha256:3c6b332cf45df58f7a7db3eea8d03fec2aa4103b5e53c3452335639fa40a6266"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "deadLetterQueue": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "AtLeastOnceQueue",
+          "name": "dead-letters"
+        },
+        "maxBatchSize": 10,
+        "maxBatchTimeoutSeconds": 5,
+        "maxConcurrency": 4,
+        "maxRetries": 3,
+        "queue": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "AtLeastOnceQueue",
+          "name": "at-least-once-queue"
+        },
+        "retryDelaySeconds": 60,
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/queue-consumer-desired-schema.json",
+        "sha256": "sha256:cc97142acf0c23186022a3be15cb3d801a8ec2900b81ad77039f3692eeddffa2"
+      }
+    },
+    "durableWorkflow": {
+      "name": "durable-workflow-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "DurableWorkflow",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:eed7a1b971e3261df6bc4bafcdfa2fd67e7928f4ec66737d0134df383e7dfc0a"
+        },
+        "packageDigest": "sha256:016ec7ec8a1a8333ab6d6aa63e4eb450fc2df47fca06e262a56cc064171d04d1"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "className": "OrderFulfilment",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/durable-workflow-desired-schema.json",
+        "sha256": "sha256:ad461df3c85d920ded44ecbddb318bf1717c7fcf96729300c2612bf79a4586ef"
+      }
+    },
+    "actorNamespace": {
+      "name": "actor-namespace-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ActorNamespace",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:3669f3bebf7b4c6169d5a3cdf7e7ca4e8d1851516702a437be6ef69c2b9b98d7"
+        },
+        "packageDigest": "sha256:eb174b666890ef630e82746374c8a91aec8692c64e98e82dc580a85d17307743"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "className": "ChatRoom",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com",
+          "kind": "ModuleWorker",
+          "name": "module-worker"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/actor-namespace-desired-schema.json",
+        "sha256": "sha256:7c6d8c0b11a1b8b447ad75db891cc254d37fc507fe842b41ad5d6ebd1f4e3e66"
+      }
+    }
+  },
+  "standardServiceFixtures": [
+    {
+      "serviceRef": {
+        "apiVersion": "standards.takoform.com/v1",
+        "protocol": "com.amazonaws.s3"
+      },
+      "satisfiable": true
+    },
+    {
+      "serviceRef": {
+        "apiVersion": "standards.takoform.com/v1",
+        "protocol": "com.example.future-store"
+      },
+      "satisfiable": false
+    }
+  ]
+}

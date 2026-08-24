@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 func TestProviderResourcesIncludeCurrentServiceForms(t *testing.T) {
@@ -93,7 +93,11 @@ func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
 		candidate.Metadata(context.Background(), frameworkresource.MetadataRequest{ProviderTypeName: "takoform"}, &metadata)
 		var schemaResponse frameworkresource.SchemaResponse
 		candidate.Schema(context.Background(), frameworkresource.SchemaRequest{}, &schemaResponse)
-		for _, forbidden := range []string{"selected_implementation", "target", "locked", "credential", "secret", "price", "quote", "billing", "backend"} {
+		// `target` is a legitimate portable relationship field for Forms such as
+		// Schedule and TopicSubscription. Host placement/implementation
+		// authority is represented by the terms below, never by that generic
+		// relationship spelling.
+		for _, forbidden := range []string{"selected_implementation", "locked", "credential", "secret", "price", "quote", "billing", "backend"} {
 			if _, ok := schemaResponse.Schema.Attributes[forbidden]; ok {
 				t.Errorf("%s exposes forbidden provider-state attribute %s", metadata.TypeName, forbidden)
 			}
@@ -301,9 +305,18 @@ func currentProviderResourceTypeNames() []string {
 // carrier — `takoform_resource` was withdrawn by spec/decisions/0021 because
 // nothing in the lane lets a client verify a FormRef it did not compile in.
 func v3ProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(edgeformcatalog.Forms))
-	for _, form := range edgeformcatalog.Forms {
-		names = append(names, form.ResourceType)
+	forms := providerV3CurrentForms()
+	names := make([]string, 0, len(forms))
+	for _, form := range forms {
+		ref, err := currentformregistry.V3ForKind(form.Family.APIVersion(), form.Kind)
+		if err != nil {
+			panic(err)
+		}
+		resourceType, ok := v3TerraformResourceTypes().Lookup(ref.ExactKey())
+		if !ok {
+			panic("provider resource type mapping missing for " + ref.ExactKey().String())
+		}
+		names = append(names, resourceType)
 	}
 	sort.Strings(names)
 	return names

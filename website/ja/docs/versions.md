@@ -1,20 +1,20 @@
 # バージョンと互換性
 
-Takoform では、Provider、Host API、Form Family、Form definition、Form Package
-API/status の 5 つを独立した軸として扱います。一つの軸の version は、別の軸の
+Takoform では、Specification、Provider、Host API、Form Family、Form definition、
+Form Package を独立した軸として扱います。一つの軸の version は、別の軸の
 preview や成熟度を意味しません。
 
 ## Current design target
 
 | 軸                    | 現在の identity                            | 意味と利用可能性                                                                                                                                                               |
 | --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Provider              | **Provider 2.1.1**                         | Registry 公開済みの stable client distribution。repository descriptor は owner publication 後も設計上 `candidate-only` metadata として残ります。 |
-| Host API              | **Host API v1beta1**                       | Beta protocol。discovery、exact Form availability、operation、fence、error を定義します。                                                                                      |
-| Form Family           | **Edge Form Family v1beta1**               | Beta family。現在の 15 個の Form definition は Experimental です。                                                                                                          |
-| Form definition       | **definition 0.1.0**                       | 現在の 15 個の Experimental Form が使う exact definition version です。                                                                                                        |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha4`** | provider や Host API とは独立した package/distribution schema identifier。package artifact は unpublished です。                                                               |
+| Specification         | **Takoform 1.0 candidate**                 | exact committed source、exact candidate/corpus、reference conformance が閉じるまで open。                                                                                       |
+| Host API              | **`forms.takoform.com/v1`**                | stable Specification contract。                                                                                                                                                 |
+| Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Forms。すべて Experimental。                                                                                                                                |
+| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | package artifact は unpublished。                                                                                                                                               |
+| Provider              | **independent**                            | Provider 2.1.1 は retained history、Provider 3 は non-normative sample。                                                                                                       |
 
-Provider の配布状態は独立した軸です。**Provider 2.1.1** が現在の Registry
+Provider の配布状態は独立した軸です。**Provider 2.1.1** は retained Registry
 公開済み client です。**Provider 2.0.0** と **Provider 1.0.3** は撤回された
 pre-Beta epoch のための不変の Registry 履歴として残ります
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
@@ -25,7 +25,7 @@ pre-Beta epoch のための不変の Registry 履歴として残ります
 
 | Client / distribution       | Host API          | Form と definition                                                    | 状態 / 用途                                                           |
 | --------------------------- | ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1、definition 0.1.0 の Experimental Form 15 個 | Registry 公開済みの current client。descriptor は設計上 `candidate-only` metadata。 |
+| Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1 の immutable historical Form 15 個 | Registry 公開済みの retained client。descriptor は設計上 `candidate-only` metadata。 |
 | Provider 2.0.0 distribution | Host API v1alpha2（撤回済み epoch） | 撤回された 9 個の v1alpha2 Form | 不変の Registry 履歴。exact pin のみ、後継なし。 |
 | Provider 1.0.3 Legacy       | Host API v1alpha1（撤回済み epoch） | 撤回された v1 Form Package identity | 不変の Registry 履歴。recovery / migration のみ。 |
 
@@ -33,10 +33,10 @@ Host API v1beta1 は wire protocol、Edge Form Family v1beta1 はその上で動
 Form の group です。definition 0.1.0 は Form の identity であり、Provider
 2.1.1 の SemVer を変更しません。
 
-## Current design target — Edge Form Family v1beta1 (15 Experimental Forms)
+## Current Edge reference family (16 Experimental Forms)
 
-現在の stack は Host API v1beta1 と、次の 15 個の typed resource です。すべて
-definition 0.1.0 の Experimental Form です（詳細ページは英語のみ）。
+現在の versionless Edge family は次の 16 個の exact Experimental `0.x` Form
+です（詳細ページは英語のみ）。
 
 - [`takoform_module_worker`](/docs/resources/module_worker.html)
 - [`takoform_worker_bundle`](/docs/resources/worker_bundle.html)
@@ -47,21 +47,22 @@ definition 0.1.0 の Experimental Form です（詳細ページは英語のみ�
 - [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)
 - [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)
 - [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)
-- [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html)
 - [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)
 - [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)
 - [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html)
 - [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)
 - [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)
+- [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)
+- [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
 
-current target は Registry から利用できます。
+independent Provider 3 sample の resource type 名は次の version floor を使います。
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.1.1"
+      version = ">= 3.0.0"
     }
   }
 }

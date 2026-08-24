@@ -1,6 +1,6 @@
 # Table Family proposals
 
-The Table Family, `table.forms.takoform.com/v1beta1`, fixes the document/KV
+The Table Family, `table.forms.takoform.com`, fixes the document/KV
 table shape — items addressed by a declared partition key — selected by
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md).
 Its member preserves, completely, the application-visible semantics of that
@@ -35,14 +35,12 @@ Desired schemas carry no `name` or envelope plumbing: the resource envelope
 owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
-A Form exists only when its proposal, catalog declaration, and candidate
-package exist ([spec/form-families.md](../../spec/form-families.md)); this
-directory carries the proposals, and the `table.document` Interface
-candidate joins `interfaces/candidates/v1alpha1` with the implementation.
-Members enter as `0.1.0` Experimental; the family channel grants no
-maturity.
+This prose accompanies the generated Experimental `Table` candidate under
+`forms/candidates/table.forms.takoform.com` and its exact `table.document`
+Interface. The generated candidate bytes, not this proposal, own the current
+identity. Family membership grants no maturity.
 
-## MVP members
+## Current members
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

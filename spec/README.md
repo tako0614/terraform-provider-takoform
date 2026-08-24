@@ -1,10 +1,12 @@
 # Takoform portable specification
 
-This directory is the portable specification surface for Takoform, an
-**Experimental specification and tooling project**. Takoform defines a small
-desired-state boundary between infrastructure-as-code clients and resource
-hosts; it is not currently an industry standard, certification authority, or
-guarantee of backend portability.
+This directory is the portable specification surface for Takoform. It contains
+the **Specification 1.0 candidate** and literal stable Host API v1 source; the
+numbered release remains open until its exact committed
+source/corpus/reference evidence closes. Takoform defines a small desired-state
+boundary between infrastructure-as-code clients and resource hosts. It is not
+an industry standards body, certification authority, or guarantee of backend
+portability.
 
 Requirement keywords, conformance classes, and what a passing check does and
 does not prove are defined in [`conformance.md`](conformance.md). How the API
@@ -23,17 +25,18 @@ Takoform has five public contract interfaces:
    [`form-definition/`](form-definition/) defines immutable `FormRef` and the
    desired/observed/output shape. [`form-package/`](form-package/) binds one
    exact definition and its data-only fixtures into immutable package bytes
-   under the `packages.forms.takoform.com/v1alpha4` envelope.
+   under the current `packages.forms.takoform.com/v1alpha5` envelope.
 2. **Desired Resource lifecycle.**
    [`host-api/`](host-api/) defines discovery, exact Form availability,
    preview/apply, read/import/observe/refresh/delete, fencing, and portable
-   errors on the `forms.takoform.com/v1beta1` wire, reached through
-   `/.well-known/takoform/v1beta1`. The host chooses implementation and
+   errors on the `forms.takoform.com/v1` wire, reached through
+   `/.well-known/takoform/v1`. The host chooses implementation and
    placement.
 3. **Form Families and their contract surfaces.**
    [`form-families.md`](form-families.md) defines namespaced Form Family
-   groups; the first family is `edge.forms.takoform.com/v1beta1`.
-   [`host-api/v1beta1.md`](host-api/v1beta1.md) defines the Host API channel
+   groups; current families use versionless groups such as
+   `edge.forms.takoform.com`.
+   [`host-api/v1.md`](host-api/v1.md) defines the Host API channel
    with UID/generation/revision resource identity, long-running Operations,
    and Host Support Profiles.
 4. **Interface, Binding, and artifact contracts.**
@@ -41,8 +44,8 @@ Takoform has five public contract interfaces:
    Interface contracts, [`binding-contract/`](binding-contract/) defines typed
    Binding contracts, [`artifact-transport/`](artifact-transport/) defines
    content-addressed artifact upload, and
-   [`standard-services/`](standard-services/) defines sealed-slot access to
-   external services speaking de-facto standard protocols.
+   [`standard-services/`](standard-services/) defines Host-resolved sealed-slot
+   access by opaque `standards.takoform.com/v1` reverse-DNS protocol identity.
 5. **Trust, lifecycle, version, and release identity.**
    [`trust/`](trust/) defines immutable publisher evidence and revocation;
    [`project-lifecycle.md`](project-lifecycle.md) separates Form maturity from
@@ -56,7 +59,7 @@ Takoform has five public contract interfaces:
 executable evidence language, and decision rationale. They are not additional
 product interfaces. The generated current inventory is
 [`../forms/README.md`](../forms/README.md), host discovery validation is
-[`schemas/host-discovery-v1beta1.schema.json`](schemas/host-discovery-v1beta1.schema.json),
+[`schemas/host-discovery-v1.schema.json`](schemas/host-discovery-v1.schema.json),
 and the local evidence map is
 [`../conformance/README.md`](../conformance/README.md).
 
@@ -67,13 +70,13 @@ revocation-checkpoint schemas, the RFC 8785/I-JSON library, the closed local
 verifier, the positive/negative corpus, the protected keyless Sigstore release
 lane, and the signed append-only checkpoint delivery lane are implemented.
 
-Current Form design work uses namespaced Form Family groups
-([`form-families.md`](form-families.md)); the first family is
-`edge.forms.takoform.com/v1beta1`. Its exact 15 `0.1.0` definitions are
-Experimental and its packages use `packages.forms.takoform.com/v1alpha4`.
-Package publication and Form maturity are independent. A repository
-implementation or local passing gate is not Form publication, Host Support,
-activation, or live Cloud availability.
+Current Form design work uses eight versionless namespaced Form Family groups
+([`form-families.md`](form-families.md)) and 31 exact Experimental `0.x`
+FormRefs. Edge contains 16 and has no current `ObjectBucket`; packages use
+`packages.forms.takoform.com/v1alpha5`. Package publication, Form maturity,
+Host API version, Specification release, and Provider release are independent.
+A repository implementation or local passing gate is not Form publication,
+Host Support, activation, or live availability.
 
 Two pre-Beta epochs preceded this one and were **withdrawn** while Takoform is
 pre-Stable ([decision
@@ -94,17 +97,25 @@ schema for that purpose. Historical `standard` and `portable-standard` fields
 in those immutable bytes do not define a current approved subset, and nothing
 derives current approval or admission from that history.
 
-The current Host API wire is `forms.takoform.com/v1beta1`, reached through
-`/.well-known/takoform/v1beta1` with API root
-`/apis/forms.takoform.com/v1beta1`. The Host API group is a protocol
-compatibility identity independent of any nested Form group. The current
-package envelope is `packages.forms.takoform.com/v1alpha4`; Interface and
+Specification 1.0 defines Host API wire `forms.takoform.com/v1`, reached through
+`/.well-known/takoform/v1` with API root
+`/apis/forms.takoform.com/v1`. The release assertion remains open while its
+committed evidence pointers are null. The Host API group is a protocol
+compatibility identity independent of every Form group and Form maturity. The
+current package envelope is `packages.forms.takoform.com/v1alpha5`; Interface and
 Binding refs remain `interfaces.takoform.com/v1alpha1` and
-`bindings.takoform.com/v1alpha1`. The Terraform provider identity is
+`bindings.takoform.com/v1alpha2`. The Terraform provider identity is
 `registry.terraform.io/tako0614/takoform`; its Registry-published stable
-`v2.1.1` release is independent from all of these API identities. Its
+`v2.1.1` release on retained Host API `forms.takoform.com/v1beta1` is immutable
+history and independent from all of these current API identities. Its
 `release/version.json` descriptor remains `candidate-only` metadata by design
 after owner publication.
+
+The official Provider 3 work is a separate non-normative sample. It may
+implement the exact current `0.x` Forms without defining their semantics or
+blocking Specification 1.0. Releasing Specification/Host API v1 does not
+promote those Forms to `1.0.0`; a future Stable Form requires an explicit
+per-Form decision.
 
 ## Normative consistency audit
 

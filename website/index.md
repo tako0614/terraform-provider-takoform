@@ -14,7 +14,7 @@ hero:
       link: /spec/
 ---
 
-## Current design target — Provider 2.1.1 / Host API v1beta1
+## Specification 1.0 candidate / Host API v1
 
 Takoform is an Experimental specification project. The current stack is
 described on five independent axes so a client version, a host protocol, a
@@ -22,41 +22,33 @@ Form identity, and package publication cannot be mistaken for one another.
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                     |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Provider              | **Provider 2.1.1**                     | Registry-published stable client distribution. The repository descriptor remains `candidate-only` metadata by design after owner publication. |
-| Host API              | **Host API v1beta1**                   | Beta protocol for discovery, exact Form availability, operations, fencing, and errors.                                       |
-| Form Family           | **Edge Form Family v1beta1**           | Beta family containing the current 15 Experimental Form definitions.                                                          |
-| Form definition       | **definition 0.1.0**                   | Exact definition version for each current Form.                                                                              |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha4` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |
+| Specification         | **Takoform 1.0 candidate**             | Open until exact committed source, exact candidate/corpus, and reference conformance close.                                  |
+| Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                                |
+| Form corpus           | **8 families / 31 Forms**              | Exact current `0.x` FormRefs; every Form remains Experimental.                                                               |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |
+| Provider              | **independent**                        | Provider 2.1.1 is retained history; Provider 3 is a non-normative sample.                                                    |
 
-Provider 2.1.1 is the Registry-published current client distribution. The
-repository's `release/version.json` descriptor intentionally remains
-`candidate-only` metadata after owner publication; this does not revoke the
-published client. Provider distribution availability is reported separately
-below and in the [machine-readable status](/.well-known/takoform-site.json).
-Use the [current quick start](/docs/) for an executable configuration.
-
-Provider 2.1.1 is Registry-published; its descriptor remains `candidate-only`
-metadata after owner publication. The pre-Beta epochs were withdrawn
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
-their identities are retired, their bytes stay in repository history, and no
-current approval or admission is implied by anything they published.
+Specification release, Form maturity, Form Package publication, and Provider
+release are independent. Specification 1.0 does not promote current Forms to
+`1.0.0`; Provider 3 cannot block it. Provider 2.1.1 remains Registry-published
+for the historical identities it shipped.
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.1.1"
+      version = ">= 3.0.0"
     }
   }
 }
 ```
 
-## Current design target — Edge Form Family v1beta1 (15 Experimental Forms)
+## Edge reference family (16 of 31 current Experimental Forms)
 
-The Host API v1beta1 carries the current Edge Form Family v1beta1
-([Form Families](/spec/form-families.html)). Each of its
-15 Forms is Experimental and uses definition 0.1.0. A worker becomes reachable
+Host API v1 carries the versionless current Form families
+([Form Families](/spec/form-families.html)). The Edge family's 16 exact
+`0.x` Forms are Experimental. A worker becomes reachable
 through a chain of immutable resources: identity, module bytes, an exported
 handler version, a traffic deployment, and an attachment that receives the
 host-assigned address.
@@ -72,7 +64,6 @@ host-assigned address.
 | [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)                           | attachment | reachability over HTTPS at an address the host assigns                         |
 | [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)                   | attachment | a UTC cron invoking the scheduled handler                                      |
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)                       | identity   | an eventually consistent edge KV namespace                                     |
-| [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html)                     | identity   | a strongly consistent object bucket                                            |
 | [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)                           | identity   | a SQLite-semantics serverless database                                         |
 | [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)                 | revision   | an immutable ordered SQL migration set                                         |
 | [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | checksum-safe suffix application to one database                               |
@@ -81,13 +72,19 @@ host-assigned address.
 | [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | durable multi-step execution as a class the worker's deployment serves         |
 | [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | addressable actors with one live context, private storage, and one alarm       |
 
+The Provider 3 candidate also maps the other 15 current Forms:
+
+- Function: [`takoform_function`](/docs/resources/function.html), [`takoform_function_version`](/docs/resources/function_version.html), [`takoform_function_deployment`](/docs/resources/function_deployment.html), [`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
+- Container: [`takoform_container_service`](/docs/resources/container_service.html), [`takoform_container_revision`](/docs/resources/container_revision.html), [`takoform_container_traffic`](/docs/resources/container_traffic.html), [`takoform_container_endpoint`](/docs/resources/container_endpoint.html), [`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
+- Table and queue: [`takoform_table`](/docs/resources/table.html), [`takoform_pull_queue`](/docs/resources/pull_queue.html)
+- Topic: [`takoform_topic`](/docs/resources/topic.html), [`takoform_topic_subscription`](/docs/resources/topic_subscription.html)
+- Schedule and vector: [`takoform_schedule`](/docs/resources/schedule.html), [`takoform_vector_index`](/docs/resources/vector_index.html)
+
 ::: warning Provider distribution boundary
-Provider 2.1.1 is a Registry-published stable distribution. Its repository
-descriptor remains `candidate-only` metadata after owner publication, and the
-15 Form Package artifacts are unpublished by this page. The target's SemVer,
-the Host API's Beta protocol, the Form family's Beta maturity, and the 15 Forms'
-Experimental maturity are separate facts. The
-[release-policy obligations](/spec/publication-freeze.html) remain separate.
+These resource names demonstrate the independent Provider 3 sample. They are
+not normative and do not claim Provider publication. The 31 current Form
+Packages remain unpublished, and the [release-evidence policy](/spec/publication-freeze.html)
+keeps Specification authority separate.
 :::
 
 Workers use capability through typed bindings backed by exact
@@ -108,15 +105,15 @@ exchangeable is the host, never the meaning
 
 ## Withdrawn epochs and published history
 
-Two pre-Beta epochs preceded the current stack and were withdrawn
+Earlier epochs preceded the current stack and were withdrawn or retained as
+immutable history
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
 Published provider releases that carried them remain immutable Registry
 history: **Provider 2.0.0** (the `forms.takoform.com/v1alpha2` compatibility
 client) and **Provider 1.0.3** (the `forms.takoform.com/v1alpha1` Legacy
 client) stay installable under exact pins for existing state, recovery, and
 migration, but their resources have no successors and this site no longer
-documents them. The next release published from this repository will be a
-major, `3.0.0`; existing users of the withdrawn resources follow the
+documents them. Existing users of withdrawn resources follow the
 [v2 to v3 migration boundary](/release/migrations/v2-to-v3.html).
 
 ## How it works

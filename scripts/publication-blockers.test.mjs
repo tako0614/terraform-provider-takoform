@@ -45,7 +45,7 @@ describe("the committed ledger", () => {
     expect(() => assertPublicationAllowed(parsed)).toThrow(/publication.*blocked/);
   });
 
-  test("allows the exact provider v2.1 Beta candidate independently", () => {
+  test("preserves exact Provider 2.1 history independently of the current 16-Form lane", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
     // The published release's count and the current lane's are separate
@@ -53,7 +53,7 @@ describe("the committed ledger", () => {
     // while the lane carries what the generation now declares.
     expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
       formCount: 15,
-      candidateFormCount: 17,
+      candidateFormCount: 16,
       version: "2.1.1",
     });
   });

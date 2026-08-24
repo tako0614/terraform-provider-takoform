@@ -3,6 +3,7 @@ package clientv3
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -237,16 +238,6 @@ func TestDiscoverRejectsPercentEncodedEndpointPaths(t *testing.T) {
 			},
 			wantPart: "invalid discovery API endpoint",
 		},
-		{
-			name: "an optional endpoint",
-			mutate: func(doc map[string]any, origin string) {
-				doc["endpoints"] = map[string]string{
-					"api":       origin + APIRootPath,
-					"artifacts": origin + encodedAPIRoot + "/artifacts",
-				}
-			},
-			wantPart: "invalid discovery artifacts endpoint",
-		},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
@@ -254,6 +245,21 @@ func TestDiscoverRejectsPercentEncodedEndpointPaths(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), test.wantPart) ||
 				!strings.Contains(err.Error(), "must not percent-encode") {
 				t.Fatalf("expected a percent-encoded path rejection, got %v", err)
+			}
+		})
+	}
+}
+
+func TestDiscoverRejectsRetainedDiscoveryEndpointFields(t *testing.T) {
+	for _, field := range []string{"artifacts", "operations", "support", "oidc_issuer"} {
+		field := field
+		t.Run(field, func(t *testing.T) {
+			err := discoverWithDoc(t, func(doc map[string]any, origin string) {
+				doc["endpoints"].(map[string]string)[field] = origin + APIRootPath + "/" + field
+			})
+			if err == nil || !strings.Contains(err.Error(), "decoding discovery document") ||
+				!strings.Contains(err.Error(), "unknown field "+fmt.Sprintf("%q", field)) {
+				t.Fatalf("expected stable discovery field %q rejection, got %v", field, err)
 			}
 		})
 	}
@@ -268,14 +274,11 @@ func TestDiscoverRejectsCrossOriginAPIEndpoint(t *testing.T) {
 	}
 }
 
-func TestDiscoverRejectsCrossOriginOptionalEndpoint(t *testing.T) {
+func TestDiscoverRejectsCrossOriginRetainedEndpointField(t *testing.T) {
 	err := discoverWithDoc(t, func(doc map[string]any, origin string) {
-		doc["endpoints"] = map[string]string{
-			"api":       origin + APIRootPath,
-			"artifacts": "https://other.example" + APIRootPath + "/artifacts",
-		}
+		doc["endpoints"].(map[string]string)["artifacts"] = "https://other.example" + APIRootPath + "/artifacts"
 	})
-	if err == nil || !strings.Contains(err.Error(), "artifacts endpoint") {
-		t.Fatalf("expected artifacts endpoint rejection, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unknown field \"artifacts\"") {
+		t.Fatalf("expected retained artifacts endpoint rejection, got %v", err)
 	}
 }

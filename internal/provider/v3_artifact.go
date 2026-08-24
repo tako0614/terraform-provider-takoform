@@ -542,7 +542,7 @@ func (r *v3FormResource) uploadWorkerBundle(
 	committed, err := r.data.clientV3.UploadArtifact(ctx, authoring.Manifest, authoring.Blobs)
 	if err != nil {
 		diags.Append(v3HostCallDiagnostic("Worker bundle upload failed", err, v3Diagnostic{
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/manifestDigest",
 			Detail: fmt.Sprintf(
 				"The content-addressed upload of artifact manifest %s (%d module blob(s)) did not commit, "+

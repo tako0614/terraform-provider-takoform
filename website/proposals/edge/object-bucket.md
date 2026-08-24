@@ -1,67 +1,56 @@
-# ObjectBucket — `takoform_edge_object_bucket`
+# Retained Provider 2.1.1 history — ObjectBucket
 
-The shipped resource type is the transitional name
-`takoform_edge_object_bucket`: the retained provider-v2 lane still owns
-`takoform_object_bucket` while both lanes are co-registered in one provider
-binary. A future provider major that drops the retained v2 lane reclaims
-`takoform_object_bucket` for this Form.
+This page records the design that shipped in the retained
+`edge.forms.takoform.com/v1beta1` package set and Provider 2.1.1 as Terraform
+resource type `takoform_edge_object_bucket`. It is not a current proposal or
+current Form. The versionless Edge candidate has no `ObjectBucket`, no
+`edge.objects` Interface, no `module-worker.object-bucket` Binding, and no
+Provider 3 authoring identity for one.
 
-## Workload and consumer
+The exact retained Definition and package bytes, not this prose, are the
+historical authority. They remain under
+`forms/candidates/edge/v1beta1/object-bucket` and in the append-only Provider
+identity ledger. Nothing in Specification 1.0 re-identifies or republishes
+them.
 
-A worker stores and serves larger immutable-ish payloads — uploads, media,
-exports — in a flat-namespace object store. Workers consume it through
-`module-worker.object-bucket` bindings.
+## Historical workload and consumer
 
-## Role
+The retained Form modeled a flat-namespace object store for uploads, media, and
+exports. A retained Worker Version consumed it through the exact
+`module-worker.object-bucket` Binding.
 
-`identity`. The bucket has no desired fields; its semantics are entirely
-fixed by the `edge.objects` Interface. There is no versioning field: object
-versioning changes observable read semantics and would be a different Form.
+## Historical role and semantics
 
-## Observable semantics
+Its role was `identity`. The bucket had no desired fields; its semantics were
+fixed by the retained `edge.objects@1.0.0` Interface. That contract described
+head/get/put/delete/list plus four multipart operations, strong
+read-after-write consistency, last-writer-wins per key, strong etags with
+conditional reads and writes, and cursor pagination with delimiter roll-up.
 
-Exactly the `edge.objects@1.0.0` contract: head/get/put/delete/list plus the
-four multipart operations, strong read-after-write consistency (a get, head,
-or list after a resolved put or delete observes it), last-writer-wins per
-key, strong etags with conditional reads and writes (`precondition_failed` on
-mismatch), and cursor pagination with delimiter roll-up.
-
-Bodies STREAM. `get` and `put` declare `bodyStream` and `contentLength`, and
-the bytes travel beside the operation document rather than inside it, which
-is what makes the 5 GiB object ceiling meaningful at all. Ranged and
-conditional reads are typed inputs of `get` — not prose — and objects above
-`maxSinglePutBytes`, or of unknown size, are written through
-`createMultipartUpload` / `uploadPart` / `completeMultipartUpload` /
+Bodies streamed beside operation documents. `get` and `put` carried
+`bodyStream` and `contentLength`; ranged and conditional reads were typed
+inputs of `get`. Objects above `maxSinglePutBytes`, or of unknown size, used
+`createMultipartUpload`, `uploadPart`, `completeMultipartUpload`, and
 `abortMultipartUpload` (decision 0020).
 
-## Why this is one Form
+The original separate-Form boundary treated CORS, lifecycle expiry, retention
+lock, eventual consistency, and object versioning as different contracts. A
+live retained binding also made deletion fail with `dependency_in_use`.
 
-Consumers rely on read-after-write visibility and etag fencing as one
-inseparable model; the storage identity and that model must not drift apart.
+These statements describe the retained v1beta1 identity only. They do not
+define a current object-resource lifecycle or certify an external object
+service.
 
-## What would require a separate Form
+## Current object-service boundary
 
-Operating rules — CORS, lifecycle expiry, retention lock — are separate
-policy resources in the family plan. An eventually consistent object store
-or a versioned bucket is a different Form.
+Current worker code may request an externally managed S3-compatible service
+through a sealed `externalServices` slot. The slot carries
+`standards.takoform.com/v1` and an opaque reverse-DNS protocol identifier such
+as `com.amazonaws.s3`. Takoform does not enumerate protocol identifiers,
+provision a bucket Resource, expose endpoints or credentials in portable
+state, or certify that a service conforms to the named protocol. The Host owns
+support lookup and sealed runtime projection.
 
-## Provided Interfaces
-
-`edge.objects@1.0.0`.
-
-## Accepted Bindings
-
-None; it is a binding target (`module-worker.object-bucket`).
-
-## Lifecycle risks
-
-Deleting a bucket bound by any Worker Version must fail with
-`dependency_in_use`. Delete destroys all objects. S3-compatible external
-access is adapter material, never a desired field
-([spec/portability-boundary.md](../../spec/portability-boundary.md)).
-
-## Prior art
-
-The strongly consistent object storage of a proven edge platform. The
-retained v1alpha2 `ObjectBucket` candidate is prior art; its `versioning`
-field is deliberately not carried forward.
+That call-only standard-service boundary is intentionally not a replacement
+`ObjectBucket` Form. A future portable object Resource would require its own
+explicit Form decision and identity; it cannot inherit this retained one.

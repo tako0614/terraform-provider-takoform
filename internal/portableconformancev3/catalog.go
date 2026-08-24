@@ -117,14 +117,18 @@ func (form *InstalledForm) deriveRelations() error {
 	constraints := make([]currentformmodel.Constraint, 0, len(form.Constraints))
 	for _, entry := range form.Constraints {
 		constraints = append(constraints, currentformmodel.Constraint{
-			Kind:      currentformmodel.ConstraintKind(entry.Kind),
-			Reference: entry.Reference,
-			KeyedBy:   entry.KeyedBy,
-			List:      entry.List,
-			Member:    entry.Member,
-			Total:     entry.Total,
-			Property:  entry.Property,
-			Output:    entry.Output,
+			Kind:       currentformmodel.ConstraintKind(entry.Kind),
+			Reference:  entry.Reference,
+			KeyedBy:    entry.KeyedBy,
+			List:       entry.List,
+			Member:     entry.Member,
+			Total:      entry.Total,
+			Property:   entry.Property,
+			Output:     entry.Output,
+			References: append([]string(nil), entry.References...),
+			Anchor:     entry.Anchor,
+			Members:    entry.Members,
+			Through:    entry.Through,
 		})
 	}
 	relations, err := currentformmodel.DeriveRelationsWithConstraints(form.DesiredSchema, constraints)
@@ -345,6 +349,7 @@ func newCatalog(served string) *Catalog {
 var laneOrder = map[string]int{
 	"forms.takoform.com/v1beta1": 1,
 	"forms.takoform.com/v1beta4": 2,
+	"forms.takoform.com/v1":      3,
 }
 
 // satisfiesRequirement reports whether a host serving `served` may install a
@@ -563,6 +568,11 @@ type bindingCandidateSet struct {
 // identity comes from the generated registry (currentformregistry.V3Current),
 // so registry/candidate drift fails closed.
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
+	resolvedRoot, err := repositoryRootForContract(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	repoRoot = resolvedRoot
 	catalog := newCatalog(contract.APIVersion)
 	var set candidateSet
 	if contract.FamilyCandidateSet == "" {
@@ -658,6 +668,9 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		return nil, err
 	}
 	if err := catalog.installSyntheticSecondDefinitionVersion(contract); err != nil {
+		return nil, err
+	}
+	if err := catalog.installConstraintSemanticsDefinitions(contract); err != nil {
 		return nil, err
 	}
 	var interfaces interfaceCandidateSet
@@ -942,6 +955,9 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 	if err := catalog.installSyntheticSecondDefinitionVersion(contract); err != nil {
 		return nil, err
 	}
+	if err := catalog.installConstraintSemanticsDefinitions(contract); err != nil {
+		return nil, err
+	}
 	catalog.interfaces[fallbackInterfaceRef.Name+"@"+fallbackInterfaceRef.Version] = supportRef{
 		Name:         fallbackInterfaceRef.Name,
 		Version:      fallbackInterfaceRef.Version,
@@ -1009,6 +1025,35 @@ func (catalog *Catalog) installSyntheticSecondDefinitionVersion(contract Contrac
 		RequiresHostAPI:    definition.RequiresHostAPI,
 		Constraints:        definition.Constraints,
 	})
+}
+
+// installConstraintSemanticsDefinitions installs the corpus-pinned synthetic
+// Forms in dependency order. They are a conformance probe group, not members of
+// the family candidate set: installing them changes no published family roster
+// and gives the black-box runner exact contracts for each generic mechanism.
+func (catalog *Catalog) installConstraintSemanticsDefinitions(contract Contract) error {
+	for _, entry := range constraintDefinitionInventory(&contract.RunnerInput) {
+		definition := entry.probe.Definition
+		if definition == nil {
+			continue
+		}
+		if err := catalog.install(&InstalledForm{
+			Ref:                entry.probe.FormRef,
+			Role:               definition.Role,
+			Title:              definition.Title,
+			Description:        definition.Description,
+			DesiredSchema:      definition.DesiredSchema,
+			OutputSchema:       definition.OutputSchema,
+			Lifecycle:          definition.LifecycleCapabilities,
+			ProvidedInterfaces: definition.ProvidedInterfaces,
+			AcceptedBindings:   definition.AcceptedBindings,
+			RequiresHostAPI:    definition.RequiresHostAPI,
+			Constraints:        definition.Constraints,
+		}); err != nil {
+			return fmt.Errorf("takoform: install constraint semantics %s: %w", entry.label, err)
+		}
+	}
+	return nil
 }
 
 func (form *InstalledForm) compileDesiredSchema() error {

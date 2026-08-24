@@ -14,7 +14,7 @@ place.
 ## Observable semantics
 
 The runtime a version runs on is not a field of this Form. It is the exact
-`worker.runtime@1.0.0` contract the [ModuleWorker](module-worker.md) identity
+`worker.runtime@1.1.0` contract the [ModuleWorker](module-worker.md) identity
 provides, so there is no `compatibilityDate` and no `compatibilityFlags`
 ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)):
 a date names no behavior without a registry saying what each date changes, and
@@ -23,12 +23,18 @@ two hosts reading the same date could legitimately run different runtimes.
 `handlers` closes the event surface a host may attach to, and its vocabulary IS
 the handler set that contract defines — a host refuses a handler the contract
 does not define, before any mutation. `vars` is a bounded data-only JSON map
-projected into the module environment. Each binding list projects one exact
-Binding contract — edge KV, object bucket, SQLite, queue producer, service —
+projected into the module environment. Each current binding list projects one exact
+Binding contract — edge KV, SQLite, queue producer, service, workflow, or actor —
 under a JavaScript identifier name, and each of those contracts states the
 JavaScript surface it projects, not just the operations it grants.
 `requiredSensitiveVars` declares only the names of sealed values the host must
 supply; values never enter portable state.
+
+`externalServices` is not another typed Binding list. It carries sealed
+`standards.takoform.com/v1` slots identified by opaque reverse-DNS protocol
+strings; the Host resolves them without a target Resource or central protocol
+enum. This is how current worker code may consume an externally managed
+S3-compatible service. It does not revive the retained `ObjectBucket` Form.
 
 `assets` is optional and absence is semantic: without it the host performs no
 asset lookup. When present it is one closed object containing an exact
@@ -62,7 +68,7 @@ resolved at request time each break the immutable-snapshot shape.
 
 ## Provided Interfaces
 
-None. Both of the worker's exact contracts — `worker.runtime@1.0.0` and
+None. Both of the worker's exact contracts — `worker.runtime@1.1.0` and
 `worker.service@1.0.0` — belong to the [ModuleWorker](module-worker.md)
 identity: a `module-worker.service` binding addresses a worker by logical
 identity, and the runtime ABI is what a host implements rather than what one
@@ -70,9 +76,10 @@ snapshot ships.
 
 ## Accepted Bindings
 
-`module-worker.edge-kv`, `module-worker.object-bucket`,
-`module-worker.sqlite`, `module-worker.queue-producer`,
-`module-worker.service`, each at 1.0.0 with its exact schema digest.
+`module-worker.actor`, `module-worker.edge-kv`, `module-worker.sqlite`,
+`module-worker.queue-producer`, `module-worker.service`, and
+`module-worker.workflow`, each at 1.0.0 with its exact schema digest. The
+retained v1beta1 `module-worker.object-bucket` contract is not current.
 
 ## Lifecycle risks
 

@@ -8,7 +8,7 @@ import (
 func testForm() Form {
 	return Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
-		Kind:   "ExampleRevision", Slug: "example-revision", ResourceType: "takoform_example_revision",
+		Kind:   "ExampleRevision", Slug: "example-revision",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleRevision, Title: "Example Revision", Description: "Test form.",
 		DefinitionVersion: "0.1.0",
 		Fields: []Field{
@@ -41,6 +41,17 @@ func TestFamilyRendersNamespacedAPIVersion(t *testing.T) {
 	}
 }
 
+func TestFormValidationAndSchemaNeedNoProviderResourceType(t *testing.T) {
+	t.Parallel()
+	form := testForm()
+	if err := form.Validate(); err != nil {
+		t.Fatalf("provider-neutral Form was rejected: %v", err)
+	}
+	if _, err := form.DesiredSchema(stubResolver{}); err != nil {
+		t.Fatalf("alternative client could not consume the provider-neutral Form: %v", err)
+	}
+}
+
 // TestLifecycleCapabilitiesFollowMutableFields proves the capability set is
 // derived from what the Form can actually represent, not from its role: a
 // mutable role with nothing mutable to change declares no update, and no Form
@@ -51,7 +62,7 @@ func TestLifecycleCapabilitiesFollowMutableFields(t *testing.T) {
 	withUpdate := []string{"create", "read", "update", "delete", "import", "observe"}
 
 	fieldless := Form{
-		Kind: "Fieldless", Slug: "fieldless", ResourceType: "takoform_fieldless",
+		Kind: "Fieldless", Slug: "fieldless",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Fieldless", DefinitionVersion: "0.1.0",
 	}
 	mutable := fieldless
@@ -134,7 +145,7 @@ func TestDesiredSchemaOmitsNameAndStaysClosed(t *testing.T) {
 func TestDesiredSchemaEmptyFormHasEmptyProperties(t *testing.T) {
 	t.Parallel()
 	form := Form{
-		Kind: "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
+		Kind: "ExampleIdentity", Slug: "example-identity",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
 		DefinitionVersion: "0.1.0",
 	}
@@ -181,7 +192,7 @@ func TestNegativeCasesDerivation(t *testing.T) {
 	}
 
 	empty := Form{
-		Kind: "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
+		Kind: "ExampleIdentity", Slug: "example-identity",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
 		DefinitionVersion: "0.1.0",
 	}
@@ -255,7 +266,7 @@ func TestRevisionFormsFixEveryField(t *testing.T) {
 // for the schema emitter.
 func TestValidateRejectsEnvelopeOwnedName(t *testing.T) {
 	form := Form{
-		Kind: "ExampleThing", Slug: "example-thing", ResourceType: "takoform_example_thing",
+		Kind: "ExampleThing", Slug: "example-thing",
 		Title: "Example", DefinitionVersion: "0.1.0", Role: RoleIdentity,
 		RequiresHostAPI: "forms.takoform.com/v1beta1",
 		Fields: []Field{{

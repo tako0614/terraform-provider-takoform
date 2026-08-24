@@ -282,17 +282,12 @@ func TestPooledKeyBudgetsReserveTheCloudflareEnvelope(t *testing.T) {
 	if kvMaxKeyBytes != 512-pooledPrefixBytes {
 		t.Fatalf("kvMaxKeyBytes = %d, want %d", kvMaxKeyBytes, 512-pooledPrefixBytes)
 	}
-	if objectsMaxKeyBytes != 1024-pooledPrefixBytes {
-		t.Fatalf("objectsMaxKeyBytes = %d, want %d", objectsMaxKeyBytes, 1024-pooledPrefixBytes)
-	}
-
 	for _, testCase := range []struct {
 		contract string
 		limit    string
 		want     int
 	}{
 		{contract: "edge.kv", limit: "maxKeyBytes", want: kvMaxKeyBytes},
-		{contract: "edge.objects", limit: "maxKeyBytes", want: objectsMaxKeyBytes},
 	} {
 		definition, err := interfaceDefinitionByName(testCase.contract)
 		if err != nil {

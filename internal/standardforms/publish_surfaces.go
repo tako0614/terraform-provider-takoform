@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // generatePublishedSurfaces writes the HCL example and the reference document
@@ -60,10 +58,7 @@ type publishedSurface struct {
 // these exact bytes, so the read-only owner gate cannot silently bless
 // hand-written drift.
 func renderPublishedSurfaces() []publishedSurface {
-	surfaces := make([]publishedSurface, 0, len(edgeformcatalog.Forms)*2+1)
-	// The Host API v1beta1 lane surfaces render from the family catalog. The
-	// retained v1alpha2 renderer that used to run beside this was withdrawn
-	// with its epoch (decision 0037).
+	surfaces := make([]publishedSurface, 0, currentFormCount()*2+1)
 	surfaces = append(surfaces, v3PublishedSurfaces()...)
 	surfaces = append(surfaces, publishedSurface{
 		path:    "forms/README.md",
@@ -115,16 +110,23 @@ func VerifyPublishedSurfaces(root string) error {
 // surface: a colliding resource type or doc basename fails generation and
 // verification alike.
 func validatePublishedSurfaceCatalog() error {
-	paths := make(map[string]string, len(edgeformcatalog.Forms)*2)
-	for _, form := range edgeformcatalog.Forms {
-		for _, path := range []string{
-			filepath.ToSlash(filepath.Join("docs", "resources", v3DocBasename(form))),
-			filepath.ToSlash(filepath.Join("examples", "resources", form.ResourceType, "resource.tf")),
-		} {
-			if owner, duplicate := paths[path]; duplicate {
-				return fmt.Errorf("Forms %s and %s render the same public surface %s", owner, form.Kind, path)
+	paths := make(map[string]string, currentFormCount()*2)
+	for _, family := range currentFamilies() {
+		for _, form := range family.Forms {
+			resourceType, err := providerReferenceTerraformType(form)
+			if err != nil {
+				return err
 			}
-			paths[path] = form.Kind
+			owner := family.Group + "/" + form.Kind
+			for _, path := range []string{
+				filepath.ToSlash(filepath.Join("docs", "resources", v3DocBasename(form))),
+				filepath.ToSlash(filepath.Join("examples", "resources", resourceType, "resource.tf")),
+			} {
+				if previous, duplicate := paths[path]; duplicate {
+					return fmt.Errorf("Forms %s and %s render the same public surface %s", previous, owner, path)
+				}
+				paths[path] = owner
+			}
 		}
 	}
 	return nil
@@ -179,8 +181,8 @@ func prepareGeneratedDirectoryPath(root, relative string) error {
 }
 
 func verifyPublishedSurfaceInventory(root string, surfaces []publishedSurface) error {
-	expectedDocs := make(map[string]struct{}, len(edgeformcatalog.Forms))
-	expectedExamples := make(map[string]struct{}, len(edgeformcatalog.Forms)*2)
+	expectedDocs := make(map[string]struct{}, currentFormCount())
+	expectedExamples := make(map[string]struct{}, currentFormCount()*2)
 	for _, surface := range surfaces {
 		switch {
 		case strings.HasPrefix(surface.path, "docs/resources/"):
@@ -305,24 +307,26 @@ func sortedStringKeys(value map[string]any) []string {
 func formInventoryDoc() string {
 	return `# Form inventory
 
-The current design target has five independent version axes. They are never a
-single maturity label:
+The current Form source is provider-neutral. Terraform resource type names,
+provider schema choices, and provider releases are reference-implementation
+metadata; none participates in Form validation, canonical bytes, or digest.
+
+The design has five independent version axes. They are never one maturity
+label:
 
 | Axis | Current design target | Meaning |
 | --- | --- | --- |
-| Provider | **Provider 2.1.1** | Registry-published stable-distribution SemVer for Terraform and OpenTofu clients. |
-| Host API | ` + "`forms.takoform.com/v1beta1`" + ` | Beta HTTP protocol identifier. |
-| Form Family | ` + "`edge.forms.takoform.com/v1beta1`" + ` | Beta family namespace and membership contract. |
+| Provider | independent | A non-normative client implementation version; not Form identity. |
+| Host API | ` + "`forms.takoform.com/v1`" + ` | Stable Host protocol required by these current definitions. |
+| Form Family | eight versionless groups | Family membership is the exact versionless ` + "`apiVersion`" + ` group. |
 | Form definition | ` + "`0.1.0`" + ` | Independent immutable version; each current Form is Experimental. |
-| Form Package API | ` + "`packages.forms.takoform.com/v1alpha4`" + ` | Package-envelope schema identifier; current package artifacts remain unpublished. |
+| Form Package API | ` + "`packages.forms.takoform.com/v1alpha5`" + ` | Package-envelope schema for versionless-family candidates. |
 
-Provider 2.1.1 is the current Registry-published client; Provider 2.0.0 is
-the published compatibility predecessor and Provider 1.0.3 is published
-Legacy. The repository release descriptor remains ` + "`candidate-only`" + ` metadata by
-design after owner publication. The Beta label does not apply to Provider 2.1.1.
-Conversely, shipping a Form through a stable Provider SemVer does not make that
-Form Stable. The 15 current Form Packages remain unpublished until their own
-publication authority advances them.
+The generated candidate index is ` + "`forms/candidates/current-family-index.json`" + `.
+It binds all eight family candidate sets plus the global Interface and Binding
+candidate sets by exact SHA-256. Provider release and publication evidence are
+separate authorities; a provider mapping cannot widen Form semantics or change
+a Form digest.
 ` + v3FormInventorySection()
 }
 

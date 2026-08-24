@@ -16,12 +16,12 @@ subscription detaches it and never deletes the topic or the target queue.
 `topic` and `target` are immutable; changing either replaces the
 attachment. `topic` references a [Topic](topic.md). `target` is the closed
 exact `{apiVersion, kind, name}` reference to a resource providing
-`queue.pull@1.0.0` — in MVP a `PullQueue` of
-`queue.forms.takoform.com/v1beta1`. The reference carries its group
+`queue.pull@1.0.0` — in the current candidate a `PullQueue` of
+`queue.forms.takoform.com`. The reference carries its group
 explicitly, so the cross-family edge is representable as-is
 ([binding contract](../../spec/binding-contract/README.md)); the relation
-requires the Interface the target provides and is uid-pinned under the
-v1beta1 relation rules. At most one subscription may bind one
+requires the Interface the target provides and is UID-pinned under the
+Host API v1 relation rules. At most one subscription may bind one
 (topic, target) pair; a second is refused — a union of two filter
 policies therefore needs two targets.
 
@@ -80,7 +80,7 @@ this subscription exists must fail with `dependency_in_use`. `deadLetter`
 equal to `target` is refused: a delivery that failed into the target
 cannot dead-letter into the same place. A target deleted and re-created
 under the same name is a different incarnation: the subscription stays
-pinned, reports `ExternalChange` or `DependencyMissing` per the v1beta1
+pinned, reports `ExternalChange` or `DependencyMissing` per the Host API v1
 relation rules, and only a re-apply re-pins it.
 
 ## Prior art

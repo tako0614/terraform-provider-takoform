@@ -10,7 +10,7 @@
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "edge.sql",
     "version": "1.0.0",
-    "schemaDigest": "sha256:ff48410cf2d59fb93533525f76cb8e880a26339a0ce91c2e0faee2a7c3f5d053"
+    "schemaDigest": "sha256:cebd1121b1e3a5cbcb7b61ec78ad9c79ce05cda90fbc5fdb7b4edd3d59562f8f"
   },
   "allowedTargetForms": [
     {

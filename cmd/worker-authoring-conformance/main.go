@@ -1,7 +1,7 @@
 // Command worker-authoring-conformance drives the Edge Platform Family
-// authoring surface — the raw v1beta1 resources and the official `worker-app`
+// authoring surface — the stable resources and the official `worker-app`
 // module — through a real Terraform-compatible CLI against the deterministic
-// v1beta1 reference host.
+// stable-v1 reference host.
 //
 // It is local implementation evidence only and never publication-ready.
 package main

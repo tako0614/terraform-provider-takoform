@@ -27,19 +27,18 @@
 // Outside assets/, the file SET must match exactly too, so neither an extra
 // published file nor a deleted one can pass.
 //
-// The fresh build runs in a throwaway directory under the repository root so
-// that module resolution reaches the pinned `node_modules`; it is removed on
-// every exit path and never touches the committed `website/public`.
+// The fresh build runs in a process-unique throwaway directory under the
+// repository root so module resolution reaches the pinned `node_modules`.
+// Each run removes only its own directory on every exit path and never touches
+// another snapshot run or the committed `website/public`.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
-  mkdirSync,
   readFileSync,
   readdirSync,
-  rmSync,
   statSync,
 } from "node:fs";
 import path from "node:path";
@@ -51,6 +50,7 @@ import {
   FROZEN_PUBLIC_IDENTITIES,
   FROZEN_PUBLIC_PAGES,
 } from "./frozen-public-identities.mjs";
+import { createWebsiteSnapshotWorkspace } from "./website-snapshot-temp.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -64,8 +64,6 @@ const vitepressBinary = path.join(
   ".bin",
   "vitepress",
 );
-const buildRoot = path.join(repositoryRoot, ".website-snapshot-tmp");
-
 const pages = [
   "index.html",
   "docs/index.html",
@@ -237,9 +235,9 @@ if (!existsSync(vitepressBinary)) {
   fail("vitepress is not installed; run bun install before this gate");
 }
 
+const workspace = createWebsiteSnapshotWorkspace(repositoryRoot);
+const buildRoot = workspace.root;
 try {
-  rmSync(buildRoot, { force: true, recursive: true });
-  mkdirSync(buildRoot, { recursive: true });
   const sourceCopy = path.join(buildRoot, "website");
   cpSync(websiteRoot, sourceCopy, {
     recursive: true,
@@ -371,5 +369,5 @@ try {
       `${byteCount} non-HTML published files byte-for-byte, and ${committedRoles.length} content-addressed assets by role\n`,
   );
 } finally {
-  rmSync(buildRoot, { force: true, recursive: true });
+  workspace.cleanup();
 }

@@ -1,0 +1,70 @@
+{
+  "apiVersion": "constraints.forms.takoform.com",
+  "kind": "StructuralConstraintHolder",
+  "definitionVersion": "0.1.0",
+  "title": "StructuralConstraintHolder stable conformance probe",
+  "description": "Synthetic stable-v1 conformance Definition; never a published family member.",
+  "role": "policy",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "lower": {
+        "type": "integer"
+      },
+      "upper": {
+        "type": "integer"
+      },
+      "rows": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 8,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ]
+        }
+      }
+    },
+    "required": [
+      "lower",
+      "upper",
+      "rows"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "orderedPair",
+      "references": [
+        "/lower",
+        "/upper"
+      ]
+    },
+    {
+      "kind": "uniqueBy",
+      "list": "/rows",
+      "member": "key"
+    }
+  ]
+}

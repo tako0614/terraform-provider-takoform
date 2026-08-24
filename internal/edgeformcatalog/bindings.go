@@ -7,7 +7,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
-// The seven typed Binding contracts of the Edge Platform Family (decision
+// The six typed Binding contracts of the Edge Platform Family (decision
 // 0010). A Binding grants a capability and a concrete runtime API together,
 // without exposing credentials; outward capability use always belongs to a
 // revision resource.
@@ -82,27 +82,6 @@ var bindingSpecs = []bindingSpec{
 			"may resolve to the previous value, or to null, until replication converges.",
 		iface:      "edge.kv",
 		targetKind: "EdgeKVNamespace",
-	},
-	{
-		name:  "module-worker.object-bucket",
-		title: "Module Worker object bucket binding",
-		description: "Projects the complete edge.objects runtime API into a Worker Version under one " +
-			"JavaScript-identifier binding name, without exposing credentials or endpoints. " +
-			"Runtime surface: env.NAME is an object with the methods head(key), get(key, options?), " +
-			"put(key, body, options?), delete(key), list(options?), createMultipartUpload(key, options?), " +
-			"uploadPart(key, uploadId, partNumber, body), completeMultipartUpload(key, uploadId, parts), and " +
-			"abortMultipartUpload(key, uploadId), each returning a promise. Object bodies STREAM: put and " +
-			"uploadPart accept a ReadableStream, an ArrayBuffer, or a string, and get resolves to an object " +
-			"whose body is a ReadableStream the handler may consume incrementally — a conforming host never " +
-			"requires the whole object in memory, which is what makes the contract's 5 GiB ceiling usable. " +
-			"get options carry range for a ranged read and ifMatch or ifNoneMatch for a conditional one; put " +
-			"options carry ifMatch, or ifNoneMatch \"*\" to write only when the key is absent. get and head " +
-			"resolve to null for an absent key; a failed precondition rejects with an Error named " +
-			"precondition_failed, an unsatisfiable range with one named range_not_satisfiable, and every other " +
-			"error with an Error named for its edge.objects code. A get, head, or list after a resolved put or " +
-			"delete observes it.",
-		iface:      "edge.objects",
-		targetKind: "ObjectBucket",
 	},
 	{
 		name:  "module-worker.sqlite",

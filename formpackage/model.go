@@ -53,16 +53,53 @@ type FormRef struct {
 
 // FormConstraint is one entry of a Form Definition's closed constraint list.
 // Every pointer is an RFC 6901 JSON Pointer into the desired instance, or into
-// the outputs for a host-assigned member.
+// the outputs for a host-assigned member. References is shared by the closed
+// orderedPair, distinctPair, and uniquePair variants; Kind fixes whether the
+// values are numeric desired fields or resolved resource UIDs.
 type FormConstraint struct {
-	Kind      string `json:"kind"`
-	Reference string `json:"reference,omitempty"`
-	KeyedBy   string `json:"keyedBy,omitempty"`
-	List      string `json:"list,omitempty"`
-	Member    string `json:"member,omitempty"`
-	Total     int64  `json:"total,omitempty"`
-	Property  string `json:"property,omitempty"`
-	Output    string `json:"output,omitempty"`
+	Kind       string   `json:"kind"`
+	Reference  string   `json:"reference,omitempty"`
+	KeyedBy    string   `json:"keyedBy,omitempty"`
+	List       string   `json:"list,omitempty"`
+	Member     string   `json:"member,omitempty"`
+	Total      int64    `json:"total,omitempty"`
+	Property   string   `json:"property,omitempty"`
+	Output     string   `json:"output,omitempty"`
+	References []string `json:"references,omitempty"`
+	Anchor     string   `json:"anchor,omitempty"`
+	Members    string   `json:"members,omitempty"`
+	Through    string   `json:"through,omitempty"`
+}
+
+// MarshalJSON preserves the presence of sum.total when its valid value is
+// zero. A plain `omitempty` integer cannot distinguish "sum of exactly zero"
+// from "this constraint kind has no total member", while the closed schemas
+// require total on sum and forbid it everywhere else.
+func (constraint FormConstraint) MarshalJSON() ([]byte, error) {
+	type wireConstraint struct {
+		Kind       string   `json:"kind"`
+		Reference  string   `json:"reference,omitempty"`
+		KeyedBy    string   `json:"keyedBy,omitempty"`
+		List       string   `json:"list,omitempty"`
+		Member     string   `json:"member,omitempty"`
+		Total      *int64   `json:"total,omitempty"`
+		Property   string   `json:"property,omitempty"`
+		Output     string   `json:"output,omitempty"`
+		References []string `json:"references,omitempty"`
+		Anchor     string   `json:"anchor,omitempty"`
+		Members    string   `json:"members,omitempty"`
+		Through    string   `json:"through,omitempty"`
+	}
+	var total *int64
+	if constraint.Kind == "sum" || constraint.Total != 0 {
+		total = &constraint.Total
+	}
+	return json.Marshal(wireConstraint{
+		Kind: constraint.Kind, Reference: constraint.Reference, KeyedBy: constraint.KeyedBy,
+		List: constraint.List, Member: constraint.Member, Total: total,
+		Property: constraint.Property, Output: constraint.Output,
+		References: constraint.References, Anchor: constraint.Anchor, Members: constraint.Members, Through: constraint.Through,
+	})
 }
 
 type FormDefinition struct {

@@ -1,88 +1,110 @@
-# Beta and provider release policy
+# Specification, Provider, and publication evidence policy
 
-The current portable contracts are the Host API
-`forms.takoform.com/v1beta1` and the Edge Platform Family
-`edge.forms.takoform.com/v1beta1`. The API and family are public **Beta**
-channels. The 15 Form Definitions remain **Experimental**, each at
-`definitionVersion: 0.1.0`; Beta does not make a Form Stable.
+Takoform has independent release and publication axes. Evidence from one axis
+MUST NOT be treated as authority for another.
 
-Provider versioning is independent. Provider `v2.1.1` is a Registry-published
-stable SemVer targeting the Beta Host API. Its `release/version.json`
-descriptor remains `candidate-only` metadata by design after owner publication.
-This is not a provider prerelease and it is not a claim that any hosted service,
-Takosumi Cloud, or Form Package is GA.
+## Specification 1.0
 
-## Provider-first release is allowed
+The normative Specification 1.0 track defines the literal stable Host API lane
+`forms.takoform.com/v1`. It closes only when all three of these Takoform-owned
+facts are committed and exact:
 
-Open records in
-[`publication-blockers.json`](publication-blockers.json) do **not** block the
-provider v2.1 release. The provider release gate instead locks all of these
-facts:
+1. one complete Specification source snapshot;
+2. the generator-owned multi-family candidate and corpus closure; and
+3. the manifest-owned reference conformance execution.
 
-- exactly 15 Terraform resource schemas and resource type names;
-- exactly 15 `edge.forms.takoform.com/v1beta1` FormRefs, Definition digests,
-  and package digests in
-  [`release/provider-form-identities.json`](../release/provider-form-identities.json);
-- fake-host and reference-host conformance against
-  `forms.takoform.com/v1beta1`;
-- exact state compatibility: read, update, import, and delete dispatch on the
-  FormRef recorded in state;
-- Beta state remains readable after a future `edge.forms.takoform.com/v1`
-  create default is added; refresh never upgrades it implicitly;
-- append-only public schema identities and no overwrite of retained
-  `v1alpha3` bytes.
+The canonical machine policy is
+[`publication-evidence.json`](publication-evidence.json), and the numbered
+release candidate/ledger is
+[`../release/specification-releases.json`](../release/specification-releases.json).
+Decisions [0052](decisions/0052-the-specification-is-released-on-its-own-line.md)
+and
+[0053](decisions/0053-specification-and-provider-release-evidence.md)
+define the boundary.
 
-The provider identity ledger is independent of package artifact publication.
-Once provider v2.1 embeds a Beta FormRef, Definition digest, and package digest,
-that tuple is immutable even while the corresponding Form Package remains
-unpublished. A correction that breaks any Beta contract mints a new
-`v1beta2` Host/family identity and new FormRef; it never edits the Beta 1
-bytes.
+The current generator index contains eight versionless families and 31 exact
+Experimental `0.x` FormRefs. Edge contains 16 and has no current
+`ObjectBucket`, `edge.objects`, or `module-worker.object-bucket`. The stable
+standard-service contract is `standards.takoform.com/v1`; protocol identifiers
+are opaque reverse-DNS strings, not a Takoform-owned enum.
 
-## What remains blocked
+Releasing Specification/Host API v1 does not:
 
-While any obligation in `publication-blockers.json` is open, this repository
-must not:
+- relabel any current Form as `1.0.0` or Stable;
+- publish a Form Package, Interface, or Binding;
+- release Provider 3;
+- prove any Host, backend, runtime, or product supports the contract; or
+- authorize a commit, tag, publication, deployment, signing action, or
+  production change.
 
-- publish the Beta Form Packages;
-- independently publish the Interface or Binding Definitions;
-- claim a production public Host API service is ready;
-- call the family Forms Stable or claim Takosumi/Takosumi Cloud GA;
-- claim independent-host, real-backend, or third-party ecosystem
-  interoperability without the evidence the obligation names.
+A future Stable Form begins at `1.0.0` only through an explicit per-Form
+decision. Form maturity remains independent from the Host API and numbered
+Specification.
 
-`bun run assert:publishable` is intentionally this stricter Form
-Package/public-service assertion. It is not part of the provider-first release
-path. Closing an obligation still requires real evidence; a passing local gate,
-an empty evidence array, or an invented path cannot close one.
+## Official Provider
 
-Independent host implementations, real backend behavior, hosted operations,
-and third-party ecosystem use are later Stable/GA qualification obligations
-owned by Takoform's lifecycle authority. They remain open until measured. A
-Takosumi deployment may be one independent adopter, but it is not a maturity
-or publication authority. The local reference host proves contract coherence
-only.
+The Terraform Provider is an independent implementation stream. Provider
+2.1.1 and its exact Host v1beta1/versioned Edge 15-Form identities remain
+immutable Registry history.
 
-## Existing immutable history
+Provider 3 is an official but non-normative sample. Its evidence track may bind
+the exact current Form projection, Provider identity ledger, retained codecs,
+state continuity, and migration behavior. It can remain open while
+Specification 1.0 closes, and a green Provider milestone cannot close the
+Specification track.
 
-Publication is per identity, not per product lane.
+## Adoption evidence
 
-- Every schema identity in
-  [`release/public-schema-identities.json`](../release/public-schema-identities.json)
-  is append-only. Published `v1alpha3` schema bytes stay served unchanged;
-  Beta schemas use new `v1beta1` URLs.
-- Provider `v1.0.3` and `v2.0.0`, their tags, and their persisted state
-  contracts remain immutable.
-- The 34 Legacy Form Packages and retained admission evidence remain
-  byte-for-byte history.
-- The Beta family was minted in a new directory and identity. The old
-  `edge.forms.takoform.com/v1alpha1` candidate tree and the
-  `forms.takoform.com/v1alpha3` host corpus that measured it were later
-  withdrawn under [decision 0037](decisions/0037-immutability-begins-at-stable.md);
-  their addresses are recorded in `release/published-document-lanes.json` and
-  their bytes remain in this repository's history.
+Independent Hosts, Takoserver, Takosumi, other backends, runtime ABI reports,
+production consumers, compatibility windows, package publishers, signers, and
+operators may record adoption evidence in their owning repositories. Those
+facts are useful for support, implementation confidence, and product
+readiness. They are not Takoform release authorities and can neither add a
+Specification prerequisite nor substitute for one.
 
-Only contracts that have satisfied the recorded qualification obligations may
-be promoted to stable `v1`/`1.0.0` identities by a Takoform lifecycle
-decision. Promotion adds identities and create defaults; it does not rewrite
-or auto-migrate Beta state.
+Decisions 0044 and 0046 are retained as adoption-program history. Decision
+0053 supersedes them as Specification and Provider release gates.
+
+## Retained publication history
+
+[`publication-blockers.json`](publication-blockers.json) records an earlier
+v1beta1 Form Package/public-service attempt. Its bytes and open statuses remain
+immutable historical truth. The new Specification assertion does not rewrite
+or require closure of those rows.
+
+Likewise:
+
+- published schema identities remain append-only in
+  [`../release/public-schema-identities.json`](../release/public-schema-identities.json);
+- occupied document lanes remain recorded in
+  [`../release/published-document-lanes.json`](../release/published-document-lanes.json);
+- Provider release and FormRef identities remain append-only in the release
+  ledgers; and
+- retired or retained bytes are never republished under a different meaning.
+
+The historical `assert:publishable` command remains the assertion for that old
+Form Package/public-service obligation set. It is not a Specification 1.0 or
+Provider 3 gate.
+
+## Fail-closed checks
+
+- `bun run check:publication-evidence` validates both independent track shapes
+  and reports their open/ready state.
+- `bun run check:specification-releases` validates the numbered candidate and
+  protects committed release entries append-only.
+- `bun run check:specification-v1-release` asserts only the three normative
+  Specification prerequisites.
+- `bun run check:provider-v3-release` asserts only the non-normative Provider
+  milestone.
+- `bun run check:takoform-milestones` asserts both as an optional project
+  checkpoint.
+
+The Specification evidence record intentionally keeps its family-index and
+suite pointers and all derived evidence objects `null` until one clean,
+reachable commit contains the frozen bytes. A dirty, staged, untracked, partial,
+unreachable, caller-renamed, or digest-mismatched closure fails. A generic
+`pass`, hand-written count, external receipt, or signature policy cannot make
+it ready.
+
+There is no `stable-mint` alias. The readiness assertion does not silently
+promote Forms or packages.

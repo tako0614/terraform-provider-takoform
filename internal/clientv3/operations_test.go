@@ -2,11 +2,110 @@ package clientv3
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestValidateOperationWireAcceptsSchemaOptionalMembers(t *testing.T) {
+	pending := map[string]any{
+		"apiVersion": OperationAPIVersion,
+		"kind":       OperationKind,
+		"id":         "op_optional",
+		"done":       false,
+		"target": map[string]any{
+			"uid":            "uid-1",
+			"manifestDigest": "sha256:" + strings.Repeat("a", 64),
+		},
+		"metadata": map[string]any{"phase": "Provisioning", "progress": 25},
+	}
+	raw, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOperationWire(raw, false); err != nil {
+		t.Fatalf("pending operation optional members rejected: %v", err)
+	}
+	terminal := map[string]any{
+		"apiVersion": OperationAPIVersion,
+		"kind":       OperationKind,
+		"id":         "op_terminal",
+		"done":       true,
+		"result":     map[string]any{},
+	}
+	raw, err = json.Marshal(terminal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOperationWire(raw, false); err != nil {
+		t.Fatalf("terminal result operation rejected: %v", err)
+	}
+	terminal["result"] = nil
+	terminal["error"] = map[string]any{
+		"code":      "internal_error",
+		"message":   "failed",
+		"requestId": "req-1",
+		"retryable": false,
+		"hostCode":  "host.internal",
+	}
+	delete(terminal, "result")
+	raw, err = json.Marshal(terminal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOperationWire(raw, false); err != nil {
+		t.Fatalf("terminal error hostCode operation rejected: %v", err)
+	}
+}
+
+func TestValidateOperationWireRejectsMalformedOptionalMembers(t *testing.T) {
+	base := map[string]any{
+		"apiVersion": OperationAPIVersion,
+		"kind":       OperationKind,
+		"id":         "op_bad_optional",
+		"done":       false,
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"unknown operation field", func(value map[string]any) { value["future"] = true }},
+		{"null target", func(value map[string]any) { value["target"] = nil }},
+		{"metadata unknown field", func(value map[string]any) { value["metadata"] = map[string]any{"future": true} }},
+		{"empty error message", func(value map[string]any) {
+			value["done"] = true
+			value["error"] = map[string]any{"code": "internal_error", "message": "", "requestId": "req-1", "retryable": false}
+		}},
+		{"empty host code", func(value map[string]any) {
+			value["done"] = true
+			value["error"] = map[string]any{"code": "internal_error", "message": "failed", "requestId": "req-1", "retryable": false, "hostCode": ""}
+		}},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			value := mapsClone(base)
+			test.mutate(value)
+			raw, err := json.Marshal(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateOperationWire(raw, false); err == nil {
+				t.Fatal("malformed operation was accepted")
+			}
+		})
+	}
+}
+
+func mapsClone(value map[string]any) map[string]any {
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		out[key] = item
+	}
+	return out
+}
 
 func TestApplyResourceVia202OperationPolling(t *testing.T) {
 	spec := map[string]any{"image": "example"}

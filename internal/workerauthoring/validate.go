@@ -212,7 +212,7 @@ func Validate(report Report) error {
 	if report.PlanRefusal.Code != "takoform.provider/immutable-revision-same-name" {
 		return errors.New("the same-name replacement was not refused at plan")
 	}
-	if report.HostSupport.Code != "takoform.provider/host-does-not-support-form" {
+	if report.HostSupport.Code != "takoform.provider/host-does-not-support-value" {
 		return errors.New("an unsupported Form was not refused at plan")
 	}
 	for name, sequence := range map[string]SequenceEvidence{

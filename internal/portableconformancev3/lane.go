@@ -1,8 +1,8 @@
 package portableconformancev3
 
-// lane.go carries what differs between the two Host API lanes this runner can
-// drive, so that one runner measures both instead of a second copy measuring
-// the second one.
+// lane.go carries what differs between the retained and stable Host API lanes
+// this runner can drive, so that one runner measures them without copied
+// implementations.
 //
 // The runner and the reference host were already lane-neutral in every place
 // that matters: both read the discovery path, the API root, and the served
@@ -91,8 +91,9 @@ type lane struct {
 // a corpus declares. A corpus naming anything else is refused rather than
 // guessed at.
 var lanes = map[string]lane{
-	beta1Lane.APIVersion: beta1Lane,
-	beta4Lane.APIVersion: beta4Lane,
+	beta1Lane.APIVersion:  beta1Lane,
+	beta4Lane.APIVersion:  beta4Lane,
+	stableLane.APIVersion: stableLane,
 }
 
 // beta1Lane is the retained lane. Registry-published provider 2.1.1 speaks it
@@ -226,7 +227,7 @@ var hardenedLane = lane{
 	RequiredChecks:                hardenedRequiredChecks,
 }
 
-// beta4Lane is the current lane (spec/host-api/v1beta4.md). It carries the
+// beta4Lane is the retained lane (spec/host-api/v1beta4.md). It carries the
 // hardening review's wire above, states its cross-resource rules as MECHANISMS
 // a family instantiates rather than as rules about particular Forms (decision
 // 0048), and admits a Form Family group that carries no version segment
@@ -254,16 +255,56 @@ var beta4Lane = lane{
 	RequiredChecks:                beta4RequiredChecks,
 }
 
-// beta4RequiredChecks is the hardened list plus the check that measures the
+// stableLane is the literal stable Host API identity. It carries the frozen
+// v1beta4 mechanisms forward and is the first lane that requires every W0
+// declared-constraint mechanism and the open, Host-owned StandardServiceRef
+// contract. The occupied beta lanes do not gain either rule retroactively.
+var stableLane = lane{
+	APIVersion:     "forms.takoform.com/v1",
+	ContractFormat: "takoform.portable-host-conformance@v1",
+	ManifestFormat: "takoform.portable-host-conformance-manifest@v1",
+	DiscoveryPath:  "/.well-known/takoform/v1",
+	APIPath:        "/apis/forms.takoform.com/v1",
+
+	ErrorCodeOrder:        hardenedLane.ErrorCodeOrder,
+	ErrorHTTPStatus:       hardenedLane.ErrorHTTPStatus,
+	ConditionReasons:      hardenedLane.ConditionReasons,
+	LifecycleCapabilities: hardenedLane.LifecycleCapabilities,
+
+	AvailabilityCarriesDeprecated: false,
+	FormsResponseEnumerates:       true,
+	StatusCarriesObserved:         false,
+	OperationSchemaVersion:        "v1",
+	SupportProfileSchemaVersion:   "v1",
+	FormsFilterGroupIsWhole:       true,
+	GroupPathCheck:                "namespaced-group-travels-as-path-segments",
+	RequiredChecks:                stableRequiredChecks,
+}
+
+// beta4RequiredChecks is the hardened list plus the checks that measure the
 // declared mechanisms, with the group path-shape check renamed to what it now
 // measures. The rename is not cosmetic: the rule is no longer "the group
 // travels as two path segments" but "the group travels as its own segments",
 // and a check whose name states an arity the lane dropped would be the first
 // thing a reader trusted and the last thing that was true.
 var beta4RequiredChecks = renameCheck(
-	append(append([]string{}, hardenedRequiredChecks...), "declared-exclusive-holds-enforced"),
+	append(append([]string{}, hardenedRequiredChecks...),
+		"declared-exclusive-holds-enforced",
+	),
 	"namespaced-group-travels-as-two-path-segments",
 	"namespaced-group-travels-as-path-segments",
+)
+
+// stableRequiredChecks is intentionally derived from the frozen beta4 list.
+// The stable lane replaces beta4's closed standard-service vocabulary check
+// with the open exact-support rule and adds the completed W0 constraint
+// semantics. This keeps every occupied v1beta4 corpus byte-identical.
+var stableRequiredChecks = replaceCheck(
+	append(append([]string{}, beta4RequiredChecks...),
+		"declared-constraint-semantics-enforced",
+	),
+	"external-service-slots-sealed",
+	"stable-standard-service-support-enforced",
 )
 
 // renameCheck returns the list with one check renamed in place. Order is the
@@ -281,13 +322,19 @@ func renameCheck(checks []string, from, to string) []string {
 	return renamed
 }
 
+// replaceCheck is an alias with intent: unlike a vocabulary-only rename, the
+// stable standard-service check replaces beta4 behavior at the same position.
+func replaceCheck(checks []string, from, to string) []string {
+	return renameCheck(checks, from, to)
+}
+
 // TerminalErrorIsClosed reports whether this lane's operation schema holds a
 // terminal error to the closed shape: a required requestId and retryable
 // false. v1alpha2 does; v1alpha1 left both open, which is why a host could
 // answer a correlation-less failure and a client had nothing to refuse it
 // with.
 func (l lane) TerminalErrorIsClosed() bool {
-	return l.OperationSchemaVersion == "v1alpha2"
+	return l.OperationSchemaVersion != "v1alpha1"
 }
 
 // hardenedRequiredChecks is v1beta1's list plus one check per rule the
@@ -414,5 +461,5 @@ func DrivesManifestFormat(format string) bool {
 // DrivenManifestFormats lists the corpus manifest formats this runner drives,
 // for a diagnostic that has to say what it would have accepted.
 func DrivenManifestFormats() []string {
-	return []string{beta1Lane.ManifestFormat, beta4Lane.ManifestFormat}
+	return []string{beta1Lane.ManifestFormat, beta4Lane.ManifestFormat, stableLane.ManifestFormat}
 }

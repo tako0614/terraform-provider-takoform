@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_edge_kv_namespace Resource - takoform"
-subcategory: "Edge Platform Family"
+subcategory: "Current Form Families"
 description: |-
   Edge KV Namespace (edge.forms.takoform.com, role identity).
 ---
@@ -11,11 +11,11 @@ Globally replicated key/value namespace of opaque BYTES with eventual consistenc
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com identity is not yet carried by any
-Registry-published provider release: it ships with the next provider release
-(decision 0046). Registry-published provider v2.1.1 serves this resource type
-under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
-candidate-only descriptor metadata after owner publication. The configured host selects and
+This page documents a non-normative official Terraform Provider mapping for the
+current Experimental Form `edge.forms.takoform.com/EdgeKVNamespace`.
+The mapping name is provider metadata: it is absent from the Form Definition and cannot change
+the Form's canonical bytes or digest. Provider publication and support are versioned separately.
+The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_edge_kv_namespace/resource.tf).
 

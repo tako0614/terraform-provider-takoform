@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
+	"unicode/utf8"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
 // MaterializeDefaults returns the effective desired spec of one resource: the
@@ -39,26 +41,88 @@ import (
 //     once;
 //   - the argument spec is never mutated; the result is always a fresh map.
 func MaterializeDefaults(desiredSchema map[string]any, spec map[string]any) map[string]any {
-	properties, _ := desiredSchema["properties"].(map[string]any)
-	out := make(map[string]any, len(spec)+len(properties))
-	for key, value := range spec {
-		out[key] = value
+	if spec == nil {
+		spec = map[string]any{}
 	}
-	for name, raw := range properties {
-		property, ok := raw.(map[string]any)
+	materialized, ok := materializeSchemaValue(desiredSchema, spec).(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	return materialized
+}
+
+func materializeSchemaValue(schema map[string]any, value any) any {
+	if discriminator, _ := schema[TaggedObjectDiscriminatorAnnotationKey].(string); discriminator != "" {
+		object, ok := stringKeyedObject(value)
 		if !ok {
-			continue
+			return cloneValue(value)
 		}
-		value, declared := property["default"]
-		if !declared {
-			continue
+		tag, _ := object[discriminator].(string)
+		branches, _ := schema["oneOf"].([]any)
+		for _, raw := range branches {
+			branch, _ := raw.(map[string]any)
+			properties, _ := branch["properties"].(map[string]any)
+			declared, _ := constantString(properties[discriminator])
+			if declared == tag {
+				return materializeSchemaValue(branch, object)
+			}
 		}
-		if _, present := out[name]; present {
-			continue
-		}
-		out[name] = canonicalJSONValue(value)
+		return cloneValue(value)
 	}
-	return out
+	schemaType, _ := schema["type"].(string)
+	switch schemaType {
+	case "object":
+		object, ok := stringKeyedObject(value)
+		if !ok {
+			return cloneValue(value)
+		}
+		properties, _ := schema["properties"].(map[string]any)
+		additional, _ := schema["additionalProperties"].(map[string]any)
+		out := make(map[string]any, len(object)+len(properties))
+		for key, item := range object {
+			child, _ := properties[key].(map[string]any)
+			if child == nil {
+				child = additional
+			}
+			if child == nil {
+				out[key] = cloneValue(item)
+				continue
+			}
+			out[key] = materializeSchemaValue(child, item)
+		}
+		for name, raw := range properties {
+			if _, present := out[name]; present {
+				continue
+			}
+			property, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			declared, hasDefault := property["default"]
+			if !hasDefault {
+				continue
+			}
+			out[name] = materializeSchemaValue(property, canonicalJSONValue(declared))
+		}
+		return out
+	case "array":
+		items, ok := defaultSlice(value)
+		if !ok {
+			return cloneValue(value)
+		}
+		itemSchema, _ := schema["items"].(map[string]any)
+		out := make([]any, 0, len(items))
+		for _, item := range items {
+			if itemSchema == nil {
+				out = append(out, cloneValue(item))
+				continue
+			}
+			out = append(out, materializeSchemaValue(itemSchema, item))
+		}
+		return out
+	default:
+		return cloneValue(value)
+	}
 }
 
 // canonicalJSONValue deep-copies one JSON value and normalizes every number to
@@ -110,7 +174,7 @@ func canonicalJSONValue(value any) any {
 // that declares it. A default that its own field's schema would reject is the
 // worst possible portability defect: every host would materialize an invalid
 // document.
-func validateFieldDefault(kind string, field Field) error {
+func validateFieldDefault(kind, sourceGroup string, field Field) error {
 	if field.Default == nil {
 		return nil
 	}
@@ -144,7 +208,7 @@ func validateFieldDefault(kind string, field Field) error {
 		if field.Pattern == "" && text == "" {
 			return fail("is empty while the field declares minLength 1")
 		}
-		if field.MaxLength > 0 && len(text) > field.MaxLength {
+		if field.MaxLength > 0 && utf8.RuneCountInString(text) > field.MaxLength {
 			return fail(fmt.Sprintf("is longer than the declared maxLength %d", field.MaxLength))
 		}
 	case KindStringEnum:
@@ -154,6 +218,32 @@ func validateFieldDefault(kind string, field Field) error {
 		}
 		if !containsString(field.Enum, text) {
 			return fail("is not a declared enum member")
+		}
+	case KindStringList:
+		items, ok := defaultSlice(field.Default)
+		if !ok {
+			return fail("is not an array")
+		}
+		for _, item := range items {
+			text, ok := item.(string)
+			if !ok {
+				return fail("carries a non-string item")
+			}
+			if len(field.Enum) > 0 {
+				if !containsString(field.Enum, text) {
+					return fail("carries item " + text + " outside the declared enum")
+				}
+				continue
+			}
+			if err := matchesPattern(field.ItemPattern, text); err != nil {
+				return fail("carries item " + text + " that " + err.Error())
+			}
+			if utf8.RuneCountInString(text) > field.MaxLength {
+				return fail(fmt.Sprintf("carries item %s longer than the declared maxLength %d", text, field.MaxLength))
+			}
+		}
+		if err := checkItemCount(field, len(items)); err != nil {
+			return fail(err.Error())
 		}
 	case KindStringSet:
 		items, ok := defaultSlice(field.Default)
@@ -183,6 +273,22 @@ func validateFieldDefault(kind string, field Field) error {
 		if err := checkItemCount(field, len(items)); err != nil {
 			return fail(err.Error())
 		}
+	case KindStringMap:
+		object, ok := stringKeyedObject(field.Default)
+		if !ok {
+			return fail("is not a string map")
+		}
+		if err := validateStringMapDefault(field, object, false); err != nil {
+			return fail(err.Error())
+		}
+	case KindStringSetMap:
+		object, ok := stringKeyedObject(field.Default)
+		if !ok {
+			return fail("is not a string-set map")
+		}
+		if err := validateStringMapDefault(field, object, true); err != nil {
+			return fail(err.Error())
+		}
 	case KindJSONMap:
 		object, ok := field.Default.(map[string]any)
 		if !ok {
@@ -194,16 +300,24 @@ func validateFieldDefault(kind string, field Field) error {
 			}
 		}
 	case KindResourceRef:
-		if err := validateResourceRefDefault(field.TargetKind, field.Default); err != nil {
+		target, err := field.effectiveResourceTarget(sourceGroup)
+		if err != nil {
+			return fail(err.Error())
+		}
+		if err := validateResourceRefDefault(target.Group, target.Kind, field.Default); err != nil {
 			return fail(err.Error())
 		}
 	case KindResourceRefList:
+		target, err := field.effectiveResourceTarget(sourceGroup)
+		if err != nil {
+			return fail(err.Error())
+		}
 		items, ok := defaultSlice(field.Default)
 		if !ok {
 			return fail("is not an array")
 		}
 		for _, item := range items {
-			if err := validateResourceRefDefault(field.TargetKind, item); err != nil {
+			if err := validateResourceRefDefault(target.Group, target.Kind, item); err != nil {
 				return fail(err.Error())
 			}
 		}
@@ -211,6 +325,10 @@ func validateFieldDefault(kind string, field Field) error {
 			return fail(err.Error())
 		}
 	case KindBindingList:
+		target, err := field.effectiveResourceTarget(sourceGroup)
+		if err != nil {
+			return fail(err.Error())
+		}
 		items, ok := defaultSlice(field.Default)
 		if !ok {
 			return fail("is not an array")
@@ -224,7 +342,7 @@ func validateFieldDefault(kind string, field Field) error {
 			if err := matchesPattern(PatternBindingName, name); err != nil {
 				return fail("carries a binding name that " + err.Error())
 			}
-			if err := validateResourceRefDefault(field.TargetKind, entry["resource"]); err != nil {
+			if err := validateResourceRefDefault(target.Group, target.Kind, entry["resource"]); err != nil {
 				return fail(err.Error())
 			}
 		}
@@ -249,20 +367,25 @@ func validateFieldDefault(kind string, field Field) error {
 			if !ok {
 				return fail("carries a slot with no service declaration")
 			}
-			if service["apiVersion"] != StandardServiceAPIVersion {
-				return fail("carries a slot whose service apiVersion is not " + StandardServiceAPIVersion)
-			}
+			apiVersion, _ := service["apiVersion"].(string)
 			protocol, _ := service["protocol"].(string)
-			if !slices.Contains(ExternalServiceProtocols, protocol) {
-				return fail("carries a slot naming protocol " + protocol + ", which is not in the closed vocabulary")
+			if err := formpackage.ValidateStandardServiceRef(formpackage.StandardServiceRef{
+				APIVersion: apiVersion,
+				Protocol:   protocol,
+			}); err != nil {
+				return fail("carries an invalid standard service: " + err.Error())
 			}
 		}
 		if err := checkItemCount(field, len(items)); err != nil {
 			return fail(err.Error())
 		}
 	case KindObject:
-		if _, ok := field.Default.(map[string]any); !ok {
+		object, ok := stringKeyedObject(field.Default)
+		if !ok {
 			return fail("is not a JSON object")
+		}
+		if err := validateObjectDefault(kind, sourceGroup, field, object); err != nil {
+			return fail(err.Error())
 		}
 	case KindObjectList:
 		items, ok := defaultSlice(field.Default)
@@ -270,21 +393,136 @@ func validateFieldDefault(kind string, field Field) error {
 			return fail("is not an array")
 		}
 		for _, item := range items {
-			if _, ok := item.(map[string]any); !ok {
+			object, ok := stringKeyedObject(item)
+			if !ok {
 				return fail("carries a non-object entry")
+			}
+			if err := validateObjectDefault(kind, sourceGroup, field, object); err != nil {
+				return fail(err.Error())
 			}
 		}
 		if err := checkItemCount(field, len(items)); err != nil {
+			return fail(err.Error())
+		}
+	case KindTaggedObject:
+		object, ok := stringKeyedObject(field.Default)
+		if !ok {
+			return fail("is not a tagged JSON object")
+		}
+		if err := validateTaggedObjectDefault(kind, sourceGroup, field, object); err != nil {
 			return fail(err.Error())
 		}
 	}
 	return nil
 }
 
-func validateResourceRefDefault(targetKind string, value any) error {
-	reference, ok := value.(map[string]any)
+func validateTaggedObjectDefault(kind, sourceGroup string, field Field, object map[string]any) error {
+	tag, ok := object[field.Discriminator].(string)
+	if !ok || tag == "" {
+		return fmt.Errorf("carries no string discriminator %s", field.Discriminator)
+	}
+	for _, variant := range field.Variants {
+		if variant.Tag != tag {
+			continue
+		}
+		members := make(map[string]any, len(object)-1)
+		for name, value := range object {
+			if name != field.Discriminator {
+				members[name] = value
+			}
+		}
+		variantField := field
+		variantField.Fields = variant.Fields
+		return validateObjectDefault(kind, sourceGroup, variantField, members)
+	}
+	return fmt.Errorf("carries unknown discriminator value %q", tag)
+}
+
+func validateObjectDefault(kind, sourceGroup string, field Field, object map[string]any) error {
+	members := make(map[string]Field, len(field.Fields))
+	for _, member := range field.Fields {
+		members[member.Wire] = member
+	}
+	for name := range object {
+		if _, known := members[name]; !known {
+			return fmt.Errorf("carries unknown object member %s", name)
+		}
+	}
+	for name, member := range members {
+		value, present := object[name]
+		if !present {
+			if member.Required {
+				return fmt.Errorf("omits required object member %s", name)
+			}
+			continue
+		}
+		candidate := member
+		candidate.Default = value
+		if err := validateFieldDefault(kind, sourceGroup, candidate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateStringMapDefault(field Field, object map[string]any, setValues bool) error {
+	if err := checkPropertyCount(field, len(object)); err != nil {
+		return err
+	}
+	for key, raw := range object {
+		if err := matchesPattern(PortableMapKeyPattern, key); err != nil {
+			return fmt.Errorf("carries key %s that %s", key, err)
+		}
+		values := []any{raw}
+		if setValues {
+			items, ok := defaultSlice(raw)
+			if !ok {
+				return fmt.Errorf("carries key %s with a non-array set", key)
+			}
+			if err := checkItemCount(field, len(items)); err != nil {
+				return fmt.Errorf("carries key %s whose set %s", key, err)
+			}
+			values = items
+		}
+		seen := map[string]struct{}{}
+		for _, value := range values {
+			text, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("carries key %s with a non-string value", key)
+			}
+			if setValues {
+				if _, duplicate := seen[text]; duplicate {
+					return fmt.Errorf("carries key %s with duplicate set value %q", key, text)
+				}
+				seen[text] = struct{}{}
+			}
+			if len(field.Enum) > 0 {
+				if !containsString(field.Enum, text) {
+					return fmt.Errorf("carries key %s with value %q outside the declared enum", key, text)
+				}
+				continue
+			}
+			if err := matchesPattern(field.ItemPattern, text); err != nil {
+				return fmt.Errorf("carries key %s with value %q that %s", key, text, err)
+			}
+			if utf8.RuneCountInString(text) > field.MaxLength {
+				return fmt.Errorf("carries key %s with value longer than the declared maxLength %d", key, field.MaxLength)
+			}
+		}
+	}
+	return nil
+}
+
+func validateResourceRefDefault(targetGroup, targetKind string, value any) error {
+	reference, ok := stringKeyedObject(value)
 	if !ok {
-		return fmt.Errorf("is not a typed {kind, name} reference")
+		return fmt.Errorf("is not a typed {apiVersion, kind, name} reference")
+	}
+	if len(reference) != 3 {
+		return fmt.Errorf("is not a closed {apiVersion, kind, name} reference")
+	}
+	if group, _ := reference["apiVersion"].(string); group != targetGroup {
+		return fmt.Errorf("does not name target group %s", targetGroup)
 	}
 	if kind, _ := reference["kind"].(string); kind != targetKind {
 		return fmt.Errorf("does not name target kind %s", targetKind)
@@ -302,6 +540,16 @@ func checkItemCount(field Field, count int) error {
 	}
 	if field.MaxItems > 0 && count > field.MaxItems {
 		return fmt.Errorf("declares more than the permitted %d items", field.MaxItems)
+	}
+	return nil
+}
+
+func checkPropertyCount(field Field, count int) error {
+	if field.MinProperties > 0 && count < field.MinProperties {
+		return fmt.Errorf("declares fewer than the required %d properties", field.MinProperties)
+	}
+	if field.MaxProperties > 0 && count > field.MaxProperties {
+		return fmt.Errorf("declares more than the permitted %d properties", field.MaxProperties)
 	}
 	return nil
 }
@@ -353,6 +601,27 @@ func defaultSlice(value any) ([]any, bool) {
 		out := make([]any, 0, len(typed))
 		for _, item := range typed {
 			out = append(out, item)
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
+func stringKeyedObject(value any) (map[string]any, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return typed, true
+	case map[string]string:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			out[key] = item
+		}
+		return out, true
+	case map[string][]string:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			out[key] = item
 		}
 		return out, true
 	default:

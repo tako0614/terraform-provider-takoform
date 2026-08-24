@@ -81,7 +81,7 @@ func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Fiel
 var Forms = []model.Form{
 	{
 		Family: Family,
-		Kind:   "ModuleWorker", Slug: "module-worker", ResourceType: "takoform_module_worker",
+		Kind:   "ModuleWorker", Slug: "module-worker",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Module Worker",
 		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES " +
@@ -113,7 +113,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "WorkerBundle", Slug: "worker-bundle", ResourceType: "takoform_worker_bundle",
+		Kind:   "WorkerBundle", Slug: "worker-bundle",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Bundle",
 		Description: "Immutable content-addressed module bundle of one worker build, named by the digest of the " +
@@ -136,7 +136,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "StaticAssetBundle", Slug: "static-asset-bundle", ResourceType: "takoform_static_asset_bundle",
+		Kind:   "StaticAssetBundle", Slug: "static-asset-bundle",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Static Asset Bundle",
 		Description: "Immutable content-addressed set of files served beside one Worker Version. The whole " +
@@ -160,7 +160,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
+		Kind:   "WorkerVersion", Slug: "worker-version",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Version",
 		Description: "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module " +
@@ -294,7 +294,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "WorkerDeployment", Slug: "worker-deployment", ResourceType: "takoform_worker_deployment",
+		Kind:   "WorkerDeployment", Slug: "worker-deployment",
 		Role: model.RoleDeployment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Deployment",
 		Description: "Selects which Worker Versions of one Module Worker serve traffic and in what " +
@@ -341,7 +341,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "WorkerCustomDomain", Slug: "worker-custom-domain", ResourceType: "takoform_worker_custom_domain",
+		Kind:   "WorkerCustomDomain", Slug: "worker-custom-domain",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Custom Domain",
 		Description: "Attaches one DNS hostname to a Module Worker so its active deployment serves that " +
@@ -366,7 +366,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "WorkerEndpoint", Slug: "worker-endpoint", ResourceType: "takoform_worker_endpoint",
+		Kind:   "WorkerEndpoint", Slug: "worker-endpoint",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Endpoint",
 		Description: "Makes one Module Worker reachable over HTTPS at an address the HOST assigns, with no " +
@@ -421,7 +421,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "WorkerCronTrigger", Slug: "worker-cron-trigger", ResourceType: "takoform_worker_cron_trigger",
+		Kind:   "WorkerCronTrigger", Slug: "worker-cron-trigger",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Cron Trigger",
 		Description: "Attaches one cron schedule to a Module Worker, invoking its scheduled handler at each " +
@@ -450,7 +450,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "EdgeKVNamespace", Slug: "edge-kv-namespace", ResourceType: "takoform_edge_kv_namespace",
+		Kind:   "EdgeKVNamespace", Slug: "edge-kv-namespace",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Edge KV Namespace",
 		Description: "Globally replicated key/value namespace of opaque BYTES with eventual consistency, exactly " +
@@ -463,13 +463,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		// The resource type is takoform_edge_object_bucket, not
-		// takoform_object_bucket: the retained v2 lane still owns that name
-		// while both lanes are co-registered in one provider binary. This is a
-		// transitional name; a future provider release that drops the retained
-		// v2 lane (a major, per versioning.md) reclaims takoform_object_bucket
-		// for this Form.
-		Kind: "ObjectBucket", Slug: "object-bucket", ResourceType: "takoform_edge_object_bucket",
+		Kind:   "ObjectBucket", Slug: "object-bucket",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Object Bucket",
 		Description: "Flat-namespace object store with strong read-after-write consistency, streaming bodies, " +
@@ -482,7 +476,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "SQLiteDatabase", Slug: "sqlite-database", ResourceType: "takoform_sqlite_database",
+		Kind:   "SQLiteDatabase", Slug: "sqlite-database",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "SQLite Database",
 		Description: "Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries, and " +
@@ -496,7 +490,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "SQLiteMigrationSet", Slug: "sqlite-migration-set", ResourceType: "takoform_sqlite_migration_set",
+		Kind:   "SQLiteMigrationSet", Slug: "sqlite-migration-set",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "SQLite Migration Set",
 		Description: "Immutable ordered SQLite migration history backed by one committed " +
@@ -519,7 +513,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "SQLiteMigrationApplication", Slug: "sqlite-migration-application", ResourceType: "takoform_sqlite_migration_application",
+		Kind:   "SQLiteMigrationApplication", Slug: "sqlite-migration-application",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "SQLite Migration Application",
 		Description: "Applies one exact SQLite Migration Set to one exact SQLite Database. Both relations are " +
@@ -543,7 +537,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "AtLeastOnceQueue", Slug: "at-least-once-queue", ResourceType: "takoform_at_least_once_queue",
+		Kind:   "AtLeastOnceQueue", Slug: "at-least-once-queue",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "At-Least-Once Queue",
 		Description: "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed " +
@@ -570,7 +564,7 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
-		Kind:   "QueueConsumer", Slug: "queue-consumer", ResourceType: "takoform_queue_consumer",
+		Kind:   "QueueConsumer", Slug: "queue-consumer",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Queue Consumer",
 		Description: "Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its " +
@@ -663,7 +657,6 @@ func Validate() error {
 	}
 	kinds := map[string]struct{}{}
 	slugs := map[string]struct{}{}
-	resourceTypes := map[string]struct{}{}
 	for _, form := range Forms {
 		if err := form.Validate(); err != nil {
 			return err
@@ -671,7 +664,7 @@ func Validate() error {
 		if form.DefinitionVersion != edgeDefinitionVersion {
 			return fmt.Errorf("form %s declares definition version %q; the MVP family line is %q", form.Kind, form.DefinitionVersion, edgeDefinitionVersion)
 		}
-		for name, set := range map[string]map[string]struct{}{form.Kind: kinds, form.Slug: slugs, form.ResourceType: resourceTypes} {
+		for name, set := range map[string]map[string]struct{}{form.Kind: kinds, form.Slug: slugs} {
 			if _, duplicate := set[name]; duplicate {
 				return fmt.Errorf("duplicate catalog identity %q", name)
 			}

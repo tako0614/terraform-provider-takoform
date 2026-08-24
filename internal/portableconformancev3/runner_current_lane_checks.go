@@ -749,6 +749,113 @@ func (r *v3Runner) checkExternalServiceSlotsSealed(version probeTarget) error {
 	return nil
 }
 
+// checkStableStandardServiceSupportEnforced measures the stable split between
+// an open opaque identifier grammar and this Host's exact support set. It uses
+// a supported structured S3 identifier plus the same unknown-valid identifier
+// in required and optional slots, so syntax, support, mutation ordering, and
+// projection behavior are independently observable.
+func (r *v3Runner) checkStableStandardServiceSupportEnforced(version probeTarget) error {
+	slots := r.contract.RunnerInput.ExternalServices
+	if slots.ServiceAPIVersion != formpackage.StandardServiceAPIVersion ||
+		!containsString(slots.Protocols, "com.amazonaws.s3") ||
+		len(slots.DesiredSpec) == 0 || len(slots.UnknownProtocolSpec) == 0 ||
+		len(slots.OptionalUnsupportedSpec) == 0 {
+		return errors.New("the stable corpus does not pin supported, required-unsupported, and optional-unsupported service slots")
+	}
+
+	checkSupport := func(protocol string, want bool) error {
+		response, err := r.request(
+			http.MethodGet,
+			r.apiBase+"/support/standard-services/"+url.PathEscape(protocol), nil, nil,
+		)
+		if err != nil {
+			return err
+		}
+		if response.Status != http.StatusOK {
+			return fmt.Errorf("stable standard-service support for %q answered HTTP %d, want 200", protocol, response.Status)
+		}
+		var profile map[string]any
+		if err := decodeStrictResponse(response, &profile); err != nil {
+			return err
+		}
+		got, err := formpackage.ValidateStandardServiceSupport(formpackage.StandardServiceRef{
+			APIVersion: formpackage.StandardServiceAPIVersion,
+			Protocol:   protocol,
+		}, profile)
+		if err != nil {
+			return err
+		}
+		if got != want {
+			return fmt.Errorf("stable standard-service support for %q = %t, want %t", protocol, got, want)
+		}
+		return nil
+	}
+	if err := checkSupport("com.amazonaws.s3", true); err != nil {
+		return err
+	}
+	unknownProtocol := "com.example.future-store"
+	if err := checkSupport(unknownProtocol, false); err != nil {
+		return err
+	}
+
+	supported := version
+	supported.Name = "stable-standard-service-supported"
+	supported.Spec = r.materialize(supported.Ref, slots.DesiredSpec)
+	if _, _, err := r.applyResource(supported, applyOptions{
+		Create: true, IdempotencyKey: "key-stable-standard-service-supported",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("creating a resource with supported S3 service slot: %w", err)
+	}
+	if err := r.deleteExisting(supported, "key-stable-standard-service-supported-delete"); err != nil {
+		return err
+	}
+
+	required := version
+	required.Name = "stable-standard-service-required-unknown"
+	required.Spec = r.materialize(required.Ref, slots.UnknownProtocolSpec)
+	prepared, err := r.prepareRequest(required, nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(prepared, "unsupported_capability"); err != nil {
+		return fmt.Errorf("required unknown-valid standard-service slot: %w", err)
+	}
+	absent, err := r.request(
+		http.MethodGet,
+		r.resourceURL(required.Ref, required.Name, "", r.exactQuery(required.Space, required.Ref)),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(absent, "resource_not_found"); err != nil {
+		return fmt.Errorf("required unsupported slot mutated before refusal: %w", err)
+	}
+
+	optional := version
+	optional.Name = "stable-standard-service-optional-unknown"
+	optional.Spec = r.materialize(optional.Ref, slots.OptionalUnsupportedSpec)
+	created, _, err := r.applyResource(optional, applyOptions{
+		Create: true, IdempotencyKey: "key-stable-standard-service-optional-unknown",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("creating a resource with optional unsupported slot: %w", err)
+	}
+	if created.Status != nil {
+		for _, forbidden := range []string{"FUTURE_STORE", "endpoint", "credential", "secret", "url"} {
+			if _, projected := created.Status.Outputs[forbidden]; projected {
+				return fmt.Errorf("optional unsupported standard-service slot projected %q", forbidden)
+			}
+		}
+	}
+	if err := r.deleteExisting(optional, "key-stable-standard-service-optional-unknown-delete"); err != nil {
+		return err
+	}
+
+	r.complete("stable-standard-service-support-enforced")
+	return nil
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

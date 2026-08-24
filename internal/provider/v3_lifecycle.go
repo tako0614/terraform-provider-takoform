@@ -25,7 +25,6 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // Default per-resource operation timeouts of the v3 lane. Each resource may
@@ -37,12 +36,13 @@ const (
 	v3DefaultDeleteTimeout = 30 * time.Minute
 )
 
-// v3FormResource implements one typed Edge Platform Family Form over the
+// v3FormResource implements one typed current-family Form over the
 // shared v1beta1 lifecycle core. The Form declaration is data
 // (internal/edgeformcatalog); a new family member is a new catalog entry.
 type v3FormResource struct {
-	form model.Form
-	data *providerData
+	form         model.Form
+	resourceType string
+	data         *providerData
 	// codecs is the exact-FormRef dispatch table: the registry of identities
 	// this resource can serve together with the per-ref codec that decodes
 	// state written under each one. Production constructions carry the build's
@@ -60,7 +60,13 @@ var (
 
 // NewV3FormResource returns a constructor for one declared family Form.
 func NewV3FormResource(form model.Form) func() resource.Resource {
-	return func() resource.Resource { return &v3FormResource{form: form, codecs: v3Codecs()} }
+	factories, err := compileV3FormResources(
+		[]model.Form{form}, currentformregistry.V3Current(), v3TerraformResourceTypes(), v3Codecs(),
+	)
+	if err != nil {
+		panic(err)
+	}
+	return factories[0]
 }
 
 // newV3FormResources lists every v3-lane resource constructor: exactly the
@@ -75,15 +81,31 @@ func NewV3FormResource(form model.Form) func() resource.Resource {
 // Shipping the carrier anyway would have offered reach with no verification
 // behind it (spec/decisions/0021).
 func newV3FormResources() []func() resource.Resource {
-	out := make([]func() resource.Resource, 0, len(edgeformcatalog.Forms))
-	for _, form := range edgeformcatalog.Forms {
-		out = append(out, NewV3FormResource(form))
+	out, err := compileV3FormResources(
+		providerV3CurrentForms(), currentformregistry.V3Current(), v3TerraformResourceTypes(), v3Codecs(),
+	)
+	if err != nil {
+		panic(err)
 	}
 	return out
 }
 
 func (r *v3FormResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = r.form.ResourceType
+	resp.TypeName = r.resourceTypeName()
+}
+
+func (r *v3FormResource) resourceTypeName() string {
+	if r.resourceType != "" {
+		return r.resourceType
+	}
+	ref, err := currentformregistry.V3Current().DefaultCreate(currentformregistry.GroupKind{
+		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
+	})
+	if err != nil {
+		return ""
+	}
+	resourceType, _ := v3TerraformResourceTypes().Lookup(ref.ExactKey())
+	return resourceType
 }
 
 func (r *v3FormResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -106,7 +128,7 @@ func (r *v3FormResource) Configure(_ context.Context, req resource.ConfigureRequ
 // diagnostic, so the user sees why this resource cannot work while the v2
 // resources can.
 func (r *v3FormResource) assertV3Configured(diags *diag.Diagnostics) bool {
-	return assertV3Lane(r.data, r.form.ResourceType, diags)
+	return assertV3Lane(r.data, r.resourceTypeName(), diags)
 }
 
 func assertV3Lane(data *providerData, resourceType string, diags *diag.Diagnostics) bool {
@@ -165,11 +187,13 @@ func (r *v3FormResource) codecTable() *v3CodecTable {
 // with the codec that encodes a spec for it. Only Create uses it: an existing
 // resource dispatches on the identity recorded in state.
 func (r *v3FormResource) v3DefaultCodec(diags *diag.Diagnostics) (v3FormCodec, bool) {
-	codec, err := r.codecTable().defaultCreate(r.form.Kind)
+	codec, err := r.codecTable().defaultCreate(currentformregistry.GroupKind{
+		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
+	})
 	if err != nil {
 		diags.Append(v3Diagnostic{
 			Summary:      r.form.Kind + " FormRef missing",
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/form",
 			Code:         v3CodeProviderBug,
 			Cause:        err,
@@ -193,7 +217,7 @@ func (r *v3FormResource) v3StateCodec(identity v3StateIdentity, diags *diag.Diag
 	if !ok {
 		diags.Append(v3Diagnostic{
 			Summary:      "State has no exact v1beta1 Form identity",
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/form",
 			Code:         v3CodeStateRefMissing,
 			Detail: "The v1beta1 resource lane fails closed on state without a complete exact FormRef, because " +
@@ -320,7 +344,7 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		// Record the identity that is known before surfacing the failure.
 		r.writeV3AcceptedState(ctx, &resp.State, codec, space, values, err, &resp.Diagnostics)
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to create "+r.form.Kind, err, v3Diagnostic{
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Space:        space,
 			Name:         values.Name.ValueString(),
 			Ref:          codec.Ref,
@@ -375,7 +399,7 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 			return
 		}
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to read "+r.form.Kind, err, v3Diagnostic{
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Space:        space,
 			Name:         values.Name.ValueString(),
 			Ref:          codec.Ref,
@@ -391,7 +415,7 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 	v3ReportRelationCondition(
-		r.form.Kind, r.form.ResourceType, space, values.Name.ValueString(), codec.Ref,
+		r.form.Kind, r.resourceTypeName(), space, values.Name.ValueString(), codec.Ref,
 		res, r.form.DeclaresUpdate(), &resp.Diagnostics,
 	)
 	// Only a Form that declares update can converge an out-of-band change in
@@ -634,7 +658,7 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec), fence)
 	if err != nil {
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to update "+r.form.Kind, err, v3Diagnostic{
-			ResourceType:       r.form.ResourceType,
+			ResourceType:       r.resourceTypeName(),
 			Space:              space,
 			Name:               values.Name.ValueString(),
 			Ref:                codec.Ref,
@@ -784,7 +808,7 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	)
 	if err != nil && !errors.Is(err, clientv3.ErrNotFound) {
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to delete "+r.form.Kind, err, v3Diagnostic{
-			ResourceType:       r.form.ResourceType,
+			ResourceType:       r.resourceTypeName(),
 			Space:              space,
 			Name:               values.Name.ValueString(),
 			Ref:                codec.Ref,
@@ -813,7 +837,7 @@ func (r *v3FormResource) ImportState(ctx context.Context, req resource.ImportSta
 	if err != nil {
 		resp.Diagnostics.Append(v3Diagnostic{
 			Summary:      "Invalid import ID",
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/metadata/name",
 			Code:         v3CodeImportIDInvalid,
 			Cause:        err,

@@ -96,7 +96,7 @@ function verifyOneCopy(document, relativePath, facts, failures) {
   if (document.formMaturity !== "experimental") {
     failures.push(
       `${relativePath}: formMaturity must be "experimental" for the current ` +
-        "15 Form definitions",
+        "Form definitions",
     );
   }
   if (

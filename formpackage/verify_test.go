@@ -102,6 +102,56 @@ func TestValidateDefinitionAllowsDescriptionsWithoutSubstringFalsePositive(t *te
 	}
 }
 
+func TestValidateDefinitionAllowsOnlyBoundedDeclarativeCommandSchema(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, func(definition map[string]any) {
+		properties := definition["desiredSchema"].(map[string]any)["properties"].(map[string]any)
+		properties["command"] = map[string]any{
+			"type": "array", "maxItems": 64,
+			"items": map[string]any{
+				"type": "string", "pattern": `^[^\x00\r\n]{1,256}$`, "maxLength": 256,
+			},
+		}
+		properties["args"] = map[string]any{
+			"type": "array", "maxItems": 64,
+			"items": map[string]any{
+				"type": "string", "pattern": `^[^\x00\r\n]{1,256}$`, "maxLength": 256,
+			},
+		}
+	})
+	if _, err := VerifyDirectory(root); err != nil {
+		t.Fatalf("bounded declarative command was rejected: %v", err)
+	}
+}
+
+func TestValidateDefinitionRejectsExecutableCommandPayloadShapes(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name  string
+		field string
+		shape map[string]any
+	}{
+		{name: "command string", field: "command", shape: map[string]any{"type": "string", "maxLength": 4096}},
+		{name: "unbounded command list", field: "command", shape: map[string]any{
+			"type": "array", "items": map[string]any{"type": "string", "pattern": ".+", "maxLength": 256},
+		}},
+		{name: "embedded script", field: "script", shape: map[string]any{"type": "string", "maxLength": 4096}},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := makeValidPackage(t, func(definition map[string]any) {
+				properties := definition["desiredSchema"].(map[string]any)["properties"].(map[string]any)
+				properties[test.field] = test.shape
+			})
+			_, err := VerifyDirectory(root)
+			if err == nil || !strings.Contains(err.Error(), "forbidden field") {
+				t.Fatalf("VerifyDirectory error = %v, want forbidden executable payload field", err)
+			}
+		})
+	}
+}
+
 func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 	t.Parallel()
 	for _, field := range []string{

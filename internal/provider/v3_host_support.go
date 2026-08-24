@@ -66,6 +66,7 @@ type v3SupportCache struct {
 	forms      map[currentformregistry.ExactFormKey]v3SupportAnswer
 	interfaces map[string]v3SupportAnswer
 	bindings   map[string]v3SupportAnswer
+	services   map[string]v3SupportAnswer
 }
 
 // v3SupportAnswer is one resolved support question: the profile the host
@@ -83,6 +84,7 @@ func newV3SupportCache() *v3SupportCache {
 		forms:      map[currentformregistry.ExactFormKey]v3SupportAnswer{},
 		interfaces: map[string]v3SupportAnswer{},
 		bindings:   map[string]v3SupportAnswer{},
+		services:   map[string]v3SupportAnswer{},
 	}
 }
 
@@ -127,6 +129,12 @@ func (c *v3SupportCache) bindingSupport(ctx context.Context, client *clientv3.Cl
 	})
 }
 
+func (c *v3SupportCache) standardServiceSupport(ctx context.Context, client *clientv3.Client, protocol string) v3SupportAnswer {
+	return c.contractSupport(ctx, &c.services, protocol, func() (map[string]any, error) {
+		return client.GetStandardServiceSupport(ctx, protocol)
+	})
+}
+
 func (c *v3SupportCache) contractSupport(
 	_ context.Context, table *map[string]v3SupportAnswer, key string, read func() (map[string]any, error),
 ) v3SupportAnswer {
@@ -161,19 +169,19 @@ func (r *v3FormResource) v3PlanHostSupport(ctx context.Context, resp *resource.M
 	case answer.Refused:
 		resp.Diagnostics.Append(v3Diagnostic{
 			Summary:      "This host does not support " + r.form.Kind,
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Ref:          codec.Ref,
 			Pointer:      "/form",
 			Code:         v3CodeFormUnsupported,
 			Detail: "The host's Support Profile surface answers that it carries no support for this exact Form " +
 				"identity, so the apply would be refused. This is a statement about the HOST, not about the " +
 				"Form: the same configuration applies unchanged against a host that implements it.",
-			Repair: "Remove the " + r.form.ResourceType + " resources from this configuration, or point the " +
+			Repair: "Remove the " + r.resourceTypeName() + " resources from this configuration, or point the " +
 				"provider at a host whose Host Support Profile declares this exact FormRef.",
 		}.error())
 		return
 	case answer.Err != nil:
-		resp.Diagnostics.Append(v3SupportUnreadable(r.form.ResourceType, "Form "+r.form.Kind, answer.Err))
+		resp.Diagnostics.Append(v3SupportUnreadable(r.resourceTypeName(), "Form "+r.form.Kind, answer.Err))
 		return
 	}
 	profile := v3SupportProfile(answer.Profile)
@@ -215,7 +223,7 @@ func (p v3SupportProfile) stringSlice(key string) []string {
 
 func (p v3SupportProfile) enum(field string) ([]string, bool) {
 	enums, _ := p["supportedEnums"].(map[string]any)
-	raw, present := enums[field].([]any)
+	raw, present := enums[p.capabilityKey(field)].([]any)
 	if !present {
 		return nil, false
 	}
@@ -230,7 +238,7 @@ func (p v3SupportProfile) enum(field string) ([]string, bool) {
 
 func (p v3SupportProfile) rangeFor(field string) (int64, bool, int64, bool) {
 	ranges, _ := p["supportedRanges"].(map[string]any)
-	bounds, present := ranges[field].(map[string]any)
+	bounds, present := ranges[p.capabilityKey(field)].(map[string]any)
 	if !present {
 		return 0, false, 0, false
 	}
@@ -244,7 +252,14 @@ func (p v3SupportProfile) limit(name string) (int64, bool) {
 	if limits == nil {
 		return 0, false
 	}
-	return v3SupportInt(limits[name])
+	return v3SupportInt(limits[p.capabilityKey(name)])
+}
+
+func (p v3SupportProfile) capabilityKey(field string) string {
+	if apiVersion, _ := p["apiVersion"].(string); apiVersion == clientv3.SupportProfileAPIVersion {
+		return "/" + strings.TrimPrefix(field, "/")
+	}
+	return field
 }
 
 func v3SupportInt(value any) (int64, bool) {
@@ -284,7 +299,7 @@ func (r *v3FormResource) checkSupportedOperations(
 	}
 	resp.Diagnostics.Append(v3Diagnostic{
 		Summary:      "This host does not offer the whole " + r.form.Kind + " lifecycle",
-		ResourceType: r.form.ResourceType,
+		ResourceType: r.resourceTypeName(),
 		Ref:          ref,
 		Pointer:      "/form",
 		Code:         v3CodeCapabilityUnsupported,
@@ -315,7 +330,7 @@ func (r *v3FormResource) checkSupportedContracts(
 		case answer.Refused:
 			resp.Diagnostics.Append(v3Diagnostic{
 				Summary:      "This host does not implement " + contract.Name + "@" + contract.Version,
-				ResourceType: r.form.ResourceType,
+				ResourceType: r.resourceTypeName(),
 				Ref:          codec.Ref,
 				Pointer:      "/form",
 				Code:         v3CodeInterfaceUnsupported,
@@ -326,7 +341,7 @@ func (r *v3FormResource) checkSupportedContracts(
 			}.error())
 		case answer.Err != nil:
 			resp.Diagnostics.Append(v3SupportUnreadable(
-				r.form.ResourceType, "Interface "+contract.Name+"@"+contract.Version, answer.Err))
+				r.resourceTypeName(), "Interface "+contract.Name+"@"+contract.Version, answer.Err))
 		}
 	}
 	for _, field := range codec.Form.Fields {
@@ -340,7 +355,7 @@ func (r *v3FormResource) checkSupportedContracts(
 		case answer.Refused:
 			resp.Diagnostics.Append(v3Diagnostic{
 				Summary:      "This host does not implement the " + field.BindingType + " binding",
-				ResourceType: r.form.ResourceType,
+				ResourceType: r.resourceTypeName(),
 				Ref:          codec.Ref,
 				Pointer:      "/" + field.Wire,
 				Attribute:    &attribute,
@@ -354,7 +369,7 @@ func (r *v3FormResource) checkSupportedContracts(
 			}.error())
 		case answer.Err != nil:
 			resp.Diagnostics.Append(v3SupportUnreadable(
-				r.form.ResourceType, "Binding "+field.BindingType+"@"+version, answer.Err))
+				r.resourceTypeName(), "Binding "+field.BindingType+"@"+version, answer.Err))
 		}
 	}
 }
@@ -405,6 +420,10 @@ func (r *v3FormResource) checkPlannedValues(
 		return
 	}
 	for _, field := range codec.Form.Fields {
+		if field.Kind == model.KindExternalServiceList {
+			r.checkExternalServices(ctx, codec, values, field, resp)
+			continue
+		}
 		name := v3AttributeName(field)
 		value, carried := values.Fields[name]
 		if !carried || value == nil || value.IsNull() || value.IsUnknown() {
@@ -418,7 +437,7 @@ func (r *v3FormResource) checkPlannedValues(
 				}
 				resp.Diagnostics.Append(v3Diagnostic{
 					Summary:      "This host does not accept " + name + " = " + written,
-					ResourceType: r.form.ResourceType,
+					ResourceType: r.resourceTypeName(),
 					Ref:          codec.Ref,
 					Pointer:      "/" + field.Wire,
 					Attribute:    &attribute,
@@ -437,7 +456,7 @@ func (r *v3FormResource) checkPlannedValues(
 			if ceiling, published := profile.limit(v3MaximumLimitName(field.Wire)); published && count > ceiling {
 				resp.Diagnostics.Append(v3Diagnostic{
 					Summary:      "This host accepts fewer " + name + " entries than the plan declares",
-					ResourceType: r.form.ResourceType,
+					ResourceType: r.resourceTypeName(),
 					Ref:          codec.Ref,
 					Pointer:      "/" + field.Wire,
 					Attribute:    &attribute,
@@ -456,7 +475,7 @@ func (r *v3FormResource) checkPlannedValues(
 			if (hasMinimum && written < minimum) || (hasMaximum && written > maximum) {
 				resp.Diagnostics.Append(v3Diagnostic{
 					Summary:      "This host does not accept " + name + " = " + fmt.Sprint(written),
-					ResourceType: r.form.ResourceType,
+					ResourceType: r.resourceTypeName(),
 					Ref:          codec.Ref,
 					Pointer:      "/" + field.Wire,
 					Attribute:    &attribute,
@@ -467,6 +486,65 @@ func (r *v3FormResource) checkPlannedValues(
 				}.error())
 			}
 		}
+	}
+}
+
+// checkExternalServices asks the Host about each opaque standard-service slot
+// in the planned version. A grammar-valid but unsupported protocol is a 200
+// support profile with satisfiable=false, not a missing registry entry. A
+// required slot therefore fails closed before prepare/mutation; an optional
+// unsupported slot remains a valid declaration and contributes no projection.
+func (r *v3FormResource) checkExternalServices(
+	ctx context.Context,
+	codec v3FormCodec,
+	values v3Values,
+	field model.Field,
+	resp *resource.ModifyPlanResponse,
+) {
+	value, carried := values.Fields[v3AttributeName(field)]
+	if !carried || value == nil || value.IsNull() || value.IsUnknown() {
+		return
+	}
+	list, ok := value.(types.List)
+	if !ok || list.IsNull() || list.IsUnknown() {
+		return
+	}
+	for index, element := range list.Elements() {
+		object, objectDiags := v3KnownObject(v3AttributeName(field), index, element)
+		resp.Diagnostics.Append(objectDiags...)
+		if objectDiags.HasError() {
+			return
+		}
+		attributes := object.Attributes()
+		protocol, protocolDiags := v3KnownString(v3AttributeName(field), "protocol", attributes["protocol"])
+		resp.Diagnostics.Append(protocolDiags...)
+		if protocolDiags.HasError() {
+			return
+		}
+		required := true
+		if rawRequired, present := attributes["required"].(types.Bool); present && !rawRequired.IsNull() && !rawRequired.IsUnknown() {
+			required = rawRequired.ValueBool()
+		}
+		answer := r.data.support.standardServiceSupport(ctx, r.data.clientV3, protocol)
+		if answer.Err != nil {
+			resp.Diagnostics.Append(v3SupportUnreadable(r.resourceTypeName(), "standard service "+protocol, answer.Err))
+			continue
+		}
+		satisfiable, present := answer.Profile["satisfiable"].(bool)
+		if !present || satisfiable || !required {
+			continue
+		}
+		attribute := path.Root(v3AttributeName(field))
+		resp.Diagnostics.Append(v3Diagnostic{
+			Summary:      "This host cannot satisfy required standard service " + protocol,
+			ResourceType: r.resourceTypeName(),
+			Ref:          codec.Ref,
+			Pointer:      "/" + field.Wire,
+			Attribute:    &attribute,
+			Code:         v3CodeCapabilityUnsupported,
+			Detail:       "The stable Host Support Profile answers satisfiable=false for this opaque protocol.",
+			Repair:       "Remove the required slot, make it optional, or apply against a host that can satisfy " + protocol + ".",
+		}.error())
 	}
 }
 
@@ -489,7 +567,7 @@ func (r *v3FormResource) checkArtifactCeiling(
 		attribute := path.Root(attributeName)
 		resp.Diagnostics.Append(v3Diagnostic{
 			Summary:      "This bundle has more files than the host accepts",
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Ref:          codec.Ref,
 			Pointer:      "/manifestDigest",
 			Attribute:    &attribute,
@@ -524,7 +602,7 @@ func (r *v3FormResource) checkArtifactCeiling(
 	attribute := path.Root(attributeName)
 	resp.Diagnostics.Append(v3Diagnostic{
 		Summary:      "This bundle is larger than the host accepts",
-		ResourceType: r.form.ResourceType,
+		ResourceType: r.resourceTypeName(),
 		Ref:          codec.Ref,
 		Pointer:      "/manifestDigest",
 		Attribute:    &attribute,

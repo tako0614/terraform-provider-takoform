@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com",
     "kind": "WorkerDeployment",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:8d3c7f53770994c749c5e6d006860a7881f6bf0f8e8c14353129044b05addb73"
+    "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5441,
-      "digest": "sha256:d72766fad5d4412ee8316f02f38d6707a66f42a17da41a680922fc2e1f63f99e"
+      "size": 5836,
+      "digest": "sha256:d1fb89cbf8615961193002f83d4447b9e4b943e95fcbd29a85a9ab2d65d670d9"
     },
     {
       "path": "fixtures/desired.json",
@@ -38,6 +38,18 @@
       "mediaType": "application/json",
       "size": 357,
       "digest": "sha256:45e5ec7e39e90a4685af13959cef34827ee4fddea3b06514dac944a68eb51f3f"
+    },
+    {
+      "path": "fixtures/negative-versions-weight.json",
+      "mediaType": "application/json",
+      "size": 323,
+      "digest": "sha256:93aa7f770cee08a5c8790c3402c0f19256d92087efd36a9751bcfb037bf314ea"
+    },
+    {
+      "path": "fixtures/negative-versions-worker-version.json",
+      "mediaType": "application/json",
+      "size": 332,
+      "digest": "sha256:382cf1de726659740976c73335db0f1b58ef63a5d1df4a3d3190d9419eb57243"
     },
     {
       "path": "fixtures/negative-versions.json",

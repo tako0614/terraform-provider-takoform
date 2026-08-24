@@ -1,0 +1,84 @@
+{
+  "format": "takoform.generic-host-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "requiredChecks": [
+    "declared-constraint-semantics-enforced",
+    "exact-form-ref-resolution",
+    "generic-lifecycle-semantics",
+    "optional-unsupported-standard-service-omitted",
+    "required-unsupported-standard-service-refused-before-mutation",
+    "supported-standard-service-resolved"
+  ],
+  "scenarios": [
+    {
+      "check": "declared-constraint-semantics-enforced",
+      "input": {
+        "operation": "portable-host-self-test",
+        "portableHostCheck": "declared-constraint-semantics-enforced"
+      },
+      "expected": {
+        "status": "passed",
+        "mutationBoundary": "preserved"
+      }
+    },
+    {
+      "check": "exact-form-ref-resolution",
+      "input": {
+        "operation": "portable-host-self-test",
+        "portableHostCheck": "exact-form-ref-resolution"
+      },
+      "expected": {
+        "status": "passed",
+        "mutationBoundary": "preserved"
+      }
+    },
+    {
+      "check": "generic-lifecycle-semantics",
+      "input": {
+        "operation": "portable-host-self-test",
+        "portableHostCheck": "generic-lifecycle-semantics"
+      },
+      "expected": {
+        "status": "passed",
+        "mutationBoundary": "preserved"
+      }
+    },
+    {
+      "check": "optional-unsupported-standard-service-omitted",
+      "input": {
+        "operation": "portable-host-self-test",
+        "portableHostCheck": "optional-unsupported-standard-service-omitted"
+      },
+      "expected": {
+        "status": "passed",
+        "mutationBoundary": "preserved"
+      }
+    },
+    {
+      "check": "required-unsupported-standard-service-refused-before-mutation",
+      "input": {
+        "operation": "portable-host-self-test",
+        "portableHostCheck": "required-unsupported-standard-service-refused-before-mutation"
+      },
+      "expected": {
+        "status": "passed",
+        "mutationBoundary": "before"
+      }
+    },
+    {
+      "check": "supported-standard-service-resolved",
+      "input": {
+        "operation": "portable-host-self-test",
+        "portableHostCheck": "supported-standard-service-resolved"
+      },
+      "expected": {
+        "status": "passed",
+        "mutationBoundary": "preserved"
+      }
+    }
+  ],
+  "portableHostContract": {
+    "path": "generic-host/portable-host/contract.json",
+    "sha256": "sha256:1c4281e54ea986ec9cfacc74ef5d384142b620a63fb19331b514eb1f2f31def7"
+  }
+}

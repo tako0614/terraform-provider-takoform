@@ -132,10 +132,22 @@ resource "takoform_worker_deployment" "app" {
 }
 
 // bindingStack renders a worker that uses the `edge.kv` binding, and
-// optionally an object bucket as well. It is the configuration the host-support
-// scenario plans: the first shape is what a KV-only host implements, the second
-// asks that host for something it does not have.
-func bindingStack(endpoint string, withBucket bool) string {
+// optionally one opaque standard-service slot as well. It is the configuration
+// the host-support scenario plans: the first shape is what a KV-capable host
+// implements, the second asks that host for an unknown required protocol.
+func bindingStack(endpoint string, withExternalService bool) string {
+	protocol := ""
+	if withExternalService {
+		protocol = "org.example.unknown"
+	}
+	return bindingStackWithProtocol(endpoint, protocol)
+}
+
+func bindingStackWithProtocol(endpoint, protocol string) string {
+	return bindingStackWithProtocolAndRequired(endpoint, protocol, true)
+}
+
+func bindingStackWithProtocolAndRequired(endpoint, protocol string, required bool) string {
 	var builder strings.Builder
 	builder.WriteString(providerBlock(endpoint))
 	builder.WriteString(fmt.Sprintf(`
@@ -164,24 +176,23 @@ resource "takoform_worker_bundle" "app" {
   }
 }
 `, workerName, workerName))
-	bucketResource := ""
-	bucketBinding := ""
-	if withBucket {
-		bucketResource = `
-resource "takoform_edge_object_bucket" "media" {
-  name = "counter-media"
-}
-`
-		bucketBinding = `
-  bucket_bindings = [
+	externalService := ""
+	if protocol != "" {
+		externalService = `
+  external_services = [
     {
-      name        = "MEDIA"
-      target_name = takoform_edge_object_bucket.media.name
+      name     = "UNKNOWN_SERVICE"
+      protocol = "%s"
+      required = %s
     },
   ]
 `
+		requiredLiteral := "false"
+		if required {
+			requiredLiteral = "true"
+		}
+		externalService = fmt.Sprintf(externalService, protocol, requiredLiteral)
 	}
-	builder.WriteString(bucketResource)
 	builder.WriteString(fmt.Sprintf(`
 resource "takoform_worker_version" "app" {
   revision_owner = %q
@@ -212,7 +223,7 @@ resource "takoform_worker_deployment" "app" {
     },
   ]
 }
-`, workerName, bucketBinding, workerName+"-deployment"))
+`, workerName, externalService, workerName+"-deployment"))
 	return builder.String()
 }
 

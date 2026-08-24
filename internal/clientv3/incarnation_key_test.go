@@ -33,14 +33,14 @@ type incarnationProbe struct {
 
 func newIncarnationProbe(t *testing.T) incarnationProbe {
 	t.Helper()
-	// This client speaks v1beta2, so it is driven against the corpus of that
-	// lane: pointing it at the retained corpus would test a client against a
-	// host serving paths it no longer builds.
-	contract, err := portableconformancev3.Verify("../../conformance/portable-host-v1beta4")
+	// The client speaks the stable v1 lane, so it is driven against the frozen
+	// stable corpus. The retained beta corpus remains an immutable historical
+	// fixture and is not selected by the current client.
+	contract, err := portableconformancev3.Verify("../../conformance/takoform-v1/generic-host/portable-host")
 	if err != nil {
 		t.Fatalf("verify portable host v3 contract: %v", err)
 	}
-	catalog, err := portableconformancev3.FallbackCatalog(contract)
+	catalog, err := portableconformancev3.LoadCatalog("../..", contract)
 	if err != nil {
 		t.Fatalf("fallback catalog: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestObserveKeyDistinguishesTwoIncarnationsOfOneName(t *testing.T) {
 // the host-driven probes above.
 func TestIncarnationKeyComposition(t *testing.T) {
 	ref := FormRef{
-		APIVersion:        "edge.forms.takoform.com/v1beta1",
+		APIVersion:        "edge.forms.takoform.com",
 		Kind:              "AtLeastOnceQueue",
 		DefinitionVersion: "0.1.0",
 		SchemaDigest:      "sha256:" + "ab",

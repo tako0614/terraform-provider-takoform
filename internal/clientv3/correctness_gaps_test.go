@@ -75,7 +75,7 @@ func TestGetFormSupportRejectsADifferentExactSchemaDigest(t *testing.T) {
 	}
 }
 
-func TestGetFormSupportAcceptsAProfileWithoutASchemaDigest(t *testing.T) {
+func TestGetFormSupportRejectsAProfileWithoutASchemaDigest(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodGet {
 			profile := wireSupportProfile()
@@ -85,8 +85,8 @@ func TestGetFormSupportAcceptsAProfileWithoutASchemaDigest(t *testing.T) {
 		}
 		return false
 	})
-	if _, err := client.GetFormSupport(context.Background(), testRef); err != nil {
-		t.Fatalf("line-level support profile without a schemaDigest was rejected: %v", err)
+	if _, err := client.GetFormSupport(context.Background(), testRef); err == nil || !contains(err, "missing required field") {
+		t.Fatalf("line-level support profile without a schemaDigest was accepted: %v", err)
 	}
 }
 

@@ -43,6 +43,11 @@ func validateNoOpenTokenFields(kind string, fields []Field) error {
 		if err := validateNoOpenTokenFields(kind, field.Fields); err != nil {
 			return err
 		}
+		for _, variant := range field.Variants {
+			if err := validateNoOpenTokenFields(kind, variant.Fields); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

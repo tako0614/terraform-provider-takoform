@@ -80,10 +80,9 @@ what a host serves against those bytes, and a repository test recomputes them
 from the installed Definition at the exact pinned FormRef so the pin cannot
 drift
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
-The family has one additional current Form: `ObjectBucket` is the one
-intentionally unprobed by this corpus. Its wire rules remain normative, but
-causal host evidence for that Form requires a separate exact package fixture;
-this corpus makes no coverage claim for it.
+Those probes now equal the current Edge family's 16 Forms exactly. There is no
+current `ObjectBucket`; that identity survives only in retained versioned Beta
+history and is outside the current family and stable-v1 suite.
 It also pins a byte-digested SECOND Form Definition
 of the ModuleWorker line, so the lane can install two contracts of one group and
 kind at once; without it, "a host answers for the exact ref recorded in state"
@@ -377,26 +376,17 @@ Ready Resource, and disappear after deletion. When present, `resourceUri` must
 pass the shared credential-free HTTPS grammar; the adversarial runner rejects
 userinfo, query, fragment, plaintext HTTP, and Unicode-hostname substitutions.
 
-The unprobed `ObjectBucket` Form has one required descriptor at one version in
-its retained fixture, so this runner does not claim that it induced
-multi-version identity ambiguity, optional-descriptor omission, or activation
-rejection on a feature-disabled host. Its wire rules remain normative, and the
-stable ambiguity error envelopes are exercised, but causal host evidence for
-those cases needs a separate exact package fixture.
-
 It treats drift only as validated observed evidence and defines no drift
 operation or portable audit endpoint.
 
 ## Runtime ABI evidence
 
 `runtime-abi-v1/` measures a different subject from every corpus above. Those
-drive a control plane; this one drives a **runtime**. The Host API v1beta1
-lane can prove that a host advertises `worker.runtime@1.0.0` at the exact
+drive a control plane; this one drives a **runtime**. The current Host API v1
+lane can prove that a host advertises `worker.runtime@1.1.0` at the exact
 pinned digest and refuses a `WorkerVersion` that names a handler the ABI does
-not define, and
-[`../spec/host-api/v1beta1.md`](../spec/host-api/v1beta1.md#what-the-lane-proves-and-what-stays-a-host-obligation)
-lists what it cannot prove, because proving it means executing the module
-rather than driving the API. This corpus executes it
+not define, but control-plane conformance cannot prove behavior that requires
+executing the module. This corpus executes it
 ([decision 0023](../spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
 
 The corpus is digest-pinned the same way `portable-host-v1beta1/` is: `manifest.json`

@@ -38,6 +38,10 @@ type Relation struct {
 	// its parent object. A relation that is not required may legitimately be
 	// absent from a valid desired spec; a required one is always present.
 	Required bool
+	// VariantSelectors is the closed tagged-object branch (or nested branches)
+	// this relation belongs to. Instance traversal reads a relation only when
+	// every discriminator selects that branch.
+	VariantSelectors []VariantSelector
 	// TargetFormRefs is the closed set of exact Form identities this relation
 	// accepts, or nil when the relation states an Interface requirement instead.
 	TargetFormRefs []TargetFormRef
@@ -53,6 +57,12 @@ type Relation struct {
 	// satisfied by any resource of the right group and kind, whatever contract
 	// its Definition has since moved to (decision 0022).
 	RequiredInterface *RequiredInterface
+}
+
+// VariantSelector pins one relation to one closed tagged-object branch.
+type VariantSelector struct {
+	Pointer string
+	Value   string
 }
 
 // TargetFormRef is one exact Form identity a relation accepts as its target.
@@ -127,7 +137,9 @@ func DeriveRelationsWithConstraints(schema map[string]any, constraints []Constra
 	if err := walker.walk(schema, "", "", true); err != nil {
 		return nil, err
 	}
-	sort.Slice(walker.out, func(i, j int) bool { return walker.out[i].Pointer < walker.out[j].Pointer })
+	sort.Slice(walker.out, func(i, j int) bool {
+		return relationSortKey(walker.out[i]) < relationSortKey(walker.out[j])
+	})
 	for _, constraint := range constraints {
 		// The vocabulary is CLOSED, and an unreadable entry is refused rather
 		// than skipped. Skipping is what a `continue` on anything that is not
@@ -153,10 +165,35 @@ func DeriveRelationsWithConstraints(schema map[string]any, constraints []Constra
 				return nil, errors.New("a host-assigned constraint names no output")
 			}
 			continue
+		case ConstraintOrderedPair, ConstraintUniqueBy:
+			if err := validateStructuralConstraintAgainstSchema(schema, constraint); err != nil {
+				return nil, err
+			}
+			continue
+		case ConstraintAcyclic, ConstraintDistinctPair, ConstraintUniquePair, ConstraintSameResolvedTarget:
+			if err := validateResolvedUIDConstraintShape(constraint); err != nil {
+				return nil, err
+			}
+			for _, pointer := range localConstraintPointers(constraint) {
+				declared := false
+				for _, relation := range walker.out {
+					if relation.Pointer == pointer {
+						declared = true
+						break
+					}
+				}
+				if !declared {
+					return nil, fmt.Errorf(
+						"resolved-UID constraint %s names %s, which is not a reference this Form declares",
+						constraint.Kind, pointer,
+					)
+				}
+			}
+			continue
 		default:
 			return nil, fmt.Errorf(
 				"constraint kind %q is not one this host implements; the closed vocabulary is "+
-					"exclusive, sum, claim, hostAssigned",
+					"exclusive, sum, claim, hostAssigned, orderedPair, uniqueBy, acyclic, distinctPair, uniquePair, sameResolvedTarget",
 				constraint.Kind,
 			)
 		}
@@ -182,6 +219,24 @@ func DeriveRelationsWithConstraints(schema map[string]any, constraints []Constra
 	return walker.out, nil
 }
 
+func relationSortKey(relation Relation) string {
+	var key strings.Builder
+	key.WriteString(relation.Pointer)
+	for _, selector := range relation.VariantSelectors {
+		key.WriteByte(0)
+		key.WriteString(selector.Pointer)
+		key.WriteByte('=')
+		key.WriteString(selector.Value)
+	}
+	key.WriteByte(0)
+	key.WriteString(relation.TargetAPIVersion)
+	key.WriteByte(0)
+	key.WriteString(relation.TargetKind)
+	key.WriteByte(0)
+	key.WriteString(relation.Binding)
+	return key.String()
+}
+
 // maxRelationDepth bounds the derivation walk. The desired schemas of this
 // model are shallow by construction; the bound exists so a hostile or
 // malformed document cannot turn derivation into unbounded work.
@@ -192,10 +247,16 @@ type relationWalker struct {
 }
 
 func (w *relationWalker) walk(node map[string]any, pointer, binding string, required bool) error {
-	return w.walkAt(node, pointer, binding, required, 0)
+	return w.walkAt(node, pointer, binding, required, nil, 0)
 }
 
-func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, required bool, depth int) error {
+func (w *relationWalker) walkAt(
+	node map[string]any,
+	pointer, binding string,
+	required bool,
+	selectors []VariantSelector,
+	depth int,
+) error {
 	if node == nil {
 		return nil
 	}
@@ -210,6 +271,14 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 		if err != nil {
 			return err
 		}
+		for _, ref := range targetRefs {
+			if ref.APIVersion != group || ref.Kind != kind {
+				return fmt.Errorf(
+					"reference %s pins %s %s but lists exact target Form %s",
+					pointer, group, kind, ref.String(),
+				)
+			}
+		}
 		exclusive, err := exclusiveHold(node, pointer)
 		if err != nil {
 			return err
@@ -220,18 +289,22 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 			TargetKind:        kind,
 			Binding:           binding,
 			Required:          required,
+			VariantSelectors:  append([]VariantSelector(nil), selectors...),
 			TargetFormRefs:    targetRefs,
 			RequiredInterface: requiredInterface,
 			Exclusive:         exclusive,
 		})
 		return nil
 	}
+	if discriminator, _ := node[TaggedObjectDiscriminatorAnnotationKey].(string); discriminator != "" {
+		return w.walkTaggedObject(node, pointer, binding, required, selectors, depth)
+	}
 	if items, ok := node["items"].(map[string]any); ok {
 		// Every element of an array shares one pointer with "*" in place of the
 		// index: the relation is a property of the schema, and the concrete
 		// index only exists once a spec is materialized. An element is always
 		// "present" when the array itself is, so requiredness passes through.
-		if err := w.walkAt(items, pointer+"/*", relationBinding(node, binding), required, depth+1); err != nil {
+		if err := w.walkAt(items, pointer+"/*", relationBinding(node, binding), required, selectors, depth+1); err != nil {
 			return err
 		}
 	}
@@ -258,8 +331,55 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 			pointer+"/"+escapeJSONPointerToken(name),
 			relationBinding(child, binding),
 			required && requiredMembers[name],
+			selectors,
 			depth+1,
 		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *relationWalker) walkTaggedObject(
+	node map[string]any,
+	pointer, binding string,
+	required bool,
+	selectors []VariantSelector,
+	depth int,
+) error {
+	discriminator, _ := node[TaggedObjectDiscriminatorAnnotationKey].(string)
+	branches, ok := node["oneOf"].([]any)
+	if !ok || len(branches) < 2 {
+		return fmt.Errorf("tagged object at %q carries fewer than two oneOf branches", pointer)
+	}
+	seen := map[string]struct{}{}
+	for _, raw := range branches {
+		branch, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("tagged object at %q carries a non-object branch", pointer)
+		}
+		if branch["type"] != "object" || branch["additionalProperties"] != false {
+			return fmt.Errorf("tagged object at %q carries a branch that is not a closed object", pointer)
+		}
+		properties, _ := branch["properties"].(map[string]any)
+		tag, ok := constantString(properties[discriminator])
+		if !ok {
+			return fmt.Errorf("tagged object at %q carries a branch without const discriminator %s", pointer, discriminator)
+		}
+		requiredMembers := anyStrings(branch["required"])
+		if !containsString(requiredMembers, discriminator) {
+			return fmt.Errorf("tagged object at %q carries branch %s with an optional discriminator", pointer, tag)
+		}
+		if _, duplicate := seen[tag]; duplicate {
+			return fmt.Errorf("tagged object at %q repeats discriminator value %q", pointer, tag)
+		}
+		seen[tag] = struct{}{}
+		branchSelectors := append([]VariantSelector(nil), selectors...)
+		branchSelectors = append(branchSelectors, VariantSelector{
+			Pointer: pointer + "/" + escapeJSONPointerToken(discriminator),
+			Value:   tag,
+		})
+		if err := w.walkAt(branch, pointer, binding, required, branchSelectors, depth+1); err != nil {
 			return err
 		}
 	}
@@ -475,11 +595,20 @@ func RelationInstances(relations []Relation, spec map[string]any) []RelationInst
 
 func resolveRelation(relation Relation, spec map[string]any) []RelationInstance {
 	tokens := strings.Split(strings.TrimPrefix(relation.Pointer, "/"), "/")
-	return descend(relation, any(spec), tokens, "")
+	return descend(relation, any(spec), any(spec), tokens, "", nil)
 }
 
-func descend(relation Relation, value any, tokens []string, pointer string) []RelationInstance {
+func descend(
+	relation Relation,
+	root, value any,
+	tokens []string,
+	pointer string,
+	wildcards []string,
+) []RelationInstance {
 	if len(tokens) == 0 {
+		if !variantSelected(relation.VariantSelectors, root, wildcards) {
+			return nil
+		}
 		reference, ok := value.(map[string]any)
 		if !ok {
 			return nil
@@ -507,7 +636,11 @@ func descend(relation Relation, value any, tokens []string, pointer string) []Re
 		}
 		var out []RelationInstance
 		for index, item := range items {
-			out = append(out, descend(relation, item, rest, pointer+"/"+strconv.Itoa(index))...)
+			indexText := strconv.Itoa(index)
+			out = append(out, descend(
+				relation, root, item, rest, pointer+"/"+indexText,
+				append(wildcards, indexText),
+			)...)
 		}
 		return out
 	}
@@ -520,7 +653,66 @@ func descend(relation Relation, value any, tokens []string, pointer string) []Re
 	if !present {
 		return nil
 	}
-	return descend(relation, child, rest, pointer+"/"+token)
+	return descend(relation, root, child, rest, pointer+"/"+token, wildcards)
+}
+
+func variantSelected(selectors []VariantSelector, root any, wildcards []string) bool {
+	for _, selector := range selectors {
+		pointer, ok := resolveWildcardPointer(selector.Pointer, wildcards)
+		if !ok {
+			return false
+		}
+		value, ok := valueAtJSONPointer(root, pointer)
+		if !ok || value != selector.Value {
+			return false
+		}
+	}
+	return true
+}
+
+func resolveWildcardPointer(pointer string, wildcards []string) (string, bool) {
+	tokens := strings.Split(strings.TrimPrefix(pointer, "/"), "/")
+	used := 0
+	for index, token := range tokens {
+		if token != "*" {
+			continue
+		}
+		if used >= len(wildcards) {
+			return "", false
+		}
+		tokens[index] = wildcards[used]
+		used++
+	}
+	if len(tokens) == 1 && tokens[0] == "" {
+		return "", true
+	}
+	return "/" + strings.Join(tokens, "/"), true
+}
+
+func valueAtJSONPointer(root any, pointer string) (any, bool) {
+	if pointer == "" {
+		return root, true
+	}
+	value := root
+	for _, token := range strings.Split(strings.TrimPrefix(pointer, "/"), "/") {
+		switch current := value.(type) {
+		case map[string]any:
+			var present bool
+			value, present = current[unescapeJSONPointerToken(token)]
+			if !present {
+				return nil, false
+			}
+		case []any:
+			index, err := strconv.Atoi(token)
+			if err != nil || index < 0 || index >= len(current) {
+				return nil, false
+			}
+			value = current[index]
+		default:
+			return nil, false
+		}
+	}
+	return value, true
 }
 
 func unescapeJSONPointerToken(token string) string {
