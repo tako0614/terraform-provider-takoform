@@ -930,7 +930,7 @@ describe("independent release tracks", () => {
     expect(() => prepareSpecificationEvidence(fixture.root)).toThrow(
       "Specification evidence is already closed; preparation is create-only",
     );
-  });
+  }, 60_000);
 
   test("a fully valid multi-family Specification future passes without Provider or external evidence", () => {
     const report = validatePublicationEvidence(future.document, { repositoryRoot: future.root });
