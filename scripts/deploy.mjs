@@ -91,7 +91,11 @@ const SITE = {
   assets: "website/public",
   config: "website/wrangler.jsonc",
   gate: "check:public-surfaces",
-  snapshotGate: "check:public-snapshot",
+  // The deploy snapshot is a Git archive by design, not a repository. Keep
+  // repository-history and synthetic future-evidence tests in the ordinary
+  // public-surface gate; the deploy gate validates only bytes and safety
+  // properties that can affect this static website publication.
+  snapshotGate: "check:website-deploy-snapshot",
   websiteGate: "check:website-snapshot",
   url: "https://takoform.com",
 };
