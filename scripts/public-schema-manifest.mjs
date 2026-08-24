@@ -210,6 +210,42 @@ export function enforceAppendOnlyPublicSchemaIdentities(
   }
 }
 
+export function enforceAppendOnlyRetiredPublicSchemaIdentities(
+  current,
+  retired,
+  historicalSets,
+) {
+  const currentByID = new Map(current.map((identity) => [identity.id, identity]));
+  const retiredByID = new Map(retired.map((identity) => [identity.id, identity]));
+  for (const identity of retired) {
+    if (currentByID.has(identity.id)) {
+      fail(
+        `identity ${identity.id} is both served and retired; ` +
+          `a withdrawn identity cannot be reactivated`,
+      );
+    }
+  }
+  for (const { identities, label } of historicalSets) {
+    for (const historical of identities) {
+      if (currentByID.has(historical.id)) {
+        fail(`${label} retired identity ${historical.id} was reactivated`);
+      }
+      const candidate = retiredByID.get(historical.id);
+      if (!candidate) {
+        fail(`${label} retired identity ${historical.id} was removed`);
+      }
+      if (
+        candidate.sha256 !== historical.sha256 ||
+        candidate.source !== historical.source ||
+        candidate.public !== historical.public ||
+        candidate.retiredBecause !== historical.retiredBecause
+      ) {
+        fail(`${label} retired identity ${historical.id} was changed`);
+      }
+    }
+  }
+}
+
 export function discoverPublicSchemas(repositoryRoot) {
   const normativeRoot = path.join(repositoryRoot, "spec", "schemas");
   const identities = readPublicSchemaIdentityLedger(repositoryRoot);

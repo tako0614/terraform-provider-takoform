@@ -45,7 +45,9 @@ import {
 import {
   discoverPublicSchemas,
   enforceAppendOnlyPublicSchemaIdentities,
+  enforceAppendOnlyRetiredPublicSchemaIdentities,
   parsePublicSchemaIdentityLedger,
+  parseRetiredPublicSchemaIdentities,
   readRetiredPublicSchemaIdentities,
   PUBLIC_SCHEMA_IDENTITY_LEDGER,
   readPublicSchemaIdentityLedger,
@@ -140,7 +142,7 @@ const CONTRACT = {
           "records previous, uploaded, and current deployment/version ids; a failed dormant upload never authorizes promotion. An indeterminate initial domain operation emits one id-bound forward-recovery command that uploads or deploys no version, verifies the current version message/static closure and candidate schema bytes through the apex, and either performs the safe absent-domain write or only repeats readback for an exact existing domain.",
         "pre-mutation-proof": `requires explicit operator-private \`TAKOFORM_CLOUDFLARE_ACCOUNT_ID\` (account id) and \`TAKOFORM_CLOUDFLARE_ZONE_ID\` (zone id) plus an exclusive-writer acknowledgement, rejects ambient Cloudflare/Wrangler/runtime overrides, binds the local OAuth profile to those ids, proves the active zone and authoritative delegation, binds the current ${SITE.worker} version message to an ancestor source commit and its retained schema ledger, and reads the exact domain changeset. Every upload, version promotion, and domain write reruns the schema proof and then the whole-tree/source/deployment fence immediately before its writer.`,
         "independent-review": "the TASK-0009 release-surface review independently checked the website, custom-domain, DNS, append-only schema identity, rollback, and live-readback boundary; the operator retains that review with the deploy result before the first origin mint",
-        "no-overwrite": `requires the candidate ${PUBLIC_SCHEMA_IDENTITY_LEDGER} to retain every identity and digest recorded by every reachable historical ledger revision. Identities retained by the current deployed source ledger must already serve the exact candidate bytes. A candidate-only identity may be minted only from an exact HTTP 404; a differing body, missing deployed identity, other HTTP response, non-DNS transport failure, redirect, or ambiguous partial origin blocks publication. Only when every URL fails specifically with ENOTFOUND may an operator mint the origin by passing ${INITIAL_SCHEMA_ORIGIN_MINT_ACK}; the acknowledgement is rejected once any URL exists and never bypasses a mismatch.`,
+        "no-overwrite": `requires the candidate ${PUBLIC_SCHEMA_IDENTITY_LEDGER} to retain every identity and digest in the current deployed source ledger. Unpublished draft commits are not publication authority. Identities retained by the deployed source must already serve the exact candidate bytes. A candidate-only identity may be minted only from an exact HTTP 404; a differing body, missing deployed identity, other HTTP response, non-DNS transport failure, redirect, or ambiguous partial origin blocks publication. Only when every URL fails specifically with ENOTFOUND may an operator mint the origin by passing ${INITIAL_SCHEMA_ORIGIN_MINT_ACK}; the acknowledgement is rejected once any URL exists and never bypasses a mismatch.`,
       },
     },
     ...RELEASE_SURFACES,
@@ -696,41 +698,8 @@ try {
     );
   }
   schemaIdentities = readPublicSchemaIdentityLedger(publicationRepo);
-  const ledgerCommits = authorityGit(
-    "log",
-    "--full-history",
-    "--format=%H",
-    commit,
-    "--",
-    PUBLIC_SCHEMA_IDENTITY_LEDGER,
-  )
-    .split("\n")
-    .filter((value) => value !== "");
-  if (ledgerCommits.length === 0) {
-    throw new Error("the identity ledger has no reachable committed history");
-  }
-  const historicalSets = [];
-  for (const ledgerCommit of ledgerCommits) {
-    const ledgerObject = ledgerObjectAt(ledgerCommit);
-    // A deletion commit has no blob at this path. An earlier reachable
-    // revision still carries the retained set and is checked below.
-    if (ledgerObject === null) continue;
-    const historical = authorityGitRaw("cat-file", "blob", ledgerObject);
-    historicalSets.push({
-      identities: parsePublicSchemaIdentityLedger(
-        historical,
-        `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@${ledgerCommit}`,
-      ),
-      label: `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@${ledgerCommit}`,
-    });
-  }
-  enforceAppendOnlyPublicSchemaIdentities(
-    schemaIdentities,
-    historicalSets,
-    readRetiredPublicSchemaIdentities(publicationRepo),
-  );
   process.stdout.write(
-    `schema identity ledger retains ${schemaIdentities.length} identities across ${historicalSets.length} committed revision(s)\n`,
+    `candidate schema identity ledger contains ${schemaIdentities.length} identities\n`,
   );
   assertCommittedGitAuthority({
     authorityRoot: authorityRepo,
@@ -750,7 +719,7 @@ try {
     ),
   );
 } catch (error) {
-  die(`cannot prove append-only schema identity history: ${error.message}`);
+  die(`cannot read the candidate schema identity ledger: ${error.message}`);
 }
 
 const assetRoot = resolve(publicationRepo, SITE.assets);
@@ -920,6 +889,7 @@ process.stdout.write(
 );
 
 let deployedSchemaIdentities;
+let deployedRetiredSchemaIdentities;
 let deployedSourceCommit;
 try {
   const deployedVersion = parsePublishedVersionSourceCommit(
@@ -949,19 +919,37 @@ try {
       `${PUBLIC_SCHEMA_IDENTITY_LEDGER} is absent from deployed source ${deployedSourceCommit}`,
     );
   }
-  deployedSchemaIdentities = parsePublicSchemaIdentityLedger(
-    authorityGitRaw("cat-file", "blob", deployedLedgerObject),
-    `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
+  const deployedLedgerBytes = authorityGitRaw(
+    "cat-file",
+    "blob",
+    deployedLedgerObject,
   );
+  const deployedLedgerLabel =
+    `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`;
+  deployedSchemaIdentities = parsePublicSchemaIdentityLedger(
+    deployedLedgerBytes,
+    deployedLedgerLabel,
+  );
+  deployedRetiredSchemaIdentities = parseRetiredPublicSchemaIdentities(
+    deployedLedgerBytes,
+    deployedLedgerLabel,
+  );
+  const candidateRetiredSchemaIdentities =
+    readRetiredPublicSchemaIdentities(publicationRepo);
   enforceAppendOnlyPublicSchemaIdentities(
     schemaIdentities,
+    [{ identities: deployedSchemaIdentities, label: deployedLedgerLabel }],
+    candidateRetiredSchemaIdentities,
+  );
+  enforceAppendOnlyRetiredPublicSchemaIdentities(
+    schemaIdentities,
+    candidateRetiredSchemaIdentities,
     [
       {
-        identities: deployedSchemaIdentities,
-        label: `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
+        identities: deployedRetiredSchemaIdentities,
+        label: deployedLedgerLabel,
       },
     ],
-    readRetiredPublicSchemaIdentities(publicationRepo),
   );
 } catch (error) {
   die(
@@ -969,7 +957,7 @@ try {
   );
 }
 process.stdout.write(
-  `deployed source ${deployedSourceCommit} retains ${deployedSchemaIdentities.length} published schema identities\n`,
+  `deployed source ${deployedSourceCommit} retains ${deployedSchemaIdentities.length} published and ${deployedRetiredSchemaIdentities.length} retired schema identities\n`,
 );
 
 // published-identity / no-overwrite: compare production to the exact candidate

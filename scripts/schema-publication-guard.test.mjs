@@ -326,6 +326,15 @@ test("website deploy contract declares the published identity obligation", () =>
   expect(website.obligations["no-overwrite"]).toContain(
     INITIAL_SCHEMA_ORIGIN_MINT_ACK,
   );
+  expect(website.obligations["no-overwrite"]).toContain(
+    "current deployed source ledger",
+  );
+  expect(website.obligations["no-overwrite"]).toContain(
+    "Unpublished draft commits are not publication authority",
+  );
+  expect(website.obligations["no-overwrite"]).not.toContain(
+    "every reachable historical ledger revision",
+  );
 });
 
 test("website deploy parsing cannot route a release surface through website writers", () => {

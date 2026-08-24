@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   discoverPublicSchemas,
   enforceAppendOnlyPublicSchemaIdentities,
+  enforceAppendOnlyRetiredPublicSchemaIdentities,
   readPublicSchemaIdentityLedger,
 } from "./public-schema-manifest.mjs";
 
@@ -143,5 +144,36 @@ describe("public schema identity history", () => {
         [{ ...retained, retiredBecause: "pre-Stable lane withdrawn" }],
       ),
     ).toThrow("is both served and retired");
+  });
+
+  test("preserves deployed retired identities without reactivation", () => {
+    const deployed = {
+      ...identity("retired"),
+      retiredBecause: "pre-Stable lane withdrawn",
+    };
+    expect(() =>
+      enforceAppendOnlyRetiredPublicSchemaIdentities([], [deployed], [
+        { identities: [deployed], label: "deployed" },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      enforceAppendOnlyRetiredPublicSchemaIdentities([], [], [
+        { identities: [deployed], label: "deployed" },
+      ]),
+    ).toThrow("retired identity https://forms.takoform.com/schemas/retired.json was removed");
+    expect(() =>
+      enforceAppendOnlyRetiredPublicSchemaIdentities(
+        [identity("retired")],
+        [],
+        [{ identities: [deployed], label: "deployed" }],
+      ),
+    ).toThrow("retired identity https://forms.takoform.com/schemas/retired.json was reactivated");
+    expect(() =>
+      enforceAppendOnlyRetiredPublicSchemaIdentities(
+        [],
+        [{ ...deployed, retiredBecause: "different history" }],
+        [{ identities: [deployed], label: "deployed" }],
+      ),
+    ).toThrow("retired identity https://forms.takoform.com/schemas/retired.json was changed");
   });
 });
