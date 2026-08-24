@@ -53,17 +53,18 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v2.1.1` is the current Registry-published release. Provider `v2.0.0`
+Provider `v3.0.0` is the current Registry-published release. Provider `v2.1.1`
 is the published compatibility predecessor and Provider `v1.0.3` is the
 published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
 and canonical Terraform Registry listings exist.
 
-`release/version.json` describes the next provider release candidate:
-`3.0.0`, tag `v3.0.0`, targeting Host API `forms.takoform.com/v1`. Its
-`publicationStatus` remains `candidate-only`: a source descriptor, local gate,
-candidate build, or compatibility matrix does not establish a signed GitHub
-Release or Terraform Registry publication. Provider 3 can be called published
-only after its own owner flow and exact Registry readback succeed.
+`release/version.json` is the immutable source descriptor used to build
+Provider `3.0.0`, tag `v3.0.0`, targeting Host API
+`forms.takoform.com/v1`. Its `publicationStatus` remains `candidate-only` by
+design: source metadata does not become publication authority after a release.
+The append-only release identity ledger records the separate immutable GitHub
+Release, Terraform Registry listing, signed OpenTofu installation, and exact
+31-resource schema readback that establish Provider 3 as published.
 
 Provider 3 projects exactly 31 Experimental `0.x` Forms from the eight current
 versionless families. Their exact FormRefs, provider-owned Terraform resource
@@ -101,15 +102,17 @@ is now retained in `release/provider-release-identities.json`; the descriptor
 remains `candidate-only` metadata by design and no publication claim is made
 for a future version without its own readback.
 
-`release/provider-release-identities.json` retains the exact six-file signed
-Registry readback closure for current provider releases as canonical base64.
-The closure binds the provider release commit, readback tooling commit,
-Terraform and OpenTofu direct installs, one provider binary digest, the
-workflow certificate identity, transparency-log proof, and original checksum
-manifest. The site derivation (`website/.vitepress/site-status.mjs`) reads the
-retained readback entries when deriving what public documentation may call
-Registry-published. This distribution evidence grants no Form maturity, Host
-Support, activation, placement, or commercial authority.
+`release/provider-release-identities.json` retains historical signed readback
+closures byte-for-byte and records the current Provider 3 owner readback in a
+small explicit record: immutable GitHub Release identity, canonical Registry
+version/download metadata, package digest, signing key, OpenTofu lockfile, and
+the 31-resource provider schema digest. The site derivation
+(`website/.vitepress/site-status.mjs`) validates that record against the
+current Form count before calling Provider 3 Registry-published. Requiring a
+new bespoke signed evidence workflow would duplicate the signed release and
+Registry trust roots without changing the public fact being stated. This
+distribution evidence grants no Form maturity, Host Support, activation,
+placement, or commercial authority.
 
 ## Provider v1.0.3 RelationalDatabase schema inputs
 

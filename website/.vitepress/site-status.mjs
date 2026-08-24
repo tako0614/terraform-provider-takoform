@@ -155,6 +155,51 @@ function readJson(repositoryRoot, relativePath) {
   }
 }
 
+function validateCurrentProviderRegistryReadback(entry) {
+  const readback = entry?.registryReadback;
+  const expectedPlatforms = [
+    "darwin_amd64",
+    "darwin_arm64",
+    "linux_amd64",
+    "linux_arm64",
+    "windows_amd64",
+  ];
+  const valid =
+    entry?.version === PROVIDER_RELEASE_TARGET_VERSION &&
+    entry?.tag === `v${PROVIDER_RELEASE_TARGET_VERSION}` &&
+    entry?.status === "assigned" &&
+    typeof entry?.tagObject === "string" &&
+    /^[0-9a-f]{40}$/.test(entry.tagObject) &&
+    typeof entry?.commit === "string" &&
+    /^[0-9a-f]{40}$/.test(entry.commit) &&
+    readback?.format === "takoform.provider-registry-readback@v1" &&
+    readback?.providerAddress === "registry.terraform.io/tako0614/takoform" &&
+    readback?.githubRelease?.immutable === true &&
+    readback?.githubRelease?.url ===
+      `https://github.com/tako0614/terraform-provider-takoform/releases/tag/v${PROVIDER_RELEASE_TARGET_VERSION}` &&
+    readback?.registry?.versionsUrl ===
+      "https://registry.terraform.io/v1/providers/tako0614/takoform/versions" &&
+    readback?.registry?.downloadUrl ===
+      `https://registry.terraform.io/v1/providers/tako0614/takoform/${PROVIDER_RELEASE_TARGET_VERSION}/download/linux/amd64` &&
+    readback?.registry?.protocol === "6.0" &&
+    JSON.stringify(readback?.registry?.platforms) ===
+      JSON.stringify(expectedPlatforms) &&
+    /^[0-9a-f]{64}$/.test(readback?.registry?.linuxAmd64Sha256 ?? "") &&
+    readback?.installation?.product === "OpenTofu" &&
+    readback?.installation?.providerVersion === PROVIDER_RELEASE_TARGET_VERSION &&
+    /^[0-9A-F]{16}$/.test(readback?.installation?.signingKeyId ?? "") &&
+    /^[0-9a-f]{64}$/.test(readback?.installation?.lockfileSha256 ?? "") &&
+    /^[0-9a-f]{64}$/.test(readback?.installation?.schemaSha256 ?? "") &&
+    Number.isInteger(readback?.installation?.resourceSchemaCount) &&
+    readback.installation.resourceSchemaCount > 0;
+  if (!valid) {
+    throw new Error(
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${PROVIDER_RELEASE_TARGET_VERSION} Registry readback is incomplete`,
+    );
+  }
+  return entry;
+}
+
 /**
  * deriveSiteStatusFacts reads every release, protocol, family and package fact
  * out of the repository. Nothing here is a literal a human keeps in step by
@@ -206,8 +251,17 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     : "candidate-open";
 
   const releaseIdentities = readJson(repositoryRoot, PROVIDER_RELEASE_IDENTITIES);
+  const releaseIdentityEntries = Array.isArray(releaseIdentities.entries)
+    ? releaseIdentities.entries
+    : [];
+  const providerTargetEntry = releaseIdentityEntries.find(
+    (entry) => entry?.version === providerReleaseTarget,
+  );
+  if (providerTargetEntry?.registryReadback) {
+    validateCurrentProviderRegistryReadback(providerTargetEntry);
+  }
   const publishedEntries = Array.isArray(releaseIdentities.entries)
-    ? releaseIdentities.entries.filter((entry) => entry?.registryReadback)
+    ? releaseIdentityEntries.filter((entry) => entry?.registryReadback)
     : [];
   const providerPublished = publishedEntries.at(-1)?.version;
   if (typeof providerPublished !== "string" || providerPublished === "") {
@@ -306,6 +360,15 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     (total, family) => total + family.forms.length,
     0,
   );
+  if (
+    providerTargetEntry?.registryReadback &&
+    providerTargetEntry.registryReadback.installation.resourceSchemaCount !==
+      currentFormCount
+  ) {
+    throw new Error(
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerReleaseTarget} Registry schema count differs from the current Form count`,
+    );
+  }
 
   const ledger = readJson(repositoryRoot, BLOCKER_LEDGER);
   if (!Array.isArray(ledger.blockers)) {

@@ -105,13 +105,15 @@ compatibility identity independent of every Form group and Form maturity. The
 current package envelope is `packages.forms.takoform.com/v1alpha5`; Interface and
 Binding refs remain `interfaces.takoform.com/v1alpha1` and
 `bindings.takoform.com/v1alpha2`. The Terraform provider identity is
-`registry.terraform.io/tako0614/takoform`; its Registry-published stable
-`v2.1.1` release on retained Host API `forms.takoform.com/v1beta1` is immutable
-history and independent from all of these current API identities. Its
+`registry.terraform.io/tako0614/takoform`; current Provider `v3.0.0` is
+Registry-published for the 31 current Forms, while `v2.1.1` on retained Host
+API `forms.takoform.com/v1beta1` is immutable history. Both are independent
+from all of these current API identities. The
 `release/version.json` descriptor remains `candidate-only` metadata by design
 after owner publication.
 
-The official Provider 3 work is a separate non-normative sample. It may
+Provider 3 is a separate Registry-published, non-normative reference
+implementation. It may
 implement the exact current `0.x` Forms without defining their semantics or
 blocking Specification 1.0. Releasing Specification/Host API v1 does not
 promote those Forms to `1.0.0`; a future Stable Form requires an explicit

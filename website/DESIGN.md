@@ -82,20 +82,16 @@ card padding is not part of this system.
 
 - The Takoform wordmark, dark aka-red palette, fonts, navigation, footer, focus
   treatment, and status vocabulary.
-- The facts: project `Experimental`; the current design target is Provider
-  `2.1.1` (human SemVer, Registry-published stable distribution), Host API
-  `v1beta1` (Beta protocol), and Edge Form Family `v1beta1` (15 Experimental
-  Forms at definition `0.1.0`). The `release/version.json` descriptor remains
-  `candidate-only` metadata by design after owner publication. The current
-  package envelope is `packages.forms.takoform.com/v1alpha4` and package
-  artifacts remain unpublished. Distribution is separate: Provider `2.0.0` is
-  the published compatibility predecessor over retained Host API
-  `forms.takoform.com/v1alpha2` resources, and Provider `1.0.3` is published
-  Legacy over `forms.takoform.com/v1alpha1`; retained package indexes use
-  `packages.forms.takoform.com/v1alpha3`. 34 pre-reset Form identities are
-  immutable `Legacy`; no current central approval/admission subset exists.
-  Host implementation source and live service availability are different
-  evidence.
+- The facts: project `Experimental`; current Provider `3.0.0` is a
+  Registry-published non-normative implementation of Host API
+  `forms.takoform.com/v1` and all 31 Experimental Forms across eight
+  versionless families. The current package envelope is
+  `packages.forms.takoform.com/v1alpha5` and package artifacts remain
+  unpublished. The `release/version.json` descriptor remains `candidate-only`
+  source metadata after owner publication; the release identity ledger owns
+  live distribution truth. Provider `2.1.1` and earlier lanes remain immutable
+  Registry history. Host implementation source and live service availability
+  are different evidence.
 
 ## What pages may differ on
 

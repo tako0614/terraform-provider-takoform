@@ -12,10 +12,11 @@ pre-release label for another axis.
 | Host API              | **`forms.takoform.com/v1`**                | Stable Specification contract for discovery, exact Form availability, operations, fencing, and errors.                                                                                       |
 | Form corpus           | **8 versionless families / 31 Forms**     | Exact current `0.x` FormRefs; all remain Experimental and independently versioned.                                                                                                           |
 | Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | Separate package/distribution identifier. Package artifacts remain unpublished.                                                                                                              |
-| Provider              | **independent**                            | Provider 2.1.1 is retained Registry history; Provider 3 is a non-normative implementation sample.                                                                                            |
+| Provider              | **3.0.0, Registry-published**              | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained Registry history.                                                                     |
 
-Provider distribution is a separate axis. **Provider 2.1.1** is retained
-Registry-published history. **Provider 2.0.0** and **Provider 1.0.3** remain
+Provider distribution is a separate axis. **Provider 3.0.0** is the current
+Registry-published implementation. **Provider 2.1.1**, **Provider 2.0.0**, and
+**Provider 1.0.3** remain
 installable Registry history for earlier epochs
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
 ([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)). Provider 3
@@ -25,6 +26,7 @@ cannot block or authorize Specification 1.0.
 
 | Client or distribution      | Host API          | Forms and definitions                                               | Status / use                                                                |
 | --------------------------- | ----------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Provider 3.0.0 distribution | Host API v1       | 8 versionless families; 31 current Experimental Form identities     | Current Registry-published non-normative reference implementation.          |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1; 15 immutable historical Form identities | Registry-published retained client; descriptor remains `candidate-only` metadata by design. |
 | Provider 2.0.0 distribution | Host API v1alpha2 (withdrawn epoch) | The nine withdrawn v1alpha2 Forms | Immutable Registry history; exact-pin only, no successors. |
 | Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
@@ -56,8 +58,8 @@ Experimental `0.x` Forms:
 - [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)
 - [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
 
-The independent Provider 3 sample uses these resource names without making
-them normative or claiming a published Provider release:
+The independent Registry-published Provider 3 uses these resource names
+without making them normative or changing Form maturity:
 
 ```hcl
 terraform {

@@ -26,12 +26,12 @@ Form identity, and package publication cannot be mistaken for one another.
 | Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                                |
 | Form corpus           | **8 families / 31 Forms**              | Exact current `0.x` FormRefs; every Form remains Experimental.                                                               |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |
-| Provider              | **independent**                        | Provider 2.1.1 is retained history; Provider 3 is a non-normative sample.                                                    |
+| Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained history.             |
 
 Specification release, Form maturity, Form Package publication, and Provider
 release are independent. Specification 1.0 does not promote current Forms to
-`1.0.0`; Provider 3 cannot block it. Provider 2.1.1 remains Registry-published
-for the historical identities it shipped.
+`1.0.0`; Provider 3 cannot block it. Provider 2.1.1 remains immutable Registry
+history for the historical identities it shipped.
 
 ```hcl
 terraform {
@@ -72,7 +72,7 @@ host-assigned address.
 | [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | durable multi-step execution as a class the worker's deployment serves         |
 | [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | addressable actors with one live context, private storage, and one alarm       |
 
-The Provider 3 candidate also maps the other 15 current Forms:
+The Registry-published Provider 3 also maps the other 15 current Forms:
 
 - Function: [`takoform_function`](/docs/resources/function.html), [`takoform_function_version`](/docs/resources/function_version.html), [`takoform_function_deployment`](/docs/resources/function_deployment.html), [`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
 - Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html), [`takoform_container_revision`](/docs/resources/container_revision.html), [`takoform_container_traffic`](/docs/resources/container_traffic.html), [`takoform_container_endpoint`](/docs/resources/container_endpoint.html), [`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
@@ -81,10 +81,11 @@ The Provider 3 candidate also maps the other 15 current Forms:
 - Schedule and vector: [`takoform_message_schedule`](/docs/resources/message_schedule.html), [`takoform_dense_vector_index`](/docs/resources/dense_vector_index.html)
 
 ::: warning Provider distribution boundary
-These resource names demonstrate the independent Provider 3 sample. They are
-not normative and do not claim Provider publication. The 31 current Form
-Packages remain unpublished, and the [release-evidence policy](/spec/publication-freeze.html)
-keeps Specification authority separate.
+These resource names are the independent Provider 3 implementation surface.
+Provider 3.0.0 is Registry-published, but the names are not normative and the
+31 current Form Packages remain unpublished. The
+[release-evidence policy](/spec/publication-freeze.html) keeps Specification
+authority separate.
 :::
 
 Workers use capability through typed bindings backed by exact

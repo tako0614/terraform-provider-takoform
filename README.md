@@ -22,7 +22,7 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 | Host API lane | `forms.takoform.com/v1` | the stable Specification wire contract |
 | Current Form corpus | `forms/candidates/current-family-index.json` | 8 versionless families, 31 exact `0.x` experimental Forms |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifacts are unpublished |
-| Retained Provider distribution | `2.1.1` | independent Registry-readback history; not Specification authority |
+| Retained Provider distribution | `3.0.0` | independent Registry-readback history; not Specification authority |
 
 These identities are independent. A Specification 1.0 release does not
 relabel any current Form as `1.0.0`, publish a Form Package, or release the
