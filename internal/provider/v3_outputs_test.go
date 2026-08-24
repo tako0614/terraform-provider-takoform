@@ -372,6 +372,11 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 		} else {
 			want += len(form.Fields)
 		}
+		if form.Kind == workerVersionKind {
+			// One computed-only attribute preserves retained Provider 2.1.1
+			// WorkerVersion state. It is not a current Form field or output.
+			want++
+		}
 		if got := len(response.Schema.Attributes); got != want {
 			t.Errorf("%s declares %d attributes, want exactly the %d it derives", form.Kind, got, want)
 		}
