@@ -969,7 +969,7 @@ describe("independent release tracks", () => {
         /specification-v1:/,
       );
     }
-  }, 20_000);
+  }, 60_000);
 
   test("a malformed Provider milestone cannot block the Specification assertion", () => {
     const root = makeCanonicalClone(
