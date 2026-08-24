@@ -493,15 +493,15 @@
       ]
     },
     {
-      "name": "out-of-range-input-is-refused",
+      "name": "bound-parameter-result-out-of-range-is-refused",
       "steps": [
         {
           "operation": "query",
           "input": {
             "params": [
-              9007199254740992
+              9007199254740991
             ],
-            "sql": "SELECT ?1 AS v"
+            "sql": "SELECT ?1 + 1 AS v"
           },
           "expectedError": "numeric_out_of_range"
         }

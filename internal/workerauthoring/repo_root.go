@@ -17,7 +17,7 @@ func RepoRoot(start string) (string, error) {
 	for {
 		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
 			candidateSet := filepath.Join(
-				current, "forms", "candidates", "edge", "v1beta1", "candidate-set.json",
+				current, "forms", "candidates", "edge.forms.takoform.com", "candidate-set.json",
 			)
 			if _, err := os.Stat(candidateSet); err == nil {
 				return current, nil

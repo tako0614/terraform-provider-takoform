@@ -1,6 +1,6 @@
 # Serverless Container Family proposals
 
-The Serverless Container Family, `container.forms.takoform.com/v1beta1`, is
+The Serverless Container Family, `container.forms.takoform.com`, is
 one of the eight families of the v1 lineup
 ([decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md)).
 Its members fix, completely, the application-visible semantics of the
@@ -29,14 +29,14 @@ The family is minted after
 so its revision Form carries the external standard-service declaration from
 birth ([spec/standard-services](../../spec/standard-services/README.md)): a
 Container Revision reaches PostgreSQL, Redis, S3-compatible storage, or SMTP
-through sealed slots with protocol tags, never through endpoints or
+through sealed slots with opaque reverse-DNS protocol identifiers, never through endpoints or
 credentials in portable state — which is also how the family serves stateful
 applications without growing the database Forms decision 0043 swore off.
 
-These documents are proposals only. No catalog declaration, candidate
-package, Interface digest, or FormRef exists yet; a Form enters a family
-only through its generated candidate set ([../README.md](../README.md)), so
-nothing here reserves a public identity.
+These prose documents accompany five generated Experimental `0.x` candidates
+under `forms/candidates/container.forms.takoform.com`. The exact candidate set,
+Definitions, Interface digest, and packages — not proposal prose — own their
+current identities. Editing this directory reserves or changes no identity.
 
 ## The service aggregate
 
@@ -48,7 +48,7 @@ its traffic resource actually serves — the same aggregate statement the Edge
 family makes in
 [decision 0016](../../spec/decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
 
-## MVP members
+## Current members
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

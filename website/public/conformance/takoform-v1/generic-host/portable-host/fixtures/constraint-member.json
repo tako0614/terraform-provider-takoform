@@ -1,0 +1,57 @@
+{
+  "apiVersion": "constraints.forms.takoform.com",
+  "kind": "ConstraintMember",
+  "definitionVersion": "0.1.0",
+  "title": "ConstraintMember stable conformance probe",
+  "description": "Synthetic stable-v1 conformance Definition; never a published family member.",
+  "role": "revision",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "through": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "constraints.forms.takoform.com"
+          },
+          "kind": {
+            "type": "string",
+            "const": "ConstraintNode"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "kind",
+          "name"
+        ],
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "worker.service",
+          "version": "1.0.0",
+          "schemaDigest": "sha256:8024073e25413c8906c3e189555a7485b4c7a6656e8a537fb2801f9b9682536e"
+        }
+      }
+    },
+    "required": [
+      "through"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ]
+}

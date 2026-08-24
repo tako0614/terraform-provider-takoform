@@ -1,6 +1,6 @@
 # Fanout Topic Family proposals
 
-The Fanout Topic Family, `topic.forms.takoform.com/v1beta1`, is minted under
+The Fanout Topic Family, `topic.forms.takoform.com`, is minted under
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md):
 pub/sub fanout is popularly offered as a managed service by every major
 provider and has no de-facto standard API, so a host-neutral contract is the
@@ -22,12 +22,12 @@ Desired schemas carry no `name` or envelope plumbing: the resource envelope
 owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
-No catalog source, generated candidate set, Interface candidate, or Binding
-candidate exists for this family yet. A Form exists only when its proposal,
-catalog declaration, and candidate package exist
-([proposals/README.md](../README.md)); these documents reserve nothing.
+This prose accompanies the two generated Experimental candidates under
+`forms/candidates/topic.forms.takoform.com` and the exact `topic.publish`
+Interface. The generated candidate bytes, not this proposal, own their current
+identities; these documents reserve nothing.
 
-## MVP members
+## Current members
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

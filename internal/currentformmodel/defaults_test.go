@@ -10,7 +10,7 @@ import (
 func semanticForm(fields ...Field) Form {
 	return Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
-		Kind:   "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
+		Kind:   "ExampleIdentity", Slug: "example-identity",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Example Identity", Description: "Identity.",
 		DefinitionVersion: "0.1.0", Fields: fields,
 	}
@@ -146,6 +146,48 @@ func TestMalformedDefaultsAreRejected(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), testCase.want) {
 			t.Errorf("%s: validate error = %v, want it to contain %q", testCase.name, err, testCase.want)
 		}
+	}
+}
+
+// JSON Schema maxLength counts Unicode code points, not UTF-8 bytes. Authoring
+// validation must use the same unit or a portable default accepted by the
+// emitted schema can be rejected merely because it contains non-ASCII text.
+func TestDefaultStringLengthsCountUnicodeCodePoints(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name  string
+		field Field
+	}{
+		{
+			name: "string",
+			field: Field{HCL: "label", Wire: "label", Kind: KindString,
+				Pattern: `^..$`, MaxLength: 2, Default: "界界", Doc: "Label."},
+		},
+		{
+			name: "ordered string list",
+			field: Field{HCL: "labels", Wire: "labels", Kind: KindStringList,
+				ItemPattern: `^..$`, MaxLength: 2, MaxItems: 4, Default: []any{"界界"}, Doc: "Labels."},
+		},
+		{
+			name: "string map",
+			field: Field{HCL: "labels", Wire: "labels", Kind: KindStringMap,
+				ItemPattern: `^..$`, MaxLength: 2, MaxProperties: 4,
+				Default: map[string]any{"label": "界界"}, Doc: "Labels."},
+		},
+	} {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if err := semanticForm(testCase.field).Validate(); err != nil {
+				t.Fatalf("two-code-point default was rejected by a maxLength 2 field: %v", err)
+			}
+		})
+	}
+
+	overlong := Field{HCL: "label", Wire: "label", Kind: KindString,
+		Pattern: `^...$`, MaxLength: 2, Default: "界界界", Doc: "Label."}
+	if err := semanticForm(overlong).Validate(); err == nil || !strings.Contains(err.Error(), "maxLength 2") {
+		t.Fatalf("three-code-point default error = %v, want maxLength rejection", err)
 	}
 }
 
@@ -294,5 +336,79 @@ func TestMaterializedValuesAreDeepCopies(t *testing.T) {
 	second := MaterializeDefaults(schema, nil)
 	if len(second["vars"].(map[string]any)) != 0 {
 		t.Fatalf("mutating a materialized value reached the Definition: %#v", second["vars"])
+	}
+}
+
+// TestRecursiveDefaultsRespectSemanticAbsence proves both halves of nested
+// defaulting. A present object/object-list is materialized recursively, while
+// an absent optional object whose absence is the contract stays absent; child
+// defaults never synthesize their parent.
+func TestRecursiveDefaultsRespectSemanticAbsence(t *testing.T) {
+	t.Parallel()
+	form := semanticForm(
+		Field{
+			HCL: "policy", Wire: "policy", Kind: KindObject,
+			Doc:               "Delivery policy. When absent, the target applies no retry policy.",
+			AbsenceIsSemantic: true,
+			Fields: []Field{{
+				HCL: "attempts", Wire: "attempts", Kind: KindInteger,
+				Doc: "Attempt count.", Min: I64(1), Max: I64(10), Default: 3,
+			}},
+		},
+		Field{
+			HCL: "targets", Wire: "targets", Kind: KindObjectList,
+			Doc: "Delivery targets.", Required: true, MinItems: 1, MaxItems: 4,
+			Example: []any{map[string]any{"options": map[string]any{}}},
+			Fields: []Field{{
+				HCL: "options", Wire: "options", Kind: KindObject,
+				Doc: "Target options.", Required: true, Example: map[string]any{},
+				Fields: []Field{{
+					HCL: "timeout_seconds", Wire: "timeoutSeconds", Kind: KindInteger,
+					Doc: "Timeout.", Min: I64(1), Max: I64(60), Default: 30,
+				}},
+			}},
+		},
+	)
+	if err := form.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	schema := mustDesiredSchema(t, form)
+
+	absent := MaterializeDefaults(schema, map[string]any{
+		"targets": []any{map[string]any{"options": map[string]any{}}},
+	})
+	if _, present := absent["policy"]; present {
+		t.Fatalf("semantic absence synthesized policy: %#v", absent)
+	}
+	targets := absent["targets"].([]any)
+	options := targets[0].(map[string]any)["options"].(map[string]any)
+	if got := options["timeoutSeconds"]; got != json.Number("30") {
+		t.Fatalf("recursive object-list default = %#v, want json.Number(30)", got)
+	}
+
+	present := MaterializeDefaults(schema, map[string]any{
+		"policy":  map[string]any{},
+		"targets": []any{map[string]any{"options": map[string]any{}}},
+	})
+	policy := present["policy"].(map[string]any)
+	if got := policy["attempts"]; got != json.Number("3") {
+		t.Fatalf("present object default = %#v, want json.Number(3)", got)
+	}
+}
+
+func TestRecursiveObjectDefaultsAreValidatedAgainstMembers(t *testing.T) {
+	t.Parallel()
+	form := semanticForm(Field{
+		HCL: "policy", Wire: "policy", Kind: KindObject,
+		Doc:     "Policy.",
+		Default: map[string]any{"attempts": 0, "unknown": true},
+		Fields: []Field{{
+			HCL: "attempts", Wire: "attempts", Kind: KindInteger,
+			Doc: "Attempt count.", Required: true, Example: 1, Min: I64(1), Max: I64(10),
+		}},
+	})
+	err := form.Validate()
+	if err == nil || (!strings.Contains(err.Error(), "unknown") && !strings.Contains(err.Error(), "minimum")) {
+		t.Fatalf("Validate error = %v, want recursive member validation", err)
 	}
 }

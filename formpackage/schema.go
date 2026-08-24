@@ -32,12 +32,13 @@ const (
 	betaTwoFamilyFormRefSchemaID         = "https://forms.takoform.com/schemas/v1beta2/form-ref.schema.json"
 	retainedFamilyFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha3/form-definition.schema.json"
 	betaFamilyFormDefinitionSchemaID     = "https://forms.takoform.com/schemas/v1beta1/form-definition.schema.json"
-	// betaTwoFamilyFormDefinitionSchemaID is the CURRENT profile. It exists
-	// because its predecessor admits `refresh`, a capability the v1beta2 lane
-	// states no Form declares and no host serves; narrowing the served
-	// v1beta1 document would have changed what a published identity means, so
-	// the defect got a successor instead (decisions 0037 and 0046).
+	// betaTwoFamilyFormDefinitionSchemaID is unpublished predecessor history.
+	// It remains the compatibility profile for a versionless Definition that
+	// does not declare the stable Host lane.
 	betaTwoFamilyFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1beta2/form-definition.schema.json"
+	stableFamilyFormDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1/form-definition.schema.json"
+	stableHostAPIVersion                = "forms.takoform.com/v1"
+	interfaceDefinitionSchemaID         = "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-definition.schema.json"
 	revocationSchemaID                  = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
 	revocationCheckpointSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
 	portableMapKeyPattern               = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
@@ -69,6 +70,7 @@ type compiledSchemas struct {
 	retainedFamilyDefinition *jsonschema.Schema
 	betaFamilyDefinition     *jsonschema.Schema
 	betaTwoFamilyDefinition  *jsonschema.Schema
+	stableFamilyDefinition   *jsonschema.Schema
 	indexV1Alpha1            *jsonschema.Schema
 	indexV1Alpha2            *jsonschema.Schema
 	indexV1Alpha3            *jsonschema.Schema
@@ -76,6 +78,7 @@ type compiledSchemas struct {
 	indexV1Alpha5            *jsonschema.Schema
 	revocation               *jsonschema.Schema
 	revocationCheckpoint     *jsonschema.Schema
+	interfaceDefinition      *jsonschema.Schema
 }
 
 // namespacedFormGroupPattern mirrors the apiVersion grammar of the family
@@ -182,7 +185,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-ref-v1beta2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "package-index-v1alpha5.schema.json", "interface-ref-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "binding-ref-v1alpha2.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
+		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-ref-v1beta2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "form-definition-v1.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "package-index-v1alpha5.schema.json", "interface-ref-v1alpha1.schema.json", "interface-definition-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "binding-ref-v1alpha2.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -284,7 +287,12 @@ func loadSchemas() (compiledSchemas, error) {
 
 		schemasValue.betaTwoFamilyDefinition, schemasErr = compiler.Compile(betaTwoFamilyFormDefinitionSchemaID)
 		if schemasErr != nil {
-			schemasErr = fmt.Errorf("compile Beta family Form Definition schema: %w", schemasErr)
+			schemasErr = fmt.Errorf("compile Beta 2 family Form Definition schema: %w", schemasErr)
+			return
+		}
+		schemasValue.stableFamilyDefinition, schemasErr = compiler.Compile(stableFamilyFormDefinitionSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile stable family Form Definition schema: %w", schemasErr)
 			return
 		}
 		schemasValue.indexV1Alpha1, schemasErr = compiler.Compile(packageIndexV1Alpha1SchemaID)
@@ -320,6 +328,11 @@ func loadSchemas() (compiledSchemas, error) {
 		schemasValue.revocationCheckpoint, schemasErr = compiler.Compile(revocationCheckpointSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile Form Package revocation checkpoint schema: %w", schemasErr)
+			return
+		}
+		schemasValue.interfaceDefinition, schemasErr = compiler.Compile(interfaceDefinitionSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile Interface Definition schema: %w", schemasErr)
 		}
 	})
 	return schemasValue, schemasErr
@@ -382,7 +395,8 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
 	var envelope struct {
-		APIVersion string `json:"apiVersion"`
+		APIVersion      string `json:"apiVersion"`
+		RequiresHostAPI string `json:"requiresHostApi"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: %w", err)
@@ -399,6 +413,8 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 			schema = schemas.retainedFamilyDefinition
 		case retainedProfileFamilyGroup(envelope.APIVersion):
 			schema = schemas.betaFamilyDefinition
+		case !strings.Contains(envelope.APIVersion, "/") && envelope.RequiresHostAPI == stableHostAPIVersion:
+			schema = schemas.stableFamilyDefinition
 		default:
 			schema = schemas.betaTwoFamilyDefinition
 		}
@@ -453,7 +469,190 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	if err := validateDefinitionSemantics(definition); err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
+	if err := validateDefinitionConstraintRelations(definition); err != nil {
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
+	}
 	return definition, value, compiledDefinitionSchemas{desired: desired, observed: observed, output: output}, nil
+}
+
+// validateDefinitionConstraintRelations closes the semantic gap JSON Schema
+// cannot express: resolved-UID constraints name relations declared elsewhere
+// in desiredSchema. The stable-v1 grammar proves pointer shape/cardinality; this
+// pass proves every LOCAL pointer actually lands on a reference annotation.
+// sameResolvedTarget.through is intentionally excluded because it points into
+// the resolved member target's exact Definition and is proved by the registry
+// resolver when that Definition is installed.
+func validateDefinitionConstraintRelations(definition FormDefinition) error {
+	if err := validateDefinitionStructuralConstraints(definition); err != nil {
+		return err
+	}
+	needsRelations := false
+	for _, constraint := range definition.Constraints {
+		switch constraint.Kind {
+		case "acyclic", "distinctPair", "uniquePair", "sameResolvedTarget":
+			needsRelations = true
+		}
+	}
+	if !needsRelations {
+		return nil
+	}
+	relations := definitionRelationPointers(definition.DesiredSchema)
+	for index, constraint := range definition.Constraints {
+		var local []string
+		switch constraint.Kind {
+		case "acyclic":
+			local = []string{constraint.Reference}
+		case "distinctPair", "uniquePair":
+			local = constraint.References
+		case "sameResolvedTarget":
+			local = []string{constraint.Anchor, constraint.Members}
+		default:
+			continue
+		}
+		for _, pointer := range local {
+			if !relations[pointer] {
+				return fmt.Errorf(
+					"Form Definition constraints[%d] kind %s names local pointer %s, which desiredSchema does not declare as a relation",
+					index, constraint.Kind, pointer,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// validateDefinitionStructuralConstraints proves that the two stable-v1
+// structural constraint variants point into the domain their kind promises.
+// The outer meta-schema closes their grammar; this semantic pass connects the
+// pointers to the embedded desired schema without attempting Host enforcement
+// against one concrete desired document.
+func validateDefinitionStructuralConstraints(definition FormDefinition) error {
+	for index, constraint := range definition.Constraints {
+		switch constraint.Kind {
+		case "orderedPair":
+			for _, pointer := range constraint.References {
+				node, required, err := desiredSchemaNodeAtPointer(definition.DesiredSchema, pointer)
+				if err != nil {
+					return fmt.Errorf("Form Definition constraints[%d] orderedPair pointer %s: %w", index, pointer, err)
+				}
+				if !required || (node["type"] != "integer" && node["type"] != "number") {
+					return fmt.Errorf(
+						"Form Definition constraints[%d] orderedPair pointer %s must name a required numeric schema",
+						index, pointer,
+					)
+				}
+			}
+		case "uniqueBy":
+			list, _, err := desiredSchemaNodeAtPointer(definition.DesiredSchema, constraint.List)
+			if err != nil {
+				return fmt.Errorf("Form Definition constraints[%d] uniqueBy list %s: %w", index, constraint.List, err)
+			}
+			if list["type"] != "array" {
+				return fmt.Errorf("Form Definition constraints[%d] uniqueBy list %s must name an array schema", index, constraint.List)
+			}
+			items, ok := list["items"].(map[string]any)
+			if !ok || items["type"] != "object" {
+				return fmt.Errorf("Form Definition constraints[%d] uniqueBy list %s must contain object schemas", index, constraint.List)
+			}
+			properties, ok := items["properties"].(map[string]any)
+			if !ok || !stringSetContains(items["required"], constraint.Member) {
+				return fmt.Errorf(
+					"Form Definition constraints[%d] uniqueBy member %s must be required on %s items",
+					index, constraint.Member, constraint.List,
+				)
+			}
+			member, ok := properties[constraint.Member].(map[string]any)
+			if !ok || !portableScalarSchemaType(member["type"]) {
+				return fmt.Errorf(
+					"Form Definition constraints[%d] uniqueBy member %s on %s must be scalar",
+					index, constraint.Member, constraint.List,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+func desiredSchemaNodeAtPointer(root map[string]any, pointer string) (map[string]any, bool, error) {
+	if pointer == "" || !strings.HasPrefix(pointer, "/") || strings.HasSuffix(pointer, "/") {
+		return nil, false, fmt.Errorf("is not a non-root JSON Pointer")
+	}
+	current := root
+	required := true
+	for _, raw := range strings.Split(strings.TrimPrefix(pointer, "/"), "/") {
+		name, err := decodeJSONPointerToken(raw)
+		if err != nil || name == "" || name == "*" {
+			return nil, false, fmt.Errorf("contains an invalid property token %q", raw)
+		}
+		properties, ok := current["properties"].(map[string]any)
+		if !ok {
+			return nil, false, fmt.Errorf("traverses a schema with no properties")
+		}
+		next, ok := properties[name].(map[string]any)
+		if !ok {
+			return nil, false, fmt.Errorf("does not name a declared property")
+		}
+		required = required && stringSetContains(current["required"], name)
+		current = next
+	}
+	return current, required, nil
+}
+
+func portableScalarSchemaType(value any) bool {
+	typeName, ok := value.(string)
+	if !ok {
+		return false
+	}
+	switch typeName {
+	case "string", "integer", "number", "boolean":
+		return true
+	default:
+		return false
+	}
+}
+
+func definitionRelationPointers(root map[string]any) map[string]bool {
+	out := map[string]bool{}
+	var walk func(map[string]any, string, int)
+	walk = func(node map[string]any, pointer string, depth int) {
+		if node == nil || depth > 64 {
+			return
+		}
+		if _, exact := node["x-takoform-target-formrefs"]; exact {
+			if pointer != "" {
+				out[pointer] = true
+			}
+			return
+		}
+		if _, interfaced := node["x-takoform-required-interface"]; interfaced {
+			if pointer != "" {
+				out[pointer] = true
+			}
+			return
+		}
+		if branches, ok := node["oneOf"].([]any); ok {
+			for _, raw := range branches {
+				if branch, ok := raw.(map[string]any); ok {
+					walk(branch, pointer, depth+1)
+				}
+			}
+		}
+		if items, ok := node["items"].(map[string]any); ok {
+			walk(items, pointer+"/*", depth+1)
+		}
+		if properties, ok := node["properties"].(map[string]any); ok {
+			for name, raw := range properties {
+				child, ok := raw.(map[string]any)
+				if !ok {
+					continue
+				}
+				token := strings.ReplaceAll(strings.ReplaceAll(name, "~", "~0"), "/", "~1")
+				walk(child, pointer+"/"+token, depth+1)
+			}
+		}
+	}
+	walk(root, "", 0)
+	return out
 }
 
 func validateDefinition(raw []byte) (FormDefinition, any, error) {
@@ -466,6 +665,54 @@ func validateDefinition(raw []byte) (FormDefinition, any, error) {
 func ValidateDefinition(raw []byte) (FormDefinition, error) {
 	definition, _, err := validateDefinition(raw)
 	return definition, err
+}
+
+// ValidateInterfaceDefinition validates one exact Interface Definition against
+// the normative v1alpha1 schema embedded with the production parser. Family
+// renderers call this path before deriving a digest, so a local authoring
+// validator can add narrower invariants but can never substitute for the
+// published wire contract.
+func ValidateInterfaceDefinition(raw []byte) error {
+	schemas, err := loadSchemas()
+	if err != nil {
+		return err
+	}
+	var document any
+	if err := validateDocument(raw, schemas.interfaceDefinition, &document); err != nil {
+		return fmt.Errorf("Interface Definition: %w", err)
+	}
+	return nil
+}
+
+// ValidateDesiredInstance validates one already-decoded desired value against
+// the exact desired schema carried by its Form Definition. It is the shared
+// consumption seam for providers and hosts that already resolved an exact
+// FormRef; callers must never substitute a latest/default schema.
+func ValidateDesiredInstance(schema map[string]any, value any) error {
+	// Callers may hold a schema produced directly by the Go authoring model,
+	// whose JSON arrays are naturally []string, while schemas decoded from a
+	// Definition carry []any. Normalize through the JSON data model before
+	// handing it to the compiler so both representations validate identically.
+	raw, err := json.Marshal(schema)
+	if err != nil {
+		return fmt.Errorf("desiredSchema encode: %w", err)
+	}
+	normalizedValue, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return fmt.Errorf("desiredSchema decode: %w", err)
+	}
+	normalized, ok := normalizedValue.(map[string]any)
+	if !ok {
+		return fmt.Errorf("desiredSchema must be an object")
+	}
+	compiled, err := compileInlineSchema(normalized, "desiredSchema")
+	if err != nil {
+		return err
+	}
+	if err := compiled.Validate(value); err != nil {
+		return fmt.Errorf("desired instance does not satisfy exact Form schema: %w", err)
+	}
+	return nil
 }
 
 // ValidatePortableData rejects credential, secret, host-authority, commercial,
@@ -832,13 +1079,16 @@ func (validator *portableSchemaValidator) validateUncached(value any, location, 
 		return schemaProofResult{}, err
 	}
 	if hasProperties {
-		for name := range properties {
+		for name, propertySchema := range properties {
+			if strings.HasPrefix(location, "desiredSchema") && isReviewedBoundedDesiredFieldSchema(name, propertySchema) {
+				continue
+			}
 			if isForbiddenFieldName(name) {
 				return schemaProofResult{}, fmt.Errorf("forbidden field %q at %s.properties", name, location)
 			}
 		}
 	}
-	if err := validateSchemaFieldNameArray(schema["required"], location+".required"); err != nil {
+	if err := validateSchemaFieldNameArray(schema["required"], location+".required", properties); err != nil {
 		return schemaProofResult{}, err
 	}
 	if err := validateDependentRequiredNames(schema["dependentRequired"], location+".dependentRequired"); err != nil {
@@ -1548,7 +1798,7 @@ func decodeJSONPointerToken(value string) (string, error) {
 	return decoded.String(), nil
 }
 
-func validateSchemaFieldNameArray(value any, location string) error {
+func validateSchemaFieldNameArray(value any, location string, properties map[string]any) error {
 	if value == nil {
 		return nil
 	}
@@ -1560,6 +1810,9 @@ func validateSchemaFieldNameArray(value any, location string) error {
 		name, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("%s entries must be strings", location)
+		}
+		if strings.HasPrefix(location, "desiredSchema") && isReviewedBoundedDesiredFieldSchema(name, properties[name]) {
+			continue
 		}
 		if isForbiddenFieldName(name) {
 			return fmt.Errorf("forbidden field %q at %s", name, location)
@@ -1580,7 +1833,7 @@ func validateDependentRequiredNames(value any, location string) error {
 		if isForbiddenFieldName(name) {
 			return fmt.Errorf("forbidden field %q at %s", name, location)
 		}
-		if err := validateSchemaFieldNameArray(required, location+"."+name); err != nil {
+		if err := validateSchemaFieldNameArray(required, location+"."+name, nil); err != nil {
 			return err
 		}
 	}

@@ -93,7 +93,7 @@ func (r *v3FormResource) UpgradeState(ctx context.Context) map[int64]resource.St
 				if req.State == nil {
 					resp.Diagnostics.Append(v3Diagnostic{
 						Summary:      "State to upgrade is missing",
-						ResourceType: r.form.ResourceType,
+						ResourceType: r.resourceTypeName(),
 						Pointer:      "/metadata",
 						Code:         v3CodeProviderBug,
 						Detail:       "Terraform asked for a state upgrade and supplied no prior state.",

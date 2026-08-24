@@ -12,13 +12,13 @@ type SiteStatus = {
   providerTargetStatus: string;
   hostApiCurrent: string;
   hostApiMaturity: string;
-  formFamilyCurrent: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
+  currentFamilyCount: number;
   formMaturity: string;
   formPackagePublicationStatus: string;
-  candidateSetDigest: string;
-  openPublicationBlockers: number;
+  specificationVersion: string;
+  specificationReleaseStatus: string;
   route: string;
 };
 
@@ -33,56 +33,43 @@ const hostApiVersion = computed(() => apiVersion(status.value.hostApiCurrent));
 const hostApiMaturity = computed(() =>
   maturityLabel(status.value.hostApiMaturity),
 );
-const formFamilyVersion = computed(() =>
-  apiVersion(status.value.formFamilyCurrent),
-);
 const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
-const providerTargetStatus = computed(() =>
-  status.value.providerTargetStatus === "registry-published"
-    ? "Registry-published"
-    : status.value.providerTargetStatus + " until Registry readback",
-);
 </script>
 
 <template>
   <div class="status-note">
     <template v-if="lang === 'ja'">
       <p>
-        <strong>Current design target</strong>: Provider
-        <code>{{ status.providerTarget }}</code> は Registry-published の
-        stable release target です。Provider availability は
-        <code>{{ providerTargetStatus }}</code>、repository descriptor metadata は
-        owner publication 後も <code>candidate-only</code> のままです。Host API
-        <code>{{ hostApiVersion }}</code> は
-        {{ hostApiMaturity }} protocol、Edge Form Family
-        <code>{{ formFamilyVersion }}</code> の
-        {{ status.currentFormCount }} 個の Form definition は {{ formMaturity }}
-        （definition
-        <code>0.1.0</code>）です。Form Package envelope は
+        <strong>Specification candidate</strong>:
+        Takoform Specification <code>{{ status.specificationVersion }}</code> は
+        <code>{{ status.specificationReleaseStatus }}</code> です。Host API
+        <code>{{ hostApiVersion }}</code> は {{ hostApiMaturity }} contract ですが、
+        current corpus の {{ status.currentFamilyCount }} 個の versionless family /
+        {{ status.currentFormCount }} 個の exact <code>0.x</code> Form は
+        {{ formMaturity }} のままです。Specification release は Form を
+        <code>1.0.0</code> に昇格させません。Form Package envelope は
         <code>{{ status.formPackageApiCurrent }}</code> で、artifact は
         <code>{{ status.formPackagePublicationStatus }}</code> です。
       </p>
       <p>
         <strong>Distribution availability</strong>: Provider
         <code>{{ status.providerPublished }}</code> は Registry readback 済みの
-        current distribution、Provider <code>2.0.0</code> は公開済みの
+        current retained distribution、Provider <code>2.0.0</code> は公開済みの
         compatibility predecessor、Provider <code>1.0.3</code> は公開済み
-        Legacy client です。これは current design target の protocol / family
-        maturity とは別の事実です。
+        Legacy client です。Provider 3 は独立した non-normative implementation
+        track で、Specification release を block しません。
       </p>
     </template>
     <template v-else>
       <p>
-        <strong>Current design target</strong>: Provider
-        <code>{{ status.providerTarget }}</code> is the Registry-published
-        stable release target. Provider availability is
-        <code>{{ providerTargetStatus }}</code>; repository descriptor metadata
-        remains <code>candidate-only</code> after owner publication. Host API
-        <code>{{ hostApiVersion }}</code> is a
-        {{ hostApiMaturity }} protocol. The Edge Form Family
-        <code>{{ formFamilyVersion }}</code> carries
-        {{ status.currentFormCount }} Form definitions, which are {{ formMaturity }}
-        at definition <code>0.1.0</code>. The Form Package envelope is
+        <strong>Specification candidate</strong>: Takoform Specification
+        <code>{{ status.specificationVersion }}</code> is
+        <code>{{ status.specificationReleaseStatus }}</code>. Host API
+        <code>{{ hostApiVersion }}</code> is a {{ hostApiMaturity }} contract,
+        while the current corpus's {{ status.currentFamilyCount }} versionless
+        families and {{ status.currentFormCount }} exact <code>0.x</code> Forms
+        remain {{ formMaturity }}. Releasing the Specification does not promote
+        those Forms to <code>1.0.0</code>. The Form Package envelope is
         <code>{{ status.formPackageApiCurrent }}</code
         >, and its artifacts are
         <code>{{ status.formPackagePublicationStatus }}</code
@@ -91,10 +78,10 @@ const providerTargetStatus = computed(() =>
       <p>
         <strong>Distribution availability</strong>: Provider
         <code>{{ status.providerPublished }}</code> is the current
-        Registry-readback distribution; Provider <code>2.0.0</code> is the
+        Registry-readback retained distribution; Provider <code>2.0.0</code> is the
         published compatibility predecessor and Provider <code>1.0.3</code>
-        remains the published Legacy client. This is separate from the current
-        target's protocol and family maturity.
+        remains the published Legacy client. Provider 3 is an independent,
+        non-normative implementation track and cannot block the Specification.
       </p>
     </template>
   </div>

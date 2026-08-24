@@ -1,22 +1,25 @@
 # Project and Form lifecycle
 
-Takoform is an **Experimental specification and tooling project** for portable
-desired-state contracts between infrastructure-as-code clients and resource
-hosts. It is not currently an industry standard, a certification authority, a
-universal cloud API, or a promise that an existing Resource can move between
-backends without migration.
+Takoform is a portable desired-state specification and tooling project. The
+repository currently contains a **Specification 1.0 candidate** and literal
+stable Host API v1 source; the numbered release remains open until its exact
+committed source/corpus/reference evidence closes. Takoform is not an industry
+standards body, certification authority, universal cloud API, or a promise that
+an existing Resource can move between backends without migration.
 
 This document is the authority for current project positioning, Form maturity,
 and the evidence required to change maturity. Exact version compatibility is
 defined in [`versioning.md`](versioning.md); package and implementation
 conformance are defined in [`conformance.md`](conformance.md).
 
-Machine authority is scoped by identity family. The withdrawn central
-epochs' lifecycle ledger went with them (decision 0042) and stays in git
-history. Current family maturity and exact identity are recorded in the
-generated family candidate set; for the Beta Edge family that is
-[`../forms/candidates/edge.forms.takoform.com/candidate-set.json`](../forms/candidates/edge.forms.takoform.com/candidate-set.json).
-The provider compatibility copy is independently locked in
+Machine authority is scoped by identity family. The withdrawn central epochs'
+lifecycle ledger went with them (decision 0042) and stays in git history. The
+closed current inventory is generated at
+[`../forms/candidates/current-family-index.json`](../forms/candidates/current-family-index.json):
+eight versionless families and 31 exact Experimental FormRefs, including 16 in
+Edge and no current `ObjectBucket`. Each family candidate set records its exact
+maturity and identities. The retained Provider 2.1.1 compatibility copy is
+independently locked in
 [`../release/provider-form-identities.json`](../release/provider-form-identities.json).
 
 ## Independent facts
@@ -25,6 +28,7 @@ The following facts MUST remain independent:
 
 | Fact | Authority | Meaning |
 | --- | --- | --- |
+| Specification release | Takoform publication evidence and numbered release ledger | One exact committed normative document/corpus/reference closure |
 | Form maturity | Takoform lifecycle record | Confidence in one portable contract |
 | Package publication | Takoform publisher evidence | Exact bytes can be retrieved and authenticated |
 | Provider compatibility | Provider release and compatibility data | A provider can represent an exact FormRef and preserve its own state contract |
@@ -32,28 +36,34 @@ The following facts MUST remain independent:
 | Form Activation | Host/operator policy | A supported FormRef is usable in a particular scope |
 | Service Offering | Commercial platform | Capacity, price, availability, and support for an exact supported FormRef |
 
-No package, provider release, generated catalog entry, host report, activation,
-or Service Offering MAY by itself promote Form maturity. A host implementation
-MUST NOT describe its support decision as Takoform approval or certification.
+No Specification release, package, provider release, generated catalog entry,
+host report, activation, or Service Offering MAY by itself promote Form
+maturity. A host implementation MUST NOT describe its support decision as
+Takoform approval or certification.
 
-The Beta Host API and provider v2.1 path follow the scoped release policy in
-[`publication-freeze.md`](publication-freeze.md). Open independent-host,
-third-party-ecosystem, and Cloud-GA evidence remains required for later
-Stable/GA claims and Form Package/public-service publication, but does not
-block a stable provider release that embeds the exact Beta identities.
+Specification 1.0 follows decisions
+[`0052`](decisions/0052-the-specification-is-released-on-its-own-line.md) and
+[`0053`](decisions/0053-specification-and-provider-release-evidence.md): only
+the exact committed source snapshot, complete multi-family candidate/corpus,
+and reference conformance close that track. Provider 3 and external Host,
+backend, runtime, production, signer, operator, Takoserver, and Takosumi facts
+are independent adoption evidence. Provider 2.1.1 and the v1beta1 identities
+remain immutable history.
 
 ## Form Families
 
 Forms are grouped into named Form Families with namespaced API groups
 ([`form-families.md`](form-families.md),
 [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)).
-A family is a catalog and namespace fact only; its API channel does not confer
-Form maturity. Each member still has an explicit maturity classification. The
-current `edge.forms.takoform.com/v1beta1` candidate set contains exactly 15
-`0.1.0` Forms and classifies all of them Experimental. Its unpublished
-`packages.forms.takoform.com/v1alpha4` artifacts are a separate publication
-fact. Adding a Form to a family, or publishing one family member, promotes
-nothing else. The retained
+A family is a catalog and namespace fact only; its group does not confer Form
+maturity. Each member still has an explicit maturity classification. The
+current versionless family index contains exactly eight families and 31
+Experimental Forms; Edge contains 16 and no `ObjectBucket`. Current packages
+use `packages.forms.takoform.com/v1alpha5`, and package publication is a
+separate fact. Adding a Form to a family, releasing Specification/Host API v1,
+or publishing one family member promotes nothing else. The retained Provider
+2.1.1 projection remains the versioned v1beta1 Edge family, 15 exact FormRefs,
+and `packages.forms.takoform.com/v1alpha4`. The
 `forms.takoform.com/v1alpha2` candidates are superseded provider-v2 preview
 source ([decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md));
 they are not a published current Form line and are not the basis for new
@@ -138,46 +148,39 @@ separate operation.
 A Stable Form is an evidence-earned portable contract. Stable is not a central
 approval applied to a preferred subset.
 
-An Experimental Form MUST NOT become Stable until:
+An Experimental Form becomes Stable only through an explicit per-Form decision
+that mints its own `1.0.0` identity. That decision MUST bind:
 
-- at least two independent host implementations from distinct codebases —
-  neither derived from the other's host internals — exercise the same exact
-  semantics through the same conformance corpus, at least one of them in
-  production for real consumers; a shared maintainer is permitted and is named
-  in the graduation record
-  ([decision 0044](decisions/0044-graduation-evidence-is-implementation-independence.md));
-- real consumers have operated the Form across a documented compatibility
-  window;
-- immutable fields, replacement, import, drift, delete, and recovery behavior
-  agree across implementations;
-- interoperability has been exercised using packages published by a party
-  other than at least one consuming host;
-- migration from the latest Experimental line is documented and tested;
-- deprecation and security-revocation procedures have been exercised on a real
-  release line;
-- known limitations do not contradict the claimed portable semantics.
+- the exact predecessor FormRef and a compatibility analysis proving what is
+  preserved or deliberately changed;
+- complete positive, negative, lifecycle, relation, constraint, output, and
+  failure fixtures for the Form's portable semantics;
+- the exact family conformance corpus and reference result that exercise the
+  proposed stable Definition;
+- migration or explicit no-migration guidance from the latest Experimental
+  identity;
+- immutable-field, replacement, import, drift, delete, recovery, and security
+  boundary review; and
+- known limitations that do not contradict the claimed portable semantics.
 
-The evidence above is gathered on the Beta 2 rehearsal generation, whose
-identities are treated as immutable from publication and complete before
-minted; Stable identities then carry the Beta 2 contracts unchanged
-([decision 0046](decisions/0046-stable-arrives-through-a-stable-grade-beta-2.md)).
+Independent implementations, production consumers, compatibility windows,
+cross-publisher installation, deprecation exercises, and revocation exercises
+SHOULD be recorded when they exist. They strengthen adoption confidence but do
+not give a Host, product, Provider, backend, signer, or operator normative
+authority over Specification 1.0 or another Form. Decisions 0044 and 0046 are
+retained as the history of that adoption-evidence program and are superseded
+by decision 0053 as release authorities.
 
 Stable commits Takoform to the stable SemVer rules in
 [`versioning.md`](versioning.md). It does not guarantee that every host supports
 the Form or that a commercial platform offers it.
 
-Takosumi GA is a qualification checkpoint, not an automatic transition. At
-that checkpoint only contracts with the required evidence above may mint a
-Stable `1.0.0` identity; all others remain Experimental/Beta without being
-renamed or overwritten.
-
-The machine record requires the exact transition history `proposal →
-experimental → stable`, two distinct host subjects from independent codebases
-(a shared maintainer named rather than hidden, per decision 0044),
-real-consumer evidence, lifecycle agreement, interoperability, independent
-publication, migration, deprecation-exercise, and security-revocation-exercise
-files. A direct Proposal-to-Stable record is
-invalid even if other evidence is present.
+No Takosumi or other product GA milestone triggers a transition. Releasing
+Specification/Host API v1 likewise leaves every current `0.x` Form
+Experimental. The machine record requires the exact transition history
+`proposal → experimental → stable`, the per-Form decision and bound contract
+evidence above, and an explicit `1.0.0` FormRef. A direct Proposal-to-Stable
+record is invalid even if adoption evidence is present.
 
 ### Legacy
 

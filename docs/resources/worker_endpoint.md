@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_worker_endpoint Resource - takoform"
-subcategory: "Edge Platform Family"
+subcategory: "Current Form Families"
 description: |-
   Worker Endpoint (edge.forms.takoform.com, role attachment).
 ---
@@ -11,11 +11,11 @@ Makes one Module Worker reachable over HTTPS at an address the HOST assigns, wit
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com identity is not yet carried by any
-Registry-published provider release: it ships with the next provider release
-(decision 0046). Registry-published provider v2.1.1 serves this resource type
-under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
-candidate-only descriptor metadata after owner publication. The configured host selects and
+This page documents a non-normative official Terraform Provider mapping for the
+current Experimental Form `edge.forms.takoform.com/WorkerEndpoint`.
+The mapping name is provider metadata: it is absent from the Form Definition and cannot change
+the Form's canonical bytes or digest. Provider publication and support are versioned separately.
+The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_endpoint/resource.tf).
 

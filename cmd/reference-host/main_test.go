@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 )
 
@@ -88,11 +87,11 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 	// the host served the current one, so the URL it printed answered 404 —
 	// which is why the address is driven from the banner here rather than
 	// composed from a constant the banner does not use.
-	if announcedDiscovery != origin+clientv3.DiscoveryPath {
+	if announcedDiscovery != origin+"/.well-known/takoform/v1" {
 		t.Fatalf(
 			"the banner announces %q, but this host serves its discovery at %q; an operator "+
 				"following the banner reaches a lane that does not answer",
-			announcedDiscovery, origin+clientv3.DiscoveryPath,
+			announcedDiscovery, origin+"/.well-known/takoform/v1",
 		)
 	}
 
@@ -120,10 +119,10 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(discovery.APIVersions) != 1 ||
-		discovery.APIVersions[0] != clientv3.APIVersion {
+		discovery.APIVersions[0] != "forms.takoform.com/v1" {
 		t.Fatalf("api_versions = %v, want exactly the current lane", discovery.APIVersions)
 	}
-	if !strings.HasSuffix(discovery.Endpoints["api"], clientv3.APIRootPath) {
+	if !strings.HasSuffix(discovery.Endpoints["api"], "/apis/forms.takoform.com/v1") {
 		t.Fatalf("endpoints.api = %q", discovery.Endpoints["api"])
 	}
 	for _, feature := range []string{
@@ -136,26 +135,17 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 	}
 }
 
-// The command's default contract has to be the corpus the rest of the
-// repository measures, or the host a reader starts is not the host
-// cmd/worker-authoring-conformance drives.
+// The command's default contract is the stable generic Host corpus. Retained
+// beta and worker-authoring runs name their own corpus explicitly and do not
+// decide what a reader gets by default.
 func TestReferenceHostDefaultsToTheMeasuredCorpus(t *testing.T) {
 	source, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness, err := os.ReadFile(filepath.Join(
-		"..", "..", "internal", "workerauthoring", "harness.go",
-	))
-	if err != nil {
-		t.Fatal(err)
-	}
-	const corpus = `"conformance", "portable-host-v1beta4"`
+	const corpus = `"conformance", "takoform-v1", "generic-host", "portable-host"`
 	if !strings.Contains(string(source), corpus) {
 		t.Fatalf("cmd/reference-host does not default to %s", corpus)
-	}
-	if !strings.Contains(string(harness), corpus) {
-		t.Fatalf("internal/workerauthoring no longer verifies %s", corpus)
 	}
 }
 

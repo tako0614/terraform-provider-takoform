@@ -7,6 +7,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // RenderedContract is one catalog Interface or Binding Definition rendered to
@@ -39,7 +40,7 @@ func RenderInterfaces() ([]RenderedContract, error) {
 	definitions := InterfaceDefinitions()
 	out := make([]RenderedContract, 0, len(definitions))
 	for _, definition := range definitions {
-		rendered, err := renderContract(definition.Name, definition.Version, definition)
+		rendered, err := renderInterfaceContract(definition.Name, definition.Version, definition)
 		if err != nil {
 			return nil, err
 		}
@@ -77,6 +78,17 @@ func renderContract(name, version string, definition any) (RenderedContract, err
 	return RenderedContract{Name: name, Version: version, DefinitionJSON: text, SchemaDigest: digest}, nil
 }
 
+func renderInterfaceContract(name, version string, definition any) (RenderedContract, error) {
+	rendered, err := renderContract(name, version, definition)
+	if err != nil {
+		return RenderedContract{}, err
+	}
+	if err := formpackage.ValidateInterfaceDefinition([]byte(rendered.DefinitionJSON)); err != nil {
+		return RenderedContract{}, fmt.Errorf("%s@%s: %w", name, version, err)
+	}
+	return rendered, nil
+}
+
 // InterfaceRefFor resolves the exact digest-bound InterfaceRef of one catalog
 // Interface at generation time.
 func InterfaceRefFor(name, version string) (formpackage.InterfaceRef, error) {
@@ -87,7 +99,7 @@ func InterfaceRefFor(name, version string) (formpackage.InterfaceRef, error) {
 	if definition.Version != version {
 		return formpackage.InterfaceRef{}, fmt.Errorf("interface %s is version %s, not %s", name, definition.Version, version)
 	}
-	rendered, err := renderContract(name, version, definition)
+	rendered, err := renderInterfaceContract(name, version, definition)
 	if err != nil {
 		return formpackage.InterfaceRef{}, err
 	}
@@ -131,18 +143,31 @@ func BindingRefFor(name, version string) (formpackage.BindingRef, error) {
 // a Form whose contract another Form pins may not pin that Form back — and the
 // in-progress set turns any future cycle into a refusal instead of a hang.
 type targetContractResolver struct {
-	rendered   map[string]RenderedForm
-	refs       map[string]currentformmodel.TargetFormRef
-	inProgress map[string]bool
+	rendered            map[string]RenderedForm
+	refs                map[string]currentformmodel.TargetFormRef
+	relations           map[string][]currentformmodel.Relation
+	inProgress          map[string]bool
+	relationsInProgress map[string]bool
+	aggregate           *currentformregistry.TargetResolver
 }
 
 func newTargetContractResolver() *targetContractResolver {
-	return &targetContractResolver{
-		rendered:   map[string]RenderedForm{},
-		refs:       map[string]currentformmodel.TargetFormRef{},
-		inProgress: map[string]bool{},
+	resolver := &targetContractResolver{
+		rendered:            map[string]RenderedForm{},
+		refs:                map[string]currentformmodel.TargetFormRef{},
+		relations:           map[string][]currentformmodel.Relation{},
+		inProgress:          map[string]bool{},
+		relationsInProgress: map[string]bool{},
 	}
+	aggregate, err := currentformregistry.NewTargetResolver(resolver, resolver)
+	if err != nil {
+		panic(fmt.Sprintf("constructing retained edge Form target resolver: %v", err))
+	}
+	resolver.aggregate = aggregate
+	return resolver
 }
+
+func (*targetContractResolver) FamilyAPIVersion() string { return Family.APIVersion() }
 
 // TargetFormRefs returns the exact identity this build renders for one kind.
 // The family declares one definition version per Form, so the accepted set is
@@ -155,6 +180,15 @@ func newTargetContractResolver() *targetContractResolver {
 // identity means what it meant when it was published (decision 0037).
 func (r *targetContractResolver) ResourceNamePattern() string {
 	return `^[a-z][a-z0-9-]{0,62}$`
+}
+
+// ResolveResourceTarget adapts the aggregate model seam without changing any
+// retained Definition bytes. Exact Form refs remain confined to the published
+// family group; an Interface contract can still govern a cross-family target.
+func (r *targetContractResolver) ResolveResourceTarget(
+	target currentformmodel.ResourceTarget,
+) (currentformmodel.ResolvedResourceTarget, error) {
+	return r.aggregate.ResolveResourceTarget(target)
 }
 
 func (r *targetContractResolver) TargetFormRefs(targetKind string) ([]currentformmodel.TargetFormRef, error) {
@@ -188,6 +222,52 @@ func (r *targetContractResolver) TargetFormRefs(targetKind string) ([]currentfor
 	return []currentformmodel.TargetFormRef{ref}, nil
 }
 
+func (r *targetContractResolver) ResolveExactFormRelations(
+	ref currentformmodel.TargetFormRef,
+) ([]currentformmodel.Relation, error) {
+	return r.aggregate.ResolveExactFormRelations(ref)
+}
+
+func (r *targetContractResolver) ExactFormRelations(
+	ref currentformmodel.TargetFormRef,
+) ([]currentformmodel.Relation, error) {
+	key := ref.String()
+	if cached, ok := r.relations[key]; ok {
+		return append([]currentformmodel.Relation(nil), cached...), nil
+	}
+	if r.relationsInProgress[key] {
+		return nil, fmt.Errorf("exact-Form relation cycle through %s", key)
+	}
+	if ref.APIVersion != Family.APIVersion() {
+		return nil, fmt.Errorf("exact target Form %s is outside retained catalog group %q", key, Family.APIVersion())
+	}
+	form, known := ByKind(ref.Kind)
+	if !known || form.DefinitionVersion != ref.DefinitionVersion {
+		return nil, fmt.Errorf("exact target Form %s is not in this retained catalog", key)
+	}
+	refs, err := r.TargetFormRefs(ref.Kind)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) != 1 || refs[0] != ref {
+		return nil, fmt.Errorf("exact target Form %s does not match rendered retained identity", key)
+	}
+	r.relationsInProgress[key] = true
+	schema, err := form.DesiredSchema(r.aggregate)
+	if err == nil {
+		var relations []currentformmodel.Relation
+		relations, err = currentformmodel.DeriveRelationsWithConstraints(schema, form.Constraints())
+		if err == nil {
+			r.relations[key] = append([]currentformmodel.Relation(nil), relations...)
+		}
+	}
+	delete(r.relationsInProgress, key)
+	if err != nil {
+		return nil, err
+	}
+	return append([]currentformmodel.Relation(nil), r.relations[key]...), nil
+}
+
 // RequiredInterface resolves one exact Interface contract out of the catalog,
 // which is where its digest already lives.
 func (r *targetContractResolver) RequiredInterface(name, version string) (currentformmodel.RequiredInterface, error) {
@@ -204,7 +284,7 @@ func (r *targetContractResolver) renderedForm(form currentformmodel.Form) (Rende
 	if cached, known := r.rendered[form.Kind]; known {
 		return cached, nil
 	}
-	rendered, err := renderForm(form, r)
+	rendered, err := renderForm(form, r.aggregate)
 	if err != nil {
 		return RenderedForm{}, fmt.Errorf("%s: %w", form.Kind, err)
 	}
@@ -294,9 +374,33 @@ func renderForm(form currentformmodel.Form, resolver currentformmodel.TargetCont
 		return RenderedForm{}, fmt.Errorf("rendered definition is invalid: %w", err)
 	}
 	return RenderedForm{
-		Kind: form.Kind, Slug: form.Slug, Role: string(form.Role), ResourceType: form.ResourceType,
+		Kind: form.Kind, Slug: form.Slug, Role: string(form.Role), ResourceType: retainedResourceType(form.Kind),
 		Definition: definition, DefinitionJSON: definitionJSON, Fixtures: fixtures,
 	}, nil
+}
+
+// retainedResourceType preserves the provider-specific metadata carried by the
+// already-published v1beta1 candidate set. It is frozen historical envelope
+// data, not part of Form semantics and not used to name current provider
+// resources.
+func retainedResourceType(kind string) string {
+	return map[string]string{
+		"ModuleWorker":               "takoform_module_worker",
+		"WorkerBundle":               "takoform_worker_bundle",
+		"StaticAssetBundle":          "takoform_static_asset_bundle",
+		"WorkerVersion":              "takoform_worker_version",
+		"WorkerDeployment":           "takoform_worker_deployment",
+		"WorkerCustomDomain":         "takoform_worker_custom_domain",
+		"WorkerEndpoint":             "takoform_worker_endpoint",
+		"WorkerCronTrigger":          "takoform_worker_cron_trigger",
+		"EdgeKVNamespace":            "takoform_edge_kv_namespace",
+		"ObjectBucket":               "takoform_edge_object_bucket",
+		"SQLiteDatabase":             "takoform_sqlite_database",
+		"SQLiteMigrationSet":         "takoform_sqlite_migration_set",
+		"SQLiteMigrationApplication": "takoform_sqlite_migration_application",
+		"AtLeastOnceQueue":           "takoform_at_least_once_queue",
+		"QueueConsumer":              "takoform_queue_consumer",
+	}[kind]
 }
 
 func resolveInterfaceRefs(sources []currentformmodel.InterfaceRefSource) ([]formpackage.InterfaceRef, error) {

@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-definition.schema.json",
+  "title": "Takoform exact Interface Definition v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "name", "version", "operations", "semantics"],
+  "properties": {
+    "apiVersion": {
+      "const": "interfaces.takoform.com/v1alpha1"
+    },
+    "kind": {
+      "const": "InterfaceDefinition"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "inputSchema", "outputSchema", "errors"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z0-9]{0,63}$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "inputSchema": {
+            "$ref": "#/$defs/jsonSchema"
+          },
+          "outputSchema": {
+            "$ref": "#/$defs/jsonSchema"
+          },
+          "errors": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            }
+          },
+          "idempotent": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["consistency"],
+      "properties": {
+        "consistency": {
+          "enum": [
+            "eventual",
+            "read_after_write",
+            "per_key_linearizable",
+            "serializable"
+          ]
+        },
+        "pagination": {
+          "enum": ["none", "cursor"]
+        },
+        "delivery": {
+          "enum": ["at_least_once", "exactly_once_effect"]
+        },
+        "ordering": {
+          "enum": ["none", "per_key", "total"]
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-zA-Z0-9]{0,63}$",
+        "x-takoform-fieldPolicy": "portable-data-only-v1"
+      },
+      "patternProperties": {
+        "^[a-z][a-zA-Z0-9]{0,63}$": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      },
+      "description": "Portable minimum limits every conforming host accepts; keys name the limited quantity."
+    },
+    "fixtures": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "steps"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operation", "input"],
+              "properties": {
+                "operation": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]{0,63}$"
+                },
+                "input": {
+                  "type": "object"
+                },
+                "expected": {
+                  "type": "object"
+                },
+                "expectedError": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{2,63}$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "jsonSchema": {
+      "type": "object",
+      "required": ["$schema", "type"],
+      "properties": {
+        "$schema": {
+          "const": "https://json-schema.org/draft/2020-12/schema"
+        },
+        "type": {}
+      }
+    }
+  }
+}

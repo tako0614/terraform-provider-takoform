@@ -2,12 +2,11 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # Provider v2.1.1 is Registry-published; release/version.json remains
-      # candidate-only descriptor metadata after owner publication. v2.1.1
-      # serves this resource type under the retained v1beta1 identities; the
-      # v1beta2 identity this page documents ships with the next release
-      # (decision 0046).
-      version = "= 2.1.1"
+      # This resource type is non-normative official-provider metadata. The
+      # current versionless Form and its digest do not contain this name.
+      # Provider 2.1.1 carries only retained versioned history; use a provider
+      # release whose exact-Form registry includes this current identity.
+      version = ">= 3.0.0"
     }
   }
 }

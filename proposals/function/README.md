@@ -1,6 +1,6 @@
 # Regional Function Family proposals
 
-The Regional Function Family, `function.forms.takoform.com/v1beta1`, is one
+The Regional Function Family, `function.forms.takoform.com`, is one
 of the eight families of the v1 lineup
 ([decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md)).
 Its members fix, completely, the application-visible semantics of the
@@ -27,13 +27,13 @@ The family is minted after
 so its revision Form carries the external standard-service declaration from
 birth ([spec/standard-services](../../spec/standard-services/README.md)): a
 Function Version reaches PostgreSQL, Redis, S3-compatible storage, or SMTP
-through sealed slots with protocol tags, never through endpoints or
+through sealed slots with opaque reverse-DNS protocol identifiers, never through endpoints or
 credentials in portable state.
 
-These documents are proposals only. No catalog declaration, candidate
-package, Interface digest, or FormRef exists yet; a Form enters a family
-only through its generated candidate set ([../README.md](../README.md)), so
-nothing here reserves a public identity.
+These prose documents accompany four generated Experimental `0.x` candidates
+under `forms/candidates/function.forms.takoform.com`. The exact candidate set,
+Definitions, Interface digest, and packages — not proposal prose — own their
+current identities. Editing this directory reserves or changes no identity.
 
 ## The function aggregate
 
@@ -46,13 +46,15 @@ family makes in
 [decision 0016](../../spec/decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
 
 Cross-family event sources are not members of this family. An attachment
-that invokes a function from a queue, topic, bucket, or schedule is declared
+that invokes a function from a queue, topic, a future source-specific object
+event contract, or a schedule is declared
 in the family that owns the SOURCE, exactly as the Edge family's
 `QueueConsumer` stays worker-targeted; scheduled invocation belongs to the
-future `schedule.forms.takoform.com` family. The MVP gives the function its
-own HTTP activation and nothing else.
+separate current `schedule.forms.takoform.com` family. There is no current
+`ObjectBucket` Form or `edge.objects` Interface. The current Function family
+gives the function its own HTTP activation and nothing else.
 
-## MVP members
+## Current members
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

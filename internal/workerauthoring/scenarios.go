@@ -894,15 +894,15 @@ func (h *harness) startReadinessSamplerFor(ctx context.Context, name string) (fu
 
 // runHostSupportAtPlan proves the plan decides host capability.
 //
-// The host under test implements `WorkerVersion` and the `edge.kv` binding
-// while implementing none of bucket, SQLite, or queue — a real host shape, and
-// one an author used to discover only at apply. The KV-only worker must plan
-// clean; adding a bucket binding must be refused at plan, naming the code, with
-// nothing mutated.
+// The host under test implements `WorkerVersion` and the `edge.kv` binding.
+// A grammar-valid but unknown opaque standard-service protocol receives a
+// stable support profile with satisfiable=false. A required slot must therefore
+// be refused at plan, with nothing mutated; a supported `com.amazonaws.s3` slot
+// is exercised by the positive branch.
 func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary string) (RefusalEvidence, error) {
 	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{
 		providerBinary:   providerBinary,
-		unsupportedKinds: []string{"ObjectBucket", "SQLiteDatabase", "AtLeastOnceQueue"},
+		unsupportedKinds: nil,
 	})
 	if err != nil {
 		return RefusalEvidence{}, err
@@ -918,6 +918,20 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary
 		return RefusalEvidence{}, fmt.Errorf(
 			"%s refused a KV-only worker against a host that supports edge.kv: %w\n%s", h.identity.Product, err, output)
 	}
+	if err := h.write("main.tf", bindingStackWithProtocol(h.Endpoint(), "com.amazonaws.s3")); err != nil {
+		return RefusalEvidence{}, err
+	}
+	if output, err := h.run(ctx, "plan", "-input=false", "-no-color"); err != nil {
+		return RefusalEvidence{}, fmt.Errorf(
+			"%s refused a worker with the supported com.amazonaws.s3 service slot: %w\n%s", h.identity.Product, err, output)
+	}
+	if err := h.write("main.tf", bindingStackWithProtocolAndRequired(h.Endpoint(), "org.example.unknown", false)); err != nil {
+		return RefusalEvidence{}, err
+	}
+	if output, err := h.run(ctx, "plan", "-input=false", "-no-color"); err != nil {
+		return RefusalEvidence{}, fmt.Errorf(
+			"%s blocked an optional unsupported standard service slot: %w\n%s", h.identity.Product, err, output)
+	}
 	if err := h.write("main.tf", bindingStack(h.Endpoint(), true)); err != nil {
 		return RefusalEvidence{}, err
 	}
@@ -925,11 +939,11 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary
 	output, planErr := h.run(ctx, "plan", "-input=false", "-no-color")
 	if planErr == nil {
 		return RefusalEvidence{}, fmt.Errorf(
-			"%s planned a bucket this host does not implement instead of refusing it\n%s", h.identity.Product, output)
+			"%s planned a required unknown standard service instead of refusing it\n%s", h.identity.Product, output)
 	}
 	for _, want := range []string{
-		"This host does not support ObjectBucket",
-		"takoform.provider/host-does-not-support-form",
+		"This host cannot satisfy required standard service org.example.unknown",
+		"takoform.provider/host-does-not-support-value",
 	} {
 		if !strings.Contains(output, want) {
 			return RefusalEvidence{}, fmt.Errorf(
@@ -940,8 +954,8 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary
 		return RefusalEvidence{}, fmt.Errorf("a refused plan mutated the host: %+v", mutations)
 	}
 	return RefusalEvidence{
-		Code:    "takoform.provider/host-does-not-support-form",
-		Summary: "This host does not support ObjectBucket",
+		Code:    "takoform.provider/host-does-not-support-value",
+		Summary: "This host cannot satisfy required standard service org.example.unknown",
 	}, nil
 }
 
@@ -1042,7 +1056,7 @@ func copyTree(source, destination string) error {
 	})
 }
 
-// client is a v1beta1 client against this harness's disposable host.
+// client is a stable-v1 client against this harness's disposable host.
 func (h *harness) client(ctx context.Context) (*clientv3.Client, error) {
 	c := clientv3.NewWithOptions(h.Endpoint(), harnessToken, h.server.Client(), clientv3.Options{})
 	if _, err := c.Discover(ctx); err != nil {

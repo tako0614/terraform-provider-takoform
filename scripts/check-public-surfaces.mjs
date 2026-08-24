@@ -12,10 +12,7 @@ import {
   PUBLIC_SCHEMA_ROUTE,
 } from "./public-schema-manifest.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
-import {
-  FAMILY_CANDIDATE_SET,
-  PROVIDER_RELEASE_TARGET_VERSION,
-} from "../website/.vitepress/site-status.mjs";
+import { FAMILY_CANDIDATE_SET } from "../website/.vitepress/site-status.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -581,46 +578,21 @@ function hasExactProviderPin(block, providerVersion) {
   ).test(block);
 }
 
-function checkTerraformProviderExample(filePath, providerVersion) {
-  const source = read(filePath);
-  if (!source.includes("registry.terraform.io/tako0614/takoform")) {
-    fail(`${relative(filePath)}: missing canonical provider source`);
-    return;
-  }
-  if (!hasExactProviderPin(source, providerVersion)) {
-    fail(
-      `${relative(filePath)}: provider example must contain version = "= ${providerVersion}"`,
-    );
-  }
+function hasProviderFloor(block, providerVersion) {
+  return new RegExp(
+    `\\bversion\\s*=\\s*">= ${escapeRegExp(providerVersion)}"`,
+  ).test(block);
 }
 
-// The Edge Platform Family examples pin the Registry-published v2.1.1
-// distribution. The release descriptor intentionally remains candidate-only
-// metadata after owner publication, so an example must state both independent
-// facts without treating descriptor metadata as Provider availability.
-//
-// Keep the example pin bound to the canonical Provider target. The retained
-// edgePreviewProvider field is descriptor metadata only and is not authority.
-const edgeFamilySourceCandidateVersion = PROVIDER_RELEASE_TARGET_VERSION;
-
-function checkEdgeFamilyProviderExample(filePath) {
+function checkCurrentProviderSample(filePath) {
   const source = read(filePath);
   if (!source.includes("registry.terraform.io/tako0614/takoform")) {
     fail(`${relative(filePath)}: missing canonical provider source`);
     return;
   }
-  if (!hasExactProviderPin(source, edgeFamilySourceCandidateVersion)) {
+  if (!hasProviderFloor(source, "3.0.0")) {
     fail(
-      `${relative(filePath)}: Edge Family example must contain version = "= ${edgeFamilySourceCandidateVersion}"`,
-    );
-  }
-  if (
-    !source.includes(`Provider v${PROVIDER_RELEASE_TARGET_VERSION} is Registry-published`) ||
-    !source.includes("candidate-only descriptor metadata after owner publication")
-  ) {
-    fail(
-      `${relative(filePath)}: Edge Family example must state Registry-published Provider ` +
-        "availability and candidate-only descriptor metadata after owner publication",
+      `${relative(filePath)}: current Form sample must contain version = ">= 3.0.0"`,
     );
   }
 }
@@ -748,29 +720,32 @@ function checkContractLaneDocumentation() {
   // withdrawn epochs' identities are deliberately NOT required any more: a
   // document may mention them as history, but nothing forces it to, and the
   // current identities must always be present.
-  const currentHostWire = "forms.takoform.com/v1beta1";
-  const currentFamily = "edge.forms.takoform.com/v1beta1";
-  const currentPackage = "packages.forms.takoform.com/v1alpha4";
+  const currentHostWire = "forms.takoform.com/v1";
+  const currentFamily = "edge.forms.takoform.com";
+  const currentPackage = "packages.forms.takoform.com/v1alpha5";
+  const retainedHostWire = "forms.takoform.com/v1beta1";
+  const retainedFamily = "edge.forms.takoform.com/v1beta1";
+  const retainedPackage = "packages.forms.takoform.com/v1alpha4";
   const documents = [
     {
       file: path.join(repositoryRoot, "spec", "README.md"),
-      required: [currentHostWire, currentFamily, currentPackage, "/.well-known/takoform/v1beta1"],
+      required: [currentHostWire, currentFamily, currentPackage, "/.well-known/takoform/v1", retainedHostWire],
     },
     {
       file: path.join(repositoryRoot, "spec", "form-definition", "README.md"),
-      required: [currentFamily, "form-definition-v1beta1.schema.json", "form-ref-v1beta1.schema.json"],
+      required: [currentHostWire, currentFamily, "form-definition-v1.schema.json", retainedFamily],
     },
     {
       file: path.join(repositoryRoot, "spec", "form-package", "README.md"),
-      required: [currentPackage, "package-index-v1alpha4.schema.json"],
+      required: [currentPackage, "package-index-v1alpha5.schema.json", retainedPackage],
     },
     {
       file: path.join(repositoryRoot, "spec", "versioning.md"),
-      required: [currentHostWire, currentFamily, currentPackage, "/.well-known/takoform/v1beta1"],
+      required: [currentHostWire, currentFamily, currentPackage, "/.well-known/takoform/v1", retainedHostWire, retainedFamily, retainedPackage],
     },
     {
       file: path.join(repositoryRoot, "release", "README.md"),
-      required: [currentHostWire, currentFamily, currentPackage],
+      required: [currentHostWire, currentFamily, currentPackage, retainedHostWire, retainedFamily, retainedPackage],
     },
     {
       file: path.join(repositoryRoot, "proposals", "README.md"),
@@ -1192,6 +1167,12 @@ const HOST_API_LANES = new Map([
     mintedFor: "protocol",
     withdrawn: "the v1alpha3 identities were withdrawn with the v1alpha2 epoch that served them (decision 0042)",
   }],
+  ["forms.takoform.com/v1", {
+    wireSchema: "spec/schemas/host-api-wire-v1.schema.json",
+    document: "spec/host-api/v1.md",
+    mintedFor: "graduation",
+    evidence: "exact committed Specification source, multi-family candidate/corpus closure, and manifest-owned reference conformance (decisions 0052 and 0053)",
+  }],
   ["forms.takoform.com/v1beta4", {
     wireSchema: "spec/schemas/host-api-wire-v1beta4.schema.json",
     document: "spec/host-api/v1beta4.md",
@@ -1367,6 +1348,10 @@ function checkExtensibleLanesNameNoFormKind() {
   for (const family of readdirSync(candidateRoot)) {
     const familyRoot = path.join(candidateRoot, family);
     if (!statSync(familyRoot).isDirectory()) continue;
+    const currentSetPath = path.join("forms", "candidates", family, "candidate-set.json");
+    if (existsSync(path.join(repositoryRoot, currentSetPath))) {
+      families.push(currentSetPath);
+    }
     for (const generation of readdirSync(familyRoot)) {
       const setPath = path.join("forms", "candidates", family, generation, "candidate-set.json");
       if (existsSync(path.join(repositoryRoot, setPath))) families.push(setPath);
@@ -1621,17 +1606,11 @@ function checkConformanceCorpusCounts() {
   const familyKinds = Array.isArray(familyCandidateSet.forms)
     ? familyCandidateSet.forms.map((entry) => entry?.kind).filter(Boolean)
     : [];
-  const unprobedKinds = familyKinds.filter(
-    (kind) => !uniqueDrivenKinds.has(kind),
-  );
-  if (
-    familyKinds.length !== 17 ||
-    unprobedKinds.length !== 1 ||
-    unprobedKinds[0] !== "ObjectBucket"
-  ) {
+  const unprobedKinds = familyKinds.filter((kind) => !uniqueDrivenKinds.has(kind));
+  if (familyKinds.length !== 16 || unprobedKinds.length !== 0) {
     fail(
-      `${FAMILY_CANDIDATE_SET}: portable-host-v1beta1 coverage must leave exactly ` +
-        `ObjectBucket unprobed (family=${familyKinds.length}, ` +
+      `${FAMILY_CANDIDATE_SET}: retained portable-host-v1beta1 coverage must ` +
+        `match the 16 current Edge Forms exactly (family=${familyKinds.length}, ` +
         `unprobed=${unprobedKinds.join(", ") || "none"})`,
     );
   }
@@ -1652,15 +1631,6 @@ function checkConformanceCorpusCounts() {
         );
       }
     }
-  }
-  if (
-    !/\bObjectBucket\b[^.]{0,220}\b(?:intentionally unprobed|unprobed by this corpus)\b/i.test(
-      text,
-    )
-  ) {
-    fail(
-      "conformance/README.md: portable-host-v1beta1 must state the intentional ObjectBucket coverage exception",
-    );
   }
 }
 
@@ -1738,12 +1708,11 @@ if (releaseVersion.tag !== `v${releaseVersion.version}`) {
   fail("release/version.json: tag must match version");
 }
 
-// The Host API v1beta1 channel: exactly the fifteen Edge Platform Family
-// resources, all rendered by internal/standardforms (doc name = resource type
-// minus the takoform_ prefix). They share the stable v2.1.1 release-target example
-// pin. There is deliberately no generic takoform_resource carrier: the lane
-// exposes no resource that is not a Form (spec/decisions/0021), so this exact
-// set is also the assertion that the carrier has not come back.
+// The current Edge Family has exactly sixteen Forms and no ObjectBucket. The
+// independent, non-normative Provider 3 sample maps all 31 current Forms, so
+// its generated docs and examples must cover the whole current-family index.
+// None of those local candidate surfaces claims Provider publication or turns
+// the mappings into Specification identity.
 //
 // Each column is bound to repository data below: the kinds and slugs to the
 // family candidate set, the doc names to docs/resources, the slugs to
@@ -1780,7 +1749,6 @@ const edgeFamilyRoster = [
     slug: "edge-kv-namespace",
     docName: "edge_kv_namespace",
   },
-  { kind: "ObjectBucket", slug: "object-bucket", docName: "edge_object_bucket" },
   { kind: "SQLiteDatabase", slug: "sqlite-database", docName: "sqlite_database" },
   {
     kind: "SQLiteMigrationSet",
@@ -1809,7 +1777,26 @@ const edgeFamilyRoster = [
     docName: "actor_namespace",
   },
 ];
-const edgeFamilyDocNames = edgeFamilyRoster.map(({ docName }) => docName);
+const currentFamilyIndex = readJson(
+  path.join(repositoryRoot, "forms", "candidates", "current-family-index.json"),
+);
+const currentFormRoster = (currentFamilyIndex.families ?? []).flatMap((family) => {
+  const candidateSet = readJson(path.join(repositoryRoot, family.candidateSet ?? ""));
+  return (candidateSet.forms ?? []).map((entry) => {
+    const slug = path.posix.basename(typeof entry?.path === "string" ? entry.path : "");
+    return {
+      group: candidateSet.family,
+      kind: entry?.kind ?? "",
+      slug,
+      docName: slug.replaceAll("-", "_"),
+    };
+  });
+});
+if (currentFamilyIndex.families?.length !== 8 || currentFormRoster.length !== 31) {
+  fail(
+    "forms/candidates/current-family-index.json: expected the exact 8-family, 31-Form current corpus",
+  );
+}
 
 const familySet = readJson(path.join(repositoryRoot, FAMILY_CANDIDATE_SET));
 const familyEntries = Array.isArray(familySet.forms) ? familySet.forms : [];
@@ -1826,7 +1813,7 @@ compareExact(
   edgeFamilyRoster.map(({ slug }) => slug),
 );
 
-const formDocNames = [...edgeFamilyDocNames];
+const formDocNames = currentFormRoster.map(({ docName }) => docName);
 const expectedResourceDocs = formDocNames.map((name) => `${name}.md`);
 const docsResourceDirectory = path.join(repositoryRoot, "docs", "resources");
 const docsResourceEntries = directoryEntries(docsResourceDirectory);
@@ -1841,8 +1828,8 @@ for (const entry of docsResourceEntries) {
   }
 }
 
-const expectedExampleDirectories = formDocNames.map(
-  (name) => `takoform_${name}`,
+const expectedExampleDirectories = currentFormRoster.map(({ docName }) =>
+  `takoform_${docName}`,
 );
 const exampleResourceDirectory = path.join(
   repositoryRoot,
@@ -1860,18 +1847,8 @@ compareExact(
   ),
   expectedResourceExampleFiles,
 );
-const edgeFamilyExampleDirectories = new Set(
-  edgeFamilyDocNames.map((name) => `takoform_${name}`),
-);
 for (const example of resourceExampleFiles) {
-  const directoryName = path
-    .relative(exampleResourceDirectory, example)
-    .split(path.sep)[0];
-  if (edgeFamilyExampleDirectories.has(directoryName)) {
-    checkEdgeFamilyProviderExample(example);
-  } else {
-    checkTerraformProviderExample(example, releaseVersion.version);
-  }
+  checkCurrentProviderSample(example);
 }
 
 const docsIndexPath = path.join(repositoryRoot, "docs", "index.md");
@@ -1923,8 +1900,8 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Public surfaces OK: provider v${releaseVersion.version}, ` +
-      "one current epoch, no current central admission, docs, examples, " +
-      "website links, and normative schema URLs are consistent.",
+    `Public surfaces OK: Specification 1.0 is an open candidate, ` +
+      `the 8-family/31-Form corpus remains Experimental, Provider v${releaseVersion.version} ` +
+      "is retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );
 }

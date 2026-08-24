@@ -1,17 +1,17 @@
-# Typed Binding contracts (bindings.takoform.com/v1alpha1)
+# Typed Binding contracts (bindings.takoform.com/v1alpha2)
 
 A Binding is a digest-bound contract that grants one consumer resource a
 typed capability on one target resource: the runtime API and the permission
 arrive together, and credentials never cross the boundary. Bindings replace
 the generic `connections` / `permissions` / `projection` surface of the
-retained v1alpha2 lane
+withdrawn Host API v1alpha2 lane
 ([decision 0010](../decisions/0010-exact-interface-and-binding-contracts.md)).
 
 ## BindingRef
 
 ```json
 {
-  "apiVersion": "bindings.takoform.com/v1alpha1",
+  "apiVersion": "bindings.takoform.com/v1alpha2",
   "name": "module-worker.edge-kv",
   "version": "1.0.0",
   "schemaDigest": "sha256:..."
@@ -20,7 +20,7 @@ retained v1alpha2 lane
 
 `name` uses the dotted grammar; `schemaDigest` binds the canonical Binding
 Definition bytes. The normative shapes are
-[`../schemas/binding-ref-v1alpha1.schema.json`](/schemas/bindings/v1alpha1/binding-ref.schema.json)
+[`../schemas/binding-ref-v1alpha2.schema.json`](/schemas/bindings/v1alpha2/binding-ref.schema.json)
 and
 [`../schemas/binding-definition-v1alpha2.schema.json`](/schemas/bindings/v1alpha2/binding-definition.schema.json).
 
@@ -49,9 +49,12 @@ A Binding Definition fixes, as data only:
   projects `env.NAME.fetch(request) -> Promise<Response>`, streaming in both
   directions, resolving (not rejecting) with the callee's host-generated 500
   when the callee's handler throws, and rejecting only when the call could not
-  be made; the KV, bucket, SQLite, and queue-producer bindings state their
+  be made; the current KV, SQLite, queue-producer, workflow, and actor bindings state their
   method names, argument and result types, and how each interface error code
-  appears in JavaScript. The meta-schema's `runtimeProjection` admits operation
+  appears in JavaScript. The current set has no bucket projection; the retained
+  v1beta1 ObjectBucket and `module-worker.object-bucket` definitions keep their
+  exact historical descriptions.
+  The meta-schema's `runtimeProjection` admits operation
   names only, so this belongs in `description`
   ([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md));
 - `bindingNameGrammar`: the grammar for instance names declared by the
@@ -69,7 +72,7 @@ A consumer resource declares instances as typed data. The wire shape is a
 {
   "name": "CACHE",
   "resource": {
-    "apiVersion": "edge.forms.takoform.com/v1beta1",
+    "apiVersion": "edge.forms.takoform.com",
     "kind": "EdgeKVNamespace",
     "name": "cache"
   }
@@ -86,7 +89,7 @@ A consumer resource declares instances as typed data. The wire shape is a
   re-created under the same name is a different resource, and the source is NOT
   re-bound to it; neither is a target whose Form has since moved to a different
   exact contract
-  ([`../host-api/v1beta1.md`](../host-api/v1beta1.md),
+  ([`../host-api/v1.md`](../host-api/v1.md),
   [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md),
   [decision 0022](../decisions/0022-relations-pin-the-target-contract.md)).
   Re-applying the source is what re-pins it.
@@ -95,7 +98,7 @@ A consumer resource declares instances as typed data. The wire shape is a
   (`requiredSensitiveVars` on a worker version) and satisfied by
   host/operator-owned bindings.
 - The object these names land in is fixed by the consumer's runtime ABI, not by
-  the Binding: for the worker family, `worker.runtime@1.0.0` states that `env`
+  the Binding: for the worker family, `worker.runtime@1.1.0` states that `env`
   carries exactly the declared binding names, vars keys, and sensitive-variable
   slots, and nothing else portable
   ([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
@@ -209,17 +212,26 @@ is stating which document it implements, not where it obtained it.
 
 ## Direction rule
 
-Outward capability (this worker *uses* KV, a bucket, a database, a queue, a
-service) is a Binding held by the consumer's revision resource. Inward
-activation (an HTTP route, custom domain, cron trigger, or queue consumer
+Outward capability (this worker *uses* KV, a database, a queue, a worker
+service, a workflow, or an actor) is a Binding held by the consumer's revision
+resource. Inward activation (an HTTP route, custom domain, cron trigger, or queue consumer
 *invokes* this worker) is an attachment resource pointing at the identity
 resource. The two directions never share a mechanism.
 
+An opaque external standard service is a third, deliberately separate case.
+An `externalServices` slot carries `standards.takoform.com/v1` plus an opaque
+reverse-DNS protocol identifier and has no target Form, Resource reference, or
+Binding Definition. The Host resolves and seals that runtime-native service;
+Takoform does not maintain a protocol enum or turn object storage into a
+current `ObjectBucket` Form.
+
 ## Provider surface
 
-The official provider renders each binding type as its own typed list
-attribute — `kv_bindings`, `bucket_bindings`, `sqlite_bindings`,
-`queue_producer_bindings`, `service_bindings` — whose elements carry `name`
-and `target_name`. There is no generic connection block in the v1beta1
-lane. (Decision 0010 names the block concept in the singular; the
-implemented attribute names are these plural lists.)
+The non-normative Provider 3 sample renders each current worker binding type as
+its own typed list attribute — `actor_bindings`, `kv_bindings`,
+`queue_producer_bindings`, `service_bindings`, `sqlite_bindings`, and
+`workflow_bindings` — whose elements carry `name` and `target_name`. It has no
+current `bucket_bindings` authoring surface. Retained Provider 2.1.1 codecs keep
+their historical ObjectBucket mapping without defining the current contract.
+There is no generic connection block in Host API v1. Provider mapping is
+implementation evidence and cannot add to or block Specification 1.0.

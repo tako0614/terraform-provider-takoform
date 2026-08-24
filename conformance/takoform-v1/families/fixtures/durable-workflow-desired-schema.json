@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Long-lived identity of one code-defined durable workflow: a class the worker's active deployment serves, whose instances survive process death. The Form fixes the execution model by identity — the worker.workflow@1.0.0 contract in its providedInterfaces states memoized replay, at-least-once step execution, the closed status vocabulary, and the two bounds that keep an instance finite. It carries NO implementation snapshot: which code answers is whatever the worker's active Worker Deployment selects, so behavior upgrades and rollback ride the deployment like any other traffic change. Instances are runtime data reached through module-worker.workflow bindings, never Resources. One worker carries at most one Durable Workflow per class name.",
+  "properties": {
+    "className": {
+      "description": "Class export name the serving module provides, in the JavaScript identifier grammar. Every weighted version of the active deployment must export it; one that does not keeps this workflow from becoming Ready, and creating an instance against it is refused rather than queued.",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+      "type": "string"
+    },
+    "worker": {
+      "additionalProperties": false,
+      "description": "Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow.",
+      "properties": {
+        "apiVersion": {
+          "const": "edge.forms.takoform.com",
+          "type": "string"
+        },
+        "kind": {
+          "const": "ModuleWorker",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "name"
+      ],
+      "type": "object",
+      "x-takoform-required-interface": {
+        "apiVersion": "interfaces.takoform.com/v1alpha1",
+        "name": "worker.runtime",
+        "schemaDigest": "sha256:ed2f8211aac5be94488d391945ca6aca7627a4ecbd261e39790093e887feae08",
+        "version": "1.1.0"
+      }
+    }
+  },
+  "required": [
+    "className",
+    "worker"
+  ],
+  "title": "Durable Workflow desired state",
+  "type": "object"
+}

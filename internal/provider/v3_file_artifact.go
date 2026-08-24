@@ -404,7 +404,7 @@ func (r *v3FormResource) uploadFileBundle(ctx context.Context, authoring v3FileB
 	committed, err := r.data.clientV3.UploadArtifact(ctx, authoring.Manifest, authoring.Blobs)
 	if err != nil {
 		diags.Append(v3HostCallDiagnostic(r.form.Kind+" artifact upload failed", err, v3Diagnostic{
-			ResourceType: r.form.ResourceType,
+			ResourceType: r.resourceTypeName(),
 			Pointer:      "/manifestDigest",
 			Detail: fmt.Sprintf(
 				"The content-addressed upload of artifact manifest %s (%d file blob(s)) did not commit, so no %s desired state was sent. Nothing was mutated.",

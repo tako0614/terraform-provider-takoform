@@ -1,8 +1,9 @@
 # Form Proposal workspace
 
-This directory contains mutable design material for Forms that have not earned
-a public FormRef. A document here is not a package, release, maturity claim,
-Host Support decision, or Service Offering.
+This directory contains mutable design material. Some notes accompany exact
+unpublished candidate FormRefs; others describe possible future Forms or
+retained history. A document here is never itself a package, release, maturity
+claim, Host Support decision, or Service Offering.
 
 Family design work lives in per-family subdirectories, authored under the
 shape-preserving boundary of
@@ -16,16 +17,19 @@ selected by [decision 0043](../spec/decisions/0043-forms-target-popular-vendor-l
   ([decision 0049](../spec/decisions/0049-a-form-versions-alone.md)), so a
   candidate is proposed in this tree and joins that one set rather than
   waiting for a generation to be minted around it.
-- [Regional Function Family](function/README.md) — regional FaaS.
-- [Serverless Container Family](container/README.md) — OCI-image services.
-- [Table Family](table/README.md) — key-addressed document tables.
-- [Pull Queue Family](queue/README.md) — pull-based at-least-once queues.
-- [Topic Family](topic/README.md) — fanout topics with push subscriptions.
-- [Schedule Family](schedule/README.md) — standalone cron invocation.
-- [Vector Family](vector/README.md) — fixed-dimension vector indexes.
+- [Regional Function Family](function/README.md) — regional FaaS, 4 current candidates.
+- [Serverless Container Family](container/README.md) — OCI-image services, 5 current candidates.
+- [Table Family](table/README.md) — key-addressed document tables, 1 current candidate.
+- [Pull Queue Family](queue/README.md) — pull-based at-least-once queues, 1 current candidate.
+- [Topic Family](topic/README.md) — fanout topics and queue subscriptions, 2 current candidates.
+- [Schedule Family](schedule/README.md) — standalone cron invocation, 1 current candidate.
+- [Vector Family](vector/README.md) — fixed-dimension vector indexes, 1 current candidate.
 
-The seven new families are proposals only: no candidate set exists yet, and a
-proposal reserves no public identity.
+All eight current versionless family candidate sets are closed by
+[`../forms/candidates/current-family-index.json`](../forms/candidates/current-family-index.json):
+31 exact Experimental `0.x` FormRefs in total. That generated index and the
+candidate bytes it names own the current identities. Proposal prose remains
+non-normative and reserves no additional identity.
 The pre-family flat Proposal set and its lifecycle registry were withdrawn
 with the pre-Beta epochs
 ([decision 0042](../spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md));

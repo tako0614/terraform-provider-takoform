@@ -1,6 +1,5 @@
-// reference-host serves the Host API v1beta1 reference implementation over
-// HTTP so a person can point a provider at it and watch the Edge Platform
-// Family work.
+// reference-host serves the stable Host API v1 reference implementation over
+// HTTP so a person can inspect the exact Edge Family lifecycle behavior.
 //
 // Everything this serves already existed: the conformance corpus builds this
 // exact host in-process to measure itself, and cmd/worker-authoring-conformance
@@ -15,7 +14,7 @@
 //     application traffic: a ModuleWorker created here has no isolate, a
 //     WorkerEndpoint's address answers nothing, and a queue delivers no message.
 //     The lane it implements drives desired state and never moves a byte of
-//     application data (spec/host-api/v1beta1.md).
+//     application data (spec/host-api/v1.md).
 //   - It is not safe to expose. It implements the runner-only
 //     Takoform-Conformance-Probe headers, which let a caller force error codes
 //     and drive host-side state transitions, and its credentials are three
@@ -52,7 +51,7 @@ func run(args []string, stdout io.Writer) error {
 	repoRoot := flags.String("repo-root", ".", "repository root holding the Form candidate catalog")
 	contractPath := flags.String(
 		"contract",
-		filepath.Join("conformance", "portable-host-v1beta4"),
+		filepath.Join("conformance", "takoform-v1", "generic-host", "portable-host"),
 		"portable host contract directory, relative to --repo-root",
 	)
 	if err := flags.Parse(args); err != nil {

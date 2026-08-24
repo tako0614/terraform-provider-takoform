@@ -84,19 +84,20 @@ func TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState(t *testing.T) {
 	}
 }
 
-// TestV3CodecTableCoversEverySupportedRef is the regression gate for the
-// two-generation build: the supported set spans the retained v1beta1
-// identities Registry-published provider 2.1.1 wrote state under and the
-// current v1beta2 generation, and every one of them must resolve a compiled
-// codec. A supported ref without a codec fails closed at runtime — correct
-// against skew, but a defect when the build itself ships the gap, because it
-// makes released state unreadable before any host is contacted.
+// TestV3CodecTableCoversEveryMappedRef is the regression gate for the
+// two-generation build: every exact identity this Provider 3 build maps to a
+// Terraform resource must resolve a compiled codec. Historical definitions
+// that remain in the Provider 2.1.1 catalog but have no Provider 3 mapping are
+// intentionally outside this table and must be drained before upgrading.
 func TestV3CodecTableCoversEverySupportedRef(t *testing.T) {
 	assertGeneratedFamilyBuild(t)
 	table := newV3CodecTable(currentformregistry.V3Current())
 	var missing []string
 	sawRetained := false
 	for _, ref := range table.registry.SupportedRefs() {
+		if _, mapped := v3TerraformResourceTypes().Lookup(ref.ExactKey()); !mapped {
+			continue
+		}
 		codec, ok := table.forStateKey(ref.ExactKey())
 		if !ok {
 			missing = append(missing, ref.ExactKey().String())

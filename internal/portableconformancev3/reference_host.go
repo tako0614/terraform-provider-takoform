@@ -718,13 +718,23 @@ func (h *ReferenceHost) handleDiscovery(w http.ResponseWriter, request *http.Req
 			"artifact_upload":        true,
 			"support_profiles":       true,
 		},
-		"endpoints": map[string]string{
-			"api":        origin + h.contract.APIPath,
-			"artifacts":  origin + h.contract.APIPath + "/artifacts",
-			"operations": origin + h.contract.APIPath + "/operations",
-			"support":    origin + h.contract.APIPath + "/support",
-		},
+		"endpoints": h.discoveryEndpoints(origin),
 	})
+}
+
+func (h *ReferenceHost) discoveryEndpoints(origin string) map[string]string {
+	if h.contract.lane.APIVersion == stableLane.APIVersion {
+		// Stable discovery has one advertised endpoint. Artifact, operation, and
+		// support roots are fixed suffixes of it; retained lanes preserve their
+		// published endpoint vocabulary byte-for-byte.
+		return map[string]string{"api": origin + h.contract.APIPath}
+	}
+	return map[string]string{
+		"api":        origin + h.contract.APIPath,
+		"artifacts":  origin + h.contract.APIPath + "/artifacts",
+		"operations": origin + h.contract.APIPath + "/operations",
+		"support":    origin + h.contract.APIPath + "/support",
+	}
 }
 
 // exactQueryForm resolves the closed exact-FormRef query vocabulary. The
@@ -1076,6 +1086,9 @@ func (h *ReferenceHost) specDiagnostics(form *InstalledForm, spec map[string]any
 			"message":  "desired spec violates the installed Form Definition: " + err.Error(),
 		}}, nil
 	}
+	if hostErr := validateStructuralConstraints(form, spec); hostErr != nil {
+		return []map[string]any{{"severity": "error", "message": hostErr.Message}}, nil
+	}
 	// Schema validity is never sufficient (spec/conformance.md, decision 0014).
 	// The runtime ABI closes the handler surface, and it does so from the exact
 	// contract the host installed rather than from the Form's enum, so a host
@@ -1113,6 +1126,17 @@ func (h *ReferenceHost) handleValidate(w http.ResponseWriter, request *http.Requ
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
+	}
+	if len(diagnostics) == 0 {
+		caller, _ := hostRequestAuth(request)
+		if constraintErr := h.validateResolvedUIDConstraintRequest(
+			form, caller.scope(body.Metadata.Space), body.Metadata.Name, body.Spec,
+		); constraintErr != nil {
+			diagnostics = append(diagnostics, map[string]any{
+				"severity": "error",
+				"message":  constraintErr.Code + ": " + constraintErr.Message,
+			})
+		}
 	}
 	h.writeJSON(w, http.StatusOK, "", map[string]any{
 		"valid":       len(diagnostics) == 0,
@@ -1204,6 +1228,18 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 		h.writeError(w, "invalid_argument", "prepare requires a valid desired spec")
 		return
 	}
+	if h.contract.lane.APIVersion == stableLane.APIVersion {
+		if hostErr := validateStableStandardServiceSlots(h.contract.RunnerInput.ExternalServices, body.Spec); hostErr != nil {
+			h.writeHostError(w, hostErr)
+			return
+		}
+	}
+	caller, _ := hostRequestAuth(request)
+	scope := caller.scope(body.Metadata.Space)
+	if hostErr := h.validateResolvedUIDConstraintRequest(form, scope, body.Metadata.Name, body.Spec); hostErr != nil {
+		h.writeHostError(w, hostErr)
+		return
+	}
 	specDigest, err := specCanonicalDigest(body.Spec)
 	if err != nil {
 		h.writeError(w, "invalid_argument", "spec is not canonicalizable I-JSON")
@@ -1217,8 +1253,6 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 	// The target is resolved inside the CALLER'S tenant. A prepare that resolved
 	// host-wide would mint a create binding against another tenant's live
 	// resource, or refuse a create because a stranger holds the name.
-	caller, _ := hostRequestAuth(request)
-	scope := caller.scope(body.Metadata.Space)
 	current := h.resourceUnderExactRef(scope, form.Ref, body.Metadata.Name)
 	uid, generation := prepareCreateUID, prepareCreateGeneration
 	if current != nil {
@@ -1307,6 +1341,14 @@ func (h *ReferenceHost) validateDesiredSemantics(
 ) ([]storedRelation, *hostError) {
 	// Two pure spec-shape rules first: neither needs another resource, so
 	// neither should depend on one resolving.
+	if h.contract.lane.APIVersion == stableLane.APIVersion {
+		if hostErr := validateStableStandardServiceSlots(h.contract.RunnerInput.ExternalServices, spec); hostErr != nil {
+			return nil, hostErr
+		}
+	}
+	if hostErr := validateStructuralConstraints(form, spec); hostErr != nil {
+		return nil, hostErr
+	}
 	if hostErr := validateSummedMembers(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
@@ -1321,6 +1363,9 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	}
 	relations, hostErr := h.resolveRelations(form, scope, spec)
 	if hostErr != nil {
+		return nil, hostErr
+	}
+	if hostErr := h.validateResolvedUIDConstraints(form, scope, name, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	if expectedKind, artifactBacked := artifactManifestKindForForm(form.Ref.Kind); artifactBacked {
@@ -2933,6 +2978,26 @@ func (h *ReferenceHost) supportAPIVersion() string {
 }
 
 func (h *ReferenceHost) handleStandardServiceSupport(w http.ResponseWriter, protocol string) {
+	if h.contract.lane.APIVersion == stableLane.APIVersion {
+		ref := formpackage.StandardServiceRef{
+			APIVersion: formpackage.StandardServiceAPIVersion,
+			Protocol:   protocol,
+		}
+		if err := formpackage.ValidateStandardServiceRef(ref); err != nil {
+			h.writeError(w, "invalid_argument", err.Error())
+			return
+		}
+		h.writeJSON(w, http.StatusOK, "", map[string]any{
+			"apiVersion": formpackage.StandardServiceSupportAPIVersion,
+			"kind":       "StandardServiceSupport",
+			"serviceRef": map[string]any{
+				"apiVersion": ref.APIVersion,
+				"protocol":   ref.Protocol,
+			},
+			"satisfiable": containsString(h.contract.RunnerInput.ExternalServices.Protocols, protocol),
+		})
+		return
+	}
 	if !containsString(h.contract.RunnerInput.ExternalServices.Protocols, protocol) {
 		h.writeError(w, "resource_not_found", "standard-service protocol is unknown")
 		return
@@ -2951,6 +3016,58 @@ func (h *ReferenceHost) handleStandardServiceSupport(w http.ResponseWriter, prot
 		},
 		"satisfiable": satisfiable,
 	})
+}
+
+// validateStableStandardServiceSlots separates syntax from support. Stable
+// StandardServiceRef is deliberately open: an unknown but grammar-valid
+// protocol is a valid declaration, and whether this Host can satisfy it is a
+// separate exact-support decision. Required defaults to true. An unsupported
+// required slot is refused before a prepare binding or mutation is recorded;
+// an unsupported optional slot is accepted and has no projection in the
+// provider-neutral resource representation.
+func validateStableStandardServiceSlots(probe ExternalServiceProbe, spec map[string]any) *hostError {
+	if probe.Property == "" {
+		return stableError("internal_error", "stable standard-service probe is not configured")
+	}
+	rawSlots, present := spec[probe.Property]
+	if !present {
+		return nil
+	}
+	slots, ok := rawSlots.([]any)
+	if !ok {
+		return stableError("invalid_argument", "standard-service slots must be an array")
+	}
+	for _, rawSlot := range slots {
+		slot, ok := rawSlot.(map[string]any)
+		if !ok {
+			return stableError("invalid_argument", "standard-service slot must be an object")
+		}
+		rawRef, ok := slot["service"].(map[string]any)
+		if !ok {
+			return stableError("invalid_argument", "standard-service slot omits service")
+		}
+		ref := formpackage.StandardServiceRef{}
+		ref.APIVersion, _ = rawRef["apiVersion"].(string)
+		ref.Protocol, _ = rawRef["protocol"].(string)
+		if err := formpackage.ValidateStandardServiceRef(ref); err != nil {
+			return stableError("invalid_argument", err.Error())
+		}
+		required := true
+		if rawRequired, present := slot["required"]; present {
+			var valid bool
+			required, valid = rawRequired.(bool)
+			if !valid {
+				return stableError("invalid_argument", "standard-service slot required must be boolean")
+			}
+		}
+		if required && !containsString(probe.Protocols, ref.Protocol) {
+			return stableError(
+				"unsupported_capability",
+				"this Host cannot satisfy required standard-service protocol "+ref.Protocol,
+			)
+		}
+	}
+	return nil
 }
 
 func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Request, parts []string) {
@@ -3012,11 +3129,15 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 			h.writeError(w, "resource_not_found", "binding support profile is unknown")
 			return
 		}
+		bindingAPIVersion := "bindings.takoform.com/v1alpha1"
+		if h.contract.lane.APIVersion == stableLane.APIVersion {
+			bindingAPIVersion = "bindings.takoform.com/v1alpha2"
+		}
 		h.writeJSON(w, http.StatusOK, "", map[string]any{
 			"apiVersion": h.supportAPIVersion(),
 			"kind":       "BindingSupport",
 			"bindingRef": map[string]any{
-				"apiVersion":   "bindings.takoform.com/v1alpha1",
+				"apiVersion":   bindingAPIVersion,
 				"name":         reference.Name,
 				"version":      reference.Version,
 				"schemaDigest": reference.SchemaDigest,
@@ -3049,16 +3170,28 @@ func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 		if contract, installed := h.runtimeContract(); installed {
 			handlers = contract.Handlers
 		}
-		profile["supportedEnums"] = map[string]any{"handlers": handlers}
-		profile["limits"] = map[string]any{"maximumBundleBytes": maximumBundleBytes}
+		if h.contract.lane.APIVersion == stableLane.APIVersion {
+			profile["supportedEnums"] = map[string]any{"/handlers": handlers}
+			profile["limits"] = map[string]any{"/maximumBundleBytes": maximumBundleBytes}
+		} else {
+			profile["supportedEnums"] = map[string]any{"handlers": handlers}
+			profile["limits"] = map[string]any{"maximumBundleBytes": maximumBundleBytes}
+		}
 	} else if artifactKind, artifactBacked := artifactManifestKindForForm(form.Ref.Kind); artifactBacked {
 		entryLimit := maximumBundleFiles
 		if artifactKind == workerBundleKind {
 			entryLimit = maximumWorkerBundleModules
 		}
-		profile["limits"] = map[string]any{
-			"maximumBundleBytes": maximumBundleBytes,
-			"maximumBundleFiles": entryLimit,
+		if h.contract.lane.APIVersion == stableLane.APIVersion {
+			profile["limits"] = map[string]any{
+				"/maximumBundleBytes": maximumBundleBytes,
+				"/maximumBundleFiles": entryLimit,
+			}
+		} else {
+			profile["limits"] = map[string]any{
+				"maximumBundleBytes": maximumBundleBytes,
+				"maximumBundleFiles": entryLimit,
+			}
 		}
 	}
 	return profile

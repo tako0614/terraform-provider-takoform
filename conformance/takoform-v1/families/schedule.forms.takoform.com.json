@@ -1,0 +1,123 @@
+{
+  "format": "takoform.family-semantic-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "group": "schedule.forms.takoform.com",
+  "candidateSet": {
+    "path": "forms/candidates/schedule.forms.takoform.com/candidate-set.json",
+    "sha256": "445058a4a87eb278f080e53674e77b1989c2ff1430d7cad8d4945b2d63c8f5bf"
+  },
+  "requiredChecks": [
+    "candidate-desired-schema-validated",
+    "exact-form-ref-lifecycle",
+    "lifecycle-capabilities-preserved"
+  ],
+  "scenarios": [
+    {
+      "check": "candidate-desired-schema-validated",
+      "input": {
+        "operation": "candidate-desired-schema-validated",
+        "exactFormRefs": [
+          {
+            "apiVersion": "schedule.forms.takoform.com",
+            "kind": "Schedule",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:d99904fdf12f983e3691ca8af1a3afa3baaa0c55ab966dcb6d4efab909761afb"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "exact-form-ref-lifecycle",
+      "input": {
+        "operation": "exact-form-ref-lifecycle",
+        "exactFormRefs": [
+          {
+            "apiVersion": "schedule.forms.takoform.com",
+            "kind": "Schedule",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:d99904fdf12f983e3691ca8af1a3afa3baaa0c55ab966dcb6d4efab909761afb"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "lifecycle-capabilities-preserved",
+      "input": {
+        "operation": "lifecycle-capabilities-preserved",
+        "exactFormRefs": [
+          {
+            "apiVersion": "schedule.forms.takoform.com",
+            "kind": "Schedule",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:d99904fdf12f983e3691ca8af1a3afa3baaa0c55ab966dcb6d4efab909761afb"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    }
+  ],
+  "runnerInput": {
+    "schedule": {
+      "name": "schedule-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "schedule.forms.takoform.com",
+          "kind": "Schedule",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:d99904fdf12f983e3691ca8af1a3afa3baaa0c55ab966dcb6d4efab909761afb"
+        },
+        "packageDigest": "sha256:5ae8be6a1102a0104c1705ae4e9ee12c6cfbc68879d02fa08897e30e4e9c09c8"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "cron": "*/5 * * * *",
+        "paused": false,
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "retryDelaySeconds": 60
+        },
+        "target": {
+          "attributes": {
+            "source": "schedule"
+          },
+          "body": {
+            "data": "scheduled.message",
+            "encoding": "utf8"
+          },
+          "queue": {
+            "apiVersion": "queue.forms.takoform.com",
+            "kind": "PullQueue",
+            "name": "scheduled-work"
+          },
+          "type": "queueMessage"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/schedule-desired-schema.json",
+        "sha256": "sha256:b6af16b0749030ef11693fa86cf4bdffb29829268baa5ec8811d55ff0e326ba8"
+      }
+    }
+  },
+  "standardServiceFixtures": []
+}

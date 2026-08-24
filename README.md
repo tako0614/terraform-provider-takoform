@@ -18,80 +18,49 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 
 | Axis | Current identity | |
 | --- | --- | --- |
-| Host API lane | `forms.takoform.com/v1beta1` | the wire a provider speaks |
-| Form Family | `edge.forms.takoform.com` | 17 Forms, each `0.1.0` and experimental |
+| Specification | `1.0` | candidate-open; three local prerequisites are release authority |
+| Host API lane | `forms.takoform.com/v1` | the stable Specification wire contract |
+| Current Form corpus | `forms/candidates/current-family-index.json` | 8 versionless families, 31 exact `0.x` experimental Forms |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifacts are unpublished |
-| Provider | `2.1.1` | installed from the Terraform Registry |
+| Retained Provider distribution | `2.1.1` | independent Registry-readback history; not Specification authority |
 
-These four numbers do not line up, and they are not supposed to: the axes
-change for different reasons. They also do not sort the same way — the lane
-went `v1alpha3` → `v1beta1`, where the digit falls, while the envelope went
-`v1alpha3` → `v1alpha4`, where it rises. **Do not infer which identity is
-current from a version word.** This table is generated from the repository
-by `bun run sync:current-generation`, and 12 publication obligations in
-[`spec/publication-blockers.json`](spec/publication-blockers.json) are open.
+These identities are independent. A Specification 1.0 release does not
+relabel any current Form as `1.0.0`, publish a Form Package, or release the
+non-normative Provider sample. This table is generated from repository bytes
+by `bun run sync:current-generation`; the explicit Specification release
+assertion remains fail-closed while its committed evidence tuple is open.
 
 <!-- current-generation:end -->
 
-## One epoch, three published provider lines
+## Specification candidate, Forms, and retained Provider history
 
-The specification carries **one epoch**: the Beta Host API lane
-`forms.takoform.com/v1beta1`, the Edge Platform Family
-`edge.forms.takoform.com/v1beta1`
-([spec/form-families.md](spec/form-families.md)), and the
-`packages.forms.takoform.com/v1alpha4` package envelope. The family is exactly
-15 Forms: `ModuleWorker`, `WorkerBundle`, `StaticAssetBundle`, `WorkerVersion`,
-`WorkerDeployment`, `WorkerCustomDomain`, `WorkerEndpoint`, `WorkerCronTrigger`,
-`EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`, `SQLiteMigrationSet`,
-`SQLiteMigrationApplication`, `AtLeastOnceQueue`, `QueueConsumer`,
-`DurableWorkflow`, and `ActorNamespace`, with
-exact Interface and typed Binding contracts under
-`interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`. All 15
-definitions are `0.1.0` and Experimental; their package artifacts remain
-unpublished. Experimental is Form maturity, not package-publication or Host-GA
-status ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+Takoform Specification 1.0 is a local **open candidate** on the literal
+`forms.takoform.com/v1` Host API. Its release authority has exactly three
+prerequisites: an exact committed source snapshot, the exact generator-owned
+multi-family candidate/corpus closure, and manifest-owned reference
+conformance. External Hosts, products, deployments, signers, and operators are
+adoption evidence, not Specification authority
+([decisions 0052 and 0053](spec/decisions/0053-specification-and-provider-release-evidence.md)).
 
-The two pre-Beta epochs — Legacy `forms.takoform.com/v1alpha1` with its 34
-published package identities, and the provider-v2 `forms.takoform.com/v1alpha2`
-epoch with its nine retained candidates — were **withdrawn** while Takoform is
-pre-Stable ([decision
-0042](spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md)). Their
-identities are recorded as retired in
-[`release/published-document-lanes.json`](release/published-document-lanes.json)
-and [`release/public-schema-identities.json`](release/public-schema-identities.json)
-so no address can quietly come back meaning something else, and their bytes
-stay in this repository's git history and release tags, where the
-[`formpackage`](formpackage/) verifier still verifies them.
+The current corpus contains 31 exact Experimental `0.x` Forms in eight
+versionless families. The Edge family contains these 16 Forms and no current
+`ObjectBucket`: `ModuleWorker`, `WorkerBundle`, `StaticAssetBundle`,
+`WorkerVersion`, `WorkerDeployment`, `WorkerCustomDomain`, `WorkerEndpoint`,
+`WorkerCronTrigger`, `EdgeKVNamespace`, `SQLiteDatabase`,
+`SQLiteMigrationSet`, `SQLiteMigrationApplication`, `AtLeastOnceQueue`,
+`QueueConsumer`, `DurableWorkflow`, and `ActorNamespace`. The other current
+families are Container, Function, Pull Queue, Schedule, Table, Topic, and
+Vector. Releasing Specification 1.0 does not silently mint Form `1.0.0`
+identities; a future stable Form starts at `1.0.0` only by an explicit
+per-Form decision.
 
-Provider SemVer is independent from both. One provider address exists,
-`registry.terraform.io/tako0614/takoform`, used identically by Terraform and
-OpenTofu, and three published releases on it are immutable Registry history:
+Provider SemVer is independent. Provider `v2.1.1` remains immutable,
+Registry-readback history for the retained `v1beta1` Host/family identities,
+and Provider `v2.0.0` and `v1.0.3` remain earlier published history. The
+official Provider 3 implementation may reference the exact current `0.x`
+Forms, but it is non-normative and cannot block Specification 1.0.
 
-- Provider `v2.1.1` is the current published, Registry-verified provider. It
-  carries the Beta Host API lane and the exact 15 Experimental Edge Platform
-  Forms, plus the nine since-withdrawn v1alpha2 resources it was published
-  with. Its 15 embedded Beta FormRefs and definition/package digests are locked
-  in [`release/provider-form-identities.json`](release/provider-form-identities.json).
-- Provider `v2.0.0` is the published compatibility predecessor for the
-  withdrawn v1alpha2 epoch. Existing state can keep it exactly pinned.
-- Provider `v1.0.3` is published Legacy for the withdrawn v1alpha1 epoch, for
-  recovery and migration only.
-
-The provider **built from this repository** exposes only the 15 Family
-resources. Because the nine v1alpha2 resources are gone from it, the next
-published release MUST be a major, `3.0.0`; what existing users of the nine do
-is written down in [release/migrations/v2-to-v3.md](release/migrations/v2-to-v3.md).
-The stable `v2.1.1` release target's `release/version.json` descriptor
-intentionally remains `candidate-only` metadata after owner publication; that
-value is not live availability state and the owner's release flow assigns the
-next version when a release is actually cut. Registry readback proves the
-immutable `v2.1.1` publication. The open obligations in
-[`spec/publication-blockers.json`](spec/publication-blockers.json) still block
-Form Package or public-service publication; provider publication does not grant
-Form maturity, Host Support, activation, or Cloud availability. The scoped
-policy is [`spec/publication-freeze.md`](spec/publication-freeze.md).
-
-## Using the published provider
+## Using retained Provider 2.1.1 history
 
 ```hcl
 terraform {
@@ -112,49 +81,38 @@ provider "takoform" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-Host transport is the Beta lane only: discovery at
+Provider 2.1.1 speaks its retained Beta lane: discovery at
 `/.well-known/takoform/v1beta1` and the API base
 `/apis/forms.takoform.com/v1beta1`, with UID/generation/revision identity,
 long-running operations, and content-addressed artifact upload
 ([`spec/host-api/v1beta1.md`](spec/host-api/v1beta1.md)). One discovery
 response never points two client generations at an ambiguous API base.
 
-### Run it against a host on your machine
+### Run the current reference Host on your machine
 
-`forms.example.com` above is a placeholder, and a provider with nowhere to point
-is not something anyone can try. This repository carries a host you can start:
+`forms.example.com` above is a placeholder. Independently, this repository
+carries a reference implementation of the current Host API v1 contract:
 
 ```console
 go run ./cmd/reference-host --addr 127.0.0.1:8080
 ```
 
-Then, in a directory of your own, with the configuration above pointing at
-`http://127.0.0.1:8080` and `token = "reference-primary-token"`:
-
-```console
-tofu init
-tofu apply
-tofu destroy
-```
-
-That creates a real `ModuleWorker` under the exact
-`edge.forms.takoform.com/v1beta1` FormRef, reports the conditions the host
-computes for it — a worker with no deployment is `Ready=False` / `Provisioning`,
-and says so — and destroys it. It is the same host `bun run check` drives an
-OpenTofu and a Terraform CLI against on every run
-(`cmd/worker-authoring-conformance`), so the walk above cannot quietly stop
-working.
+The frozen reference suite executes through
+`go run ./cmd/portable-host-conformance suite --manifest
+conformance/takoform-v1/manifest.json`. Provider 2.1.1 compatibility and the
+current Host v1 reference are independent surfaces; their presence in one
+repository is not a claim that the retained Provider release implements the
+new Specification lane.
 
 **What that host is not.** It stores desired state and serves no application
 traffic: the worker you create has no isolate, a `WorkerEndpoint`'s address
 answers nothing, and a queue delivers no message. This lane drives desired state
 and never moves a byte of application data
-([`spec/host-api/v1beta1.md`](spec/host-api/v1beta1.md)). It also implements the
+([`spec/host-api/v1.md`](spec/host-api/v1.md)). It also implements the
 runner-only conformance probe headers and its credentials are three constants
 compiled into this repository, so keep it on loopback. It is a host to learn and
-develop against; measuring a real one is what
-[`spec/publication-blockers.json`](spec/publication-blockers.json) is still open
-about.
+develop against. Evidence from a real product or production Host is optional
+adoption evidence, not Specification release authority.
 
 ## What a host owns
 
@@ -173,7 +131,7 @@ The generated inventories:
 
 - [Form inventory](forms/README.md)
 - [Provider reference](docs/index.md)
-- [Candidate set](forms/candidates/edge/v1beta1/candidate-set.json)
+- [Current family index](forms/candidates/current-family-index.json)
 
 ## Development
 

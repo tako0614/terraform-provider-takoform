@@ -49,3 +49,6 @@ record does not replace them.
 - [0044 — Graduation evidence is implementation independence, honestly attributed](0044-graduation-evidence-is-implementation-independence.md)
 - [0045 — An external standard service is a sealed slot with a protocol tag](0045-external-standard-services-are-sealed-slots.md)
 - [0046 — Stable arrives through a stable-grade Beta 2](0046-stable-arrives-through-a-stable-grade-beta-2.md)
+- [0052 — The Specification is released on its own line](0052-the-specification-is-released-on-its-own-line.md)
+- [0053 — Specification and Provider evidence are separate release authorities](0053-specification-and-provider-release-evidence.md)
+- [0054 — Standard-service identifiers are open and integrations are Host-owned](0054-standard-service-identifiers-are-open-and-host-integrated.md)

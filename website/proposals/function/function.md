@@ -19,7 +19,7 @@ deployment resources around it.
 
 The identity fixes the regional function ABI, and says exactly what that ABI
 is: the exact Interface contract `function.runtime@1.0.0`, authored the way
-`worker.runtime@1.0.0` fixes the ModuleWorker ABI
+`worker.runtime@1.1.0` fixes the ModuleWorker ABI
 ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 It is a JavaScript ES-module function runtime, deliberately distinct from
 `worker.runtime`:
@@ -68,10 +68,12 @@ runtimes.
 ## What would require a separate Form
 
 A different language runtime is a different Form line. Cross-family event
-sources — queue-, topic-, bucket-, or schedule-driven invocation — are
-attachments declared in the source's own family, never members here; the
-Edge family's `QueueConsumer` stays worker-targeted, and scheduled
-invocation belongs to the future schedule family. Function-to-function
+sources — queue-, topic-, or schedule-driven invocation — are attachments
+declared in the source's own family, never members here; the Edge family's
+`QueueConsumer` stays worker-targeted, and scheduled invocation belongs to the
+separate current Schedule family. A source-specific object event would require
+its own future contract; there is no current `ObjectBucket` Form.
+Function-to-function
 invocation would be its own `function.invoke` Interface and binding
 contract, proposed when that work starts.
 

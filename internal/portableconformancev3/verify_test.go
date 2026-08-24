@@ -15,9 +15,12 @@ import (
 
 func corpusRoot(t *testing.T) string {
 	t.Helper()
-	// The current lane's corpus. The v1beta1 one is retained for its bytes and
-	// is not runnable by this build (conformance/README.md).
-	root, err := filepath.Abs(filepath.Join("..", "..", "conformance", "portable-host-v1beta4"))
+	// The literal stable lane's generic Host corpus. Both beta corpora remain
+	// retained artifacts and are checked by their byte/derivation gates; current
+	// behavior tests run only on v1 so new semantics cannot mutate beta history.
+	root, err := filepath.Abs(filepath.Join(
+		"..", "..", "conformance", "takoform-v1", "generic-host", "portable-host",
+	))
 	if err != nil {
 		t.Fatalf("resolve corpus root: %v", err)
 	}
@@ -175,7 +178,7 @@ func TestVerifyRejectsDriftedRequiredChecks(t *testing.T) {
 	}
 	digest := sha256.Sum256(updated)
 	manifest := map[string]string{
-		"format":   beta4Lane.ManifestFormat,
+		"format":   stableLane.ManifestFormat,
 		"contract": "contract.json",
 		"sha256":   hex.EncodeToString(digest[:]),
 	}
@@ -282,7 +285,7 @@ func repinCorpus(t *testing.T, root string, mutate func(input map[string]json.Ra
 	}
 	digest := sha256.Sum256(updated)
 	manifestRaw, err := json.Marshal(map[string]string{
-		"format":   beta4Lane.ManifestFormat,
+		"format":   stableLane.ManifestFormat,
 		"contract": "contract.json",
 		"sha256":   hex.EncodeToString(digest[:]),
 	})

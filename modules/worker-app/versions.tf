@@ -4,9 +4,8 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # Provider v2.1.1 is Registry-published; release/version.json remains
-      # candidate-only descriptor metadata after owner publication.
-      version = ">= 2.1.1"
+      # The current module targets the stable Host API v1 Provider 3 line.
+      version = ">= 3.0.0"
     }
   }
 }

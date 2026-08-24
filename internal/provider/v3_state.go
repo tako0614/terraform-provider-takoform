@@ -7,6 +7,7 @@ package provider
 // (spec/decisions/0011).
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
@@ -82,6 +84,17 @@ func (r *v3FormResource) writeV3StateFrom(
 ) diag.Diagnostics {
 	var diags diag.Diagnostics
 	ref := codec.Ref
+	// A representation from the Host is untrusted input. Validate the complete
+	// desired document against the schema carried by THIS exact FormRef before
+	// writing even identity or status into Terraform state. In particular, the
+	// provider must not quietly turn a missing/defaulted/nested field into null
+	// or decode an older/newer Form's shape under this identity.
+	if response == v3VerifiedRepresentation {
+		if err := v3ValidateHostSpec(codec, res.Spec); err != nil {
+			diags.Append(v3InvalidHostSpecError(codec, err))
+			return diags
+		}
+	}
 	diags.Append(state.SetAttribute(ctx, path.Root("name"), types.StringValue(res.Metadata.Name))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("space"), types.StringValue(space))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("uid"), types.StringValue(res.Metadata.UID))...)
@@ -128,11 +141,70 @@ func (r *v3FormResource) writeV3StateFrom(
 			continue
 		}
 		if adoptHostSpec || value == nil || value.IsUnknown() {
-			value = v3FieldValueFromSpec(ctx, field, res.Spec[field.Wire], &diags)
+			value = v3FieldValueFromSpec(ctx, codec.Form.Family.APIVersion(), field, res.Spec[field.Wire], &diags)
 		}
 		diags.Append(state.SetAttribute(ctx, path.Root(name), value)...)
 	}
 	return diags
+}
+
+// v3ValidateHostSpec validates a Host representation through shared,
+// provider-neutral Form semantics. The exact Definition schema rejects
+// missing required and explicit-null typed fields. Portable defaults are
+// required to have been materialized by the Host before it echoes the
+// representation; only properties whose absence is semantic may remain
+// absent. Structural constraints are evaluated by the shared Form model, not
+// reimplemented as provider-specific rules.
+func v3ValidateHostSpec(codec v3FormCodec, spec map[string]any) error {
+	if codec.DesiredSchema == nil {
+		return errors.New("exact Form codec has no desired schema")
+	}
+	if err := formpackage.ValidateDesiredInstance(codec.DesiredSchema, spec); err != nil {
+		return err
+	}
+	materialized := model.MaterializeDefaults(codec.DesiredSchema, spec)
+	equal, err := v3CanonicalJSONEqual(spec, materialized)
+	if err != nil {
+		return fmt.Errorf("compare Host spec with its materialized defaults: %w", err)
+	}
+	if !equal {
+		return errors.New("Host spec omits one or more portable defaulted fields")
+	}
+	if err := model.ValidateStructuralConstraintValues(codec.Form.StructuralConstraints, spec); err != nil {
+		return fmt.Errorf("Host spec violates a structural Form constraint: %w", err)
+	}
+	return nil
+}
+
+func v3CanonicalJSONEqual(left, right any) (bool, error) {
+	leftRaw, err := json.Marshal(left)
+	if err != nil {
+		return false, err
+	}
+	rightRaw, err := json.Marshal(right)
+	if err != nil {
+		return false, err
+	}
+	leftCanonical, err := formpackage.Canonicalize(leftRaw)
+	if err != nil {
+		return false, err
+	}
+	rightCanonical, err := formpackage.Canonicalize(rightRaw)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(leftCanonical, rightCanonical), nil
+}
+
+func v3InvalidHostSpecError(codec v3FormCodec, err error) diag.Diagnostic {
+	return diag.NewErrorDiagnostic(
+		"Host returned a spec that violates its exact Form",
+		fmt.Sprintf(
+			"The Host representation at /spec does not satisfy %s: %v. "+
+				"No part of this representation was written to Terraform state.",
+			codec.Ref.ExactKey(), err,
+		),
+	)
 }
 
 // v3CodecFieldMissingError is the fail-closed diagnostic for a codec that
@@ -463,19 +535,29 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 			var value types.Set
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value
-		case model.KindBindingList, model.KindObjectList, model.KindResourceRefList,
+		case model.KindStringList, model.KindBindingList, model.KindObjectList, model.KindResourceRefList,
 			model.KindExternalServiceList:
 			var value types.List
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value
-		case model.KindObject:
+		case model.KindStringMap, model.KindStringSetMap:
+			var value types.Map
+			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
+			values.Fields[name] = value
+		case model.KindObject, model.KindTaggedObject:
 			var value types.Object
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value
-		default:
+		case model.KindString, model.KindStringEnum, model.KindJSONMap, model.KindResourceRef:
 			var value types.String
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value
+		default:
+			diags.AddAttributeError(
+				path.Root(name),
+				"Unsupported Form field kind",
+				fmt.Sprintf("Field %s uses unsupported FieldKind %q; the provider refuses a lossy fallback.", field.Wire, field.Kind),
+			)
 		}
 	}
 	return values, diags

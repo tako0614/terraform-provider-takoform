@@ -20,7 +20,7 @@ type mutation struct {
 	Status int    `json:"status"`
 }
 
-// recordingHost is a disposable decorator over the v1beta1 reference host.
+// recordingHost is a disposable decorator over the stable-v1 reference host.
 //
 // It does two things the reference host must not do itself. It RECORDS the
 // resource mutations in order, which is how a scenario proves that a
@@ -28,8 +28,8 @@ type mutation struct {
 // green. And it can WITHHOLD the Host Support Profile of named Form kinds,
 // which is how a scenario proves the provider decides capability at plan time:
 // a host that implements WorkerVersion and `edge.kv` while implementing none of
-// bucket, SQLite, or queue is a real host shape, and there is no other way to
-// stand one up.
+// another substrate is a real host shape, and there is no other way to stand
+// one up.
 type recordingHost struct {
 	inner            http.Handler
 	unsupportedKinds map[string]bool

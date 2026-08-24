@@ -10,20 +10,44 @@ the semantic rule every member Form must satisfy is
 
 ## Groups
 
-Each family owns a DNS-like API group with its own version:
+Each current family owns one versionless reverse-DNS API group:
 
 ```text
-edge.forms.takoform.com/v1beta1
-container.forms.takoform.com/v1beta1     (future; decision 0043)
-forms.example.com/v1alpha1               (third party)
+edge.forms.takoform.com
+container.forms.takoform.com
+forms.example.com                       (third party)
 ```
 
-A FormRef `apiVersion` is validated as `<dns-like group>/<version>`, not as a
-fixed constant. Official families use subdomains of `forms.takoform.com`.
-The groups `forms.takoform.com/v1alpha1` (Legacy) and
-`forms.takoform.com/v1alpha2` (retained provider-v2 preview) are frozen and
-never reused by a family. Family groups version independently; a new group
-version is a new namespace, and occupied FormRefs are never rebound.
+A stable-v1 FormRef `apiVersion` is the whole versionless group, not a central
+constant and not `<group>/<version>`. `kind`, `definitionVersion`, and
+`schemaDigest` complete the exact Form identity; one Form changes without
+renumbering its siblings ([decision
+0049](decisions/0049-a-form-versions-alone.md)). Official families use
+subdomains of `forms.takoform.com`, and a third-party reverse-DNS group is
+equally representable. Publisher trust remains a separate fact.
+
+Versioned groups such as `edge.forms.takoform.com/v1beta1` are retained
+pre-v1 identities. The groups `forms.takoform.com/v1alpha1` (Legacy) and
+`forms.takoform.com/v1alpha2` (retained provider-v2 preview) are also frozen.
+None is accepted as a current v1 group or reused for new semantics.
+
+The generated current-family index closes this repository's candidate corpus;
+the prose table is a readable projection, not a second registry:
+
+| Family group | Forms |
+| --- | ---: |
+| `container.forms.takoform.com` | 5 |
+| `edge.forms.takoform.com` | 16 |
+| `function.forms.takoform.com` | 4 |
+| `queue.forms.takoform.com` | 1 |
+| `schedule.forms.takoform.com` | 1 |
+| `table.forms.takoform.com` | 1 |
+| `topic.forms.takoform.com` | 2 |
+| `vector.forms.takoform.com` | 1 |
+
+Those eight groups contain 31 exact Experimental `0.x` FormRefs. Specification
+1.0 and Host API v1 do not promote any of them to Form `1.0.0`; a future Stable
+Form starts at `1.0.0` only by an explicit decision for that Form.
 
 Publisher identity never enters the FormRef. Semantic identity (FormRef),
 distribution bytes (package digest), publisher trust (signature policy), and
@@ -42,17 +66,16 @@ let tooling enforce lifecycle rules mechanically.
 | `attachment` | connects a parent to external events or endpoints | deleting an attachment never deletes the parent |
 | `policy` | operating rules changed independently of the parent | never migrates into the parent identity |
 
-Outward capability use (a worker using KV, buckets, databases, queues,
-services) is a typed Binding held by a revision resource
+Outward capability use (a worker using KV, databases, queues, services,
+workflows, or actors) is a typed Binding held by a revision resource
 ([decision 0010](decisions/0010-exact-interface-and-binding-contracts.md)).
 Inward activation (HTTP routes, custom domains, cron triggers, queue
 consumption) is an attachment resource. The two are never merged.
 
 A family that splits one running thing across these roles owes a statement of
 what holds them together. For the Edge Platform Family that statement is
-[decision 0016](decisions/0016-the-worker-aggregate-has-one-active-deployment.md),
-normatively stated in
-[`host-api/v1beta1.md`](host-api/v1beta1.md#the-worker-aggregate): an identity
+[decision 0016](decisions/0016-the-worker-aggregate-has-one-active-deployment.md)
+and the current Edge Form Definitions: an identity
 has at most ONE deployment resource; that deployment selects revisions of its
 own identity, each named once, with weights summing to exactly 10000; every
 attachment is admitted against the deployment rather than against any stored
@@ -66,25 +89,27 @@ its ETag, while leaving its generation alone.
 
 ## Edge Platform Family
 
-`edge.forms.takoform.com/v1beta1` is the first official family. Its members
+`edge.forms.takoform.com` is the first official family. Its members
 fix the shape of a proven edge developer platform without naming its vendor.
-The authored first-milestone members are:
+Its 16 current members are:
 
 ```text
 Compute      ModuleWorker, WorkerBundle, WorkerVersion, WorkerDeployment,
              StaticAssetBundle, WorkerCustomDomain, WorkerEndpoint,
              WorkerCronTrigger
-Data         EdgeKVNamespace, ObjectBucket, SQLiteDatabase,
+Data         EdgeKVNamespace, SQLiteDatabase,
              SQLiteMigrationSet, SQLiteMigrationApplication
 Messaging    AtLeastOnceQueue, QueueConsumer
+Stateful     DurableWorkflow, ActorNamespace
 ```
 
-Later milestones add further members through their own proposals —
-`WorkerRoute`, `DenseVectorIndex`, `VectorMetadataIndex`, and
-the bucket policy resources (`BucketCorsPolicy`, `BucketLifecyclePolicy`,
-`BucketLockPolicy`). Listing a planned member here reserves nothing: a Form
-exists only when its proposal, catalog declaration, and candidate package
-exist.
+`ObjectBucket` is not a current Form. The related `edge.objects` Interface and
+`module-worker.object-bucket` Binding are likewise absent from the current
+candidate closure. Runtime access to an externally managed object service uses
+a sealed `standards.takoform.com/v1` slot with an opaque reverse-DNS protocol
+identifier such as `com.amazonaws.s3`; Takoform carries no central protocol
+enum and grants no portable lifecycle authority over that service. The exact
+retained v1beta1 ObjectBucket bytes keep their historical meaning.
 
 Static files and SQLite migrations are artifact-backed rather than inline:
 `StaticAssetBundle` and `SQLiteMigrationSet` desired state is exactly one
@@ -93,7 +118,7 @@ ordered set to a database with append-only path+digest history
 ([decision 0033](decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
 
 `ModuleWorker` fixes the ES Module Worker ABI by identity, and states what that
-ABI is: the exact Interface contract `worker.runtime@1.0.0` in its
+ABI is: the exact Interface contract `worker.runtime@1.1.0` in its
 `providedInterfaces`
 ([decision 0019](decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 That contract fixes the module's default-export shape, the `fetch`, `scheduled`,
@@ -157,18 +182,20 @@ an oversight:
   publishes no `status.outputs` at all.
 
 Semantics that differ from these shapes join other families instead of
-widening a member: `PostgresDatabase`, `FifoQueue`, `WasiFunction`,
-`ContainerService`, `TimezoneSchedule`, and durable-actor and addressable
-container designs are separate family work with their own proposals.
+widening an Edge member. The current Container, Function, Pull Queue,
+Schedule, Table, Topic, and Vector families therefore keep their own groups and
+exact FormRefs. Their presence does not turn the family list into a central
+kind enum: the generated index closes this candidate corpus, while a Host
+advertises the exact subset it actually supports.
 
 ## What a family does not do
 
 - It does not merge packages: one Form Package still contains exactly one
   Form Definition.
-- It does not grant maturity: the current family candidate set explicitly
-  classifies its exact 15 `0.1.0` members as Experimental. The Beta family
-  channel does not make them Stable, and their package artifacts remain a
-  separate unpublished fact.
+- It does not grant maturity: all 31 current FormRefs are exact Experimental
+  `0.x` identities, including the Edge family's 16. The stable Host lane and
+  Specification 1.0 do not make them Stable, and their package artifacts
+  remain a separate unpublished fact.
 - It does not constrain hosts: a host may support any subset of a family and
   states that subset in its Host Support Profile.
 - It does not admit vendor identity: adapter profiles map family Forms to
@@ -194,7 +221,7 @@ member is present it is one closed object with three required members:
 ```json
 {
   "bundle": {
-    "apiVersion": "edge.forms.takoform.com/v1beta2",
+    "apiVersion": "edge.forms.takoform.com",
     "kind": "StaticAssetBundle",
     "name": "static-assets"
   },

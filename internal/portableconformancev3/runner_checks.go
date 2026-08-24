@@ -114,6 +114,16 @@ func (r *v3Runner) run() error {
 			}
 			return r.checkDeclaredExclusiveHoldsEnforced()
 		},
+		// The other declared mechanisms use corpus-only Forms so the runner can
+		// drive every rule even when no product family happens to declare all of
+		// them in one generation. Their Definition bytes are pinned and compared
+		// above; this step is the independent behavior oracle.
+		func() error {
+			if !r.contract.lane.requires("declared-constraint-semantics-enforced") {
+				return nil
+			}
+			return r.checkDeclaredConstraintSemanticsEnforced()
+		},
 		// The two attachment rules a schema cannot state: a cron expression is a
 		// schedule rather than a shape, and one queue has one consumer
 		// (spec/decisions/0020). Both run against the worker the gate check just
@@ -217,12 +227,16 @@ func (r *v3Runner) run() error {
 	// that exists only in this lane: on a v1beta1 corpus the list is empty and
 	// the run is exactly what it always was.
 	if r.contract.lane.requires("fence-matrix-observed") {
+		standardServiceCheck := func() error { return r.checkExternalServiceSlotsSealed(version) }
+		if r.contract.lane.requires("stable-standard-service-support-enforced") {
+			standardServiceCheck = func() error { return r.checkStableStandardServiceSupportEnforced(version) }
+		}
 		steps = append(steps,
 			func() error { return r.checkFenceMatrixObserved(kv) },
 			func() error { return r.checkFormsRouteEnumerates(mw) },
 			func() error { return r.checkAvailabilityTruthConditions(kv) },
 			func() error { return r.checkCancelOutcomesClosed(kv) },
-			func() error { return r.checkExternalServiceSlotsSealed(version) },
+			standardServiceCheck,
 			func() error { return r.checkPortableDefaultsMaterialized(queue) },
 		)
 	}
@@ -534,19 +548,16 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 //
 // What it does NOT measure, stated so it is not mistaken for coverage: the
 // published rule is about every exact FormRef a host serves, and this compares
-// the fifteen documents the corpus pins: fourteen distinct probe Forms plus the
-// synthetic second ModuleWorker definition. A host serving a desired schema of
-// its own for an installed Form no probe drives passes, and a client of that
-// Form has exactly the specDigest problem above. The family's fifteenth Form,
-// ObjectBucket, is intentionally outside this runner inventory; its absence is
-// a declared coverage exception, not an omitted check. A pin nothing
-// materializes against is maintenance with no oracle value (spec/decisions/0022),
-// and it is the reason the pin is required of every probe rather than of a
-// hand-written list, so the measured coverage grows with the probes. The
-// residual is that the lane's word covers the Forms it drives, which is what a
-// report of this corpus says; closing it for the whole catalog would mean
-// pinning every installed Definition's desired schema, and nothing in this lane
-// needs those bytes for anything else.
+// every resource probe the corpus declares, its synthetic second definition,
+// and every conformance-only constraint Definition below. A host serving a
+// desired schema of its own for an installed Form no probe drives can still
+// pass, and a client of that Form has exactly the specDigest problem above. A
+// pin nothing materializes against is maintenance with no oracle value
+// (spec/decisions/0022), which is why the pin is required of every probe rather
+// than copied from the catalog. The residual is that the lane's word covers the
+// Forms it drives, which is what a report of this corpus says; closing it for
+// the whole catalog would mean pinning every installed Definition's desired
+// schema, and nothing in this lane needs those bytes for anything else.
 func (r *v3Runner) checkFormDefinitions() error {
 	input := r.contract.RunnerInput
 	type pinnedDefinition struct {
@@ -570,6 +581,16 @@ func (r *v3Runner) checkFormDefinitions() error {
 			ref:         second.FormRef,
 			schema:      second.Definition.DesiredSchema,
 			constraints: second.Definition.Constraints,
+		})
+	}
+	for _, entry := range constraintDefinitionInventory(&input) {
+		if entry.probe.Definition == nil {
+			continue
+		}
+		pinned = append(pinned, pinnedDefinition{
+			ref:         entry.probe.FormRef,
+			schema:      entry.probe.Definition.DesiredSchema,
+			constraints: entry.probe.Definition.Constraints,
 		})
 	}
 	for _, want := range pinned {
@@ -3659,7 +3680,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	if workerVersionProfile == nil {
 		return errors.New("support profiles omit the WorkerVersion line")
 	}
-	if err := verifyWorkerVersionProfile(workerVersionProfile, r.contract.RunnerInput.SupportProbes.RuntimeContract); err != nil {
+	if err := verifyWorkerVersionProfile(workerVersionProfile, r.contract.RunnerInput.SupportProbes.RuntimeContract, r.contract.lane.APIVersion == stableLane.APIVersion); err != nil {
 		return err
 	}
 	artifactForms := []struct {
@@ -3686,8 +3707,12 @@ func (r *v3Runner) checkSupportProfiles() error {
 			return fmt.Errorf("support profiles omit exact artifact Form %s", want.Kind)
 		}
 		limits, _ := found["limits"].(map[string]any)
-		if limits == nil || fmt.Sprintf("%v", limits["maximumBundleBytes"]) != fmt.Sprintf("%d", maximumBundleBytes) ||
-			fmt.Sprintf("%v", limits["maximumBundleFiles"]) != fmt.Sprintf("%d", artifact.maximumBundleFiles) {
+		bytesKey, filesKey := "maximumBundleBytes", "maximumBundleFiles"
+		if r.contract.lane.APIVersion == stableLane.APIVersion {
+			bytesKey, filesKey = "/maximumBundleBytes", "/maximumBundleFiles"
+		}
+		if limits == nil || fmt.Sprintf("%v", limits[bytesKey]) != fmt.Sprintf("%d", maximumBundleBytes) ||
+			fmt.Sprintf("%v", limits[filesKey]) != fmt.Sprintf("%d", artifact.maximumBundleFiles) {
 			return fmt.Errorf("%s support limits = %v, want maximumBundleBytes=%d maximumBundleFiles=%d", want.Kind, limits, maximumBundleBytes, artifact.maximumBundleFiles)
 		}
 	}
@@ -3708,7 +3733,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	if err := decodeStrictResponse(oneResponse, &one); err != nil {
 		return err
 	}
-	if err := verifyWorkerVersionProfile(one, r.contract.RunnerInput.SupportProbes.RuntimeContract); err != nil {
+	if err := verifyWorkerVersionProfile(one, r.contract.RunnerInput.SupportProbes.RuntimeContract, r.contract.lane.APIVersion == stableLane.APIVersion); err != nil {
 		return err
 	}
 	probes := r.contract.RunnerInput.SupportProbes
@@ -3758,15 +3783,21 @@ func (r *v3Runner) checkSupportProfiles() error {
 // lane because a date is meaningless without a registry stating which behavior
 // each date changes, so a profile that still advertises one is advertising
 // portability it cannot deliver (spec/decisions/0019).
-func verifyWorkerVersionProfile(profile map[string]any, runtime RuntimeContractProbe) error {
+func verifyWorkerVersionProfile(profile map[string]any, runtime RuntimeContractProbe, stablePointers bool) error {
 	enums, _ := profile["supportedEnums"].(map[string]any)
 	if enums == nil {
 		return errors.New("WorkerVersion profile omitted supportedEnums")
 	}
-	if !stringSliceEquals(enums["handlers"], runtime.Handlers) {
+	handlersKey := "handlers"
+	bytesKey := "maximumBundleBytes"
+	if stablePointers {
+		handlersKey = "/handlers"
+		bytesKey = "/maximumBundleBytes"
+	}
+	if !stringSliceEquals(enums[handlersKey], runtime.Handlers) {
 		return fmt.Errorf(
 			"WorkerVersion supportedEnums.handlers = %v, want the %s@%s vocabulary %v",
-			enums["handlers"], runtime.Name, runtime.Version, runtime.Handlers,
+			enums[handlersKey], runtime.Name, runtime.Version, runtime.Handlers,
 		)
 	}
 	if _, present := enums["compatibilityFlags"]; present {
@@ -3782,7 +3813,7 @@ func verifyWorkerVersionProfile(profile map[string]any, runtime RuntimeContractP
 		)
 	}
 	limits, _ := profile["limits"].(map[string]any)
-	if limits == nil || fmt.Sprintf("%v", limits["maximumBundleBytes"]) != "10485760" {
+	if limits == nil || fmt.Sprintf("%v", limits[bytesKey]) != "10485760" {
 		return fmt.Errorf("WorkerVersion limits = %v", limits)
 	}
 	return nil

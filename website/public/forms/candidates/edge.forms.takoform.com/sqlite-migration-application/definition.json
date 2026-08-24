@@ -5,7 +5,7 @@
   "title": "SQLite Migration Application",
   "description": "Applies one exact SQLite Migration Set to one exact SQLite Database. Both relations are immutable and UID-pinned before mutation. The database's durable migration ledger records each applied manifest entry as its ordered path+digest pair. The requested set must extend that ledger exactly; a rewrite, reorder, or removal is refused before SQL executes, and only the unapplied suffix runs. Each file and its ledger append commit atomically, so an interrupted application retries the same suffix without replaying a recorded migration. Ready means the ledger equals the referenced set. Deleting this attachment only stops managing the application resource: it never runs down-migrations, rewrites the ledger, reverts schema, or deletes the database.",
   "role": "attachment",
-  "requiresHostApi": "forms.takoform.com/v1beta1",
+  "requiresHostApi": "forms.takoform.com/v1",
   "constraints": [
     {
       "kind": "exclusive",
@@ -47,7 +47,7 @@
             "apiVersion": "edge.forms.takoform.com",
             "definitionVersion": "0.1.0",
             "kind": "SQLiteDatabase",
-            "schemaDigest": "sha256:da64ef1eb579e82e8c46e9c8427f8309997addb78f3a94effc8c83cd653d10fc"
+            "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
           }
         ]
       },
@@ -81,7 +81,7 @@
             "apiVersion": "edge.forms.takoform.com",
             "definitionVersion": "0.1.0",
             "kind": "SQLiteMigrationSet",
-            "schemaDigest": "sha256:ad8cf727f11e381b91c679e0c4f03818f07ce2e04fed65df5d1fd35eb47b975f"
+            "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
           }
         ]
       }

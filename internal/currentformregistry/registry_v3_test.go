@@ -1,50 +1,134 @@
 package currentformregistry
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
-	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "candidates", "edge.forms.takoform.com", "candidate-set.json"))
+type generatedFamilyCandidate struct {
+	Kind          string `json:"kind"`
+	Role          string `json:"role"`
+	FormRef       V3Ref  `json:"formRef"`
+	PackageDigest string `json:"packageDigest"`
+}
+
+func loadGeneratedCurrentFamilyCandidates(t *testing.T) ([]generatedFamilyCandidate, map[string]struct{}) {
+	t.Helper()
+	repositoryRoot := filepath.Join("..", "..")
+	raw, err := os.ReadFile(filepath.Join(repositoryRoot, "forms", "candidates", "current-family-index.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var manifest struct {
-		Family string `json:"family"`
-		Forms  []struct {
-			Kind          string `json:"kind"`
-			Role          string `json:"role"`
-			FormRef       V3Ref  `json:"formRef"`
-			PackageDigest string `json:"packageDigest"`
-		} `json:"forms"`
-	}
-	if err := json.Unmarshal(raw, &manifest); err != nil {
+	var exact map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &exact); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Family != "edge.forms.takoform.com" {
-		t.Fatalf("family = %q", manifest.Family)
+	for _, key := range []string{"format", "families", "interfaceCandidateSet", "bindingCandidateSet"} {
+		if _, present := exact[key]; !present {
+			t.Fatalf("current family index is missing %q", key)
+		}
 	}
+	if len(exact) != 4 {
+		t.Fatalf("current family index top-level keys = %v, want the fixed v1 shape", exact)
+	}
+	var exactFamilies []map[string]json.RawMessage
+	if err := json.Unmarshal(exact["families"], &exactFamilies); err != nil {
+		t.Fatal(err)
+	}
+	for index, entry := range exactFamilies {
+		for _, key := range []string{"group", "candidateSet", "sha256", "formCount"} {
+			if _, present := entry[key]; !present {
+				t.Fatalf("current family index families[%d] is missing %q", index, key)
+			}
+		}
+		if len(entry) != 4 {
+			t.Fatalf("current family index families[%d] keys = %v, want the fixed v1 shape", index, entry)
+		}
+	}
+	for _, key := range []string{"interfaceCandidateSet", "bindingCandidateSet"} {
+		var reference map[string]json.RawMessage
+		if err := json.Unmarshal(exact[key], &reference); err != nil {
+			t.Fatal(err)
+		}
+		if len(reference) != 2 || reference["path"] == nil || reference["sha256"] == nil {
+			t.Fatalf("current family index %s keys = %v, want exactly path and sha256", key, reference)
+		}
+	}
+	var index struct {
+		Format   string `json:"format"`
+		Families []struct {
+			Group        string `json:"group"`
+			CandidateSet string `json:"candidateSet"`
+			SHA256       string `json:"sha256"`
+			FormCount    int    `json:"formCount"`
+		} `json:"families"`
+	}
+	if err := json.Unmarshal(raw, &index); err != nil {
+		t.Fatal(err)
+	}
+	if index.Format != "takoform.current-family-index@v1" || len(index.Families) != 8 {
+		t.Fatalf("current family index = format %q, families %d", index.Format, len(index.Families))
+	}
+	var candidates []generatedFamilyCandidate
+	groups := make(map[string]struct{}, len(index.Families))
+	priorGroup := ""
+	for _, family := range index.Families {
+		if family.Group <= priorGroup {
+			t.Fatalf("current family index is not strictly ordered by group: %q after %q", family.Group, priorGroup)
+		}
+		priorGroup = family.Group
+		wantPath := filepath.ToSlash(filepath.Join("forms", "candidates", family.Group, "candidate-set.json"))
+		if family.CandidateSet != wantPath {
+			t.Fatalf("%s candidate set path = %q, want %q", family.Group, family.CandidateSet, wantPath)
+		}
+		candidateRaw, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(family.CandidateSet)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fmt.Sprintf("%x", sha256.Sum256(candidateRaw)); got != family.SHA256 {
+			t.Fatalf("%s candidate set digest = %q, want %q", family.Group, got, family.SHA256)
+		}
+		var manifest struct {
+			Family string                     `json:"family"`
+			Forms  []generatedFamilyCandidate `json:"forms"`
+		}
+		if err := json.Unmarshal(candidateRaw, &manifest); err != nil {
+			t.Fatal(err)
+		}
+		if manifest.Family != family.Group || len(manifest.Forms) != family.FormCount {
+			t.Fatalf("%s candidate set = family %q, Forms %d, want %d", family.Group, manifest.Family, len(manifest.Forms), family.FormCount)
+		}
+		groups[family.Group] = struct{}{}
+		candidates = append(candidates, manifest.Forms...)
+	}
+	return candidates, groups
+}
+
+func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
+	t.Parallel()
+	candidates, groups := loadGeneratedCurrentFamilyCandidates(t)
 	registry := V3Current()
 	// supported spans generations (released refs stay for state
 	// compatibility); the candidate manifest is one generation and must
 	// account for exactly its own supported refs and every create default.
 	currentSupported := 0
 	for key := range registry.supported {
-		if key.APIVersion == manifest.Family {
+		if _, current := groups[key.APIVersion]; current {
 			currentSupported++
 		}
 	}
-	if len(manifest.Forms) != currentSupported {
-		t.Fatalf("candidate manifest has %d Forms, provider supports %d of this generation", len(manifest.Forms), currentSupported)
+	if len(candidates) != currentSupported {
+		t.Fatalf("candidate index has %d Forms, registry supports %d current Forms", len(candidates), currentSupported)
 	}
-	if len(manifest.Forms) != len(registry.defaultCreates) {
-		t.Fatalf("candidate manifest has %d Forms, provider defaults to %d", len(manifest.Forms), len(registry.defaultCreates))
+	if len(candidates) != len(registry.defaultCreates) {
+		t.Fatalf("candidate index has %d Forms, registry defaults to %d", len(candidates), len(registry.defaultCreates))
 	}
-	for _, entry := range manifest.Forms {
+	for _, entry := range candidates {
 		entry.FormRef.PackageDigest = entry.PackageDigest
 		got, ok := registry.Lookup(entry.FormRef.ExactKey())
 		if !ok {
@@ -65,6 +149,7 @@ func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
 
 func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 	t.Parallel()
+	_, currentGroups := loadGeneratedCurrentFamilyCandidates(t)
 	registry := V3Current()
 	supported := registry.SupportedRefs()
 	// The supported set spans generations: every ref a RELEASED provider
@@ -74,10 +159,9 @@ func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 	if len(supported) < len(registry.defaultCreates) {
 		t.Fatalf("supported family FormRefs = %d, fewer than the %d defaults", len(supported), len(registry.defaultCreates))
 	}
-	currentFamily := "edge.forms.takoform.com"
 	currentCount := 0
 	for _, ref := range supported {
-		if ref.APIVersion == currentFamily {
+		if _, current := currentGroups[ref.APIVersion]; current {
 			currentCount++
 		}
 	}
@@ -266,5 +350,49 @@ func TestV3RegistryRefusesConflictingProvenance(t *testing.T) {
 	}
 	if _, err := base.Register(V3Ref{Kind: "ModuleWorker"}, false); err == nil {
 		t.Fatal("an incomplete FormRef was registered")
+	}
+}
+
+// TestV3RegistrySameKindAcrossGroupsNeverFallsBack proves the exact registry
+// and the create-default index are multi-family keys, not kind-only aliases.
+// No real family is added: these are injected identities exercising the
+// generic registry shape.
+func TestV3RegistrySameKindAcrossGroupsNeverFallsBack(t *testing.T) {
+	t.Parallel()
+	ref := func(group, version, schema, pkg string) V3Ref {
+		return V3Ref{
+			APIVersion: group, Kind: "Queue", DefinitionVersion: version,
+			SchemaDigest: "sha256:" + schema, PackageDigest: "sha256:" + pkg,
+		}
+	}
+	a := ref("a.forms.example", "0.1.0", strings.Repeat("a", 64), strings.Repeat("b", 64))
+	b := ref("b.forms.example", "1.0.0", strings.Repeat("c", 64), strings.Repeat("d", 64))
+	registry, err := newV3Registry(nil, nil).Register(a, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err = registry.Register(b, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []V3Ref{a, b} {
+		if got, err := registry.DefaultCreate(want.ExactKey().GroupKind()); err != nil || got != want {
+			t.Fatalf("default %s = %#v (err %v), want %#v", want.APIVersion, got, err, want)
+		}
+		if got, ok := registry.Lookup(want.ExactKey()); !ok || got != want {
+			t.Fatalf("lookup %s = %#v ok=%t", want.ExactKey(), got, ok)
+		}
+	}
+	if _, err := registry.DefaultCreate(GroupKind{APIVersion: "missing.forms.example", Kind: "Queue"}); err == nil {
+		t.Fatal("wrong-group create lookup fell back to another family's Queue")
+	}
+	for name, key := range map[string]ExactFormKey{
+		"wrong group":  {APIVersion: "missing.forms.example", Kind: a.Kind, DefinitionVersion: a.DefinitionVersion, SchemaDigest: a.SchemaDigest},
+		"latest alias": {APIVersion: a.APIVersion, Kind: a.Kind, DefinitionVersion: "latest", SchemaDigest: a.SchemaDigest},
+		"wrong digest": {APIVersion: a.APIVersion, Kind: a.Kind, DefinitionVersion: a.DefinitionVersion, SchemaDigest: "sha256:" + strings.Repeat("f", 64)},
+	} {
+		if _, ok := registry.Lookup(key); ok {
+			t.Errorf("%s exact lookup unexpectedly fell back: %s", name, key)
+		}
 	}
 }

@@ -3,10 +3,13 @@
 A Form Package is a closed local directory with a root `package-index.json` and
 exactly the payload files listed by that index. Requirement keywords are used
 as described in [`../conformance.md`](../conformance.md). The normative Draft
-2020-12 index schema is the current family
-[`v1alpha4`](/schemas/v1alpha4/package-index.schema.json) profile carrying
-namespaced-group `forms.takoform.com` family FormRefs. The three earlier
-envelope identities were withdrawn with their epochs
+2020-12 index schema is the current
+[`v1alpha5`](/schemas/v1alpha5/package-index.schema.json) profile carrying
+versionless namespaced family FormRefs. The occupied
+[`v1alpha4`](/schemas/v1alpha4/package-index.schema.json) profile remains the
+exact `packages.forms.takoform.com/v1alpha4` envelope used by retained Provider
+2.1.1/v1beta1 identities. The
+three earlier envelope identities were withdrawn with their epochs
 ([decision 0042](../decisions/0042-the-pre-beta-epochs-are-withdrawn.md));
 the `formpackage` verifier keeps embedded copies of
 every epoch's schemas
@@ -33,8 +36,8 @@ one — the index is closed, fixes `kind` to `FormPackage`, and requires a
 ## Index and identity
 
 The current family index has the fixed identity
-`packages.forms.takoform.com/v1alpha4` / `FormPackage` with an exact
-namespaced-group `FormRef`. It carries one `definitionPath` and a
+`packages.forms.takoform.com/v1alpha5` / `FormPackage` with an exact
+versionless-group `FormRef`. It carries one `definitionPath` and a
 lexicographically sorted `files` array. Every file entry records a canonical
 relative slash path, an allowlisted data media type, its byte length, and a
 lowercase `sha256:` digest over the exact payload bytes.

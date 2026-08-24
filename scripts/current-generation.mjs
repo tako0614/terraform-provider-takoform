@@ -37,11 +37,16 @@ const END = "<!-- current-generation:end -->";
 
 function render(facts) {
   const rows = [
-    ["Host API lane", facts.hostApiCurrent, "the wire a provider speaks"],
     [
-      "Form Family",
-      facts.formFamilyCurrent,
-      `${facts.currentFormCount} Forms, each \`0.1.0\` and ${facts.formMaturity}`,
+      "Specification",
+      facts.specificationVersion,
+      `${facts.specificationReleaseStatus}; three local prerequisites are release authority`,
+    ],
+    ["Host API lane", facts.hostApiCurrent, "the stable Specification wire contract"],
+    [
+      "Current Form corpus",
+      facts.currentFamilyIndex,
+      `${facts.currentFamilyCount} versionless families, ${facts.currentFormCount} exact \`0.x\` ${facts.formMaturity} Forms`,
     ],
     [
       "Form Package envelope",
@@ -49,9 +54,9 @@ function render(facts) {
       `package artifacts are ${facts.formPackagePublicationStatus}`,
     ],
     [
-      "Provider",
+      "Retained Provider distribution",
       facts.providerPublished,
-      "installed from the Terraform Registry",
+      "independent Registry-readback history; not Specification authority",
     ],
   ];
   return [
@@ -61,13 +66,11 @@ function render(facts) {
     "| --- | --- | --- |",
     ...rows.map(([axis, value, note]) => `| ${axis} | \`${value}\` | ${note} |`),
     "",
-    "These four numbers do not line up, and they are not supposed to: the axes",
-    "change for different reasons. They also do not sort the same way — the lane",
-    "went `v1alpha3` → `v1beta1`, where the digit falls, while the envelope went",
-    "`v1alpha3` → `v1alpha4`, where it rises. **Do not infer which identity is",
-    "current from a version word.** This table is generated from the repository",
-    `by \`bun run sync:current-generation\`, and ${facts.openPublicationBlockers} publication obligations in`,
-    "[`spec/publication-blockers.json`](spec/publication-blockers.json) are open.",
+    "These identities are independent. A Specification 1.0 release does not",
+    "relabel any current Form as `1.0.0`, publish a Form Package, or release the",
+    "non-normative Provider sample. This table is generated from repository bytes",
+    "by `bun run sync:current-generation`; the explicit Specification release",
+    "assertion remains fail-closed while its committed evidence tuple is open.",
     "",
     END,
   ].join("\n");
@@ -88,7 +91,7 @@ const expected =
 if (mode === "--write") {
   writeFileSync(readmePath, expected);
   process.stdout.write(
-    `README current generation: ${facts.hostApiCurrent}, ${facts.formFamilyCurrent}, provider ${facts.providerPublished}\n`,
+    `README current generation: ${facts.hostApiCurrent}, ${facts.currentFamilyCount} families, provider ${facts.providerPublished}\n`,
   );
   process.exit(0);
 }
@@ -102,5 +105,5 @@ if (readme !== expected) {
 }
 process.stdout.write(
   `README current generation matches the repository: ${facts.hostApiCurrent}, ` +
-    `${facts.formFamilyCurrent}, provider ${facts.providerPublished}\n`,
+    `${facts.currentFamilyCount} families, provider ${facts.providerPublished}\n`,
 );

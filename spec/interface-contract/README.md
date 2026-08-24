@@ -61,7 +61,7 @@ the placement rule of
 [decision 0014](../decisions/0014-published-schemas-are-structural-minima.md):
 the published meta-schema is a structural minimum, so a contract expresses
 everything it can within what that schema already admits rather than minting a
-new identity for each new kind of rule. `worker.runtime@1.0.0` is the worked
+new identity for each new kind of rule. `worker.runtime@1.1.0` is the current worked
 example
 ([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 
@@ -69,7 +69,7 @@ example
 
 An Interface is not only a capability a resource offers outward. The exact
 runtime a host provides to code it runs is the same kind of contract, and is
-declared the same way: `ModuleWorker` lists `worker.runtime@1.0.0` in its
+declared the same way: current `ModuleWorker` lists `worker.runtime@1.1.0` in its
 `providedInterfaces`, a host that supports that Form implements the contract at
 that exact digest, and a runtime revision is a new contract version rather than
 a new value of some field. A Form MUST NOT state a runtime by a version token,
@@ -84,10 +84,11 @@ define — or one the module it references does not export — is refused before
 anything is stored. Everything the contract fixes about invocation is proven by
 its behavior fixtures against a real isolate: handler signatures, streaming
 bodies, `env`'s exact property set, `waitUntil`, exception outcomes, and the
-`globals` floor. The exact split for `worker.runtime@1.0.0` is written down in
-[`../host-api/v1beta1.md`](../host-api/v1beta1.md#what-the-lane-proves-and-what-stays-a-host-obligation),
-because a reader deciding whether a passing conformance report means "this host
-runs my code correctly" is entitled to know which half it covers.
+`globals` floor. The exact Host half is exercised by the manifest-owned
+[`takoform-v1` suite](../../conformance/takoform-v1/manifest.json), while the
+runtime half is exercised by the separate corpus below. A reader deciding
+whether a passing conformance report means "this host runs my code correctly"
+is entitled to know which subject that report measured.
 
 The second half has its own corpus, runner, and command —
 [`../../conformance/runtime-abi-v1/`](../../conformance/runtime-abi-v1/contract.json),
@@ -96,8 +97,8 @@ against a Host API
 ([decision 0023](../decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
 Its reports state which subject was measured: a run against the repository's
 in-process stand-in proves the corpus, only a run against a deployed worker
-proves a runtime, and neither is ever publication evidence. Every handler
-`worker.runtime@1.0.0` declares is measured there, and the corpus ENFORCES that
+proves a runtime, and neither is Specification publication evidence. Every handler
+`worker.runtime@1.1.0` declares is measured there, and the corpus ENFORCES that
 rather than stating it: a declared handler with no check naming it is refused at
 load, and an explicitly unmeasured entry does not discharge one. A handler
 nothing can invoke is therefore removed from the contract and returns with the
@@ -110,9 +111,15 @@ run has no module-loader adapter.
 ## Behavior fixtures
 
 Shape validation alone cannot distinguish a KV store from a queue, so an
-Interface Definition SHOULD carry data-only traces. This one belongs to
-`edge.objects`, whose declared consistency is `read_after_write`, which is what
-makes the second step's expectation normative:
+Interface Definition SHOULD carry data-only traces.
+
+### Retained beta-only example: `edge.objects`
+
+The current Interface candidate set contains no `edge.objects`; current
+`ObjectBucket` and `module-worker.object-bucket` identities do not exist. The
+following retained beta example is preserved only to show how a declared
+`read_after_write` consistency model makes the second step's expectation
+normative. It is not a current Interface declaration:
 
 ```json
 {
@@ -149,7 +156,7 @@ catalog refuses to render one.
 Where a value is bytes, the contract carries it in one shared encoded-bytes
 shape rather than as a bare string, so that a declared byte limit and a
 structural `maxLength` do not measure two different quantities. Where a payload
-streams at all — an object body, a worker-to-worker request or response — the
+streams at all — for example, a worker-to-worker request or response — the
 operation declares that it streams and states what is KNOWN of its length
 instead of carrying the bytes, and the bytes travel beside the document. What
 is known is sometimes nothing: a `worker.service` call completes at the response
@@ -169,8 +176,10 @@ All of it is decided in decision 0020 and stated in each definition's own
 descriptions, because the published meta-schema has a member for none of it.
 
 `edge.sql` uses the same encoded-bytes object for BLOBs but does not expose
-SQLite storage-class tags. Its exact value is null, a finite binary64 number
-inside `Number.MAX_SAFE_INTEGER`, UTF-8 text, or canonical encoded bytes.
+SQLite storage-class tags. Its exact value is null, a finite binary64 number,
+UTF-8 text, or canonical encoded bytes. Fractional finite numbers are valid;
+integer-valued numbers outside `Number.MAX_SAFE_INTEGER` and non-finite values
+are rejected.
 `query` earns idempotency by executing inside a rollback-only transaction and
 always rolling it back, not by classifying SQL text as read-only; runtime SQL
 cannot own schema migration. That correction supersedes only decision 0020's

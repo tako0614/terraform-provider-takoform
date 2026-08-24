@@ -1,0 +1,258 @@
+{
+  "format": "takoform.all-family-composition-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "familyGroups": [
+    "container.forms.takoform.com",
+    "edge.forms.takoform.com",
+    "function.forms.takoform.com",
+    "queue.forms.takoform.com",
+    "schedule.forms.takoform.com",
+    "table.forms.takoform.com",
+    "topic.forms.takoform.com",
+    "vector.forms.takoform.com"
+  ],
+  "requiredChecks": [
+    "all-family-composition-resolves",
+    "wrong-digest-refused"
+  ],
+  "scenarios": [
+    {
+      "check": "all-family-composition-resolves",
+      "input": {
+        "familyGroups": [
+          "container.forms.takoform.com",
+          "edge.forms.takoform.com",
+          "function.forms.takoform.com",
+          "queue.forms.takoform.com",
+          "schedule.forms.takoform.com",
+          "table.forms.takoform.com",
+          "topic.forms.takoform.com",
+          "vector.forms.takoform.com"
+        ],
+        "formRefs": [
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0032d7759696f746454236001a8aec84df30d30c673b2bdfcf360086043399d9"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:06c8945bbc5d4772178a269b3e0cfd69531b476a3ed1bf32b4a9686e3f0acb99"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerRevision",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:2d453c251dec50393a042211ba24fd306f57ecd603008cc0981c274320203025"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerService",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerTraffic",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f191698b2a051f6d5375621b73d0bee14e82ec43f5f436aa90e3a74c5828d556"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ActorNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3669f3bebf7b4c6169d5a3cdf7e7ca4e8d1851516702a437be6ef69c2b9b98d7"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "AtLeastOnceQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "DurableWorkflow",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:eed7a1b971e3261df6bc4bafcdfa2fd67e7928f4ec66737d0134df383e7dfc0a"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "EdgeKVNamespace",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1a3f5d50bde53b4f743334dba3b0d0d28c1516727ca76d266beb61c5ee210022"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "ModuleWorker",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "QueueConsumer",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteDatabase",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c72eeb66ef96c4679b5c724fa1219d71c89bb7eeb9e543d73d868ec41bddddfe"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationApplication",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "SQLiteMigrationSet",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:05a4aa2ebd8fbf659f05ae378288d9c9657cc7478e1437f013732199bfcce7b9"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "StaticAssetBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:83142a3f824cf1fa2793fb73f4c32203ae07fb70db789d056aebe4c0ebe9334f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerBundle",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:cb21984a579ae2706bddada8b44a22c0f8390994550c10d7c65df82edfa1141b"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCronTrigger",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:5faa838c794b3326d0377d641db6247d4320b6ce39b1b0bb660d4deec18fe5ed"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerDeployment",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f"
+          },
+          {
+            "apiVersion": "edge.forms.takoform.com",
+            "kind": "WorkerVersion",
+            "definitionVersion": "0.2.0",
+            "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+          },
+          {
+            "apiVersion": "function.forms.takoform.com",
+            "kind": "Function",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:7811632bfa32b1ffde95bf6efc8ee67e4f6c0778e452c56e61d89dd5b4969388"
+          },
+          {
+            "apiVersion": "function.forms.takoform.com",
+            "kind": "FunctionDeployment",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:85e10197b9d10275da71e8291c0891b2d9b231f094be2f87d3f0b8d160a56574"
+          },
+          {
+            "apiVersion": "function.forms.takoform.com",
+            "kind": "FunctionEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:b4346d86a700abbce805f4b9fe02fb03214f8aefa87ee600f2c3c21c8cba56bd"
+          },
+          {
+            "apiVersion": "function.forms.takoform.com",
+            "kind": "FunctionVersion",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:314e6c1b5c9e79dd0d8c23aeb92737d70d303c6f78a4c9729397dda5e79f2b14"
+          },
+          {
+            "apiVersion": "queue.forms.takoform.com",
+            "kind": "PullQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1ee156919f8399cac58ecf16e73a90239224cb01c81be634d8c305dbf3156599"
+          },
+          {
+            "apiVersion": "schedule.forms.takoform.com",
+            "kind": "Schedule",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:d99904fdf12f983e3691ca8af1a3afa3baaa0c55ab966dcb6d4efab909761afb"
+          },
+          {
+            "apiVersion": "table.forms.takoform.com",
+            "kind": "Table",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:e5c9933f637632b8e3b6b300d0d30593f291158ac088e34bb6ac0f76ec2bfc05"
+          },
+          {
+            "apiVersion": "topic.forms.takoform.com",
+            "kind": "Topic",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:425e21346190addd2ffb8a95d69afaa81f18f3a8d3d158de6496014482acaf80"
+          },
+          {
+            "apiVersion": "topic.forms.takoform.com",
+            "kind": "TopicSubscription",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:7256be928d86025e2f9ab2d711ee52f218c6c2295bea865a78602dba960da56f"
+          },
+          {
+            "apiVersion": "vector.forms.takoform.com",
+            "kind": "VectorIndex",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:46e4a807db0a90295c13edd82f03cf81d17df780f5d5cb7758377862205c692b"
+          }
+        ],
+        "resolution": "exact-only"
+      },
+      "expected": {
+        "status": "passed",
+        "resolvedFormCount": 31,
+        "unresolvedFormCount": 0
+      }
+    },
+    {
+      "check": "wrong-digest-refused",
+      "input": {
+        "familyGroups": [
+          "container.forms.takoform.com",
+          "edge.forms.takoform.com",
+          "function.forms.takoform.com",
+          "queue.forms.takoform.com",
+          "schedule.forms.takoform.com",
+          "table.forms.takoform.com",
+          "topic.forms.takoform.com",
+          "vector.forms.takoform.com"
+        ],
+        "formRefs": [
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "resolution": "exact-only"
+      },
+      "expected": {
+        "status": "passed",
+        "refusal": "form_unknown",
+        "mutated": false
+      }
+    }
+  ]
+}

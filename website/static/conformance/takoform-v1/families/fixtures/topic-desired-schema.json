@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fanout topic whose accepted publishes are delivered at least once to every matching TopicSubscription. The topic retains and replays nothing; the topic.publish Interface fixes the message and publish semantics.",
+  "properties": {},
+  "title": "Topic desired state",
+  "type": "object"
+}

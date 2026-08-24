@@ -1,16 +1,18 @@
-// publication-blockers.mjs — the machine authority for scoped Beta release
-// policy.
+// publication-blockers.mjs — retained Form Package/public-service policy and
+// Provider 2.1 compatibility evidence.
 //
 //   bun scripts/publication-blockers.mjs --check
 //
-// spec/publication-freeze.md names later Stable/GA qualification obligations.
-// They still block Form Package and public-service publication, but they do not
-// block provider v2.1.1 from carrying the locally proven Beta contracts.
+// spec/publication-freeze.md names later Form Package/public-service
+// qualification obligations. They do not authorize or block a Takoform
+// Specification release, and they do not block provider v2.1.1 from carrying
+// the locally proven Beta contracts.
 //
-// The check therefore proves two separate facts: provider v2.1's exact Beta
-// identity set is coherent, while the Form Package candidate set remains
-// unpublished until the stricter obligations close. An urgent revocation for
-// an already-published package also never waits on these obligations.
+// The check therefore proves two separate compatibility facts: provider
+// v2.1's exact historical Beta identity set is coherent, while the current
+// Form Package candidate set remains unpublished until these separate
+// obligations close. An urgent revocation for an already-published package
+// also never waits on these obligations.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -249,8 +251,9 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
   }
 }
 
-// assertProviderReleaseCandidate proves the provider-first lane without using
-// package/GA obligations as a proxy. It locks v2.1.1 to the 15 Experimental
+// assertProviderReleaseCandidate preserves the Provider 2.1 historical lane
+// without using package or Specification obligations as a proxy. It locks
+// v2.1.1 to the 15 Experimental
 // Beta FormRefs and package digests recorded in the append-only provider
 // identity ledger. Candidate-only is a publication fact, not a prerelease
 // version: the owner deploy changes it only after the real release exists.
@@ -258,7 +261,8 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
 // The two counts below are different facts and only one of them moves: the
 // published release embeds the fifteen identities it shipped with, forever,
 // while the current candidate lane carries whatever the generation now
-// declares (decision 0046).
+// declares. Decision 0053 supersedes decision 0046 as release authority;
+// neither lane can authorize or block Specification 1.0.
 export function assertProviderReleaseCandidate(repositoryRoot) {
   const descriptor = JSON.parse(
     readFileSync(path.join(repositoryRoot, "release/version.json"), "utf8"),
@@ -285,9 +289,17 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     candidate.formMaturity !== "experimental" ||
     candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
     candidate.publicationStatus !== "unpublished" ||
-    candidate.forms?.length !== 17
+    candidate.forms?.length !== 16 ||
+    candidate.forms.some(
+      (entry) =>
+        entry?.kind === "ObjectBucket" ||
+        entry?.formRef?.kind === "ObjectBucket" ||
+        entry?.formRef?.apiVersion === "edge.objects",
+    )
   ) {
-    fail("the current candidate lane must carry exactly 17 Experimental Beta Forms in v1alpha5 package envelopes");
+    fail(
+      "the current candidate lane must carry exactly 16 Experimental Forms in unpublished v1alpha5 package envelopes, without ObjectBucket or edge.objects",
+    );
   }
   const embedded = identities.releases?.find(
     (entry) => entry.providerVersion === descriptor.version,
@@ -347,9 +359,10 @@ function main() {
   const summary = [...byPriority.entries()].sort().map(([priority, count]) => `${priority}=${count}`).join(" ");
   const traceability = summarizeTraceability(ledger);
   console.log(
-    `Beta release policy OK: provider v${provider.version} locks ${provider.formCount} exact Experimental Forms ` +
+    `retained Provider/Form Package policy OK: provider v${provider.version} locks ${provider.formCount} exact historical Experimental Forms ` +
       `and the current candidate lane carries ${provider.candidateFormCount}; ` +
-      `${open.length} later package/Stable/GA obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ${traceability}`,
+      `${open.length} separate package/public-service obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ` +
+      `none authorizes or blocks a Specification release; ${traceability}`,
   );
 }
 

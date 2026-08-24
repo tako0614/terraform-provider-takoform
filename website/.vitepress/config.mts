@@ -97,10 +97,6 @@ const edgeResourceItems = [
     link: "/docs/resources/worker_cron_trigger.html",
   },
   { text: "Edge KV namespace", link: "/docs/resources/edge_kv_namespace.html" },
-  {
-    text: "Edge object bucket",
-    link: "/docs/resources/edge_object_bucket.html",
-  },
   { text: "SQLite database", link: "/docs/resources/sqlite_database.html" },
   {
     text: "SQLite migration set",
@@ -119,7 +115,33 @@ const edgeResourceItems = [
   { text: "Actor namespace", link: "/docs/resources/actor_namespace.html" },
 ];
 
-const currentStackResourceItems = edgeResourceItems;
+const currentStackResourceItems = [
+  ...edgeResourceItems,
+  { text: "Function", link: "/docs/resources/function.html" },
+  { text: "Function version", link: "/docs/resources/function_version.html" },
+  {
+    text: "Function deployment",
+    link: "/docs/resources/function_deployment.html",
+  },
+  { text: "Function endpoint", link: "/docs/resources/function_endpoint.html" },
+  { text: "Container service", link: "/docs/resources/container_service.html" },
+  { text: "Container revision", link: "/docs/resources/container_revision.html" },
+  { text: "Container traffic", link: "/docs/resources/container_traffic.html" },
+  { text: "Container endpoint", link: "/docs/resources/container_endpoint.html" },
+  {
+    text: "Container custom domain",
+    link: "/docs/resources/container_custom_domain.html",
+  },
+  { text: "Table", link: "/docs/resources/table.html" },
+  { text: "Pull queue", link: "/docs/resources/pull_queue.html" },
+  { text: "Topic", link: "/docs/resources/topic.html" },
+  {
+    text: "Topic subscription",
+    link: "/docs/resources/topic_subscription.html",
+  },
+  { text: "Schedule", link: "/docs/resources/schedule.html" },
+  { text: "Vector index", link: "/docs/resources/vector_index.html" },
+];
 
 const specSidebar = [
   {
@@ -135,7 +157,7 @@ const specSidebar = [
       { text: "Portability boundary", link: "/spec/portability-boundary.html" },
       { text: "Form Families", link: "/spec/form-families.html" },
       { text: "Project lifecycle", link: "/spec/project-lifecycle.html" },
-      { text: "Beta release policy", link: "/spec/publication-freeze.html" },
+      { text: "Release evidence policy", link: "/spec/publication-freeze.html" },
       { text: "Versioning", link: "/spec/versioning.html" },
       { text: "Conformance", link: "/spec/conformance.html" },
     ],
@@ -143,7 +165,7 @@ const specSidebar = [
   {
     text: "Contracts",
     items: [
-      { text: "Host API v1beta1", link: "/spec/host-api/v1beta1.html" },
+      { text: "Host API v1", link: "/spec/host-api/v1.html" },
       { text: "Form Definition", link: "/spec/form-definition/" },
       { text: "Form Package", link: "/spec/form-package/" },
       { text: "Interface contracts", link: "/spec/interface-contract/" },
@@ -159,6 +181,8 @@ const specSidebar = [
     items: [
       { text: "Versions & compatibility", link: "/docs/versions.html" },
       { text: "Host API lanes", link: "/spec/host-api/" },
+      { text: "Retained Host API v1beta4", link: "/spec/host-api/v1beta4.html" },
+      { text: "Retained Host API v1beta1", link: "/spec/host-api/v1beta1.html" },
       { text: "v2 to v3 migration boundary", link: "/release/migrations/v2-to-v3.html" },
     ],
   },
@@ -184,7 +208,6 @@ const edgeProposalItems = [
     link: "/proposals/edge/worker-cron-trigger.html",
   },
   { text: "Edge KV namespace", link: "/proposals/edge/edge-kv-namespace.html" },
-  { text: "Object bucket", link: "/proposals/edge/object-bucket.html" },
   { text: "SQLite database", link: "/proposals/edge/sqlite-database.html" },
   {
     text: "SQLite migration set",
@@ -206,7 +229,7 @@ const edgeProposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Current design target — Provider 2.1.1 / Host API v1beta1",
+      text: "Specification 1.0 candidate / Host API v1",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -215,7 +238,7 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Current design target — Edge Form Family v1beta1 (15 Experimental Forms)",
+      text: "Provider 3 candidate reference (31 current Experimental Forms)",
       items: currentStackResourceItems,
     },
     {
@@ -233,11 +256,11 @@ const englishSidebar = {
   "/spec/": specSidebar,
   "/proposals/": [
     {
-      text: "Current design target — Edge Form Family v1beta1 proposals",
+      text: "Current 8-family / 31-Form candidate corpus",
       items: [{ text: "Overview", link: "/proposals/" }, ...edgeProposalItems],
     },
     {
-      text: "New family proposals (decision 0043)",
+      text: "Additional current families (decision 0043)",
       collapsed: true,
       items: [
         { text: "Function family", link: "/proposals/function/" },
@@ -262,7 +285,7 @@ const englishSidebar = {
   "/release/": [
     {
       text: "Release",
-      items: [{ text: "Provider release", link: "/release/" }],
+      items: [{ text: "Specification and Provider releases", link: "/release/" }],
     },
   ],
 };
@@ -270,7 +293,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Current design target — Provider 2.1.1 / Host API v1beta1",
+      text: "Specification 1.0 candidate / Host API v1",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -281,7 +304,7 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Current design target — Edge Form Family v1beta1 (15 Experimental Forms)",
+      text: "Provider 3 candidate reference (current 31 Forms)",
       items: currentStackResourceItems,
     },
     {

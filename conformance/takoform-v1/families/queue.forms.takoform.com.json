@@ -1,0 +1,113 @@
+{
+  "format": "takoform.family-semantic-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "group": "queue.forms.takoform.com",
+  "candidateSet": {
+    "path": "forms/candidates/queue.forms.takoform.com/candidate-set.json",
+    "sha256": "c636f7dce3bc649704c7eceab33d0df4217947d36837ca42e08ebbd22f2ecaf1"
+  },
+  "requiredChecks": [
+    "candidate-desired-schema-validated",
+    "exact-form-ref-lifecycle",
+    "lifecycle-capabilities-preserved"
+  ],
+  "scenarios": [
+    {
+      "check": "candidate-desired-schema-validated",
+      "input": {
+        "operation": "candidate-desired-schema-validated",
+        "exactFormRefs": [
+          {
+            "apiVersion": "queue.forms.takoform.com",
+            "kind": "PullQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1ee156919f8399cac58ecf16e73a90239224cb01c81be634d8c305dbf3156599"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "exact-form-ref-lifecycle",
+      "input": {
+        "operation": "exact-form-ref-lifecycle",
+        "exactFormRefs": [
+          {
+            "apiVersion": "queue.forms.takoform.com",
+            "kind": "PullQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1ee156919f8399cac58ecf16e73a90239224cb01c81be634d8c305dbf3156599"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "lifecycle-capabilities-preserved",
+      "input": {
+        "operation": "lifecycle-capabilities-preserved",
+        "exactFormRefs": [
+          {
+            "apiVersion": "queue.forms.takoform.com",
+            "kind": "PullQueue",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:1ee156919f8399cac58ecf16e73a90239224cb01c81be634d8c305dbf3156599"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    }
+  ],
+  "runnerInput": {
+    "pullQueue": {
+      "name": "pull-queue-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "queue.forms.takoform.com",
+          "kind": "PullQueue",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:1ee156919f8399cac58ecf16e73a90239224cb01c81be634d8c305dbf3156599"
+        },
+        "packageDigest": "sha256:67f5eb98e6ac3617f383f76778a382527ab4312edd5c63ef81f49d7bda1caa82"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "deadLetter": {
+          "maxReceiveCount": 5,
+          "queue": {
+            "apiVersion": "queue.forms.takoform.com",
+            "kind": "PullQueue",
+            "name": "dead-letters"
+          }
+        },
+        "defaultVisibilityTimeoutSeconds": 30,
+        "messageRetentionSeconds": 345600,
+        "receiveWaitBoundSeconds": 20
+      },
+      "desiredSchema": {
+        "path": "fixtures/pull-queue-desired-schema.json",
+        "sha256": "sha256:48d0bea795c10c5e29041f268b8ff86d24b24bd02f7b436780dff88c104e127f"
+      }
+    }
+  },
+  "standardServiceFixtures": []
+}

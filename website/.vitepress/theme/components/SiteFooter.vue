@@ -12,14 +12,13 @@ type SiteStatus = {
   providerTargetStatus: string;
   hostApiCurrent: string;
   hostApiMaturity: string;
-  formFamilyCurrent: string;
-  formFamilyMaturity: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
+  currentFamilyCount: number;
   formMaturity: string;
   formPackagePublicationStatus: string;
-  candidateSetDigest: string;
-  openPublicationBlockers: number;
+  specificationVersion: string;
+  specificationReleaseStatus: string;
   route: string;
 };
 
@@ -33,42 +32,27 @@ const hostApiVersion = computed(() => apiVersion(status.value.hostApiCurrent));
 const hostApiMaturity = computed(() =>
   maturityLabel(status.value.hostApiMaturity),
 );
-const formFamilyVersion = computed(() =>
-  apiVersion(status.value.formFamilyCurrent),
-);
-const formFamilyMaturity = computed(() =>
-  maturityLabel(status.value.formFamilyMaturity),
-);
 const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
-const providerTargetStatus = computed(() =>
-  status.value.providerTargetStatus === "registry-published"
-    ? "Registry-published"
-    : status.value.providerTargetStatus + " until Registry readback",
-);
 </script>
 
 <template>
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>Current design target</strong>: Provider
-        {{ status.providerTarget }} ({{ providerTargetStatus }}, descriptor
-        metadata candidate-only); Host API
-        {{ hostApiVersion }} ({{ hostApiMaturity }}); Edge Form Family
-        {{ formFamilyVersion }} ({{ formFamilyMaturity }} family,
-        {{ status.currentFormCount }} {{ formMaturity }} Form definitions,
-        definition 0.1.0).
+        <strong>Specification candidate</strong>:
+        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
+        Host API {{ hostApiVersion }} ({{ hostApiMaturity }});
+        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
+        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
         Form Package {{ status.formPackageApiCurrent }} is
         {{ status.formPackagePublicationStatus }}.
       </p>
       <p v-else>
-        <strong>Current design target</strong>: Provider
-        {{ status.providerTarget }} ({{ providerTargetStatus }}, descriptor
-        metadata candidate-only); Host API
-        {{ hostApiVersion }} ({{ hostApiMaturity }}); Edge Form Family
-        {{ formFamilyVersion }} ({{ formFamilyMaturity }} family,
-        {{ status.currentFormCount }} {{ formMaturity }} Form definitions,
-        definition 0.1.0).
+        <strong>Specification candidate</strong>:
+        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
+        Host API {{ hostApiVersion }} ({{ hostApiMaturity }});
+        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
+        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
         Form Package {{ status.formPackageApiCurrent }} is
         {{ status.formPackagePublicationStatus }}.
       </p>
@@ -81,7 +65,7 @@ const providerTargetStatus = computed(() =>
         </span>
         <span v-else>
           Distribution availability: Provider {{ status.providerPublished }} is
-          the current Registry-readback distribution; Provider 2.0.0 is the
+          the current Registry-readback retained distribution; Provider 2.0.0 is the
           published compatibility predecessor and Provider 1.0.3 is published
           Legacy.
         </span>

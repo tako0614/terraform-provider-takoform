@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/standards/v1/standard-service-ref.schema.json",
+  "title": "Takoform StandardServiceRef v1",
+  "description": "A provider-neutral reference to one opaque standard-service protocol identifier. Schema validity does not certify protocol conformance; a Host advertises exact support separately.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "protocol"],
+  "properties": {
+    "apiVersion": {
+      "const": "standards.takoform.com/v1"
+    },
+    "protocol": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){2,}$",
+      "maxLength": 253,
+      "description": "Normalized reverse-DNS owner namespace followed by a protocol segment. The identifier is compared opaquely and is not a Takoform registry entry."
+    }
+  }
+}

@@ -18,16 +18,6 @@
     "notFoundHandling": "single_page_application",
     "runWorkerFirst": true
   },
-  "bucketBindings": [
-    {
-      "name": "MEDIA",
-      "resource": {
-        "apiVersion": "edge.forms.takoform.com",
-        "kind": "ObjectBucket",
-        "name": "object-bucket"
-      }
-    }
-  ],
   "bundle": {
     "apiVersion": "edge.forms.takoform.com",
     "kind": "WorkerBundle",
@@ -37,8 +27,15 @@
     {
       "name": "PRIMARY_DB",
       "service": {
-        "apiVersion": "standards.takoform.com/v1alpha1",
-        "protocol": "postgresql"
+        "apiVersion": "standards.takoform.com/v1",
+        "protocol": "org.postgresql.wire"
+      }
+    },
+    {
+      "name": "MEDIA",
+      "service": {
+        "apiVersion": "standards.takoform.com/v1",
+        "protocol": "com.amazonaws.s3"
       }
     }
   ],

@@ -10,7 +10,7 @@ import (
 func collidingForm(varsExample map[string]any) Form {
 	return Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
-		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
+		Kind:   "WorkerVersion", Slug: "worker-version",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
 		Fields: []Field{
 			{HCL: "vars", Wire: "vars", Kind: KindJSONMap, Default: map[string]any{},
@@ -53,7 +53,7 @@ func TestValidateEnvironmentNamespaceRejectsCollidingExamples(t *testing.T) {
 func TestProjectsEnvironmentNamesIsBoundedToNameCarryingKinds(t *testing.T) {
 	form := Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
-		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
+		Kind:   "WorkerVersion", Slug: "worker-version",
 		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
 		Fields: []Field{{
 			HCL: "activation_delay_seconds", Wire: "activationDelaySeconds", Kind: KindInteger,

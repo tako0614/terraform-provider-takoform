@@ -38,11 +38,10 @@ const (
 	EnvironmentBindingNames = "binding-names"
 	EnvironmentMapKeys      = "map-keys"
 	EnvironmentSetItems     = "items"
-	// EnvironmentExternalServiceProjections is a sealed slot list: what joins
-	// the namespace is not the declared slot names but every member each slot
-	// PROJECTS — the closure the uniqueness rule is stated over
-	// (spec/standard-services).
-	EnvironmentExternalServiceProjections = "external-service-projections"
+	// EnvironmentExternalServiceNames is a sealed runtime-native binding list.
+	// Takoform owns only the binding key (the slot name); the Host integration
+	// for the opaque protocol owns its internal entries and projection shape.
+	EnvironmentExternalServiceNames = "external-service-names"
 )
 
 // EnvironmentNameFields lists every declared field of one Form that projects
@@ -54,7 +53,7 @@ func (f Form) EnvironmentNameFields() []EnvironmentNameField {
 		case field.Kind == KindBindingList:
 			out = append(out, EnvironmentNameField{Field: field, Source: EnvironmentBindingNames})
 		case field.Kind == KindExternalServiceList:
-			out = append(out, EnvironmentNameField{Field: field, Source: EnvironmentExternalServiceProjections})
+			out = append(out, EnvironmentNameField{Field: field, Source: EnvironmentExternalServiceNames})
 		case !field.ProjectsEnvironmentNames:
 		case field.Kind == KindJSONMap:
 			out = append(out, EnvironmentNameField{Field: field, Source: EnvironmentMapKeys})
@@ -70,15 +69,13 @@ func (f Form) EnvironmentNameFields() []EnvironmentNameField {
 func EnvironmentNamesOfExample(entry EnvironmentNameField) []string {
 	var out []string
 	switch entry.Source {
-	case EnvironmentExternalServiceProjections:
+	case EnvironmentExternalServiceNames:
 		items, _ := entry.Field.Example.([]any)
 		for _, item := range items {
 			slot, _ := item.(map[string]any)
 			name, _ := slot["name"].(string)
-			service, _ := slot["service"].(map[string]any)
-			protocol, _ := service["protocol"].(string)
-			if name != "" && protocol != "" {
-				out = append(out, ExternalServiceProjectedNames(name, protocol)...)
+			if name != "" {
+				out = append(out, name)
 			}
 		}
 	case EnvironmentBindingNames:

@@ -1,0 +1,118 @@
+{
+  "format": "takoform.family-semantic-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "group": "table.forms.takoform.com",
+  "candidateSet": {
+    "path": "forms/candidates/table.forms.takoform.com/candidate-set.json",
+    "sha256": "d953783bb41b36a8c3c07ed93afbc9eaa9d5d2c94cae65a3de2efe3b1a1b526f"
+  },
+  "requiredChecks": [
+    "candidate-desired-schema-validated",
+    "exact-form-ref-lifecycle",
+    "lifecycle-capabilities-preserved"
+  ],
+  "scenarios": [
+    {
+      "check": "candidate-desired-schema-validated",
+      "input": {
+        "operation": "candidate-desired-schema-validated",
+        "exactFormRefs": [
+          {
+            "apiVersion": "table.forms.takoform.com",
+            "kind": "Table",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:e5c9933f637632b8e3b6b300d0d30593f291158ac088e34bb6ac0f76ec2bfc05"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "exact-form-ref-lifecycle",
+      "input": {
+        "operation": "exact-form-ref-lifecycle",
+        "exactFormRefs": [
+          {
+            "apiVersion": "table.forms.takoform.com",
+            "kind": "Table",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:e5c9933f637632b8e3b6b300d0d30593f291158ac088e34bb6ac0f76ec2bfc05"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    },
+    {
+      "check": "lifecycle-capabilities-preserved",
+      "input": {
+        "operation": "lifecycle-capabilities-preserved",
+        "exactFormRefs": [
+          {
+            "apiVersion": "table.forms.takoform.com",
+            "kind": "Table",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:e5c9933f637632b8e3b6b300d0d30593f291158ac088e34bb6ac0f76ec2bfc05"
+          }
+        ],
+        "candidateCount": 1
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 1
+      }
+    }
+  ],
+  "runnerInput": {
+    "table": {
+      "name": "table-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "table.forms.takoform.com",
+          "kind": "Table",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:e5c9933f637632b8e3b6b300d0d30593f291158ac088e34bb6ac0f76ec2bfc05"
+        },
+        "packageDigest": "sha256:2bf18526eb42b0e933318082b1cb88331bcc536d0d9fff76ab59cd6f44ec1bc0"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "partitionKey": {
+          "name": "tenantId",
+          "type": "string"
+        },
+        "secondaryIndexes": [
+          {
+            "name": "by-email",
+            "partitionKey": "email",
+            "sortKey": "createdAt"
+          }
+        ],
+        "sortKey": {
+          "name": "createdAt",
+          "type": "number"
+        },
+        "ttlAttribute": "expiresAt"
+      },
+      "desiredSchema": {
+        "path": "fixtures/table-desired-schema.json",
+        "sha256": "sha256:1c7f50d7049b822e32287b9f9c425df496d9ab6021301d650f00848d28fa6d62"
+      }
+    }
+  },
+  "standardServiceFixtures": []
+}

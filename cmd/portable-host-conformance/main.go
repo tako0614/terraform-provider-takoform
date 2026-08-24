@@ -25,7 +25,10 @@ func main() {
 
 func run(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: portable-host-conformance self-test|run [options]")
+		return errors.New("usage: portable-host-conformance self-test|run|suite [options]")
+	}
+	if args[0] == "suite" {
+		return runStableSuite(args[1:], stdout)
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -84,6 +87,30 @@ func run(args []string, stdout io.Writer) error {
 		*survey,
 		stdout,
 	)
+}
+
+func runStableSuite(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("suite", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	manifestPath := flags.String("manifest", "", "stable v1 conformance suite manifest (required)")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return errors.New("unexpected positional arguments")
+	}
+	if strings.TrimSpace(*manifestPath) == "" {
+		return errors.New("suite requires --manifest")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	report, err := portableconformancev3.RunStableSuite(ctx, *manifestPath)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(report)
 }
 
 func manifestFormat(contractPath string) (string, error) {

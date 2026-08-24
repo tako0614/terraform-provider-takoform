@@ -59,9 +59,10 @@ replaces the whole item at its key; `delete` removes it and succeeds when it
 is already absent. Either write MAY carry a condition — `exists` (whether
 the item exists) and/or `equals` (exact top-level scalar attribute values),
 conjoined — evaluated and applied as one atomic step. A failed condition
-changes nothing and fails `precondition_failed`, the code `edge.objects`
-already uses for exactly this meaning: a caller-stated guard did not hold
-and the write did not happen. A retried conditional write that already
+changes nothing and fails `precondition_failed`, the code the retained
+v1beta1 `edge.objects` Interface used for the same historical meaning: a
+caller-stated guard did not hold and the write did not happen. `edge.objects`
+is not a current Interface and supplies no current dependency here. A retried conditional write that already
 applied may therefore fail its own condition; conditional writes are not
 blindly retryable.
 

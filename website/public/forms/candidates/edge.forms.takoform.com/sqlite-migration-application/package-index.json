@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com",
     "kind": "SQLiteMigrationApplication",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:4538fafa845678092b376ad8f9876dfe2872e2e0723f10718078d41f0b522b56"
+    "schemaDigest": "sha256:f3b42ede7bad664e494a04ea6f0fd167082988688fe96f4ec1fbb80db13a8e01"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5546,
-      "digest": "sha256:6878eb201ff03a0a4bb5e15dcc5d42366dcbe82074aa2ca944b89a25e6442aa6"
+      "size": 5541,
+      "digest": "sha256:4d19f4dc2058530f1babac68d0a2c70dfdb910a7c643312869c50cfa858604b4"
     },
     {
       "path": "fixtures/desired.json",

@@ -1,0 +1,247 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "function.runtime",
+  "version": "1.0.0",
+  "title": "Function invocation runtime",
+  "description": "The exact host-provided invocation ABI for one Function. The main module exports a declared handler invoked exactly as handler(event, context); the event vocabulary is a closed discriminated union whose only member in this version is kind=http, and context is a closed object carrying invocationId and remainingTimeMs. The host awaits an optional promise and returns a bounded HTTP-shaped result. The invoking FunctionVersion timeout is the wall-clock budget; remainingTimeMs never exceeds that declared budget. The process environment contains only the version's vars, required sensitive names, and sealed standard-service projections; credentials and endpoints are never part of this Interface Definition. A runtime behavior change requires a new exact Interface version and a Form revision.",
+  "operations": [
+    {
+      "name": "http",
+      "description": "Invoke the declared named export exactly as handler(event, context) for one HTTP event. The host awaits asynchronous completion; an uncaught failure is reported as handler_failed rather than leaving the invocation hanging. The handler reads its sealed environment projection from the process namespace, not from a third argument.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "additionalProperties": false,
+            "properties": {
+              "invocationId": {
+                "maxLength": 256,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
+                "type": "string"
+              },
+              "remainingTimeMs": {
+                "maximum": 900000,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "invocationId",
+              "remainingTimeMs"
+            ],
+            "type": "object"
+          },
+          "event": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "body": {
+                    "maxLength": 1048576,
+                    "type": "string"
+                  },
+                  "headers": {
+                    "additionalProperties": {
+                      "maxLength": 8192,
+                      "type": "string"
+                    },
+                    "maxProperties": 128,
+                    "propertyNames": {
+                      "maxLength": 256,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "kind": {
+                    "const": "http"
+                  },
+                  "method": {
+                    "enum": [
+                      "DELETE",
+                      "GET",
+                      "HEAD",
+                      "OPTIONS",
+                      "PATCH",
+                      "POST",
+                      "PUT"
+                    ],
+                    "type": "string"
+                  },
+                  "url": {
+                    "maxLength": 8192,
+                    "pattern": "^https://[^\\x00\\r\\n]+$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "method",
+                  "url",
+                  "headers",
+                  "body"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "event",
+          "context"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 1048576,
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 128,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": {
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "headers",
+          "body"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_event",
+        "invalid_context",
+        "handler_failed",
+        "event_too_large",
+        "response_too_large",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "read_after_write",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxContextBudgetMs": 900000,
+    "maxEnvironmentItems": 256,
+    "maxEventBytes": 1048576,
+    "maxInvocationIdBytes": 256,
+    "maxResponseBytes": 1048576
+  },
+  "fixtures": [
+    {
+      "name": "http-event-returns-response",
+      "steps": [
+        {
+          "operation": "http",
+          "input": {
+            "context": {
+              "invocationId": "inv-001",
+              "remainingTimeMs": 900000
+            },
+            "event": {
+              "body": "",
+              "headers": {},
+              "kind": "http",
+              "method": "GET",
+              "url": "https://fn.example.invalid/health"
+            }
+          },
+          "expected": {
+            "body": "ok",
+            "headers": {},
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown-event-kind-is-rejected",
+      "steps": [
+        {
+          "operation": "http",
+          "input": {
+            "context": {
+              "invocationId": "inv-001",
+              "remainingTimeMs": 900000
+            },
+            "event": {
+              "body": "",
+              "headers": {},
+              "kind": "schedule",
+              "method": "GET",
+              "url": "https://fn.example.invalid/health"
+            }
+          },
+          "expectedError": "invalid_event"
+        }
+      ]
+    },
+    {
+      "name": "unknown-event-member-is-rejected",
+      "steps": [
+        {
+          "operation": "http",
+          "input": {
+            "context": {
+              "invocationId": "inv-001",
+              "remainingTimeMs": 900000
+            },
+            "event": {
+              "body": "",
+              "headers": {},
+              "kind": "http",
+              "method": "GET",
+              "unexpected": "no",
+              "url": "https://fn.example.invalid/health"
+            }
+          },
+          "expectedError": "invalid_event"
+        }
+      ]
+    },
+    {
+      "name": "unknown-context-member-is-rejected",
+      "steps": [
+        {
+          "operation": "http",
+          "input": {
+            "context": {
+              "invocationId": "inv-001",
+              "remainingTimeMs": 900000,
+              "unexpected": "no"
+            },
+            "event": {
+              "body": "",
+              "headers": {},
+              "kind": "http",
+              "method": "GET",
+              "url": "https://fn.example.invalid/health"
+            }
+          },
+          "expectedError": "invalid_context"
+        }
+      ]
+    }
+  ]
+}

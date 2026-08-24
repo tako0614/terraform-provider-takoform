@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
 
-// Deterministic builder for the Form Family candidate lane (spec decisions
-// 0008..0035): Edge Platform Family Form Packages (package-index v1alpha4,
-// form-definition v1beta1), the exact Interface and Binding candidate sets,
-// and the provider v3 registry. Mirrors scripts/current-form-candidates.mjs:
-// stage, verify, then install atomically; --check regenerates into a
-// temporary tree and compares.
+// Deterministic builder for every current versionless Form Family, the global
+// Interface and Binding candidate sets, the closed current-family index, and
+// the exact registry. The Go source renders families in dependency order;
+// this writer stages, verifies, then installs all outputs atomically. --check
+// regenerates into a temporary tree and compares exact bytes.
 
 import { createHash } from "node:crypto";
 import {
@@ -28,14 +27,96 @@ const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-// The group is the whole identity. It carries no version, so this constant
-// cannot drift from a generation number and the tree below is named by the
-// identity it holds rather than by a number that has to be kept in step
-// (decision 0049).
-const FAMILY = "edge.forms.takoform.com";
 const PACKAGE_API_VERSION = "packages.forms.takoform.com/v1alpha5";
+const FAMILY_INDEX_FORMAT = "takoform.current-family-index@v1";
+const FAMILY_INDEX_PATH = "forms/candidates/current-family-index.json";
+const INTERFACE_CANDIDATE_SET_PATH =
+  "interfaces/candidates/v1alpha1/candidate-set.json";
+const BINDING_CANDIDATE_SET_PATH =
+  "bindings/candidates/v1alpha2/candidate-set.json";
+// This is the Go source's dependency order. The fixed current-family index is
+// separately sorted by group/path as required by its public evidence parser.
+const familySpecs = Object.freeze([
+  Object.freeze({
+    group: "edge.forms.takoform.com",
+    authoringSource: "internal/edgeformcatalog",
+    forms: Object.freeze([
+      ["ModuleWorker", "module-worker", "identity"],
+      ["WorkerBundle", "worker-bundle", "revision"],
+      ["StaticAssetBundle", "static-asset-bundle", "revision"],
+      ["WorkerVersion", "worker-version", "revision"],
+      ["WorkerDeployment", "worker-deployment", "deployment"],
+      ["WorkerCustomDomain", "worker-custom-domain", "attachment"],
+      ["WorkerEndpoint", "worker-endpoint", "attachment"],
+      ["WorkerCronTrigger", "worker-cron-trigger", "attachment"],
+      ["EdgeKVNamespace", "edge-kv-namespace", "identity"],
+      ["SQLiteDatabase", "sqlite-database", "identity"],
+      ["SQLiteMigrationSet", "sqlite-migration-set", "revision"],
+      ["SQLiteMigrationApplication", "sqlite-migration-application", "attachment"],
+      ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
+      ["QueueConsumer", "queue-consumer", "attachment"],
+      ["DurableWorkflow", "durable-workflow", "identity"],
+      ["ActorNamespace", "actor-namespace", "identity"],
+    ]),
+  }),
+  Object.freeze({
+    group: "function.forms.takoform.com",
+    authoringSource: "internal/functionformcatalog",
+    forms: Object.freeze([
+      ["Function", "function", "identity"],
+      ["FunctionVersion", "function-version", "revision"],
+      ["FunctionDeployment", "function-deployment", "deployment"],
+      ["FunctionEndpoint", "function-endpoint", "attachment"],
+    ]),
+  }),
+  Object.freeze({
+    group: "container.forms.takoform.com",
+    authoringSource: "internal/containerformcatalog",
+    forms: Object.freeze([
+      ["ContainerService", "container-service", "identity"],
+      ["ContainerRevision", "container-revision", "revision"],
+      ["ContainerTraffic", "container-traffic", "deployment"],
+      ["ContainerEndpoint", "container-endpoint", "attachment"],
+      ["ContainerCustomDomain", "container-custom-domain", "attachment"],
+    ]),
+  }),
+  Object.freeze({
+    group: "table.forms.takoform.com",
+    authoringSource: "internal/tableformcatalog",
+    forms: Object.freeze([["Table", "table", "identity"]]),
+  }),
+  Object.freeze({
+    group: "queue.forms.takoform.com",
+    authoringSource: "internal/queueformcatalog",
+    forms: Object.freeze([["PullQueue", "pull-queue", "identity"]]),
+  }),
+  Object.freeze({
+    group: "topic.forms.takoform.com",
+    authoringSource: "internal/topicformcatalog",
+    forms: Object.freeze([
+      ["Topic", "topic", "identity"],
+      ["TopicSubscription", "topic-subscription", "attachment"],
+    ]),
+  }),
+  Object.freeze({
+    group: "schedule.forms.takoform.com",
+    authoringSource: "internal/scheduleformcatalog",
+    forms: Object.freeze([["Schedule", "schedule", "identity"]]),
+  }),
+  Object.freeze({
+    group: "vector.forms.takoform.com",
+    authoringSource: "internal/vectorformcatalog",
+    forms: Object.freeze([["VectorIndex", "vector-index", "identity"]]),
+  }),
+]);
 const trackedTargets = {
-  forms: path.join(repositoryRoot, "forms", "candidates", FAMILY),
+  forms: new Map(
+    familySpecs.map(({ group }) => [
+      group,
+      path.join(repositoryRoot, "forms", "candidates", group),
+    ]),
+  ),
+  familyIndex: path.join(repositoryRoot, FAMILY_INDEX_PATH),
   interfaces: path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
   bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha2"),
 };
@@ -66,46 +147,28 @@ export const FROZEN_PROVIDER_RELEASES = new Map([
     }),
   ],
 ]);
-const forms = [
-  ["ModuleWorker", "module-worker", "identity"],
-  ["WorkerBundle", "worker-bundle", "revision"],
-  ["StaticAssetBundle", "static-asset-bundle", "revision"],
-  ["WorkerVersion", "worker-version", "revision"],
-  ["WorkerDeployment", "worker-deployment", "deployment"],
-  ["WorkerCustomDomain", "worker-custom-domain", "attachment"],
-  ["WorkerEndpoint", "worker-endpoint", "attachment"],
-  ["WorkerCronTrigger", "worker-cron-trigger", "attachment"],
-  ["EdgeKVNamespace", "edge-kv-namespace", "identity"],
-  ["ObjectBucket", "object-bucket", "identity"],
-  ["SQLiteDatabase", "sqlite-database", "identity"],
-  ["SQLiteMigrationSet", "sqlite-migration-set", "revision"],
-  ["SQLiteMigrationApplication", "sqlite-migration-application", "attachment"],
-  ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
-  ["QueueConsumer", "queue-consumer", "attachment"],
-  ["DurableWorkflow", "durable-workflow", "identity"],
-  ["ActorNamespace", "actor-namespace", "identity"],
+const interfaceContracts = [
+  ["container.runtime", "1.0.0"],
+  ["edge.kv", "1.0.0"],
+  ["edge.queue", "1.0.0"],
+  ["edge.sql", "1.0.0"],
+  ["function.runtime", "1.0.0"],
+  ["queue.pull", "1.0.0"],
+  ["table.document", "1.0.0"],
+  ["topic.publish", "1.0.0"],
+  ["vector.index", "1.0.0"],
+  ["worker.actor", "1.0.0"],
+  ["worker.runtime", "1.1.0"],
+  ["worker.service", "1.0.0"],
+  ["worker.workflow", "1.0.0"],
 ];
-// The interface lane order MUST match edgeformcatalog.InterfaceDefinitions().
-// worker.runtime is the exact ES Module Worker runtime ABI the ModuleWorker
-// identity provides (spec/decisions/0019).
-const interfaceNames = [
-  "edge.kv",
-  "edge.objects",
-  "edge.sql",
-  "edge.queue",
-  "worker.service",
-  "worker.runtime",
-  "worker.workflow",
-  "worker.actor",
-];
-const bindingNames = [
-  "module-worker.edge-kv",
-  "module-worker.object-bucket",
-  "module-worker.sqlite",
-  "module-worker.queue-producer",
-  "module-worker.service",
-  "module-worker.workflow",
-  "module-worker.actor",
+const bindingContracts = [
+  ["module-worker.actor", "1.0.0"],
+  ["module-worker.edge-kv", "1.0.0"],
+  ["module-worker.queue-producer", "1.0.0"],
+  ["module-worker.service", "1.0.0"],
+  ["module-worker.sqlite", "1.0.0"],
+  ["module-worker.workflow", "1.0.0"],
 ];
 
 if (import.meta.main) {
@@ -119,7 +182,12 @@ function main() {
   }
 
   if (mode === "--write") {
-    for (const target of Object.values(trackedTargets)) {
+    for (const target of [
+      ...trackedTargets.forms.values(),
+      trackedTargets.familyIndex,
+      trackedTargets.interfaces,
+      trackedTargets.bindings,
+    ]) {
       assertSafeGeneratedTarget(target);
     }
     const stagingParent = mkdtempSync(
@@ -127,26 +195,43 @@ function main() {
     );
     try {
       const stagedRoots = {
-        forms: path.join(stagingParent, "forms-v1beta1"),
+        forms: new Map(
+          familySpecs.map(({ group }) => [
+            group,
+            path.join(stagingParent, "forms", group),
+          ]),
+        ),
+        familyIndex: path.join(stagingParent, "current-family-index.json"),
         interfaces: path.join(stagingParent, "interfaces-v1alpha1"),
         bindings: path.join(stagingParent, "bindings-v1alpha2"),
       };
       const stagedRegistryPath = path.join(stagingParent, "registry_v3_generated.go");
-      const manifest = generate(stagedRoots);
+      const generation = generate(stagedRoots);
       verifyPackages(stagedRoots.forms);
-      const embeddedIdentities = loadProviderIdentityLedger(manifest);
+      const embeddedIdentities = loadProviderIdentityLedger(generation);
       writeFileSync(
         stagedRegistryPath,
-        renderRegistry(manifest, unionSupportedIdentities(manifest, embeddedIdentities)),
+        renderRegistry(
+          generation,
+          unionSupportedIdentities(generation, embeddedIdentities),
+        ),
       );
       installGeneratedOutputs(stagingParent, [
-        [stagedRoots.forms, trackedTargets.forms],
+        ...familySpecs.map(({ group }) => [
+          stagedRoots.forms.get(group),
+          trackedTargets.forms.get(group),
+        ]),
+        [stagedRoots.familyIndex, trackedTargets.familyIndex],
         [stagedRoots.interfaces, trackedTargets.interfaces],
         [stagedRoots.bindings, trackedTargets.bindings],
         [stagedRegistryPath, registryPath],
       ]);
+      const formCount = familySpecs.reduce(
+        (total, family) => total + family.forms.length,
+        0,
+      );
       process.stdout.write(
-        `wrote ${forms.length} Edge Platform Family Form candidates, ${interfaceNames.length} interface candidates, ${bindingNames.length} binding candidates, and the provider v3 registry\n`,
+        `wrote ${formCount} Forms in ${familySpecs.length} versionless families, ${interfaceContracts.length} interface candidates, ${bindingContracts.length} binding candidates, the current-family index, and the exact registry\n`,
       );
     } finally {
       rmSync(stagingParent, { recursive: true, force: true });
@@ -157,139 +242,180 @@ function main() {
   const temporary = mkdtempSync(path.join(tmpdir(), "takoform-form-families-"));
   try {
     const generatedRoots = {
-      forms: path.join(temporary, "forms-v1beta1"),
+      forms: new Map(
+        familySpecs.map(({ group }) => [
+          group,
+          path.join(temporary, "forms", group),
+        ]),
+      ),
+      familyIndex: path.join(temporary, "current-family-index.json"),
       interfaces: path.join(temporary, "interfaces-v1alpha1"),
       bindings: path.join(temporary, "bindings-v1alpha2"),
     };
-    const manifest = generate(generatedRoots);
-    const embeddedIdentities = loadProviderIdentityLedger(manifest);
-    for (const [key, generatedRoot] of Object.entries(generatedRoots)) {
-      compareTrees(generatedRoot, trackedTargets[key], key);
+    const generation = generate(generatedRoots);
+    const embeddedIdentities = loadProviderIdentityLedger(generation);
+    for (const { group } of familySpecs) {
+      compareTrees(
+        generatedRoots.forms.get(group),
+        trackedTargets.forms.get(group),
+        `${group} Forms`,
+      );
     }
+    compareFile(
+      readFileSync(generatedRoots.familyIndex, "utf8"),
+      trackedTargets.familyIndex,
+      "current-family index",
+    );
+    compareTrees(generatedRoots.interfaces, trackedTargets.interfaces, "interfaces");
+    compareTrees(generatedRoots.bindings, trackedTargets.bindings, "bindings");
     verifyPackages(trackedTargets.forms);
     compareFile(
-      renderRegistry(manifest, unionSupportedIdentities(manifest, embeddedIdentities)),
+      renderRegistry(
+        generation,
+        unionSupportedIdentities(generation, embeddedIdentities),
+      ),
       registryPath,
-      "provider v3 registry",
+      "exact Form registry",
     );
-    process.stdout.write("Form Family candidates are reproducible and valid\n");
+    process.stdout.write("Current Form Family candidates are reproducible and valid\n");
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
 }
 
 function generate(outputRoots) {
-  for (const outputRoot of Object.values(outputRoots)) {
+  for (const outputRoot of [
+    ...outputRoots.forms.values(),
+    path.dirname(outputRoots.familyIndex),
+    outputRoots.interfaces,
+    outputRoots.bindings,
+  ]) {
     mkdirSync(outputRoot, { recursive: true });
   }
   const source = renderFamilySources();
-  const manifest = {
-    format: "takoform.form-family-candidates@v1",
-    family: FAMILY,
-    formMaturity: "experimental",
-    packageApiVersion: PACKAGE_API_VERSION,
-    publicationStatus: "unpublished",
-    authoringSource: "internal/edgeformcatalog",
-    authoringPolicy: "service-shape-preserving-contract",
-    forms: [],
-  };
-
-  for (const [formIndex, [kind, slug, role]] of forms.entries()) {
-    const rendered = source.forms[formIndex];
-    if (rendered?.kind !== kind || rendered?.slug !== slug || rendered?.role !== role) {
-      throw new Error(`${slug}: family catalog order or identity drifted`);
-    }
-    const definition = rendered.definition;
-    if (
-      definition.kind !== kind ||
-      definition.apiVersion !== FAMILY ||
-      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
-        definition.definitionVersion ?? "",
-      ) ||
-      definition.role !== role
-    ) {
-      throw new Error(`${slug}: family catalog emitted an invalid candidate identity`);
-    }
-    if ((definition.negativeConformanceFixtures ?? []).length === 0) {
-      throw new Error(`${slug}: every family candidate must carry a negative fixture`);
-    }
-    if (Object.hasOwn(definition.desiredSchema?.properties ?? {}, "name")) {
-      throw new Error(`${slug}: v1beta1 desired schemas must not declare a name property`);
-    }
-
-    const destinationRoot = path.join(outputRoots.forms, slug);
-    mkdirSync(path.join(destinationRoot, "fixtures"), { recursive: true });
-    const fixtureNames = Object.keys(rendered.fixtures).sort();
-    for (const fixtureName of fixtureNames) {
-      writeJson(
-        path.join(destinationRoot, "fixtures", fixtureName),
-        rendered.fixtures[fixtureName],
+  const manifests = [];
+  for (const [familyIndex, familySpec] of familySpecs.entries()) {
+    const sourceFamily = source.families[familyIndex];
+    if (sourceFamily?.group !== familySpec.group) {
+      throw new Error(
+        `family source order drifted at ${familySpec.group}: got ${sourceFamily?.group}`,
       );
     }
+    const manifest = {
+      format: "takoform.form-family-candidates@v1",
+      family: familySpec.group,
+      formMaturity: "experimental",
+      packageApiVersion: PACKAGE_API_VERSION,
+      publicationStatus: "unpublished",
+      authoringSource: familySpec.authoringSource,
+      authoringPolicy: "service-shape-preserving-contract",
+      forms: [],
+    };
+    for (const [formIndex, [kind, slug, role]] of familySpec.forms.entries()) {
+      const rendered = sourceFamily.forms[formIndex];
+      if (
+        rendered?.kind !== kind ||
+        rendered?.slug !== slug ||
+        rendered?.role !== role
+      ) {
+        throw new Error(`${familySpec.group}/${slug}: family catalog order or identity drifted`);
+      }
+      const definition = rendered.definition;
+      if (
+        definition.kind !== kind ||
+        definition.apiVersion !== familySpec.group ||
+        !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
+          definition.definitionVersion ?? "",
+        ) ||
+        definition.role !== role
+      ) {
+        throw new Error(`${familySpec.group}/${slug}: family catalog emitted an invalid candidate identity`);
+      }
+      if ((definition.negativeConformanceFixtures ?? []).length === 0) {
+        throw new Error(`${slug}: every family candidate must carry a negative fixture`);
+      }
+      if (Object.hasOwn(definition.desiredSchema?.properties ?? {}, "name")) {
+        throw new Error(`${slug}: current desired schemas must not declare a name property`);
+      }
+
+      const destinationRoot = path.join(outputRoots.forms.get(familySpec.group), slug);
+      mkdirSync(path.join(destinationRoot, "fixtures"), { recursive: true });
+      const fixtureNames = Object.keys(rendered.fixtures).sort();
+      for (const fixtureName of fixtureNames) {
+        writeJson(
+          path.join(destinationRoot, "fixtures", fixtureName),
+          rendered.fixtures[fixtureName],
+        );
+      }
 
     // Use the verbatim JSON text emitted by the Go source renderer. Re-
     // serializing through JavaScript would round large integer schema values
     // to the nearest float64 and silently change the normative bytes.
-    const definitionRaw = rendered.definitionJson;
-    if (typeof definitionRaw !== "string" || definitionRaw.length === 0) {
-      throw new Error(`${slug}: source renderer emitted no definitionJson text`);
-    }
-    writeFileSync(path.join(destinationRoot, "definition.json"), definitionRaw);
-    const payloadPaths = [
-      "definition.json",
-      ...fixtureNames.map((name) => `fixtures/${name}`),
-    ].sort();
-    const files = payloadPaths.map((relative) => {
-      const raw = readFileSync(path.join(destinationRoot, relative));
-      return {
-        path: relative,
-        mediaType:
-          relative === "definition.json"
-            ? "application/vnd.takoform.form-definition.v1+json"
-            : "application/json",
-        size: raw.length,
-        digest: digest(raw),
+      const definitionRaw = rendered.definitionJson;
+      if (typeof definitionRaw !== "string" || definitionRaw.length === 0) {
+        throw new Error(`${slug}: source renderer emitted no definitionJson text`);
+      }
+      writeFileSync(path.join(destinationRoot, "definition.json"), definitionRaw);
+      const payloadPaths = [
+        "definition.json",
+        ...fixtureNames.map((name) => `fixtures/${name}`),
+      ].sort();
+      const files = payloadPaths.map((relative) => {
+        const raw = readFileSync(path.join(destinationRoot, relative));
+        return {
+          path: relative,
+          mediaType:
+            relative === "definition.json"
+              ? "application/vnd.takoform.form-definition.v1+json"
+              : "application/json",
+          size: raw.length,
+          digest: digest(raw),
+        };
+      });
+      const formRef = {
+        apiVersion: familySpec.group,
+        kind,
+        // The version is the Form's own, not a catalog generation.
+        definitionVersion: definition.definitionVersion,
+        schemaDigest: digestCanonicalJSON(
+          path.join(destinationRoot, "definition.json"),
+        ),
       };
-    });
-    const formRef = {
-      apiVersion: FAMILY,
-      kind,
-      // The version is the Form's own, not the generation's: a member whose
-      // contract diverged from the generation line carries a different one,
-      // and the source catalog is the only place that decides which
-      // (decision 0046).
-      definitionVersion: definition.definitionVersion,
-      schemaDigest: digestCanonicalJSON(
-        path.join(destinationRoot, "definition.json"),
-      ),
-    };
-    const index = {
-      apiVersion: PACKAGE_API_VERSION,
-      kind: "FormPackage",
-      formRef,
-      definitionPath: "definition.json",
-      files,
-    };
-    const indexPath = path.join(destinationRoot, "package-index.json");
-    writeJson(indexPath, index);
-    manifest.forms.push({
-      kind,
-      role,
-      path: `forms/candidates/${FAMILY}/${slug}`,
-      formRef,
-      packageDigest: digestCanonicalJSON(indexPath),
-    });
+      const index = {
+        apiVersion: PACKAGE_API_VERSION,
+        kind: "FormPackage",
+        formRef,
+        definitionPath: "definition.json",
+        files,
+      };
+      const indexPath = path.join(destinationRoot, "package-index.json");
+      writeJson(indexPath, index);
+      manifest.forms.push({
+        kind,
+        role,
+        path: `forms/candidates/${familySpec.group}/${slug}`,
+        formRef,
+        packageDigest: digestCanonicalJSON(indexPath),
+      });
+    }
+    if (sourceFamily.forms.length !== familySpec.forms.length) {
+      throw new Error(`${familySpec.group}: family source contains an undeclared Form`);
+    }
+    writeJson(
+      path.join(outputRoots.forms.get(familySpec.group), "candidate-set.json"),
+      manifest,
+    );
+    manifests.push(manifest);
   }
-  writeJson(path.join(outputRoots.forms, "candidate-set.json"), manifest);
 
   writeContractCandidates({
     outputRoot: outputRoots.interfaces,
     contracts: source.interfaces,
-    expectedNames: interfaceNames,
+    expectedContracts: interfaceContracts,
     candidateSet: {
       format: "takoform.interface-candidates@v1",
       publicationStatus: "unpublished",
-      authoringSource: "internal/edgeformcatalog",
+      authoringSource: "cmd/current-form-source",
       interfaces: [],
     },
     listKey: "interfaces",
@@ -297,20 +423,58 @@ function generate(outputRoots) {
   writeContractCandidates({
     outputRoot: outputRoots.bindings,
     contracts: source.bindings,
-    expectedNames: bindingNames,
+    expectedContracts: bindingContracts,
     candidateSet: {
       format: "takoform.binding-candidates@v1",
       publicationStatus: "unpublished",
-      authoringSource: "internal/edgeformcatalog",
+      authoringSource: "cmd/current-form-source",
       bindings: [],
     },
     listKey: "bindings",
   });
-  return manifest;
+  const familyIndex = {
+    format: FAMILY_INDEX_FORMAT,
+    families: manifests
+      .map((manifest) => {
+        const candidateSet = `forms/candidates/${manifest.family}/candidate-set.json`;
+        const stagedCandidateSet = path.join(
+          outputRoots.forms.get(manifest.family),
+          "candidate-set.json",
+        );
+        return {
+          group: manifest.family,
+          candidateSet,
+          sha256: sha256Hex(readFileSync(stagedCandidateSet)),
+          formCount: manifest.forms.length,
+        };
+      })
+      .sort((left, right) =>
+        left.group.localeCompare(right.group) ||
+        left.candidateSet.localeCompare(right.candidateSet),
+      ),
+    interfaceCandidateSet: {
+      path: INTERFACE_CANDIDATE_SET_PATH,
+      sha256: sha256Hex(
+        readFileSync(path.join(outputRoots.interfaces, "candidate-set.json")),
+      ),
+    },
+    bindingCandidateSet: {
+      path: BINDING_CANDIDATE_SET_PATH,
+      sha256: sha256Hex(
+        readFileSync(path.join(outputRoots.bindings, "candidate-set.json")),
+      ),
+    },
+  };
+  writeJson(outputRoots.familyIndex, familyIndex);
+  return {
+    families: manifests,
+    forms: manifests.flatMap((manifest) => manifest.forms),
+    familyIndex,
+  };
 }
 
-function writeContractCandidates({ outputRoot, contracts, expectedNames, candidateSet, listKey }) {
-  for (const [index, name] of expectedNames.entries()) {
+function writeContractCandidates({ outputRoot, contracts, expectedContracts, candidateSet, listKey }) {
+  for (const [index, [name, version]] of expectedContracts.entries()) {
     const contract = contracts[index];
     // A contract's version is its own: worker.runtime went to 1.1.0 when the
     // env closure gained the external-service projections (decision 0045).
@@ -318,7 +482,7 @@ function writeContractCandidates({ outputRoot, contracts, expectedNames, candida
     // candidate set to the catalog.
     if (
       contract?.name !== name ||
-      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(contract?.version ?? "")
+      contract?.version !== version
     ) {
       throw new Error(`${listKey} catalog order or identity drifted at ${name}`);
     }
@@ -343,7 +507,7 @@ function writeContractCandidates({ outputRoot, contracts, expectedNames, candida
 }
 
 function renderFamilySources() {
-  const result = spawnSync("go", ["run", "./cmd/edge-form-source"], {
+  const result = spawnSync("go", ["run", "./cmd/current-form-source"], {
     cwd: repositoryRoot,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -353,25 +517,34 @@ function renderFamilySources() {
   }
   const rendered = JSON.parse(result.stdout);
   if (
-    rendered?.family !== FAMILY ||
-    rendered?.forms?.length !== forms.length ||
-    rendered?.interfaces?.length !== interfaceNames.length ||
-    rendered?.bindings?.length !== bindingNames.length
+    !Array.isArray(rendered?.families) ||
+    rendered.families.length !== familySpecs.length ||
+    rendered?.interfaces?.length !== interfaceContracts.length ||
+    rendered?.bindings?.length !== bindingContracts.length
   ) {
     throw new Error("family Form source emitted an unexpected document shape");
   }
   return rendered;
 }
 
-function verifyPackages(root) {
-  for (const [, slug] of forms) {
-    const result = spawnSync(
-      "go",
-      ["run", "./cmd/form-package", "verify", path.join(root, slug)],
-      { cwd: repositoryRoot, encoding: "utf8" },
-    );
-    if (result.status !== 0) {
-      throw new Error(`${slug}: package verification failed\n${result.stderr}${result.stdout}`);
+function verifyPackages(roots) {
+  for (const family of familySpecs) {
+    for (const [, slug] of family.forms) {
+      const result = spawnSync(
+        "go",
+        [
+          "run",
+          "./cmd/form-package",
+          "verify",
+          path.join(roots.get(family.group), slug),
+        ],
+        { cwd: repositoryRoot, encoding: "utf8" },
+      );
+      if (result.status !== 0) {
+        throw new Error(
+          `${family.group}/${slug}: package verification failed\n${result.stderr}${result.stdout}`,
+        );
+      }
     }
   }
 }
@@ -437,13 +610,13 @@ function compareFile(expected, actualPath, label) {
 // maps carry the same Form entries; the shape is what lets that stop being
 // true without a state migration
 // (spec/decisions/0017-provider-state-survives-form-evolution-and-interruption.md).
-function renderRegistry(manifest, supportedIdentities) {
+function renderRegistry(generation, supportedIdentities) {
   const exactKey = (entry) =>
     `{APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
     `Kind: ${JSON.stringify(entry.formRef.kind)}, ` +
     `DefinitionVersion: ${JSON.stringify(entry.formRef.definitionVersion)}, ` +
     `SchemaDigest: ${JSON.stringify(entry.formRef.schemaDigest)}}`;
-  const defaults = manifest.forms
+  const defaults = generation.forms
     .map(
       (entry) =>
         `\t{APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
@@ -487,12 +660,12 @@ function renderRegistry(manifest, supportedIdentities) {
 // forever, and the current candidate generation's identities are what this
 // build creates and must equally serve. Before the catalog moved past the
 // published release the two sets were equal and the union is a no-op.
-function unionSupportedIdentities(manifest, embeddedIdentities) {
+function unionSupportedIdentities(generation, embeddedIdentities) {
   const byKey = new Map();
   for (const form of embeddedIdentities) {
     byKey.set(canonicalJson(form.formRef), form);
   }
-  for (const { formRef, packageDigest } of manifest.forms) {
+  for (const { formRef, packageDigest } of generation.forms) {
     const key = canonicalJson(formRef);
     // A candidate contributes its IDENTITY. The provider's authoring name is
     // the provider's, and a released ledger entry that carries one keeps it
@@ -507,7 +680,7 @@ function unionSupportedIdentities(manifest, embeddedIdentities) {
 // remains in v3Supported forever, even after a later family becomes the create
 // default. This is the source-level state-compatibility fence for existing
 // Beta resources; release/provider-form-identities.json is never regenerated.
-function loadProviderIdentityLedger(manifest) {
+function loadProviderIdentityLedger(generation) {
   const ledger = JSON.parse(readFileSync(providerIdentityLedgerPath, "utf8"));
   const release = JSON.parse(readFileSync(releaseDescriptorPath, "utf8"));
   if (
@@ -583,35 +756,17 @@ function loadProviderIdentityLedger(manifest) {
   if (
     currentRelease === undefined ||
     currentRelease.portableApiVersion !== release.versioning.portableApiVersion ||
-    currentRelease.formMaturity !== manifest.formMaturity
+    generation.families.some(
+      (manifest) => manifest.formMaturity !== currentRelease.formMaturity,
+    )
   ) {
     throw new Error("provider Form identity ledger has no exact entry for the release descriptor");
   }
-  if (currentRelease.family === manifest.family) {
-    // The catalog builds the generation the descriptor-named release
-    // embeds, so the two must be byte-equal: a drifted digest is a changed
-    // contract hiding inside a published SemVer.
-    const currentManifest = manifest.forms.map(
-      ({ resourceType, formRef, packageDigest }) => ({
-        resourceType,
-        formRef,
-        packageDigest,
-      }),
-    );
-    if (canonicalJson(currentRelease.forms) !== canonicalJson(currentManifest)) {
-      throw new Error(
-        "published embedded FormRefs/digests drifted; mint a new family identity and provider release instead of changing the ledger",
-      );
-    }
-  } else {
-    // The catalog has moved PAST the published release: the Beta 2 state
-    // decision 0046 names, with the published generation frozen in its
-    // ledger entry and the current generation awaiting its own release.
-    // What holds then: no released entry may already claim the new family
-    // version (a release's family is immutable), and the frozen-entry
-    // checks above already refused any edit to the published set. The
-    // byte-equality obligation transfers to the next release's gate when
-    // its ledger entry is minted.
+  // The versionless candidate families have moved past every provider release
+  // in this retained ledger. No released entry may already claim one of these
+  // groups; its exact bytes and Provider-owned resourceType mapping would then
+  // need a new append-only release ledger entry rather than regeneration here.
+  for (const manifest of generation.families) {
     if (families.has(manifest.family)) {
       throw new Error(
         `family ${manifest.family} is already claimed by a released ledger entry; a moved catalog mints a NEW family version`,
@@ -661,7 +816,12 @@ function inventory(root) {
 }
 
 function assertSafeGeneratedTarget(target) {
-  const expected = Object.values(trackedTargets);
+  const expected = [
+    ...trackedTargets.forms.values(),
+    trackedTargets.familyIndex,
+    trackedTargets.interfaces,
+    trackedTargets.bindings,
+  ];
   if (!expected.includes(target) || path.dirname(target) === repositoryRoot) {
     throw new Error(`refusing unsafe generated target ${target}`);
   }
@@ -674,6 +834,10 @@ function writeJson(file, value) {
 
 function digest(bytes) {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+function sha256Hex(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function digestCanonicalJSON(file) {

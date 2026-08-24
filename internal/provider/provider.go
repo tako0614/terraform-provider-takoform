@@ -65,7 +65,7 @@ type takoformProvider struct {
 }
 
 // providerData is shared with every resource via Configure. It carries the one
-// negotiated Host API lane this build speaks, forms.takoform.com/v1beta1. The
+// negotiated Host API lane this build speaks, forms.takoform.com/v1. The
 // retained v1alpha2 lane rode beside it through provider v2.x and was
 // withdrawn with its epoch; existing v2.x installations keep working because a
 // released provider is self-contained (decision 0037).
@@ -73,7 +73,7 @@ type providerData struct {
 	clientV3     *clientv3.Client
 	v3Err        error
 	defaultSpace string
-	// support caches the v1beta1 Host Support Profiles the plan decides
+	// support caches the stable v1 Host Support Profiles the plan decides
 	// against. It is per provider configuration because a profile is a static
 	// statement about one host, and a plan asks the same questions once per
 	// resource (v3_host_support.go).
@@ -220,11 +220,9 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	// Exactly the fifteen typed Edge Platform Family resources, one for each
-	// catalog Form. There is no generic carrier, and the nine retained
-	// v1alpha2 resource types were withdrawn with their epoch — removing a
-	// published resource type is what makes this source a provider MAJOR
-	// (spec/versioning.md; release/migrations/v2-to-v3.md).
+	// Exactly the 31 typed current-family resources, one for each Form in the
+	// generated current-family index. There is no generic carrier, and the
+	// retained Provider 2.1.1 identities are not registered in this major line.
 	return newV3FormResources()
 }
 
@@ -234,8 +232,8 @@ func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.Da
 	return nil
 }
 
-// configureClientV3 negotiates the Host API v1beta1 lane against the same
-// endpoint and token. The v1beta1 discovery contract is strict (closed
+// configureClientV3 negotiates the stable Host API v1 lane against the same
+// endpoint and token. The stable discovery contract is strict (closed
 // api_versions, required features, same-origin endpoints), so a successful
 // Discover is the whole gate.
 func negotiateLane(
@@ -252,7 +250,7 @@ func negotiateLane(
 func configureClientV3(ctx context.Context, endpoint, token string, httpClient *http.Client) (*clientv3.Client, error) {
 	c := clientv3.NewWithOptions(endpoint, token, httpClient, clientv3.Options{})
 	if _, err := c.Discover(ctx); err != nil {
-		return nil, fmt.Errorf("discovering Takoform v1beta1 endpoint %q: %w", endpoint, err)
+		return nil, fmt.Errorf("discovering Takoform v1 endpoint %q: %w", endpoint, err)
 	}
 	return c, nil
 }

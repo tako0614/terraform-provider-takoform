@@ -70,7 +70,8 @@ func v3ValidateEnvironmentNamespace(
 				claim.Path,
 				"Duplicate module environment name",
 				"The name "+claim.Name+" is already declared at "+previous.String()+". "+
-					"vars, required_sensitive_vars, and every binding list project into one module "+
+					"vars, required_sensitive_vars, every typed binding, and every sealed standard-service "+
+					"binding project into one module "+
 					"environment namespace, so a name belongs to exactly one of them. A conforming "+
 					"host refuses this configuration before it mutates anything.",
 			)
@@ -88,7 +89,7 @@ func v3EnvironmentClaims(
 ) []v3EnvironmentClaim {
 	attribute := path.Root(v3AttributeName(entry.Field))
 	switch entry.Source {
-	case model.EnvironmentBindingNames:
+	case model.EnvironmentBindingNames, model.EnvironmentExternalServiceNames:
 		var list types.List
 		if readDiags := config.GetAttribute(ctx, attribute, &list); readDiags.HasError() {
 			diags.Append(readDiags...)

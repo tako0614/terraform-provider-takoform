@@ -10,24 +10,31 @@ import (
 // supply one exactly as the generation pipeline does.
 type stubResolver struct{}
 
-func (stubResolver) TargetFormRefs(targetKind string) ([]TargetFormRef, error) {
-	return []TargetFormRef{{
-		APIVersion:        "edge.forms.takoform.com/v1beta1",
-		Kind:              targetKind,
-		DefinitionVersion: "0.1.0",
-		SchemaDigest:      "sha256:" + strings.Repeat("a", 64),
-	}}, nil
+func (stubResolver) ResolveResourceTarget(target ResourceTarget) (ResolvedResourceTarget, error) {
+	resolved := ResolvedResourceTarget{ResourceNamePattern: PatternResourceName}
+	if target.Contract.ExactForm {
+		resolved.TargetFormRefs = []TargetFormRef{{
+			APIVersion:        target.Group,
+			Kind:              target.Kind,
+			DefinitionVersion: "0.1.0",
+			SchemaDigest:      "sha256:" + strings.Repeat("a", 64),
+		}}
+	}
+	if target.Contract.Interface != nil {
+		resolved.RequiredInterface = &RequiredInterface{
+			APIVersion:   "interfaces.takoform.com/v1alpha1",
+			Name:         target.Contract.Interface.Name,
+			Version:      target.Contract.Interface.Version,
+			SchemaDigest: "sha256:" + strings.Repeat("b", 64),
+		}
+	}
+	return resolved, nil
 }
 
-func (stubResolver) ResourceNamePattern() string { return PatternResourceName }
-
-func (stubResolver) RequiredInterface(name, version string) (RequiredInterface, error) {
-	return RequiredInterface{
-		APIVersion:   "interfaces.takoform.com/v1alpha1",
-		Name:         name,
-		Version:      version,
-		SchemaDigest: "sha256:" + strings.Repeat("b", 64),
-	}, nil
+func (stubResolver) ResolveExactFormRelations(TargetFormRef) ([]Relation, error) {
+	return []Relation{{
+		Pointer: "/function", TargetAPIVersion: "function.forms.takoform.com", TargetKind: "Function",
+	}}, nil
 }
 
 // testInterfaceContract is the contract every reference-shaped field in this
@@ -117,5 +124,97 @@ func TestDerivationRefusesAnUnannotatedReference(t *testing.T) {
 	_, err := DeriveRelations(schema)
 	if err == nil || !strings.Contains(err.Error(), "states no target contract") {
 		t.Fatalf("derive error = %v, want the unannotated-reference refusal", err)
+	}
+}
+
+type resourceTargetResolverFunc func(ResourceTarget) (ResolvedResourceTarget, error)
+
+func (resolve resourceTargetResolverFunc) ResolveResourceTarget(target ResourceTarget) (ResolvedResourceTarget, error) {
+	return resolve(target)
+}
+
+// TestCrossFamilyResourceTargetPinsItsOwnGroup proves a reference does not
+// inherit the source Form's family. Cross-family references state the exact
+// target group, kind, and contract as one ResourceTarget.
+func TestCrossFamilyResourceTargetPinsItsOwnGroup(t *testing.T) {
+	t.Parallel()
+	form := semanticForm(Field{
+		HCL: "queue", Wire: "queue", Kind: KindResourceRef, Required: true,
+		Doc: "Queue receiving the delivery.", Example: map[string]any{
+			"apiVersion": "queue.forms.takoform.com", "kind": "PullQueue", "name": "jobs",
+		},
+		ResourceTarget: &ResourceTarget{
+			Group: "queue.forms.takoform.com", Kind: "PullQueue",
+			Contract: TargetContract{ExactForm: true},
+		},
+	})
+	schema, err := form.DesiredSchema(stubResolver{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := schema["properties"].(map[string]any)["queue"].(map[string]any)
+	properties := queue["properties"].(map[string]any)
+	if got := properties["apiVersion"].(map[string]any)["const"]; got != "queue.forms.takoform.com" {
+		t.Fatalf("apiVersion const = %v, want the ResourceTarget group", got)
+	}
+}
+
+// TestResolvedExactFormMustMatchTheWholeResourceTarget covers both exact
+// identity coordinates a resolver could accidentally look up by kind alone.
+func TestResolvedExactFormMustMatchTheWholeResourceTarget(t *testing.T) {
+	t.Parallel()
+	form := semanticForm(Field{
+		HCL: "queue", Wire: "queue", Kind: KindResourceRef, Required: true,
+		Doc: "Queue receiving the delivery.", Example: map[string]any{
+			"apiVersion": "queue.forms.takoform.com", "kind": "PullQueue", "name": "jobs",
+		},
+		ResourceTarget: &ResourceTarget{
+			Group: "queue.forms.takoform.com", Kind: "PullQueue",
+			Contract: TargetContract{ExactForm: true},
+		},
+	})
+	for name, mismatch := range map[string]TargetFormRef{
+		"wrong group": {
+			APIVersion: "topic.forms.takoform.com", Kind: "PullQueue",
+			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:" + strings.Repeat("a", 64),
+		},
+		"wrong kind": {
+			APIVersion: "queue.forms.takoform.com", Kind: "DifferentQueue",
+			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:" + strings.Repeat("a", 64),
+		},
+	} {
+		name, mismatch := name, mismatch
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			resolver := resourceTargetResolverFunc(func(ResourceTarget) (ResolvedResourceTarget, error) {
+				return ResolvedResourceTarget{
+					ResourceNamePattern: PatternResourceName,
+					TargetFormRefs:      []TargetFormRef{mismatch},
+				}, nil
+			})
+			_, err := form.DesiredSchema(resolver)
+			if err == nil || !strings.Contains(err.Error(), "does not match ResourceTarget") {
+				t.Fatalf("DesiredSchema error = %v, want the exact target mismatch", err)
+			}
+		})
+	}
+}
+
+func TestResourceTargetDefaultMustMatchTheExactGroup(t *testing.T) {
+	t.Parallel()
+	form := semanticForm(Field{
+		HCL: "queue", Wire: "queue", Kind: KindResourceRef,
+		Doc: "Queue receiving the delivery.",
+		Default: map[string]any{
+			"apiVersion": "topic.forms.takoform.com", "kind": "PullQueue", "name": "jobs",
+		},
+		ResourceTarget: &ResourceTarget{
+			Group: "queue.forms.takoform.com", Kind: "PullQueue",
+			Contract: TargetContract{ExactForm: true},
+		},
+	})
+	err := form.Validate()
+	if err == nil || !strings.Contains(err.Error(), "queue.forms.takoform.com") {
+		t.Fatalf("Validate error = %v, want exact target group refusal", err)
 	}
 }

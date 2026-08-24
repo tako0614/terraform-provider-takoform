@@ -1,5 +1,5 @@
-// Package currentformmodel is the rich authoring model for v1beta1 Form
-// Definitions (the current Beta Form Family contract fixed by decision 0035).
+// Package currentformmodel is the shared rich authoring model for retained
+// retained v1beta1 Form Definitions and the current closed stable-v1 vocabulary.
 //
 // A Form is described once here — its role, its typed fields, the exact
 // Interface and Binding contracts it references — and every derived surface
@@ -13,6 +13,7 @@
 package currentformmodel
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -71,8 +72,17 @@ const (
 	KindStringEnum FieldKind = "string-enum"
 	KindInteger    FieldKind = "integer"
 	KindBoolean    FieldKind = "boolean"
+	// KindStringList is an ordered string array. Duplicates are values, not an
+	// authoring error: command/argument lists may repeat the same token.
+	KindStringList FieldKind = "string-list"
 	// KindStringSet is a unique-item string array closed by ItemPattern or Enum.
 	KindStringSet FieldKind = "string-set"
+	// KindStringMap is a bounded map from portable keys to bounded strings.
+	KindStringMap FieldKind = "string-map"
+	// KindStringSetMap is a bounded map whose values are bounded string sets.
+	// Defaults and examples sort each set lexically so a semantic set has one
+	// deterministic document spelling.
+	KindStringSetMap FieldKind = "string-set-map"
 	// KindJSONMap is the data-only vars map: reviewed key grammar, any JSON
 	// value bounded to depth 8 containers, and a per-object key ceiling.
 	KindJSONMap FieldKind = "json-map"
@@ -80,17 +90,20 @@ const (
 	KindResourceRef     FieldKind = "resource-ref"
 	KindResourceRefList FieldKind = "resource-ref-list"
 	// KindExternalServiceList declares sealed external standard-service
-	// slots (decision 0045): a SCREAMING_SNAKE name plus a protocol from the
-	// closed standards vocabulary, with an optional requiredness flag.
+	// slots: a SCREAMING_SNAKE binding name plus an opaque normalized
+	// reverse-DNS protocol identifier, with an optional requiredness flag.
 	// Portable state never carries the endpoint or credential that satisfies
-	// a slot; the host projects protocol-fixed members into the same runtime
-	// namespace binding names occupy.
+	// a slot; the Host integration projects one sealed runtime-native binding
+	// under the slot name and owns its internal entries.
 	KindExternalServiceList FieldKind = "external-service-list"
 	// KindBindingList declares typed capability bindings: binding name plus a
 	// target-kind resource reference (decision 0010).
 	KindBindingList FieldKind = "binding-list"
 	KindObjectList  FieldKind = "object-list"
 	KindObject      FieldKind = "object"
+	// KindTaggedObject is a closed discriminated union. Every variant is a
+	// closed object with one discriminator const.
+	KindTaggedObject FieldKind = "tagged-object"
 )
 
 // Field is one typed portable field of a Form.
@@ -126,6 +139,20 @@ type Field struct {
 	// ItemPattern anchors KindStringSet items when Enum is empty.
 	ItemPattern        string
 	MinItems, MaxItems int
+	// MinProperties and MaxProperties bound typed map entries. Map keys use the
+	// reviewed portable key grammar and RFC 8785 supplies deterministic key
+	// order at canonical encoding time.
+	MinProperties, MaxProperties int
+	// ResourceTarget is the exact cross-family address and contract of a new
+	// reference-shaped field. Group is never inherited from the source Form:
+	// two families may use the same kind name, and resolving by kind alone would
+	// make the target depend on which catalogs a host happened to install.
+	ResourceTarget *ResourceTarget
+	// TargetKind and Target are the retained same-family authoring spelling used
+	// by the already-published v1beta1 declarations. New declarations use the
+	// aggregate ResourceTarget above. Keeping the retained spelling here avoids
+	// rewriting immutable Definition bytes while the one helper below gives both
+	// spellings identical schema and relation behavior.
 	// TargetKind names the exact Form kind a KindResourceRef,
 	// KindResourceRefList, or KindBindingList points at.
 	TargetKind string
@@ -139,6 +166,10 @@ type Field struct {
 	BindingType string
 	// Fields declares the closed members of KindObject and KindObjectList.
 	Fields []Field
+	// Discriminator and Variants declare KindTaggedObject. Discriminator is the
+	// wire member whose const selects exactly one closed variant.
+	Discriminator string
+	Variants      []TaggedObjectVariant
 
 	// ProjectsEnvironmentNames marks a field whose VALUES name entries in the
 	// same runtime environment namespace that binding names occupy: the map
@@ -195,6 +226,14 @@ type Field struct {
 	CounterExample any
 }
 
+// TaggedObjectVariant is one closed branch of a KindTaggedObject. Tag is the
+// discriminator value and Fields are every other member admitted in that
+// branch.
+type TaggedObjectVariant struct {
+	Tag    string
+	Fields []Field
+}
+
 // SummedMember is the declared cross-element arithmetic of one object list:
 // the member that is added up, and the total it must reach exactly.
 type SummedMember struct {
@@ -232,6 +271,17 @@ type Constraint struct {
 	Property string `json:"property,omitempty"`
 	// Output is the declared output member the host mints.
 	Output string `json:"output,omitempty"`
+	// References is one ordered pair. orderedPair compares two required numeric
+	// desired values; distinctPair and uniquePair compare two resolved
+	// relations. The kind determines the value domain and no coercion occurs.
+	References []string `json:"references,omitempty"`
+	// Anchor, Members and Through define sameResolvedTarget. Anchor is one
+	// resolved relation in this resource; Members is a list relation in this
+	// resource; Through is the single relation each resolved member target must
+	// itself hold to Anchor's UID.
+	Anchor  string `json:"anchor,omitempty"`
+	Members string `json:"members,omitempty"`
+	Through string `json:"through,omitempty"`
 }
 
 // ConstraintKind is the closed vocabulary. A kind outside it is not a
@@ -252,6 +302,25 @@ const (
 	// ConstraintHostAssigned: the host mints this output; no desired property
 	// states it and no configuration reconstructs it.
 	ConstraintHostAssigned ConstraintKind = "hostAssigned"
+	// ConstraintOrderedPair requires the numeric value at References[0] to be
+	// less than or equal to the numeric value at References[1]. Both pointers
+	// name required desired fields.
+	ConstraintOrderedPair ConstraintKind = "orderedPair"
+	// ConstraintUniqueBy requires one scalar member to be unique among the
+	// elements of one object list.
+	ConstraintUniqueBy ConstraintKind = "uniqueBy"
+	// ConstraintAcyclic rejects a relation edge that would close a UID graph
+	// cycle through the same declared relation.
+	ConstraintAcyclic ConstraintKind = "acyclic"
+	// ConstraintDistinctPair requires two relations in one desired resource to
+	// resolve to different UIDs.
+	ConstraintDistinctPair ConstraintKind = "distinctPair"
+	// ConstraintUniquePair allows at most one live resource of this Form kind to
+	// hold one ordered pair of resolved UIDs.
+	ConstraintUniquePair ConstraintKind = "uniquePair"
+	// ConstraintSameResolvedTarget requires every member target's Through
+	// relation to resolve to the Anchor UID.
+	ConstraintSameResolvedTarget ConstraintKind = "sameResolvedTarget"
 )
 
 // Constraints derives the Form's constraint list from what its fields and
@@ -259,33 +328,62 @@ const (
 // where a reader looks for it — and the PUBLISHED document carries one list,
 // which is where an implementer looks for it.
 func (f Form) Constraints() []Constraint {
-	out := []Constraint{}
-	for _, field := range f.Fields {
-		if field.Exclusive != nil {
-			entry := Constraint{Kind: ConstraintExclusive, Reference: "/" + field.Wire}
-			if field.Exclusive.KeyedBy != "" {
-				entry.KeyedBy = field.Exclusive.KeyedBy
-			}
-			out = append(out, entry)
-		}
-		if field.Sum != nil {
-			out = append(out, Constraint{
-				Kind: ConstraintSum, List: "/" + field.Wire,
-				Member: field.Sum.Member, Total: field.Sum.Total,
-			})
-		}
-		if field.Claimed {
-			out = append(out, Constraint{Kind: ConstraintClaim, Property: "/" + field.Wire})
-		}
-	}
+	out := fieldConstraints(f.Fields, "")
 	for _, output := range f.Outputs {
 		if output.HostAssigned {
 			out = append(out, Constraint{Kind: ConstraintHostAssigned, Output: "/" + output.Wire})
 		}
 	}
+	out = append(out, f.StructuralConstraints...)
+	out = append(out, f.ResolvedUIDConstraints...)
 	if len(out) == 0 {
 		return nil
 	}
+	return out
+}
+
+// fieldConstraints walks the same recursive object/list/tagged tree as schema
+// and relation derivation. A marker on a nested member therefore cannot be
+// accepted by authoring validation and then disappear from the published
+// Definition. Exact duplicates can arise when two tagged variants deliberately
+// share one identical member shape; they are one pointer rule, so emit it once.
+func fieldConstraints(fields []Field, parent string) []Constraint {
+	var out []Constraint
+	seen := map[string]bool{}
+	var walk func([]Field, string)
+	appendUnique := func(entry Constraint) {
+		key := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%d", entry.Kind, entry.Reference, entry.KeyedBy, entry.List, entry.Member, entry.Total)
+		key += "\x00" + entry.Property
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, entry)
+		}
+	}
+	walk = func(fields []Field, prefix string) {
+		for _, field := range fields {
+			pointer := prefix + "/" + escapeJSONPointerToken(field.Wire)
+			if field.Exclusive != nil {
+				appendUnique(Constraint{Kind: ConstraintExclusive, Reference: pointer, KeyedBy: field.Exclusive.KeyedBy})
+			}
+			if field.Sum != nil {
+				appendUnique(Constraint{Kind: ConstraintSum, List: pointer, Member: field.Sum.Member, Total: field.Sum.Total})
+			}
+			if field.Claimed {
+				appendUnique(Constraint{Kind: ConstraintClaim, Property: pointer})
+			}
+			switch field.Kind {
+			case KindObject:
+				walk(field.Fields, pointer)
+			case KindObjectList:
+				walk(field.Fields, pointer+"/*")
+			case KindTaggedObject:
+				for _, variant := range field.Variants {
+					walk(variant.Fields, pointer)
+				}
+			}
+		}
+	}
+	walk(fields, parent)
 	return out
 }
 
@@ -311,7 +409,7 @@ type InterfaceRefSource struct {
 // perfectly good target for a reason the source does not actually have.
 type TargetContract struct {
 	// ExactForm requires the target to be one of the exact Form identities the
-	// build renders for the field's TargetKind.
+	// aggregate resolver returns for the ResourceTarget's group and kind.
 	ExactForm bool
 	// Interface names the exact Interface contract the target must provide.
 	Interface *InterfaceRefSource
@@ -319,6 +417,22 @@ type TargetContract struct {
 
 // Declared reports whether this field states a target contract at all.
 func (t TargetContract) Declared() bool { return t.ExactForm || t.Interface != nil }
+
+// ResourceTarget is one exact cross-resource dependency: the target Form
+// group, kind, and the one contract the source requires of it. Group is the
+// complete Form group identity as it appears in FormRef.apiVersion; it may be a
+// retained versioned group or a current versionless group, but it is never a
+// floating family/catalog lookup.
+type ResourceTarget struct {
+	Group    string
+	Kind     string
+	Contract TargetContract
+}
+
+// Declared reports whether any part of the target was supplied.
+func (t ResourceTarget) Declared() bool {
+	return t.Group != "" || t.Kind != "" || t.Contract.Declared()
+}
 
 // BindingRefSource names an exact Binding contract by name and version.
 type BindingRefSource struct {
@@ -328,15 +442,13 @@ type BindingRefSource struct {
 
 // Form is one member of a Form Family.
 type Form struct {
-	// Family is the API group this Form belongs to. It is the apiVersion every
-	// cross-resource reference this Form declares points into: a reference is
-	// {apiVersion, kind, name}, and both the group and the kind are constants
-	// of the referring field.
-	Family       Family
-	Kind         string // PascalCase portable kind
-	Slug         string // kebab-case package directory
-	ResourceType string // takoform_* Terraform resource type
-	Role         Role
+	// Family is the API group this Form belongs to. Retained same-family
+	// references inherit it; every new ResourceTarget pins its own group, so a
+	// source may address another family without a kind-only catalog lookup.
+	Family Family
+	Kind   string // PascalCase portable kind
+	Slug   string // kebab-case package directory
+	Role   Role
 	// RequiresHostAPI is the earliest Host API lane this Form's contract needs
 	// (decision 0047). It is declared per FORM, not per family: what a Form
 	// needs from the substrate is a property of its own contract, so one
@@ -363,6 +475,15 @@ type Form struct {
 
 	ProvidedInterfaces []InterfaceRefSource
 	AcceptedBindings   []BindingRefSource
+	// StructuralConstraints carries closed rules across desired properties
+	// that standard JSON Schema cannot express: numeric ordering between two
+	// required fields and scalar uniqueness within one object list. They are
+	// provider-neutral Form semantics and remain distinct from UID resolution.
+	StructuralConstraints []Constraint
+	// ResolvedUIDConstraints carries only the four closed cross-relation rules
+	// whose truth is decided after name resolution. Document-shape constraints
+	// remain JSON Schema; no universal graph expression is admitted here.
+	ResolvedUIDConstraints []Constraint
 }
 
 // ReservedResourceAttributes is the closed set of attribute names the
@@ -474,14 +595,11 @@ func (f Form) Validate() error {
 	if !hostAPILanePattern.MatchString(f.RequiresHostAPI) {
 		return fmt.Errorf("form %s declares requiresHostApi %q, which is not a Host API lane identity", f.Kind, f.RequiresHostAPI)
 	}
-	if f.Kind == "" || f.Slug == "" || f.ResourceType == "" || f.Title == "" || f.DefinitionVersion == "" {
+	if f.Kind == "" || f.Slug == "" || f.Title == "" || f.DefinitionVersion == "" {
 		return fmt.Errorf("form %q is missing identity fields", f.Kind)
 	}
 	if !f.Role.Valid() {
 		return fmt.Errorf("form %s declares unknown role %q", f.Kind, f.Role)
-	}
-	if !strings.HasPrefix(f.ResourceType, "takoform_") {
-		return fmt.Errorf("form %s resource type %q is outside takoform_*", f.Kind, f.ResourceType)
 	}
 	seen := map[string]struct{}{}
 	for _, field := range f.Fields {
@@ -519,7 +637,7 @@ func (f Form) Validate() error {
 				f.Kind, field.Wire,
 			)
 		}
-		if err := validateField(f.Kind, field); err != nil {
+		if err := validateField(f.Kind, f.Family.APIVersion(), field); err != nil {
 			return err
 		}
 	}
@@ -529,14 +647,31 @@ func (f Form) Validate() error {
 	if len(f.AcceptedBindings) > 0 && f.Role != RoleRevision {
 		return fmt.Errorf("form %s role %s accepts bindings; only revision Forms hold them", f.Kind, f.Role)
 	}
-	// A reference names its target group as a constant, so a Form that declares
-	// one must know which group it belongs to. Without it the emitted schema
-	// would pin an empty apiVersion and every reference would be unresolvable.
+	// A Form that declares a relation must carry its own group identity. Retained
+	// same-family references also inherit this value; without it their emitted
+	// schema would pin an empty apiVersion and be unresolvable.
 	// The GROUP is what must be present; the version segment is optional,
 	// because a group carries one only while it has a published generation to
 	// keep apart (decision 0049).
 	if f.declaresReference() && f.Family.Group == "" {
 		return fmt.Errorf("form %s declares a cross-resource reference without a Family group", f.Kind)
+	}
+	if err := validateResolvedUIDConstraints(f); err != nil {
+		return err
+	}
+	if err := validateStructuralConstraints(f); err != nil {
+		return err
+	}
+	minimum := f.minimumRequiredHostAPI()
+	sufficient, err := hostAPILaneAtLeast(f.RequiresHostAPI, minimum)
+	if err != nil {
+		return fmt.Errorf("form %s compares requiresHostApi: %w", f.Kind, err)
+	}
+	if !sufficient {
+		return fmt.Errorf(
+			"form %s declares requiresHostApi %s below the mechanism-derived minimum %s",
+			f.Kind, f.RequiresHostAPI, minimum,
+		)
 	}
 	return nil
 }
@@ -595,7 +730,7 @@ func (f Form) validateOutputs(desiredNames map[string]struct{}) error {
 				"form %s output %s declares an absence meaning; a host returns every declared output, so there is no absent case",
 				f.Kind, output.Wire,
 			)
-		case output.Target.Declared() || output.TargetKind != "" || output.BindingType != "":
+		case output.ResourceTarget != nil || output.Target.Declared() || output.TargetKind != "" || output.BindingType != "":
 			return fmt.Errorf("form %s output %s points at another resource; an output is a value, never a relation", f.Kind, output.Wire)
 		case output.ProjectsEnvironmentNames:
 			return fmt.Errorf("form %s output %s claims to project environment names; only desired state does", f.Kind, output.Wire)
@@ -645,6 +780,11 @@ func fieldsDeclareReference(fields []Field) bool {
 		if fieldsDeclareReference(field.Fields) {
 			return true
 		}
+		for _, variant := range field.Variants {
+			if fieldsDeclareReference(variant.Fields) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -656,9 +796,23 @@ var absenceSemanticPhrases = []string{
 	"without it", "when absent", "if absent", "when omitted", "if omitted", "in its absence",
 }
 
-func validateField(kind string, field Field) error {
+func validateField(kind, sourceGroup string, field Field) error {
 	if field.HCL == "" || field.Wire == "" || field.Doc == "" {
 		return fmt.Errorf("form %s field %q must declare HCL, Wire, and Doc", kind, field.Wire)
+	}
+	if field.MinItems < 0 || field.MaxItems < 0 ||
+		(field.MaxItems > 0 && field.MinItems > field.MaxItems) {
+		return fmt.Errorf(
+			"form %s field %s declares invalid item bounds %d through %d",
+			kind, field.Wire, field.MinItems, field.MaxItems,
+		)
+	}
+	if field.MinProperties < 0 || field.MaxProperties < 0 ||
+		(field.MaxProperties > 0 && field.MinProperties > field.MaxProperties) {
+		return fmt.Errorf(
+			"form %s field %s declares invalid property bounds %d through %d",
+			kind, field.Wire, field.MinProperties, field.MaxProperties,
+		)
 	}
 	if field.Required && field.Default != nil {
 		return fmt.Errorf("form %s required field %s declares a Default; a required value is never omitted", kind, field.Wire)
@@ -685,7 +839,7 @@ func validateField(kind string, field Field) error {
 			)
 		}
 	}
-	if err := validateFieldDefault(kind, field); err != nil {
+	if err := validateFieldDefault(kind, sourceGroup, field); err != nil {
 		return err
 	}
 	if field.HostAssigned && field.Kind != KindString {
@@ -736,15 +890,14 @@ func validateField(kind string, field Field) error {
 	}
 	if field.ProjectsEnvironmentNames {
 		switch field.Kind {
-		// An external-service list names environment entries INDIRECTLY: what
-		// joins the namespace is the projected closure of each slot, not the
-		// slot names, which is why the uniqueness rule is stated over that
-		// closure (spec/standard-services).
+		// An external-service list contributes the sealed runtime-native
+		// binding key. Its opaque protocol integration owns the binding's
+		// internal entries; the Form model must not duplicate that projection.
 		case KindJSONMap, KindStringSet, KindExternalServiceList:
 		default:
 			return fmt.Errorf(
 				"form %s field %s marks ProjectsEnvironmentNames on kind %q; only a json-map's keys, "+
-					"a string-set's items, or an external-service list's projected members can name "+
+					"a string-set's items, or an external-service list's slot names can name "+
 					"environment entries",
 				kind, field.Wire, field.Kind,
 			)
@@ -752,13 +905,13 @@ func validateField(kind string, field Field) error {
 	}
 	switch field.Kind {
 	case KindResourceRef, KindResourceRefList, KindBindingList:
-		if err := validateTargetContract(kind, field); err != nil {
+		if err := validateResourceTarget(kind, field); err != nil {
 			return err
 		}
 	default:
-		if field.Target.Declared() {
+		if field.ResourceTarget != nil || field.Target.Declared() || field.TargetKind != "" {
 			return fmt.Errorf(
-				"form %s field %s declares a target contract on kind %q; only a reference-shaped field points at another resource",
+				"form %s field %s declares a ResourceTarget on kind %q; only a reference-shaped field points at another resource",
 				kind, field.Wire, field.Kind,
 			)
 		}
@@ -772,16 +925,40 @@ func validateField(kind string, field Field) error {
 		if len(field.Enum) == 0 {
 			return fmt.Errorf("form %s enum field %s declares no values", kind, field.Wire)
 		}
+	case KindStringList:
+		if len(field.Enum) == 0 && field.ItemPattern == "" {
+			return fmt.Errorf("form %s string collection field %s is open; declare Enum or ItemPattern", kind, field.Wire)
+		}
+		if field.MaxItems == 0 {
+			return fmt.Errorf("form %s string collection field %s is unbounded; declare MaxItems", kind, field.Wire)
+		}
+		if len(field.Enum) == 0 && field.MaxLength == 0 {
+			return fmt.Errorf("form %s string collection field %s has unbounded string items; declare MaxLength", kind, field.Wire)
+		}
 	case KindStringSet:
 		if len(field.Enum) == 0 && field.ItemPattern == "" {
 			return fmt.Errorf("form %s string-set field %s is unbounded; declare Enum or ItemPattern", kind, field.Wire)
 		}
+	case KindStringMap:
+		if field.MaxProperties == 0 {
+			return fmt.Errorf("form %s string-map field %s is not bounded; declare MaxProperties", kind, field.Wire)
+		}
+		if len(field.Enum) == 0 && (field.ItemPattern == "" || field.MaxLength == 0) {
+			return fmt.Errorf("form %s string-map field %s has unbounded values; declare Enum or ItemPattern plus MaxLength", kind, field.Wire)
+		}
+	case KindStringSetMap:
+		if field.MaxProperties == 0 || field.MaxItems == 0 {
+			return fmt.Errorf("form %s string-set-map field %s is not bounded; declare MaxProperties and MaxItems", kind, field.Wire)
+		}
+		if len(field.Enum) == 0 && (field.ItemPattern == "" || field.MaxLength == 0) {
+			return fmt.Errorf("form %s string-set-map field %s has unbounded values; declare Enum or ItemPattern plus MaxLength", kind, field.Wire)
+		}
 	case KindResourceRef, KindResourceRefList:
-		if field.TargetKind == "" {
+		if field.ResourceTarget == nil && field.TargetKind == "" {
 			return fmt.Errorf("form %s field %s declares no target kind", kind, field.Wire)
 		}
 	case KindBindingList:
-		if field.TargetKind == "" {
+		if field.ResourceTarget == nil && field.TargetKind == "" {
 			return fmt.Errorf("form %s field %s declares no target kind", kind, field.Wire)
 		}
 		// The Binding contract travels into the desired schema as an
@@ -800,8 +977,41 @@ func validateField(kind string, field Field) error {
 				return fmt.Errorf("form %s field %s declares duplicate member %s", kind, field.Wire, member.Wire)
 			}
 			nested[member.Wire] = struct{}{}
-			if err := validateField(kind, member); err != nil {
+			if err := validateField(kind, sourceGroup, member); err != nil {
 				return err
+			}
+		}
+	case KindTaggedObject:
+		if field.Discriminator == "" {
+			return fmt.Errorf("form %s tagged object %s declares no discriminator", kind, field.Wire)
+		}
+		if len(field.Fields) != 0 {
+			return fmt.Errorf("form %s tagged object %s declares shared Fields; every member belongs to one closed variant", kind, field.Wire)
+		}
+		if len(field.Variants) < 2 || len(field.Variants) > 16 {
+			return fmt.Errorf("form %s tagged object %s declares %d variants; require 2 through 16", kind, field.Wire, len(field.Variants))
+		}
+		seenTags := map[string]struct{}{}
+		for _, variant := range field.Variants {
+			if !taggedVariantPattern.MatchString(variant.Tag) {
+				return fmt.Errorf("form %s tagged object %s declares invalid variant tag %q", kind, field.Wire, variant.Tag)
+			}
+			if _, duplicate := seenTags[variant.Tag]; duplicate {
+				return fmt.Errorf("form %s tagged object %s repeats variant tag %q", kind, field.Wire, variant.Tag)
+			}
+			seenTags[variant.Tag] = struct{}{}
+			seenMembers := map[string]struct{}{}
+			for _, member := range variant.Fields {
+				if member.Wire == field.Discriminator {
+					return fmt.Errorf("form %s tagged object %s variant %s redeclares discriminator %s", kind, field.Wire, variant.Tag, field.Discriminator)
+				}
+				if _, duplicate := seenMembers[member.Wire]; duplicate {
+					return fmt.Errorf("form %s tagged object %s variant %s repeats member %s", kind, field.Wire, variant.Tag, member.Wire)
+				}
+				seenMembers[member.Wire] = struct{}{}
+				if err := validateField(kind, sourceGroup, member); err != nil {
+					return err
+				}
 			}
 		}
 	case KindExternalServiceList:
@@ -818,27 +1028,78 @@ func validateField(kind string, field Field) error {
 	return nil
 }
 
+// effectiveResourceTarget returns the new aggregate target or translates the
+// retained same-family spelling without changing its emitted bytes.
+func (f Field) effectiveResourceTarget(sourceGroup string) (ResourceTarget, error) {
+	if f.ResourceTarget != nil {
+		if f.TargetKind != "" || f.Target.Declared() {
+			return ResourceTarget{}, errors.New("a reference declares both ResourceTarget and retained TargetKind/Target members")
+		}
+		return *f.ResourceTarget, nil
+	}
+	return ResourceTarget{Group: sourceGroup, Kind: f.TargetKind, Contract: f.Target}, nil
+}
+
+// EffectiveResourceTarget returns the complete target address and contract
+// used by provider/client adapters. New fields keep their explicit group;
+// retained declarations are translated through sourceGroup without exposing a
+// kind-only lookup seam.
+func (f Field) EffectiveResourceTarget(sourceGroup string) (ResourceTarget, error) {
+	return f.effectiveResourceTarget(sourceGroup)
+}
+
+var formGroupPattern = regexp.MustCompile(
+	`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:/v[0-9]+(?:(?:alpha|beta)[0-9]+)?)?$`,
+)
+
+var taggedVariantPattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]{0,63}$`)
+
+var formKindPattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+
+// validateResourceTarget proves that a reference has one complete exact
+// address and one target contract. The new spelling names its own group; the
+// retained spelling receives the source group when the schema is rendered.
+func validateResourceTarget(kind string, field Field) error {
+	if field.ResourceTarget == nil {
+		return validateTargetContract(kind, field.Wire, field.Target)
+	}
+	if field.TargetKind != "" || field.Target.Declared() {
+		return fmt.Errorf(
+			"form %s reference field %s declares both ResourceTarget and retained TargetKind/Target members",
+			kind, field.Wire,
+		)
+	}
+	target := *field.ResourceTarget
+	if !formGroupPattern.MatchString(target.Group) {
+		return fmt.Errorf("form %s reference field %s declares invalid target group %q", kind, field.Wire, target.Group)
+	}
+	if !formKindPattern.MatchString(target.Kind) {
+		return fmt.Errorf("form %s reference field %s declares invalid target kind %q", kind, field.Wire, target.Kind)
+	}
+	return validateTargetContract(kind, field.Wire, target.Contract)
+}
+
 // validateTargetContract proves one reference-shaped field states exactly one
 // requirement about its target. Both would be two sources of truth for one
 // dependency; neither would emit a reference that group and kind alone
 // satisfy, which is precisely the hole decision 0022 closes.
-func validateTargetContract(kind string, field Field) error {
+func validateTargetContract(kind, wire string, contract TargetContract) error {
 	switch {
-	case field.Target.ExactForm && field.Target.Interface != nil:
+	case contract.ExactForm && contract.Interface != nil:
 		return fmt.Errorf(
 			"form %s reference field %s declares both an exact Form contract and a required Interface; "+
 				"a relation depends on one or the other",
-			kind, field.Wire,
+			kind, wire,
 		)
-	case !field.Target.Declared():
+	case !contract.Declared():
 		return fmt.Errorf(
 			"form %s reference field %s declares no target contract; state the exact Form the relation "+
 				"depends on, or the Interface the target must provide (decision 0022)",
-			kind, field.Wire,
+			kind, wire,
 		)
-	case field.Target.Interface != nil &&
-		(field.Target.Interface.Name == "" || field.Target.Interface.Version == ""):
-		return fmt.Errorf("form %s reference field %s names an incomplete required Interface", kind, field.Wire)
+	case contract.Interface != nil &&
+		(contract.Interface.Name == "" || contract.Interface.Version == ""):
+		return fmt.Errorf("form %s reference field %s names an incomplete required Interface", kind, wire)
 	}
 	return nil
 }

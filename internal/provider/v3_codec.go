@@ -33,15 +33,20 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/retainededgeformcatalog"
 )
 
 // v3FormCodec is one exact FormRef together with the Form declaration that
 // decodes state written under it and encodes a spec for it.
 type v3FormCodec struct {
-	Ref  currentformregistry.V3Ref
-	Form model.Form
+	Ref           currentformregistry.V3Ref
+	Form          model.Form
+	DesiredSchema map[string]any
+}
+
+type v3CodecDeclaration struct {
+	Form          model.Form
+	DesiredSchema map[string]any
 }
 
 // v3CodecTable is the provider's exact-FormRef dispatch surface: the build's
@@ -49,7 +54,7 @@ type v3FormCodec struct {
 // returns a copy, so a build's own table can never be reshaped at a distance.
 type v3CodecTable struct {
 	registry *currentformregistry.V3Registry
-	codecs   map[currentformregistry.ExactFormKey]model.Form
+	codecs   map[currentformregistry.ExactFormKey]v3CodecDeclaration
 }
 
 // v3Codecs is the table this provider build carries. Every supported exact ref
@@ -64,26 +69,39 @@ var v3Codecs = sync.OnceValue(func() *v3CodecTable {
 func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
 	table := &v3CodecTable{
 		registry: registry,
-		codecs:   map[currentformregistry.ExactFormKey]model.Form{},
+		codecs:   map[currentformregistry.ExactFormKey]v3CodecDeclaration{},
 	}
-	// The supported set spans two generations (decision 0046): the current
-	// catalog declares the v1beta2 identities, and the frozen retained
-	// catalog declares the v1beta1 identities Registry-published provider
-	// v2.1.1 wrote state under. Each generation is decoded only by its own
-	// declarations; the digest check below keeps the pairing exact.
-	generations := []catalogGeneration{
-		{family: edgeformcatalog.Family, forms: edgeformcatalog.Forms},
-		{family: retainededgeformcatalog.Family, forms: retainededgeformcatalog.Forms},
+	// The supported set spans the eight current families plus the frozen
+	// retained v1beta1 generation (decision 0046). Every current family is
+	// selected explicitly from the generated current-family projection; the
+	// retained catalog is appended separately so the historical lane remains
+	// byte/identity independent of current Forms.
+	generations := make([]catalogGeneration, 0, len(providerV3CurrentFamilies())+1)
+	for _, family := range providerV3CurrentFamilies() {
+		generation := catalogGeneration{family: family.family, forms: family.forms}
+		generation.rendered, generation.renderErr = family.render()
+		generations = append(generations, generation)
 	}
-	generations[0].rendered, generations[0].renderErr = edgeformcatalog.RenderForms()
+	generations = append(generations, catalogGeneration{
+		family: retainededgeformcatalog.Family,
+		forms:  retainededgeformcatalog.Forms,
+	})
 	retainedRendered, retainedErr := retainededgeformcatalog.RenderForms()
-	generations[1].rendered = make([]edgeformcatalog.RenderedForm, 0, len(retainedRendered))
+	retainedGeneration := &generations[len(generations)-1]
+	retainedGeneration.rendered = make([]catalogRenderedForm, 0, len(retainedRendered))
 	for _, form := range retainedRendered {
-		generations[1].rendered = append(generations[1].rendered, edgeformcatalog.RenderedForm(form))
+		retainedGeneration.rendered = append(retainedGeneration.rendered, catalogRenderedForm{DefinitionJSON: form.DefinitionJSON})
 	}
-	generations[1].renderErr = retainedErr
+	retainedGeneration.renderErr = retainedErr
 	for _, ref := range registry.SupportedRefs() {
-		form, declared := formForExactRef(ref, generations)
+		// ObjectBucket is retained only as immutable Provider 2.1.1 source
+		// history. Provider 3 deliberately carries no Terraform mapping or
+		// state codec for it; legacy state must be disposed with Provider 2.1.1
+		// before upgrading to this major line.
+		if ref.APIVersion == retainededgeformcatalog.Family.APIVersion() && ref.Kind == "ObjectBucket" {
+			continue
+		}
+		declaration, declared := formForExactRef(ref, generations)
 		if !declared {
 			// A supported identity whose field set is not compiled into this
 			// build has no codec. It stays out of the table, so state bound to
@@ -91,7 +109,7 @@ func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
 			// declarations.
 			continue
 		}
-		table.codecs[ref.ExactKey()] = form
+		table.codecs[ref.ExactKey()] = declaration
 	}
 	return table
 }
@@ -101,8 +119,12 @@ func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
 type catalogGeneration struct {
 	family    model.Family
 	forms     []model.Form
-	rendered  []edgeformcatalog.RenderedForm
+	rendered  []catalogRenderedForm
 	renderErr error
+}
+
+type catalogRenderedForm struct {
+	DefinitionJSON string
 }
 
 // formForExactRef keeps the Form declaration selected by the same exact
@@ -114,26 +136,41 @@ type catalogGeneration struct {
 func formForExactRef(
 	ref currentformregistry.V3Ref,
 	generations []catalogGeneration,
-) (model.Form, bool) {
+) (v3CodecDeclaration, bool) {
 	for _, generation := range generations {
 		if generation.family.APIVersion() != ref.APIVersion {
 			continue
 		}
 		if generation.renderErr != nil || len(generation.rendered) != len(generation.forms) {
-			return model.Form{}, false
+			return v3CodecDeclaration{}, false
 		}
 		for index, candidate := range generation.forms {
 			if candidate.Kind == ref.Kind &&
 				candidate.DefinitionVersion == ref.DefinitionVersion {
-				digest, err := formpackage.DigestCanonicalJSON([]byte(generation.rendered[index].DefinitionJSON))
+				definitionJSON := []byte(generation.rendered[index].DefinitionJSON)
+				// WorkerVersion and WorkerDeployment are the two retained
+				// identities whose v1beta1 bytes must remain exactly those
+				// shipped by provider 2.1.1. Decode them from the embedded
+				// historical artifacts instead of letting current-only model
+				// changes alter the old schema digest.
+				if generation.family.APIVersion() == retainededgeformcatalog.Family.APIVersion() {
+					if frozen, ok := retainedFrozenDefinition(candidate.Kind); ok {
+						definitionJSON = frozen
+					}
+				}
+				digest, err := formpackage.DigestCanonicalJSON(definitionJSON)
 				if err != nil || digest != ref.SchemaDigest {
 					continue
 				}
-				return candidate, true
+				definition, err := formpackage.ValidateDefinition(definitionJSON)
+				if err != nil {
+					return v3CodecDeclaration{}, false
+				}
+				return v3CodecDeclaration{Form: candidate, DesiredSchema: definition.DesiredSchema}, true
 			}
 		}
 	}
-	return model.Form{}, false
+	return v3CodecDeclaration{}, false
 }
 
 // withCodec returns a copy of the table that also supports ref, decoded and
@@ -146,28 +183,31 @@ func (t *v3CodecTable) withCodec(ref currentformregistry.V3Ref, form model.Form,
 	}
 	next := &v3CodecTable{
 		registry: registry,
-		codecs:   make(map[currentformregistry.ExactFormKey]model.Form, len(t.codecs)+1),
+		codecs:   make(map[currentformregistry.ExactFormKey]v3CodecDeclaration, len(t.codecs)+1),
 	}
 	for key, existing := range t.codecs {
 		next.codecs[key] = existing
 	}
-	next.codecs[ref.ExactKey()] = form
+	desiredSchema, err := v3DesiredSchemaForCodec(form)
+	if err != nil {
+		return nil, fmt.Errorf("takoform: derive exact desired schema for %s: %w", ref.ExactKey(), err)
+	}
+	next.codecs[ref.ExactKey()] = v3CodecDeclaration{Form: form, DesiredSchema: desiredSchema}
 	return next, nil
 }
 
 // defaultCreate resolves the codec a NEW resource of one kind is created
 // under.
-func (t *v3CodecTable) defaultCreate(kind string) (v3FormCodec, error) {
-	groupKind := currentformregistry.GroupKind{APIVersion: edgeformcatalog.Family.APIVersion(), Kind: kind}
+func (t *v3CodecTable) defaultCreate(groupKind currentformregistry.GroupKind) (v3FormCodec, error) {
 	ref, err := t.registry.DefaultCreate(groupKind)
 	if err != nil {
 		return v3FormCodec{}, err
 	}
-	form, known := t.codecs[ref.ExactKey()]
+	declaration, known := t.codecs[ref.ExactKey()]
 	if !known {
 		return v3FormCodec{}, fmt.Errorf("takoform: no codec is compiled for the create target %s", ref.ExactKey())
 	}
-	return v3FormCodec{Ref: ref, Form: form}, nil
+	return v3FormCodec{Ref: ref, Form: declaration.Form, DesiredSchema: declaration.DesiredSchema}, nil
 }
 
 // forStateKey resolves the codec of one EXACT recorded identity. Membership —
@@ -180,11 +220,45 @@ func (t *v3CodecTable) forStateKey(key currentformregistry.ExactFormKey) (v3Form
 	if !supported {
 		return v3FormCodec{}, false
 	}
-	form, known := t.codecs[key]
+	declaration, known := t.codecs[key]
 	if !known {
 		return v3FormCodec{}, false
 	}
-	return v3FormCodec{Ref: ref, Form: form}, true
+	return v3FormCodec{Ref: ref, Form: declaration.Form, DesiredSchema: declaration.DesiredSchema}, true
+}
+
+// v3DesiredSchemaForCodec derives only the desired document shape for
+// synthetic/additive test codecs. Production codecs above always retain the
+// desiredSchema decoded from their exact rendered Definition. Contract
+// annotations do not affect instance validation, so deterministic placeholder
+// identities are sufficient here; resolved-UID constraints are deliberately
+// removed because their cross-Form proof is installation semantics, not JSON
+// shape.
+func v3DesiredSchemaForCodec(form model.Form) (map[string]any, error) {
+	shape := form
+	shape.ResolvedUIDConstraints = nil
+	return shape.DesiredSchema(v3SchemaOnlyTargetResolver{})
+}
+
+type v3SchemaOnlyTargetResolver struct{}
+
+func (v3SchemaOnlyTargetResolver) ResolveResourceTarget(target model.ResourceTarget) (model.ResolvedResourceTarget, error) {
+	const digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	resolved := model.ResolvedResourceTarget{ResourceNamePattern: model.PatternResourceName}
+	switch {
+	case target.Contract.ExactForm && target.Contract.Interface == nil:
+		resolved.TargetFormRefs = []model.TargetFormRef{{
+			APIVersion: target.Group, Kind: target.Kind, DefinitionVersion: "0.0.0", SchemaDigest: digest,
+		}}
+	case !target.Contract.ExactForm && target.Contract.Interface != nil:
+		resolved.RequiredInterface = &model.RequiredInterface{
+			APIVersion: "interfaces.takoform.com/v1alpha1",
+			Name:       target.Contract.Interface.Name, Version: target.Contract.Interface.Version, SchemaDigest: digest,
+		}
+	default:
+		return model.ResolvedResourceTarget{}, fmt.Errorf("ResourceTarget %s/%s has no single contract", target.Group, target.Kind)
+	}
+	return resolved, nil
 }
 
 // knownRefsForKind is every exact identity of one kind this build can serve —

@@ -1,6 +1,6 @@
 // standard-form-conformance verifies and regenerates the catalog-derived
-// public surfaces of the Edge Platform Family: one reference document and one
-// example per Form, plus the Form inventory. The central-epoch subcommands
+// public surfaces of the official Provider's current Form mappings: one
+// reference document and one example per Form, plus the Form inventory. The central-epoch subcommands
 // that used to live beside these — release plans, candidate publication,
 // legacy package and admission checks — were withdrawn with the pre-Beta
 // generations they verified (decision 0042).

@@ -129,6 +129,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	}
 
 	payloads := make(map[string][]byte, len(index.Files))
+	jsonPayloads := make(map[string]any, len(index.Files))
 	for _, file := range index.Files {
 		limit := int64(maxPayloadBytes)
 		if isJSONMediaType(file.MediaType) {
@@ -155,9 +156,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 			if err := json.Unmarshal(raw, &value); err != nil {
 				return VerificationReport{}, fmt.Errorf("JSON payload %q: %w", file.Path, err)
 			}
-			if err := rejectForbiddenContent(value, file.Path); err != nil {
-				return VerificationReport{}, fmt.Errorf("payload content policy: %w", err)
-			}
+			jsonPayloads[file.Path] = value
 		} else if !utf8.Valid(raw) || bytes.IndexByte(raw, 0) >= 0 {
 			return VerificationReport{}, fmt.Errorf("text payload %q must be valid UTF-8 without NUL bytes", file.Path)
 		}
@@ -192,6 +191,27 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	}
 	if _, err := validateFormRef(formRefRaw); err != nil {
 		return VerificationReport{}, err
+	}
+	// A desired fixture may use a sensitive-looking property name only when
+	// the exact Form desired schema proves that property is one of the narrow,
+	// closed exceptions already admitted for the Definition. Other fixture
+	// stages and unreferenced JSON payloads retain the ordinary fail-closed
+	// lexical policy. This lets a bounded declarative process `command` travel
+	// as data without allowing script/backend/free-form command payloads.
+	desiredFixturePaths := definitionDesiredFixturePaths(definition)
+	for payloadPath, value := range jsonPayloads {
+		if payloadPath == index.DefinitionPath {
+			continue
+		}
+		var policyErr error
+		if desiredFixturePaths[payloadPath] {
+			policyErr = rejectForbiddenDesiredFixtureContent(value, definition.DesiredSchema, payloadPath)
+		} else {
+			policyErr = rejectForbiddenContent(value, payloadPath)
+		}
+		if policyErr != nil {
+			return VerificationReport{}, fmt.Errorf("payload content policy: %w", policyErr)
+		}
 	}
 	for _, fixture := range definition.ConformanceFixtures {
 		for _, fixturePath := range []string{fixture.DesiredPath, fixture.ObservedPath, fixture.OutputPath} {
@@ -276,6 +296,37 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 
 func isJSONMediaType(mediaType string) bool {
 	return strings.HasSuffix(mediaType, "+json") || mediaType == "application/json" || mediaType == "application/schema+json"
+}
+
+func definitionDesiredFixturePaths(definition FormDefinition) map[string]bool {
+	const (
+		desiredStage = 1
+		otherStage   = 2
+	)
+	stages := map[string]int{}
+	mark := func(path string, stage int) {
+		if path == "" {
+			return
+		}
+		stages[path] |= stage
+	}
+	for _, fixture := range definition.ConformanceFixtures {
+		mark(fixture.DesiredPath, desiredStage)
+		mark(fixture.ObservedPath, otherStage)
+		mark(fixture.OutputPath, otherStage)
+	}
+	for _, fixture := range definition.NegativeFixtures {
+		if fixture.Stage == "desired" {
+			mark(fixture.InputPath, desiredStage)
+		} else {
+			mark(fixture.InputPath, otherStage)
+		}
+	}
+	desired := make(map[string]bool, len(stages))
+	for path, stage := range stages {
+		desired[path] = stage == desiredStage
+	}
+	return desired
 }
 
 func validateFixtureAgainstSchema(schema *jsonschema.Schema, source map[string]any, raw []byte, label string) error {

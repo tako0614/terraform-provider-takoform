@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
 // Operation wire constants (spec/schemas/operation-v1alpha1.schema.json).
@@ -105,7 +107,228 @@ func validateOperation(operation *Operation) error {
 	return nil
 }
 
+// validateOperationWire is the schema-backed shape check for the operation
+// envelope. The typed Operation model intentionally keeps result generic (its
+// owning resource schema validates the terminal representation), but the
+// operation wire itself is closed: null target/metadata/error values,
+// unknown members, malformed identity, and terminal payloads in a pending
+// record must never be accepted by a client.
+func validateOperationWire(data []byte, wrapped bool) error {
+	var root map[string]json.RawMessage
+	if err := decodeStrictJSON(data, &root); err != nil {
+		return err
+	}
+	raw := root
+	if wrapped {
+		if err := operationObjectKeys(root, []string{"operation"}, "operation"); err != nil {
+			return fmt.Errorf("takoform: operation response: %w", err)
+		}
+		if !rawJSONObject(root["operation"]) {
+			return errors.New("takoform: operation response operation must be an object")
+		}
+		raw = map[string]json.RawMessage{}
+		if err := json.Unmarshal(root["operation"], &raw); err != nil {
+			return fmt.Errorf("takoform: operation response operation: %w", err)
+		}
+	}
+	if err := operationObjectKeys(raw, []string{"apiVersion", "kind", "id", "done"}, "apiVersion", "kind", "id", "done", "target", "metadata", "result", "error"); err != nil {
+		return fmt.Errorf("takoform: operation: %w", err)
+	}
+	apiVersion, err := rawString(raw["apiVersion"])
+	if err != nil || apiVersion != OperationAPIVersion {
+		return errors.New("takoform: host operation identity is not operations.takoform.com/v1alpha1 Operation")
+	}
+	kind, err := rawString(raw["kind"])
+	if err != nil || kind != OperationKind {
+		return errors.New("takoform: host operation identity is not operations.takoform.com/v1alpha1 Operation")
+	}
+	id, err := rawString(raw["id"])
+	if err != nil || !operationIDPattern.MatchString(id) || len(id) > 128 {
+		return errors.New("takoform: host operation id must match ^op_[A-Za-z0-9][A-Za-z0-9._-]{0,124}$")
+	}
+	done, err := rawBool(raw["done"])
+	if err != nil {
+		return errors.New("takoform: host operation done must be boolean")
+	}
+	if value, present := raw["target"]; present {
+		if err := validateOperationTarget(value); err != nil {
+			return err
+		}
+	}
+	if value, present := raw["metadata"]; present {
+		if err := validateOperationMetadata(value); err != nil {
+			return err
+		}
+	}
+	result, hasResult := raw["result"]
+	if hasResult && !rawJSONObject(result) {
+		return errors.New("takoform: host operation result must be an object")
+	}
+	if value, present := raw["error"]; present {
+		if err := validateOperationError(value); err != nil {
+			return err
+		}
+	}
+	_, hasError := raw["error"]
+	if !done && (hasResult || hasError) {
+		return errors.New("takoform: host operation carries a terminal payload before done")
+	}
+	if done && hasResult == hasError {
+		return errors.New("takoform: terminal operation must carry exactly one of result or error")
+	}
+	return nil
+}
+
+func operationObjectKeys(value map[string]json.RawMessage, required []string, allowed ...string) error {
+	want := make(map[string]struct{}, len(allowed))
+	for _, key := range allowed {
+		want[key] = struct{}{}
+	}
+	for _, key := range required {
+		if _, ok := value[key]; !ok {
+			return fmt.Errorf("missing required field %q", key)
+		}
+	}
+	for key := range value {
+		if _, ok := want[key]; !ok {
+			return fmt.Errorf("contains unknown field %q", key)
+		}
+	}
+	return nil
+}
+
+func rawJSONObject(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	return len(trimmed) >= 2 && trimmed[0] == '{' && trimmed[len(trimmed)-1] == '}'
+}
+
+func rawString(raw json.RawMessage) (string, error) {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func rawBool(raw json.RawMessage) (bool, error) {
+	var value bool
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false, err
+	}
+	return value, nil
+}
+
+func rawInteger(raw json.RawMessage) (int64, error) {
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return 0, err
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return 0, errors.New("not an integer")
+	}
+	return number.Int64()
+}
+
+func validateOperationTarget(raw json.RawMessage) error {
+	if !rawJSONObject(raw) {
+		return errors.New("takoform: host operation target must be an object")
+	}
+	var target map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &target); err != nil {
+		return fmt.Errorf("takoform: host operation target: %w", err)
+	}
+	if err := operationObjectKeys(target, nil, "uid", "manifestDigest"); err != nil {
+		return fmt.Errorf("takoform: host operation target: %w", err)
+	}
+	if value, present := target["uid"]; present {
+		uid, err := rawString(value)
+		if err != nil || len(uid) < 1 || len(uid) > 128 || !uidPattern.MatchString(uid) {
+			return errors.New("takoform: host operation target uid is invalid")
+		}
+	}
+	if value, present := target["manifestDigest"]; present {
+		digest, err := rawString(value)
+		if err != nil || !formpackage.ValidDigest(digest) {
+			return errors.New("takoform: host operation target manifestDigest is invalid")
+		}
+	}
+	return nil
+}
+
+func validateOperationMetadata(raw json.RawMessage) error {
+	if !rawJSONObject(raw) {
+		return errors.New("takoform: host operation metadata must be an object")
+	}
+	var metadata map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return fmt.Errorf("takoform: host operation metadata: %w", err)
+	}
+	if err := operationObjectKeys(metadata, nil, "phase", "progress"); err != nil {
+		return fmt.Errorf("takoform: host operation metadata: %w", err)
+	}
+	if value, present := metadata["phase"]; present {
+		phase, err := rawString(value)
+		if err != nil || len(phase) < 1 || len(phase) > 64 || !operationPhasePattern.MatchString(phase) {
+			return errors.New("takoform: host operation metadata phase is invalid")
+		}
+	}
+	if value, present := metadata["progress"]; present {
+		progress, err := rawInteger(value)
+		if err != nil || progress < 0 || progress > 100 {
+			return errors.New("takoform: host operation metadata progress must be an integer between 0 and 100")
+		}
+	}
+	return nil
+}
+
+func validateOperationError(raw json.RawMessage) error {
+	if !rawJSONObject(raw) {
+		return errors.New("takoform: host operation error must be an object")
+	}
+	var failure map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &failure); err != nil {
+		return fmt.Errorf("takoform: host operation error: %w", err)
+	}
+	if err := operationObjectKeys(failure, []string{"code", "message", "requestId", "retryable"}, "code", "message", "requestId", "retryable", "hostCode"); err != nil {
+		return fmt.Errorf("takoform: host operation error: %w", err)
+	}
+	code, err := rawString(failure["code"])
+	if err != nil {
+		return errors.New("takoform: host operation error code must be a string")
+	}
+	if _, known := stableErrorHTTPStatusByCode[code]; !known {
+		return fmt.Errorf("takoform: terminal operation error code %q is outside this lane's closed taxonomy", code)
+	}
+	message, err := rawString(failure["message"])
+	if err != nil || len(message) < 1 {
+		return errors.New("takoform: host operation error message must be non-empty")
+	}
+	requestID, err := rawString(failure["requestId"])
+	if err != nil || len(requestID) < 1 {
+		return errors.New("takoform: host operation error requestId must be non-empty")
+	}
+	retryable, err := rawBool(failure["retryable"])
+	if err != nil || retryable {
+		return errors.New("takoform: terminal operation error declares itself retryable")
+	}
+	if value, present := failure["hostCode"]; present {
+		hostCode, err := rawString(value)
+		if err != nil || len(hostCode) < 1 {
+			return errors.New("takoform: host operation error hostCode must be non-empty")
+		}
+	}
+	return nil
+}
+
+var operationPhasePattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+
 func (c *Client) decodeOperationEnvelope(data []byte, fullURL string) (*Operation, error) {
+	if err := validateOperationWire(data, true); err != nil {
+		return nil, err
+	}
 	var envelope struct {
 		Operation *Operation `json:"operation"`
 	}
@@ -142,6 +365,9 @@ func (c *Client) getOperation(ctx context.Context, id string) (*Operation, time.
 	fullURL := c.operationURL(id, "")
 	_, headers, data, err := c.do(ctx, http.MethodGet, fullURL, nil, nil, false, http.StatusOK)
 	if err != nil {
+		return nil, 0, err
+	}
+	if err := validateOperationWire(data, false); err != nil {
 		return nil, 0, err
 	}
 	var operation Operation
@@ -214,6 +440,9 @@ func (c *Client) CancelOperation(ctx context.Context, id string) (*Operation, er
 	fullURL := c.operationURL(id, "cancel")
 	_, _, data, err := c.do(ctx, http.MethodPost, fullURL, headers, nil, true, http.StatusOK)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateOperationWire(data, false); err != nil {
 		return nil, err
 	}
 	var operation Operation

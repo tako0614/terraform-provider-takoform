@@ -1,0 +1,435 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "vector.index",
+  "version": "1.0.0",
+  "title": "Dense vector index",
+  "description": "Fixed-dimension dense vector index with namespaced whole-record upsert, read-after-write fetch, approximate top-k similarity query, closed equality or inclusion metadata filters, and idempotent deletion. Query freshness is eventual and the host may use approximate nearest-neighbor retrieval; the declared metric and returned scores remain exact for the stored precision.",
+  "operations": [
+    {
+      "name": "upsert",
+      "description": "Insert or replace whole records in one namespace. Values and metadata are replaced together; a batch larger than the portable floor is rejected rather than partially applied.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "namespace": {
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": {
+                    "oneOf": [
+                      {
+                        "maxLength": 8192,
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "maxProperties": 128,
+                  "propertyNames": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "values": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 1536,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "values"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "invalid_value",
+        "metadata_too_large",
+        "batch_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "fetch",
+      "description": "Read records by id from one namespace. Absent ids are omitted from the result rather than reported as errors; a resolved upsert or delete is visible to a subsequent fetch.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "namespace": {
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "records": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": {
+                    "oneOf": [
+                      {
+                        "maxLength": 8192,
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "maxProperties": 128,
+                  "propertyNames": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "values": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 1536,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "values"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "batch_too_large",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "query",
+      "description": "Return at most topK approximate nearest neighbors for a query vector in one namespace. A closed equality or inclusion filter may narrow metadata matches, and flags control whether values and metadata are returned. Query results are eventually fresh.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "oneOf": [
+                    {
+                      "maxLength": 8192,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "in": {
+                      "items": {
+                        "oneOf": [
+                          {
+                            "maxLength": 8192,
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "in"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "maxProperties": 16,
+            "propertyNames": {
+              "maxLength": 128,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "includeMetadata": {
+            "type": "boolean"
+          },
+          "includeValues": {
+            "type": "boolean"
+          },
+          "namespace": {
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string"
+          },
+          "topK": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "vector": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 1536,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "vector",
+          "topK"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "matches": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": {
+                    "oneOf": [
+                      {
+                        "maxLength": 8192,
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "maxProperties": 128,
+                  "propertyNames": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "values": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 1536,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "score"
+              ],
+              "type": "object"
+            },
+            "maxItems": 256,
+            "type": "array"
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "invalid_value",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "delete",
+      "description": "Delete up to the portable batch limit of records by id. Deleting an already absent id succeeds and query indexes converge asynchronously.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "namespace": {
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "batch_too_large",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    }
+  ],
+  "semantics": {
+    "consistency": "eventual",
+    "ordering": "total"
+  },
+  "limits": {
+    "maxDeleteIds": 1000,
+    "maxDimension": 1536,
+    "maxFetchIds": 100,
+    "maxFilterClauses": 16,
+    "maxIdBytes": 128,
+    "maxInValues": 64,
+    "maxMetadataBytes": 40960,
+    "maxNamespaceNameBytes": 63,
+    "maxTopK": 256,
+    "maxUpsertBatchVectors": 100
+  },
+  "fixtures": [
+    {
+      "name": "fetch-missing",
+      "steps": [
+        {
+          "operation": "fetch",
+          "input": {
+            "ids": [
+              "missing"
+            ]
+          },
+          "expected": {
+            "records": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete-absent",
+      "steps": [
+        {
+          "operation": "delete",
+          "input": {
+            "ids": [
+              "absent"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -87,11 +87,12 @@ None. The runtime contract belongs to the [Function](function.md) identity.
 
 ## Accepted Bindings
 
-None in the MVP, and the absence is honest rather than an oversight. The
-edge data Interfaces (`edge.kv`, `edge.objects`, `edge.sql`, `edge.queue`)
-state the JavaScript surface their `module-worker.*` bindings project into
-`worker.runtime`'s environment; projecting a typed binding into this
-family's runtime requires either a stated projection into
+None in the MVP, and the absence is honest rather than an oversight. Current
+Edge Interfaces such as `edge.kv`, `edge.sql`, and `edge.queue` state the
+JavaScript surface their `module-worker.*` bindings project into
+`worker.runtime`'s environment. The retained v1beta1 `edge.objects` Interface
+is historical and is not a current Function capability. Projecting any typed
+binding into this family's runtime requires either a stated projection into
 `function.runtime` or a wire-level realization of the Interface, and the
 binding contracts define neither today. The MVP reaches external state
 through the standard-service slots above; typed cross-family bindings

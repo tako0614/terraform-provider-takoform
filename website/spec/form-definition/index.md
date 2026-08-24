@@ -4,15 +4,22 @@ A Form Definition is a deterministic, data-only description of one portable
 service shape. Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
-The current family profile is
-[`form-definition-v1beta2.schema.json`](/schemas/v1beta2/form-definition.schema.json)
+The current authoring profile is
+[`form-definition-v1.schema.json`](/schemas/v1/form-definition.schema.json)
 with
-[`form-ref-v1beta1.schema.json`](/schemas/v1beta1/form-ref.schema.json) —
-the FormRef schema does not move with it, because it admits any namespaced
-group by design and had nothing to correct. Its predecessor
+[`form-ref-v1.schema.json`](/schemas/v1/form-ref.schema.json). The
+Form Definition profile moves independently of the exact FormRef shape. Stable
+v1 carries the closed authoring vocabulary used only by versionless Forms that
+declare the stable `forms.takoform.com/v1` Host lane; it does not reinterpret
+the occupied Beta Host lane or a retained Form package. The
 [`form-definition-v1beta1.schema.json`](/schemas/v1beta1/form-definition.schema.json)
-is retained unchanged and still validates the `edge.forms.takoform.com/v1beta1`
-packages published under it. In both profiles:
+profile is retained unchanged and still validates the
+`edge.forms.takoform.com/v1beta1` package bytes embedded by retained Provider
+2.1.1. The unpublished
+v1beta2 Form Definition schema remains as predecessor history, while
+[`form-ref-v1beta1.schema.json`](/schemas/v1beta1/form-ref.schema.json)
+remains the exact reference profile of those retained v1beta1 packages; no
+published identity is rewritten. Across current and retained profiles:
 its `apiVersion` is a namespaced Form Family group
 ([decision 0009](../decisions/0009-form-families-and-namespaced-api-versions.md)),
 it declares a required closed `role`
@@ -40,8 +47,8 @@ extensions:
 
 ```json
 {
-  "apiVersion": "edge.forms.takoform.com/v1beta2",
-  "kind": "ExampleStore",
+  "apiVersion": "function.forms.takoform.com",
+  "kind": "Function",
   "definitionVersion": "0.1.0",
   "schemaDigest": "sha256:<64 lowercase hexadecimal characters>"
 }
@@ -50,7 +57,10 @@ extensions:
 `kind` MUST be a PascalCase portable kind, `definitionVersion` MUST be SemVer,
 and `schemaDigest` MUST be SHA-256 over the definition's RFC 8785 canonical
 bytes. The definition MUST repeat the first three identity fields, and a
-verifier MUST reject any mismatch.
+verifier MUST reject any mismatch. A current group is versionless: the exact
+identity is `(group, kind, definitionVersion, schemaDigest)`. Resolution never
+substitutes a family latest, a sibling kind, or a Definition with a different
+version or digest.
 
 ## Definition fields
 
@@ -61,9 +71,9 @@ A definition contains:
 - inline Draft 2020-12 desired and observed schemas, plus an optional output schema;
 - optional immutable JSON Pointer fields;
 - an explicit subset of `create`, `read`, `update`, `delete`, `import`, and
-  `observe` — the current family's whole capability vocabulary. `refresh` and
-  `drift` belong to the withdrawn lanes. The CURRENT profile
-  (`v1beta2/form-definition.schema.json`) admits neither; its predecessor
+  `observe` — the current capability vocabulary. `refresh` and
+  `drift` belong to the withdrawn lanes. The current profile
+  (`v1/form-definition.schema.json`) admits neither; its predecessor
   `v1beta1` still admits `refresh` and is retained unchanged for the packages
   published against it, because narrowing a served identity would change what
   it meant when it was published;
@@ -96,6 +106,83 @@ The semantic verifier rules below are also normative: document-local reference
 closure, closed-object proof, validation-work limits, fixture semantics, and
 the portable data-only vocabulary can reject a document that satisfies the
 outer JSON Schema.
+
+## Closed recursive values and defaults
+
+The stable-v1 authoring model adds only the concrete data shapes current Forms
+need; it does not add a generic JSON, bytes, message, or graph-expression type.
+
+- An ordered string list preserves item order and duplicate values. It is not
+  interchangeable with a string set.
+- A string map and string-set map both declare `maxProperties`, use the
+  portable map-key grammar below, and bound their string values. Every set
+  value also declares `maxItems` and uses `uniqueItems: true`.
+- RFC 8785 canonical encoding supplies deterministic object-key order. Defaults
+  and conformance examples additionally sort each string-set-map value
+  lexically; ordered string lists are never sorted or deduplicated.
+- Closed objects and object lists recurse through the same vocabulary. Defaults
+  materialize inside a present object and every present list element. An
+  optional object whose absence is itself semantic remains absent; nested
+  defaults do not synthesize that parent.
+- A tagged object is a closed `oneOf`. Every branch requires the same string
+  discriminator with one branch-specific `const`, forbids unknown members, and
+  contains all and only that variant's fields. Reference traversal follows only
+  the selected valid branch.
+
+## Structural and resolved-UID constraints
+
+The stable-v1 `constraints` list adds exactly two desired-structure variants and
+four resolved-UID variants. The structural variants compare already validated
+desired values without coercion:
+
+```json
+{"kind":"orderedPair","references":["/minInstances","/maxInstances"]}
+{"kind":"uniqueBy","list":"/secondaryIndexes","member":"name"}
+```
+
+`orderedPair` carries exactly two distinct non-wildcard pointers, both naming
+required numeric properties, and requires the first value to be less than or
+equal to the second. `uniqueBy` names an object-list property plus one direct,
+required scalar member of every item; no two items in one list may carry the
+same JSON scalar value. Equality is typed JSON equality, so implementations do
+not stringify or otherwise coerce values. The list itself may be optional when
+its schema gives omission a portable meaning.
+
+The four resolved-UID variants compare host-resolved immutable resource UIDs
+only: a reused name with a replacement UID is a different target, and group,
+kind, name, or desired bytes are never a substitute for resolution.
+
+```json
+{"kind":"acyclic","reference":"/deadLetter/queue"}
+{"kind":"distinctPair","references":["/target","/deadLetter"]}
+{"kind":"uniquePair","references":["/topic","/target"]}
+{"kind":"sameResolvedTarget","anchor":"/function","members":"/versions/*/functionVersion","through":"/function"}
+```
+
+`acyclic` rejects an edge that would close a cycle through the declared
+relation. `distinctPair` requires its two local relations to resolve to
+different UIDs. `uniquePair` allows at most one live resource of the same exact
+Form to hold the ordered pair of resolved UIDs. `sameResolvedTarget` resolves
+the local `anchor`, resolves every local relation selected by `members`, then
+follows `through` on each member target; every resulting UID MUST equal the
+anchor UID.
+
+The vocabulary is closed. `orderedPair.references`, `uniqueBy.list`,
+`acyclic.reference`, both resolved-pair members, and
+`sameResolvedTarget.anchor` carry no array wildcard. `members` carries exactly
+one `*` array token. `through` is an RFC 6901 pointer in the resolved member
+target's desired document, not a pointer in the declaring Form. A Definition
+with another kind, a foreign member, the wrong pointer cardinality, or a local
+pointer that is not a declared relation is invalid. The comparison and
+uniqueness scope are fixed by these variants; there is no universal graph DSL.
+
+`requiresHostApi` is checked against the mechanisms a Form actually declares,
+not against its kind or family. Resolved-UID constraints, tagged-branch relation
+traversal, sealed external-service slots, and a new Form-neutral required
+entrypoint require `forms.takoform.com/v1`. Ordinary JSON Schema
+validation does not raise the bound by itself. Retained v1beta1 declarations
+keep their published lower bound and meaning; this profile does not reinterpret
+or re-identify them.
 
 ## Connections were the withdrawn profile's surface
 
@@ -176,6 +263,28 @@ authentication, API keys, service offerings, or billing, remain valid; fields
 such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
 `privateKeyPem`, `invoice`, `paymentMethod`, `currency`, `taxCode`,
 `serviceOfferingId`, `managerIdentifier`, and `region` do not.
+
+Three desired-property spellings have shape-dependent exceptions; their names
+alone never bypass the boundary. `command` is permitted only as a bounded
+ordered list whose string items have both a non-empty pattern and an explicit
+maximum length. `concurrencyTarget` is permitted only as an integer with
+explicit minimum and maximum bounds. `target` is permitted only when its child
+schema proves one portable relation contract:
+
+- a closed object with exactly `apiVersion`, `kind`, and `name`, a bounded name
+  grammar, and exactly one of `x-takoform-target-formrefs` or
+  `x-takoform-required-interface`; or
+- a closed, discriminator-selected `oneOf` with two through sixteen distinct
+  branches, where every branch contains such an annotated relation object.
+
+Exact-Form annotations contain only complete group, kind, definition-version,
+and canonical SHA-256 identities. Required-Interface annotations contain only
+complete API version, name, version, and canonical SHA-256 identity. A bare
+string, an open object, an unannotated or ambiguously annotated reference, a
+tagged branch without a reviewed relation, and lookalike names such as
+`backendTarget` remain forbidden. These are schema proofs consumed equally by
+every implementation; they do not grant a provider or host authority to widen
+Form semantics.
 
 Every package is an exact one-definition package, never one multi-definition
 package. The current generated catalog and package set predate decision

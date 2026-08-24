@@ -1,15 +1,15 @@
 ---
 page_title: "Takoform provider"
-description: "Published provider v2.1.1 for the Beta Host API and the 15 Experimental Edge Platform Forms"
+description: "Takoform Specification 1.0 candidate, current Form corpus, and retained Provider history"
 ---
 
 # Takoform provider
 
-Takoform is an **Experimental specification project** with one current epoch:
-the Beta Edge Platform Family (`edge.forms.takoform.com/v1beta1`) on the
-`forms.takoform.com/v1beta1` Host API channel, whose packages use the
-`packages.forms.takoform.com/v1alpha4` envelope. The provider discovers the
-Beta wire at `/.well-known/takoform/v1beta1`.
+Takoform Specification 1.0 is an open source candidate on Host API
+`forms.takoform.com/v1`. Its exact current corpus has eight versionless
+families and 31 Experimental `0.x` Forms, using package envelope
+`packages.forms.takoform.com/v1alpha5`. A Specification release does not
+promote any Form to `1.0.0`, publish a Form Package, or release a Provider.
 
 The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and the
 `forms.takoform.com/v1alpha2` provider-v2 epoch) were withdrawn
@@ -19,12 +19,11 @@ history; the withdrawn resources have no successors in this documentation, and
 [the migration boundary](../release/migrations/v2-to-v3.md) says what existing
 state does.
 
-Provider `v2.1.1` is the current Registry-published provider and carries the
-exact 15 Experimental Edge Forms. Using them requires a compatible host; this
-repository does not assert a hosted service's live availability. The stable
-`v2.1.1` release target's source descriptor remains `candidate-only` metadata
-after owner publication. The 15 Beta Form Packages remain unpublished, and the
-next release published from this repository will be a major, `3.0.0`.
+Provider `v2.1.1` is retained Registry-published history for the exact
+`v1beta1`/versioned-family identities it shipped. The official Provider 3
+sample is independent and non-normative; it cannot block Specification 1.0.
+Using either requires a compatible host, and this repository does not assert a
+hosted service's live availability.
 
 ## Install the provider
 
@@ -63,11 +62,17 @@ git checkout --detach v2.1.1
 
 A source tag, documentation page, or local build alone is not Registry publication or installation evidence.
 
-## Edge Platform Family (v1beta1)
+## Current Provider 3 Form reference
 
-The `edge.forms.takoform.com/v1beta1` Form Family rides the Beta Host API,
-discovered at `/.well-known/takoform/v1beta1`. Its 15 typed resources are
-Experimental `0.1.0` Forms:
+The independent Provider 3 candidate maps all 31 current Experimental Forms.
+These resource type names are non-normative Provider metadata; the links below
+describe local candidate code, not a published Provider release.
+
+### Edge family
+
+The versionless `edge.forms.takoform.com` family contains 16 exact
+Experimental `0.x` Forms and intentionally has no current `ObjectBucket`. It
+is one of the eight families in the Specification candidate:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)
@@ -78,7 +83,6 @@ Experimental `0.1.0` Forms:
 - [WorkerEndpoint](resources/worker_endpoint.md)
 - [WorkerCronTrigger](resources/worker_cron_trigger.md)
 - [EdgeKVNamespace](resources/edge_kv_namespace.md)
-- [ObjectBucket](resources/edge_object_bucket.md)
 - [SQLiteDatabase](resources/sqlite_database.md)
 - [SQLiteMigrationSet](resources/sqlite_migration_set.md)
 - [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
@@ -87,11 +91,31 @@ Experimental `0.1.0` Forms:
 - [DurableWorkflow](resources/durable_workflow.md)
 - [ActorNamespace](resources/actor_namespace.md)
 
-The Edge `ObjectBucket` registers as `takoform_edge_object_bucket`; the bare
-`takoform_object_bucket` resource type belongs to the withdrawn v1alpha2 lane
-and is deliberately not reused.
+### Function family
 
-These are the whole v1beta1 surface. The provider exposes no generic carrier
+- [Function](resources/function.md)
+- [FunctionVersion](resources/function_version.md)
+- [FunctionDeployment](resources/function_deployment.md)
+- [FunctionEndpoint](resources/function_endpoint.md)
+
+### Container family
+
+- [ContainerService](resources/container_service.md)
+- [ContainerRevision](resources/container_revision.md)
+- [ContainerTraffic](resources/container_traffic.md)
+- [ContainerEndpoint](resources/container_endpoint.md)
+- [ContainerCustomDomain](resources/container_custom_domain.md)
+
+### Table, queue, topic, schedule, and vector families
+
+- [Table](resources/table.md)
+- [PullQueue](resources/pull_queue.md)
+- [Topic](resources/topic.md)
+- [TopicSubscription](resources/topic_subscription.md)
+- [Schedule](resources/schedule.md)
+- [VectorIndex](resources/vector_index.md)
+
+The provider exposes no generic carrier
 for a Form it was not built against: a resource whose Form identity comes from
 the configuration cannot verify that identity, because the lane's Form
 Definition response carries neither the canonical definition bytes the

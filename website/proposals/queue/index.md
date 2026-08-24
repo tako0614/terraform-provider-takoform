@@ -1,6 +1,6 @@
 # Pull Queue Family proposals
 
-The Pull Queue Family, `queue.forms.takoform.com/v1beta1`, is minted under
+The Pull Queue Family, `queue.forms.takoform.com`, is minted under
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md):
 the pull queue is popularly offered as a managed service by every major
 provider and has no de-facto standard API, so a host-neutral contract is the
@@ -22,12 +22,12 @@ Desired schemas carry no `name` or envelope plumbing: the resource envelope
 owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
-No catalog source, generated candidate set, Interface candidate, or Binding
-candidate exists for this family yet. A Form exists only when its proposal,
-catalog declaration, and candidate package exist
-([proposals/README.md](../index.md)); these documents reserve nothing.
+This prose accompanies the generated Experimental `PullQueue` candidate under
+`forms/candidates/queue.forms.takoform.com` and its exact `queue.pull`
+Interface. The generated candidate bytes, not this proposal, own the current
+identity; these documents reserve nothing.
 
-## MVP members
+## Current members
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

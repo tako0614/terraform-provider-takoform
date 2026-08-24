@@ -89,13 +89,6 @@ resource "takoform_worker_version" "this" {
     }
   ]
 
-  bucket_bindings = [
-    for binding_name in sort(keys(var.bucket_bindings)) : {
-      name        = binding_name
-      target_name = var.bucket_bindings[binding_name]
-    }
-  ]
-
   sqlite_bindings = [
     for binding_name in sort(keys(var.sqlite_bindings)) : {
       name        = binding_name
@@ -116,6 +109,8 @@ resource "takoform_worker_version" "this" {
       target_name = var.service_bindings[binding_name]
     }
   ]
+
+  external_services = var.external_services
 
   create_timeout = var.create_timeout
   delete_timeout = var.delete_timeout

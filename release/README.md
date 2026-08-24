@@ -1,4 +1,28 @@
-# Provider release boundary
+# Release boundaries
+
+## Specification release
+
+[`specification-releases.json`](specification-releases.json) is the append-only
+numbered Takoform Specification ledger. Its current 1.0 object is a candidate,
+not a completed release. A numbered entry may be recorded only after
+[`../spec/publication-evidence.json`](../spec/publication-evidence.json) closes
+the exact committed source snapshot, multi-family candidate/corpus closure,
+and manifest-owned reference conformance result.
+
+Specification 1.0 defines Host API `forms.takoform.com/v1` but does not promote
+the 31 current Experimental `0.x` FormRefs, publish their packages, or advance
+the official Provider. Provider 3 is an independent non-normative sample;
+Provider 2.1.1 and its Host v1beta1/15-Form identities remain immutable
+Registry history. `bun run check:specification-releases` validates the ledger,
+while `bun run check:specification-v1-release` intentionally fails until the
+committed evidence is complete.
+
+The exact current candidate is the versionless family set rooted at
+`edge.forms.takoform.com` and the other seven groups in the current-family
+index, using package envelope `packages.forms.takoform.com/v1alpha5`. Neither
+identity is published by recording the Specification candidate.
+
+## Provider release boundary
 
 `release/version.json` is the independent Takoform provider version source. It
 does not inherit a Takosumi package or release version.

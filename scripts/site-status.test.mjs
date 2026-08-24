@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +10,7 @@ import {
   verifySiteStatusDocument,
 } from "./site-status.mjs";
 import {
+  CURRENT_FAMILY_INDEX,
   FAMILY_CANDIDATE_SET,
   SITE_STATUS_DEPRECATED_FIELDS,
   SITE_STATUS_FIELDS,
@@ -24,11 +26,17 @@ const repositoryRoot = path.resolve(import.meta.dirname, "..");
 function fixture(mutate) {
   const root = mkdtempSync(path.join(tmpdir(), "takoform-site-status-"));
   try {
+    const currentFamilyIndex = JSON.parse(
+      readFileSync(path.join(repositoryRoot, CURRENT_FAMILY_INDEX), "utf8"),
+    );
     for (const relativePath of [
       "release/version.json",
       "release/provider-release-identities.json",
+      "release/specification-releases.json",
       "spec/publication-blockers.json",
       FAMILY_CANDIDATE_SET,
+      CURRENT_FAMILY_INDEX,
+      ...currentFamilyIndex.families.map(({ candidateSet }) => candidateSet),
       SITE_STATUS_REPOSITORY_PATH,
       SITE_STATUS_PUBLISHED_PATH,
     ]) {
@@ -38,6 +46,18 @@ function fixture(mutate) {
   } finally {
     rmSync(root, { force: true, recursive: true });
   }
+}
+
+function rewriteIndexedFamilies(root, mutate) {
+  const index = read(root, CURRENT_FAMILY_INDEX);
+  for (const family of index.families) {
+    const candidateSet = mutate(read(root, family.candidateSet));
+    write(root, family.candidateSet, candidateSet);
+    family.sha256 = createHash("sha256")
+      .update(readFileSync(path.join(root, family.candidateSet)))
+      .digest("hex");
+  }
+  write(root, CURRENT_FAMILY_INDEX, index);
 }
 
 function write(root, relativePath, document) {
@@ -74,8 +94,13 @@ describe("the committed status document", () => {
     expect(document.formFamilyMaturity).toBeUndefined();
     expect(document.formMaturity).toBe("experimental");
     expect(document.formPackagePublicationStatus).toBe("unpublished");
-    expect(document.hostApiMaturity).toBe("beta");
+    expect(document.hostApiMaturity).toBe("stable");
     expect(document.hostApiMaturity).not.toBe(document.formMaturity);
+    expect(document.specificationVersion).toBe("1.0");
+    expect(document.specificationReleaseStatus).toBe("candidate-open");
+    expect(document.currentFamilyIndex).toBe(CURRENT_FAMILY_INDEX);
+    expect(document.currentFamilyCount).toBe(8);
+    expect(document.currentFormCount).toBe(31);
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -87,6 +112,9 @@ describe("the committed status document", () => {
       "edgePreviewProvider",
       "edgeFamilyStatus",
       "formPackageStatus",
+      "formFamilyCurrent",
+      "candidateSetDigest",
+      "openPublicationBlockers",
     ]);
   });
 
@@ -231,11 +259,10 @@ describe("the derivation", () => {
 
   test("follows the candidate set's bytes", () => {
     const changed = fixture((root) => {
-      const candidateSet = read(root, FAMILY_CANDIDATE_SET);
-      write(root, FAMILY_CANDIDATE_SET, {
+      rewriteIndexedFamilies(root, (candidateSet) => ({
         ...candidateSet,
         publicationStatus: "still-unpublished",
-      });
+      }));
       return deriveSiteStatusFacts(root);
     });
     expect(changed.formMaturity).toBe("experimental");
@@ -250,11 +277,10 @@ describe("the derivation", () => {
   test("rejects a candidate set that relabels definitions outside Experimental", () => {
     expect(() =>
       fixture((root) => {
-        const candidateSet = read(root, FAMILY_CANDIDATE_SET);
-        write(root, FAMILY_CANDIDATE_SET, {
+        rewriteIndexedFamilies(root, (candidateSet) => ({
           ...candidateSet,
           formMaturity: "beta",
-        });
+        }));
         return deriveSiteStatusFacts(root);
       }),
     ).toThrow("current Form definitions must be experimental");

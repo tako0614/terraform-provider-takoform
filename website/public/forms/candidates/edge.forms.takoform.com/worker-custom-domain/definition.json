@@ -5,7 +5,7 @@
   "title": "Worker Custom Domain",
   "description": "Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker. A hostname is a name in DNS rather than a label in this host's namespace, so it is CANONICALIZED before it is compared and before it is stored — trailing root dot removed, ASCII letters lowercased — and one canonical hostname is served by AT MOST ONE attachment per tenant, across every space. A second attachment claiming a hostname a live one already serves is refused before any mutation; releasing the holder makes the claim representable (decision 0026).",
   "role": "attachment",
-  "requiresHostApi": "forms.takoform.com/v1beta1",
+  "requiresHostApi": "forms.takoform.com/v1",
   "constraints": [
     {
       "kind": "claim",
@@ -52,7 +52,7 @@
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "worker.runtime",
-          "schemaDigest": "sha256:41aa3f9cd89ca2ba1d16faf153acfb35521c76168ff7b41dfb910d706b7bfbd9",
+          "schemaDigest": "sha256:ed2f8211aac5be94488d391945ca6aca7627a4ecbd261e39790093e887feae08",
           "version": "1.1.0"
         }
       }

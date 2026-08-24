@@ -100,14 +100,18 @@ func (r *v3Runner) declaredExclusiveSubjects() ([]exclusiveSubject, error) {
 		constraints := make([]currentformmodel.Constraint, 0, len(entry.Probe.Constraints))
 		for _, constraint := range entry.Probe.Constraints {
 			constraints = append(constraints, currentformmodel.Constraint{
-				Kind:      currentformmodel.ConstraintKind(constraint.Kind),
-				Reference: constraint.Reference,
-				KeyedBy:   constraint.KeyedBy,
-				List:      constraint.List,
-				Member:    constraint.Member,
-				Total:     constraint.Total,
-				Property:  constraint.Property,
-				Output:    constraint.Output,
+				Kind:       currentformmodel.ConstraintKind(constraint.Kind),
+				Reference:  constraint.Reference,
+				KeyedBy:    constraint.KeyedBy,
+				List:       constraint.List,
+				Member:     constraint.Member,
+				Total:      constraint.Total,
+				Property:   constraint.Property,
+				Output:     constraint.Output,
+				References: append([]string(nil), constraint.References...),
+				Anchor:     constraint.Anchor,
+				Members:    constraint.Members,
+				Through:    constraint.Through,
 			})
 		}
 		relations, err := currentformmodel.DeriveRelationsWithConstraints(schema, constraints)

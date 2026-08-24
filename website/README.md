@@ -207,26 +207,33 @@ operator and are never committed here.
 
 The site must claim nothing beyond signed, committed evidence in this
 repository. The current public truth is: provider `v2.1.1` is the published,
-Registry readback-verified current client; provider `v2.0.0` is the published
-compatibility predecessor; provider `v1.0.3` is the published Legacy client;
-Takoform is an Experimental specification project; and the 34
+Registry readback-verified current Provider distribution on retained Host API
+v1beta1; provider `v2.0.0` is the published compatibility predecessor; provider
+`v1.0.3` is the published Legacy client; Takoform Specification 1.0 and literal
+Host API v1 are still an open release candidate; and the 34
 published Form Package identities are immutable Legacy evidence. There is no
-current central Takoform approval or admission. The current
-`forms.takoform.com/v1alpha2` epoch contains exactly nine retained `0.1.0`
-candidates; this repository does not assert any host's live catalog. The last published
+current central Takoform approval or admission. The current generated corpus
+contains eight versionless families and 31 exact Experimental `0.x` FormRefs;
+Edge contains 16 and has no current `ObjectBucket`, `edge.objects`, or
+`module-worker.object-bucket`. This repository does not assert any host's live
+catalog. The last published
 historical admission identity is `forms/admissions/v1.0.7`; its exact Git and
 set identities remain pinned as Legacy evidence.
 The frozen Legacy FormRef group is `forms.takoform.com/v1alpha1`. Retained
 provider-v2 Form Package indexes use `packages.forms.takoform.com/v1alpha3`;
-current Beta family packages use `packages.forms.takoform.com/v1alpha4`, and published
-v1alpha1/v1alpha2 package indexes remain immutable Legacy evidence.
+retained Provider 2.1.1/v1beta1 candidate packages use
+`packages.forms.takoform.com/v1alpha4`; current versionless-group candidates use
+`packages.forms.takoform.com/v1alpha5` and remain unpublished as Form Package
+artifacts. Published v1alpha1/v1alpha2 package indexes remain immutable Legacy
+evidence.
 
 `release/version.json` names stable `v2.1.1` as the Beta release target and
 keeps `publicationStatus: candidate-only` as descriptor metadata after the
 release owner publishes it; the descriptor must not be presented as live
 publication state. Retained signed release and Registry evidence independently
 establish `v2.1.1` as the current published provider. Any later
-publication, lifecycle, Host Support, or revocation claim still requires the corresponding
-retained evidence. See
+publication, lifecycle, Host Support, or revocation claim still requires the
+corresponding evidence. Provider 3 is a separate non-normative sample and
+cannot close or block Specification 1.0. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
 and the repository [`AGENTS.md`](../AGENTS.md).

@@ -54,12 +54,33 @@ func v3AttributeDefaultValue(t *testing.T, attribute schema.Attribute) (attr.Val
 		var response defaults.SetResponse
 		typed.Default.DefaultSet(ctx, defaults.SetRequest{}, &response)
 		return response.PlanValue, true
+	case schema.ListAttribute:
+		if typed.Default == nil {
+			return nil, false
+		}
+		var response defaults.ListResponse
+		typed.Default.DefaultList(ctx, defaults.ListRequest{}, &response)
+		return response.PlanValue, true
+	case schema.MapAttribute:
+		if typed.Default == nil {
+			return nil, false
+		}
+		var response defaults.MapResponse
+		typed.Default.DefaultMap(ctx, defaults.MapRequest{}, &response)
+		return response.PlanValue, true
 	case schema.ListNestedAttribute:
 		if typed.Default == nil {
 			return nil, false
 		}
 		var response defaults.ListResponse
 		typed.Default.DefaultList(ctx, defaults.ListRequest{}, &response)
+		return response.PlanValue, true
+	case schema.SingleNestedAttribute:
+		if typed.Default == nil {
+			return nil, false
+		}
+		var response defaults.ObjectResponse
+		typed.Default.DefaultObject(ctx, defaults.ObjectRequest{}, &response)
 		return response.PlanValue, true
 	default:
 		return nil, false
@@ -144,7 +165,7 @@ func TestV3DefaultedAttributesSurviveApplyWithoutDiff(t *testing.T) {
 
 			// host echo → state, which must be exactly what the plan held.
 			var readDiags diag.Diagnostics
-			roundTripped := v3FieldValueFromSpec(ctx, field, decodedWire(t, wire), &readDiags)
+			roundTripped := v3FieldValueFromSpec(ctx, form.Family.APIVersion(), field, decodedWire(t, wire), &readDiags)
 			if readDiags.HasError() {
 				t.Errorf("%s.%s: reading the echoed default back: %v", form.Kind, name, readDiags)
 				continue
@@ -209,10 +230,10 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 		planValues[name] = value
 		defaulted[name] = value
 	}
-	// vars_json, the seven binding lists, required_sensitive_vars, and
+	// vars_json, the six binding lists, required_sensitive_vars, and
 	// external_services.
-	if len(defaulted) != 10 {
-		t.Fatalf("WorkerVersion exercised %d defaulted attributes, want 10", len(defaulted))
+	if len(defaulted) != 9 {
+		t.Fatalf("WorkerVersion exercised %d defaulted attributes, want 9", len(defaulted))
 	}
 
 	plan := v3PlanWith(t, ctx, schemaResponse, planValues)
@@ -287,6 +308,10 @@ func v3AttributeRequiresReplace(attribute schema.Attribute) bool {
 		return len(typed.PlanModifiers) > 0
 	case schema.SetAttribute:
 		return len(typed.PlanModifiers) > 0
+	case schema.ListAttribute:
+		return len(typed.PlanModifiers) > 0
+	case schema.MapAttribute:
+		return len(typed.PlanModifiers) > 0
 	case schema.ListNestedAttribute:
 		return len(typed.PlanModifiers) > 0
 	case schema.SingleNestedAttribute:
@@ -344,6 +369,14 @@ func v3StateValue(t *testing.T, ctx context.Context, state tfsdk.State, name str
 		return value
 	case types.List:
 		var value types.List
+		get(&value)
+		return value
+	case types.Map:
+		var value types.Map
+		get(&value)
+		return value
+	case types.Object:
+		var value types.Object
 		get(&value)
 		return value
 	default:

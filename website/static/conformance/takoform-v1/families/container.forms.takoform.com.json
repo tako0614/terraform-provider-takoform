@@ -1,0 +1,334 @@
+{
+  "format": "takoform.family-semantic-corpus@v1",
+  "hostApiLane": "forms.takoform.com/v1",
+  "group": "container.forms.takoform.com",
+  "candidateSet": {
+    "path": "forms/candidates/container.forms.takoform.com/candidate-set.json",
+    "sha256": "389fbcc5b69a5132f02fad2570b184e36c3703481713f0735568d69e67ccf85f"
+  },
+  "requiredChecks": [
+    "candidate-desired-schema-validated",
+    "exact-form-ref-lifecycle",
+    "lifecycle-capabilities-preserved"
+  ],
+  "scenarios": [
+    {
+      "check": "candidate-desired-schema-validated",
+      "input": {
+        "operation": "candidate-desired-schema-validated",
+        "exactFormRefs": [
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerService",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerRevision",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:2d453c251dec50393a042211ba24fd306f57ecd603008cc0981c274320203025"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerTraffic",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f191698b2a051f6d5375621b73d0bee14e82ec43f5f436aa90e3a74c5828d556"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:06c8945bbc5d4772178a269b3e0cfd69531b476a3ed1bf32b4a9686e3f0acb99"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0032d7759696f746454236001a8aec84df30d30c673b2bdfcf360086043399d9"
+          }
+        ],
+        "candidateCount": 5
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 5
+      }
+    },
+    {
+      "check": "exact-form-ref-lifecycle",
+      "input": {
+        "operation": "exact-form-ref-lifecycle",
+        "exactFormRefs": [
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerService",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerRevision",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:2d453c251dec50393a042211ba24fd306f57ecd603008cc0981c274320203025"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerTraffic",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f191698b2a051f6d5375621b73d0bee14e82ec43f5f436aa90e3a74c5828d556"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:06c8945bbc5d4772178a269b3e0cfd69531b476a3ed1bf32b4a9686e3f0acb99"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0032d7759696f746454236001a8aec84df30d30c673b2bdfcf360086043399d9"
+          }
+        ],
+        "candidateCount": 5
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 5
+      }
+    },
+    {
+      "check": "lifecycle-capabilities-preserved",
+      "input": {
+        "operation": "lifecycle-capabilities-preserved",
+        "exactFormRefs": [
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerService",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerRevision",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:2d453c251dec50393a042211ba24fd306f57ecd603008cc0981c274320203025"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerTraffic",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f191698b2a051f6d5375621b73d0bee14e82ec43f5f436aa90e3a74c5828d556"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerEndpoint",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:06c8945bbc5d4772178a269b3e0cfd69531b476a3ed1bf32b4a9686e3f0acb99"
+          },
+          {
+            "apiVersion": "container.forms.takoform.com",
+            "kind": "ContainerCustomDomain",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0032d7759696f746454236001a8aec84df30d30c673b2bdfcf360086043399d9"
+          }
+        ],
+        "candidateCount": 5
+      },
+      "expected": {
+        "status": "passed",
+        "exactCandidateCount": 5
+      }
+    }
+  ],
+  "runnerInput": {
+    "containerService": {
+      "name": "container-service-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerService",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+        },
+        "packageDigest": "sha256:218973ae806e3d6b24a3373e752fa8abc1eb53432eaf457cd4faa214e927d047"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/container-service-desired-schema.json",
+        "sha256": "sha256:7709b5a33b4ae0cf38f37b285c62e9b9b171f6caa03335df8ea0fd80cc7a4ca5"
+      }
+    },
+    "containerRevision": {
+      "name": "container-revision-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerRevision",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:2d453c251dec50393a042211ba24fd306f57ecd603008cc0981c274320203025"
+        },
+        "packageDigest": "sha256:3b777c9b7a19d8d944ccc8e7cde7555f97ba328a6cd6ef03dda1a06c89fe9b7e"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "args": [
+          "--port",
+          "8080"
+        ],
+        "command": [
+          "/app/server"
+        ],
+        "concurrencyTarget": 80,
+        "cpu": 1000,
+        "externalServices": [
+          {
+            "name": "PRIMARY_DB",
+            "required": true,
+            "service": {
+              "apiVersion": "standards.takoform.com/v1",
+              "protocol": "org.postgresql.wire"
+            }
+          }
+        ],
+        "image": "registry.example/app@sha256:6a5cbf24f5d0c86479ae13b9d1731a626a1729f01aef65403c5c8ac82ed85f43",
+        "maxInstances": 20,
+        "memoryMiB": 512,
+        "minInstances": 0,
+        "requiredSensitiveVars": [
+          "API_SIGNING_TOKEN"
+        ],
+        "service": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerService",
+          "name": "container-service"
+        },
+        "timeoutSeconds": 60,
+        "vars": {
+          "LOG_LEVEL": "info"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/container-revision-desired-schema.json",
+        "sha256": "sha256:fd3b3014abdcf941f1e76c168ec4ffe38583bfb6855e98261659d11212788492"
+      }
+    },
+    "containerTraffic": {
+      "name": "container-traffic-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerTraffic",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:f191698b2a051f6d5375621b73d0bee14e82ec43f5f436aa90e3a74c5828d556"
+        },
+        "packageDigest": "sha256:0e70c03c242ae270b7701dac10ef5a810c83a7ec64758d2ce13e31d01e325711"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "revisions": [
+          {
+            "containerRevision": {
+              "apiVersion": "container.forms.takoform.com",
+              "kind": "ContainerRevision",
+              "name": "container-revision"
+            },
+            "weight": 10000
+          }
+        ],
+        "service": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerService",
+          "name": "container-service"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/container-traffic-desired-schema.json",
+        "sha256": "sha256:98a7baa0637ea29a024cc26b6f68595ce458c0d4005d94075b3b3c40abaf4e6a"
+      }
+    },
+    "containerEndpoint": {
+      "name": "container-endpoint-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerEndpoint",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:06c8945bbc5d4772178a269b3e0cfd69531b476a3ed1bf32b4a9686e3f0acb99"
+        },
+        "packageDigest": "sha256:5ed173de0559148e6b10f96386f348ef240772d22c37f373ab94008b58a401d5"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "service": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerService",
+          "name": "container-service"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/container-endpoint-desired-schema.json",
+        "sha256": "sha256:10e4e9a5e08abf383d81ff5631b9e24d50a9af655db3abc86191c5573ddd36b8"
+      }
+    },
+    "containerCustomDomain": {
+      "name": "container-custom-domain-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerCustomDomain",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0032d7759696f746454236001a8aec84df30d30c673b2bdfcf360086043399d9"
+        },
+        "packageDigest": "sha256:864e7b6000a22abe265eff00720de0c3ee32cb95143f2942a8c6a387a15b7169"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "hostname": "app.example.invalid",
+        "service": {
+          "apiVersion": "container.forms.takoform.com",
+          "kind": "ContainerService",
+          "name": "container-service"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/container-custom-domain-desired-schema.json",
+        "sha256": "sha256:7ff19404949a945750d5cf0fa1dc934f39b269de9e5cdaba39b815384863812e"
+      }
+    }
+  },
+  "standardServiceFixtures": []
+}

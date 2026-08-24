@@ -149,19 +149,6 @@ const (
 	kvMaxValueBytes = 26214400
 	// queueMaxMessageBytes bounds the DECODED length of one queue message body.
 	queueMaxMessageBytes = 127000
-	// objectsMaxKeyBytes is the portion of the pooled object-key budget after
-	// its 45-byte runtime envelope is reserved from the 1024-byte substrate
-	// ceiling.
-	objectsMaxKeyBytes = 979
-	// objectsMaxObjectBytes is the largest object, reachable only through a
-	// multipart upload.
-	objectsMaxObjectBytes = 5368709120
-	// objectsMaxSinglePutBytes is the largest object one put may write. Above
-	// it, and whenever the producer does not know the size in advance, the
-	// multipart operations are the path.
-	objectsMaxSinglePutBytes = 314572800
-	// objectsMaxMultipartParts bounds the parts of one multipart upload.
-	objectsMaxMultipartParts = 10000
 	// The edge.sql structural ceilings and declared limits use these same
 	// values, so the operation schema and portable contract cannot drift.
 	sqlMaxStatementBytes           = 100000
@@ -348,7 +335,6 @@ func sqlStatement() map[string]any {
 func InterfaceDefinitions() []InterfaceDefinition {
 	return []InterfaceDefinition{
 		edgeKVInterface(),
-		edgeObjectsInterface(),
 		edgeSQLInterface(),
 		edgeQueueInterface(),
 		workerServiceInterface(),
@@ -615,320 +601,6 @@ func edgeKVInterface() InterfaceDefinition {
 	}
 }
 
-// edgeObjectsInterface is the strongly consistent object bucket.
-//
-// Before decision 0020 its description promised range reads that `get` had no
-// input for, and its body was a JSON string bounded by nothing while the object
-// size limit said 5 GiB — a shape no host could produce and no client could
-// consume. It is now a real object API: head, ranged and conditional get,
-// conditional put, delete, list with delimiter roll-up, and the four multipart
-// operations, with bodies STREAMING beside the operation document rather than
-// inside it.
-func edgeObjectsInterface() InterfaceDefinition {
-	key := stringSchema(1, objectsMaxKeyBytes)
-	etag := stringSchema(1, 256)
-	contentType := stringSchema(1, 256)
-	size := map[string]any{"type": "integer", "minimum": 0, "maximum": objectsMaxObjectBytes}
-	millis := map[string]any{"type": "integer", "minimum": 0}
-	bodyStream := map[string]any{"type": "boolean"}
-	uploadID := stringSchema(1, 256)
-	partNumber := map[string]any{"type": "integer", "minimum": 1, "maximum": objectsMaxMultipartParts}
-	byteRange := closedObject([]string{"offset"}, map[string]any{
-		"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": objectsMaxObjectBytes},
-		"length": map[string]any{"type": "integer", "minimum": 1, "maximum": objectsMaxObjectBytes},
-	})
-	return InterfaceDefinition{
-		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
-		Name: "edge.objects", Version: "1.0.0",
-		Title: "Object bucket",
-		Description: "Flat-namespace object storage with strong read-after-write consistency and STREAMING bodies. " +
-			"An object body never travels as a JSON member: maxObjectBytes is 5 GiB and no JSON string carries " +
-			"that, so get and put declare bodyStream and the bytes move as a stream beside the operation " +
-			"document. contentLength states the exact byte count in both directions, and a put whose stream " +
-			"does not deliver exactly contentLength bytes fails with invalid_body having stored nothing. " +
-			"Consistency: a get, head, or list issued after a put or a delete that has already resolved " +
-			"observes that put or that delete. Writes to one key are last-writer-wins; there is no cross-key " +
-			"atomicity, no transaction, and no versioning, so a replaced object is gone. An etag is a STRONG " +
-			"validator of the exact bytes of one object. A conditional get or put fences with ifMatch (act only " +
-			"when the current etag is exactly this one); a get may instead fence with ifNoneMatch on an etag, " +
-			"and a put with ifNoneMatch \"*\" to write only when the key is absent. A failed precondition is " +
-			"precondition_failed and changes nothing. A ranged get returns a contiguous subrange of ONE object: " +
-			"offset is the first byte, length the count, an omitted length runs to the end, and an offset at or " +
-			"past the object size fails with range_not_satisfiable rather than returning an empty body. " +
-			"Objects above maxSinglePutBytes, and any object whose size the producer does not know in advance, " +
-			"are written through the multipart operations: createMultipartUpload opens an upload, uploadPart " +
-			"writes one numbered part, completeMultipartUpload assembles the parts in part-number order into " +
-			"one object with one etag, and abortMultipartUpload discards the upload. Every part except the " +
-			"highest-numbered one MUST be at least 5242880 bytes. An upload holds no key until it completes, so " +
-			"a get of that key before completion behaves as though the upload did not exist. " +
-			"In a behavior trace, a step whose input declares bodyStream sends exactly contentLength bytes " +
-			"whose value at index i is i modulo 256, which makes every trace below byte-for-byte reproducible. " +
-			"Multipart traces are absent from that set because their steps depend on part etags the host mints " +
-			"during the trace; multipart assembly is a HOST OBLIGATION stated in the Host API specification.",
-		Semantics: InterfaceSemantics{Consistency: "read_after_write", Pagination: "cursor"},
-		Limits: map[string]int64{
-			"maxKeyBytes": objectsMaxKeyBytes, "maxObjectBytes": objectsMaxObjectBytes,
-			"maxSinglePutBytes": objectsMaxSinglePutBytes, "maxMultipartParts": objectsMaxMultipartParts,
-			"maxListPageObjects": 1000,
-		},
-		Operations: []InterfaceOperation{
-			{
-				Name: "head",
-				Description: "Read one object's size, strong etag, content type, and write time without its body. Absent " +
-					"keys fail with not_found. uploadedAtMillis is milliseconds since the Unix epoch, in UTC, of the write " +
-					"that produced the current bytes.",
-				InputSchema: operationObject([]string{"key"}, map[string]any{"key": key}),
-				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{
-					"contentType":      contentType,
-					"etag":             etag,
-					"size":             size,
-					"uploadedAtMillis": millis,
-				}),
-				Errors:     []string{"invalid_key", "not_found", "backend_unavailable"},
-				Idempotent: true,
-			},
-			{
-				Name: "get",
-				Description: "Read one object as a byte stream. bodyStream is always true in the output: the body is " +
-					"streamed beside this document and is never a member of it, so a caller may begin consuming before the " +
-					"whole object has arrived. size is the size of the WHOLE object, partial says whether a range was " +
-					"applied, and range echoes the exact subrange served. A conditional get fences with ifMatch (serve only " +
-					"when the current etag is exactly this one) or ifNoneMatch (serve only when it is not); a failed " +
-					"precondition is precondition_failed and carries no body. A range whose offset is at or past size fails " +
-					"with range_not_satisfiable.",
-				InputSchema: operationObject([]string{"key"}, map[string]any{
-					"key":         key,
-					"range":       byteRange,
-					"ifMatch":     etag,
-					"ifNoneMatch": etag,
-				}),
-				OutputSchema: operationObject([]string{"bodyStream", "etag", "partial", "size"}, map[string]any{
-					"bodyStream":  bodyStream,
-					"contentType": contentType,
-					"etag":        etag,
-					"partial":     map[string]any{"type": "boolean"},
-					"range":       byteRange,
-					"size":        size,
-				}),
-				Errors: []string{
-					"invalid_key", "not_found", "precondition_failed",
-					"range_not_satisfiable", "backend_unavailable",
-				},
-				Idempotent: true,
-			},
-			{
-				Name: "put",
-				Description: "Write one object from a byte stream, replacing any previous object at the key, and return " +
-					"the strong etag of the bytes written. bodyStream MUST be true and contentLength MUST be the exact byte " +
-					"count of the stream; a stream delivering a different count fails with invalid_body and stores nothing. " +
-					"A conditional put fences with ifMatch on the current etag, or with ifNoneMatch \"*\" to write only when " +
-					"the key is absent; a failed precondition is precondition_failed and writes nothing. A contentLength " +
-					"above maxSinglePutBytes fails with value_too_large — that object belongs in a multipart upload.",
-				InputSchema: operationObject([]string{"bodyStream", "contentLength", "key"}, map[string]any{
-					"key":           key,
-					"bodyStream":    bodyStream,
-					"contentLength": size,
-					"contentType":   contentType,
-					"ifMatch":       etag,
-					"ifNoneMatch":   map[string]any{"type": "string", "enum": []any{"*"}},
-				}),
-				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{"etag": etag, "size": size}),
-				Errors: []string{
-					"invalid_key", "invalid_body", "value_too_large",
-					"precondition_failed", "backend_unavailable",
-				},
-			},
-			{
-				Name: "delete",
-				Description: "Delete one object. Deleting an absent key succeeds, so delete never reports existence. A " +
-					"head, get, or list issued after a resolved delete does not see the object.",
-				InputSchema:  operationObject([]string{"key"}, map[string]any{"key": key}),
-				OutputSchema: operationObject(nil, map[string]any{}),
-				Errors:       []string{"invalid_key", "backend_unavailable"},
-				Idempotent:   true,
-			},
-			{
-				Name: "list",
-				Description: "List objects in lexicographic key order by their UTF-8 bytes, optionally under a prefix, one " +
-					"cursor page at a time. limit bounds one page and a host may return fewer. truncated is true exactly " +
-					"when another page follows, and the cursor then addresses it and MUST be passed back unmodified. A " +
-					"delimiter rolls every key whose remainder after the prefix contains it up into prefixes, and those keys " +
-					"are then absent from objects. The listing observes every put and delete that has already resolved.",
-				InputSchema: operationObject(nil, map[string]any{
-					"prefix":    stringSchema(0, objectsMaxKeyBytes),
-					"delimiter": stringSchema(1, 16),
-					"cursor":    stringSchema(1, 4096),
-					"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
-				}),
-				OutputSchema: operationObject([]string{"objects", "truncated"}, map[string]any{
-					"objects": map[string]any{
-						"type":     "array",
-						"maxItems": 1000,
-						"items": closedObject([]string{"etag", "key", "size"}, map[string]any{
-							"key": key, "etag": etag, "size": size, "uploadedAtMillis": millis,
-						}),
-					},
-					"prefixes": map[string]any{
-						"type": "array", "maxItems": 1000, "uniqueItems": true,
-						"items": stringSchema(1, objectsMaxKeyBytes),
-					},
-					"truncated": map[string]any{"type": "boolean"},
-					"cursor":    stringSchema(1, 4096),
-				}),
-				Errors:     []string{"invalid_cursor", "backend_unavailable"},
-				Idempotent: true,
-			},
-			{
-				Name: "createMultipartUpload",
-				Description: "Open a multipart upload for one key and return its opaque uploadId. The key is not written " +
-					"and not reserved: another writer may put or complete the same key meanwhile, and last writer wins. An " +
-					"upload a host has abandoned fails every later part with upload_not_found.",
-				InputSchema: operationObject([]string{"key"}, map[string]any{
-					"key": key, "contentType": contentType,
-				}),
-				OutputSchema: operationObject([]string{"uploadId"}, map[string]any{"uploadId": uploadID}),
-				Errors:       []string{"invalid_key", "backend_unavailable"},
-			},
-			{
-				Name: "uploadPart",
-				Description: "Write one numbered part of an open upload from a byte stream and return the part's strong " +
-					"etag, which completeMultipartUpload requires back. Part numbers are 1..maxMultipartParts and need not " +
-					"be contiguous; re-uploading a number replaces that part. Every part except the highest-numbered one " +
-					"MUST be at least 5242880 bytes, and a shorter one fails with invalid_part. contentLength MUST be the " +
-					"exact byte count of the stream.",
-				InputSchema: operationObject(
-					[]string{"bodyStream", "contentLength", "key", "partNumber", "uploadId"},
-					map[string]any{
-						"key": key, "uploadId": uploadID, "partNumber": partNumber,
-						"bodyStream": bodyStream, "contentLength": size,
-					},
-				),
-				OutputSchema: operationObject([]string{"etag", "partNumber"}, map[string]any{
-					"etag": etag, "partNumber": partNumber,
-				}),
-				Errors: []string{
-					"invalid_key", "invalid_body", "invalid_part",
-					"upload_not_found", "value_too_large", "backend_unavailable",
-				},
-			},
-			{
-				Name: "completeMultipartUpload",
-				Description: "Assemble the named parts, in ascending part-number order, into one object at the key and " +
-					"return the object's strong etag and total size. Every part listed must have been uploaded and must " +
-					"carry the etag uploadPart returned for it; a mismatch fails with invalid_part and assembles nothing. " +
-					"The object becomes visible atomically: no reader ever observes a partially assembled object. " +
-					"Completing an upload the host no longer holds fails with upload_not_found.",
-				InputSchema: operationObject([]string{"key", "parts", "uploadId"}, map[string]any{
-					"key": key, "uploadId": uploadID,
-					"parts": map[string]any{
-						"type": "array", "minItems": 1, "maxItems": objectsMaxMultipartParts,
-						"items": closedObject([]string{"etag", "partNumber"}, map[string]any{
-							"etag": etag, "partNumber": partNumber,
-						}),
-					},
-				}),
-				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{"etag": etag, "size": size}),
-				Errors: []string{
-					"invalid_key", "invalid_part", "upload_not_found",
-					"value_too_large", "precondition_failed", "backend_unavailable",
-				},
-			},
-			{
-				Name: "abortMultipartUpload",
-				Description: "Discard an open upload and every part written to it. It never touches the key: an object " +
-					"already at that key is untouched. Aborting an upload the host no longer holds fails with " +
-					"upload_not_found, so abort is not a way to test whether an upload exists.",
-				InputSchema: operationObject([]string{"key", "uploadId"}, map[string]any{
-					"key": key, "uploadId": uploadID,
-				}),
-				OutputSchema: operationObject(nil, map[string]any{}),
-				Errors:       []string{"invalid_key", "upload_not_found", "backend_unavailable"},
-			},
-		},
-		Fixtures: []InterfaceFixture{
-			{
-				Name: "put-then-head-observes-the-write",
-				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{
-						"key": "reports/summary.txt", "bodyStream": true,
-						"contentLength": 8, "contentType": "text/plain",
-					}},
-					{Operation: "head", Input: map[string]any{"key": "reports/summary.txt"}, Expected: map[string]any{
-						"size": 8,
-					}},
-				},
-			},
-			{
-				Name: "ranged-get-returns-a-subrange-of-one-object",
-				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{
-						"key": "blobs/data.bin", "bodyStream": true, "contentLength": 1024,
-					}},
-					{Operation: "get", Input: map[string]any{
-						"key": "blobs/data.bin", "range": map[string]any{"offset": 512, "length": 256},
-					}, Expected: map[string]any{
-						"bodyStream": true, "partial": true, "size": 1024,
-						"range": map[string]any{"offset": 512, "length": 256},
-					}},
-				},
-			},
-			{
-				Name: "range-past-the-end-is-refused",
-				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{
-						"key": "blobs/small.bin", "bodyStream": true, "contentLength": 4,
-					}},
-					{Operation: "get", Input: map[string]any{
-						"key": "blobs/small.bin", "range": map[string]any{"offset": 64},
-					}, ExpectedError: "range_not_satisfiable"},
-				},
-			},
-			{
-				Name: "conditional-put-refuses-an-existing-key",
-				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{
-						"key": "once.txt", "bodyStream": true, "contentLength": 1,
-					}},
-					{Operation: "put", Input: map[string]any{
-						"key": "once.txt", "bodyStream": true, "contentLength": 1, "ifNoneMatch": "*",
-					}, ExpectedError: "precondition_failed"},
-				},
-			},
-			{
-				Name: "delete-then-head-not-found",
-				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{
-						"key": "tmp/scratch.txt", "bodyStream": true, "contentLength": 1,
-					}},
-					{Operation: "delete", Input: map[string]any{"key": "tmp/scratch.txt"}},
-					{Operation: "head", Input: map[string]any{"key": "tmp/scratch.txt"}, ExpectedError: "not_found"},
-				},
-			},
-			{
-				Name: "list-truncates-at-the-requested-limit",
-				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{
-						"key": "page/a", "bodyStream": true, "contentLength": 1,
-					}},
-					{Operation: "put", Input: map[string]any{
-						"key": "page/b", "bodyStream": true, "contentLength": 1,
-					}},
-					{Operation: "list", Input: map[string]any{"prefix": "page/", "limit": 1}, Expected: map[string]any{
-						"truncated": true,
-					}},
-					{Operation: "list", Input: map[string]any{"prefix": "page/"}, Expected: map[string]any{
-						"truncated": false,
-					}},
-				},
-			},
-		},
-	}
-}
-
-// edgeSQLInterface is the embedded SQLite runtime contract corrected by
-// decision 0034. Its values stay in JavaScript's portable corridor rather than
-// exposing SQLite storage classes, and query earns idempotency from an actual
-// rollback-only transaction rather than from fallible SQL pre-classification.
 func edgeSQLInterface() InterfaceDefinition {
 	statementResult := sqlStatementResult()
 	queryResult := sqlQueryResult()
@@ -1033,10 +705,10 @@ func edgeSQLInterface() InterfaceDefinition {
 				},
 			},
 			{
-				Name: "out-of-range-input-is-refused",
+				Name: "bound-parameter-result-out-of-range-is-refused",
 				Steps: []InterfaceFixtureStep{
 					{Operation: "query", Input: map[string]any{
-						"sql": "SELECT ?1 AS v", "params": []any{float64(sqlMaxNumberMagnitude) + 1},
+						"sql": "SELECT ?1 + 1 AS v", "params": []any{sqlNumber(float64(sqlMaxNumberMagnitude))},
 					}, ExpectedError: "numeric_out_of_range"},
 				},
 			},
@@ -1278,7 +950,7 @@ const (
 // module-worker.service Binding Definition said the projection streams request
 // to response in both directions and buffers neither. Both could not be true,
 // and buffering a body into a JSON member is the exact defect decision 0020
-// exists to prevent: it is the same mistake edge.objects made with a 5 GiB
+// exists to prevent: it is the same mistake an oversized embedded body would
 // ceiling, one order of magnitude down. The contract therefore moves to the
 // streaming model the binding already promised — the operation document says
 // whether a body exists and what is known of its size, and the bytes travel
@@ -1526,7 +1198,7 @@ func workerRuntimeInterface() InterfaceDefinition {
 		// external standard-service slot projects exactly the 1.0.0 closure,
 		// so every module written against 1.0.0 keeps its meaning. What is new
 		// is a fourth source of env names, and the env closure is normative
-		// text — a host that projected slot members without saying so would be
+		// text — a host that projected a sealed binding without saying so would be
 		// serving a contract nobody published (decision 0045).
 		Name: WorkerRuntimeInterfaceName, Version: "1.1.0",
 		Title: "ES Module Worker runtime ABI",
@@ -1540,17 +1212,16 @@ func workerRuntimeInterface() InterfaceDefinition {
 			"Request and response bodies are STREAMS, never buffered strings: a host never requires a handler " +
 			"to read a request body before responding, and streams a response body out as the handler produces it. " +
 			"env is a plain object whose own enumerable properties are exactly the names the Worker Version " +
-			"declares — every vars key, every requiredSensitiveVars name, every binding name, and every member " +
-			"projected by an externalServices slot — and nothing " +
+			"declares — every vars key, every requiredSensitiveVars name, every typed binding name, and every " +
+			"externalServices slot name — and nothing " +
 			"else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, " +
 			"and that value never enters portable state. " +
-			"An externalServices slot names a standard protocol the host resolves for this version, and projects " +
-			"a fixed member set derived from its declared NAME: a postgresql, redis, or smtp slot projects NAME_URL; " +
-			"an s3-compatible slot projects NAME_ENDPOINT, NAME_REGION, NAME_BUCKET, NAME_ACCESS_KEY_ID, and " +
-			"NAME_SECRET_ACCESS_KEY. Those values are host-resolved endpoints and credentials and never enter " +
-			"portable state, exactly like a sensitive variable; a required slot the host cannot satisfy keeps the " +
-			"version from becoming Ready rather than projecting an absent or empty member, and an optional slot the " +
-			"host does not satisfy projects none of its members at all. " +
+			"An externalServices slot names an opaque standard protocol the host resolves for this version, and " +
+			"appears as one sealed runtime-native binding under its declared NAME. The Host integration and protocol " +
+			"own that binding's internal entries and delivery shape; Takoform defines no protocol-to-environment " +
+			"member table. Host-resolved endpoints and credentials never enter portable state, exactly like a " +
+			"sensitive variable; a required slot without an exact satisfiable support profile keeps the version from " +
+			"becoming Ready, and an optional unsatisfied slot projects no binding at all. " +
 			"ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; " +
 			"a rejection is reported to host diagnostics only, never changes an already-sent response, and never " +
 			"turns a successful invocation into a failed one. " +

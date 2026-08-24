@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Key-addressed document table with a declared partition key, optional sort key, mutable secondary indexes, and optional lazy TTL. The table.document Interface fixes document values, conditional writes, consistent single-item reads, and key-ordered partition queries; this identity carries only the table's addressing declaration.",
+  "properties": {
+    "partitionKey": {
+      "additionalProperties": false,
+      "description": "Immutable partition key declaration. Every item must carry this top-level attribute; changing it replaces the table.",
+      "properties": {
+        "name": {
+          "description": "Top-level document attribute used by this key.",
+          "maxLength": 255,
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,254}$",
+          "type": "string"
+        },
+        "type": {
+          "description": "Portable scalar type used to encode and order this key attribute.",
+          "enum": [
+            "string",
+            "number",
+            "bytes"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "type": "object"
+    },
+    "secondaryIndexes": {
+      "default": [],
+      "description": "Secondary indexes over top-level document attributes. Adding or removing an entry is an in-place table update; an index is redefined only by removing it and adding it later. Omitting this list declares no secondary indexes.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "Stable portable name of this secondary index.",
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string"
+          },
+          "partitionKey": {
+            "description": "Top-level attribute forming the index partition key.",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,254}$",
+            "type": "string"
+          },
+          "sortKey": {
+            "description": "Optional top-level attribute forming the index sort key. When absent, the index has no sort key.",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,254}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "partitionKey"
+        ],
+        "type": "object"
+      },
+      "maxItems": 20,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "sortKey": {
+      "additionalProperties": false,
+      "description": "Optional immutable sort key declaration. When absent, each partition key addresses at most one item; changing it replaces the table.",
+      "properties": {
+        "name": {
+          "description": "Top-level document attribute used by the sort key.",
+          "maxLength": 255,
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,254}$",
+          "type": "string"
+        },
+        "type": {
+          "description": "Portable scalar type used to encode and order the sort key attribute.",
+          "enum": [
+            "string",
+            "number",
+            "bytes"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ttlAttribute": {
+      "description": "Optional top-level number attribute used for lazy epoch-second expiry. When absent, the table has no TTL policy; setting or clearing it is an in-place update.",
+      "maxLength": 255,
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,254}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "partitionKey"
+  ],
+  "title": "Table desired state",
+  "type": "object"
+}

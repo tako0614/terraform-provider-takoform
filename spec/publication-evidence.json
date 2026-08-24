@@ -1,0 +1,85 @@
+{
+  "format": "takoform.release-evidence@v3",
+  "policy": "Takoform has two independent release tracks. Normative Specification 1.0 closes only on an exact committed source snapshot, the fixed generator-owned multi-family candidate index reopened through every package, Definition, Interface, Binding, suite corpus, runner input, and referenced byte, and the manifest-owned deterministic reference-conformance execution. The current 0.x FormRefs remain exact and Experimental; releasing the Specification and Host API v1 does not relabel or promote them to Form 1.0.0. The current Edge family target is exactly 16/16 with no ObjectBucket Form, no edge.objects API, and no same-document bucket Resource link. The standards.takoform.com/v1 service slot accepts opaque reverse-DNS protocol identifiers unknown to Takoform; it is not a central protocol enum, while the v1alpha1 enum remains immutable history. Host-resolved endpoints and credentials never enter portable Form state. The official Terraform Provider 3.0 is an independent non-normative implementation milestone. External Hosts, backends, production consumers, Takoserver, Takosumi, and operator signatures are adoption evidence, not Takoform release authorities. Local origin/ref checks assume an already authenticated and freshly fetched canonical checkout; they prevent accidental repository substitution but are not remote provenance attestation. No status, caller list, generic pass result, or hand-written count in this file is trusted.",
+  "repositoryAuthority": {
+    "format": "takoform.repository-authority@v2",
+    "repository": "takoform",
+    "canonicalOrigin": "https://github.com/tako0614/terraform-provider-takoform.git",
+    "allowedReachableRefs": [
+      "refs/remotes/origin/main",
+      "refs/tags/v*",
+      "refs/tags/specification/*"
+    ],
+    "refVerification": "trusted-fetched-checkout-precondition"
+  },
+  "identityAxes": {
+    "hostApiLane": "forms.takoform.com/v1",
+    "familyGroupSet": "current-family-index-derived",
+    "familyGroupsAreVersionless": true,
+    "formRefIdentity": [
+      "group",
+      "kind",
+      "definitionVersion",
+      "schemaDigest"
+    ],
+    "packageEnvelope": "packages.forms.takoform.com/v1alpha5",
+    "standardServiceContract": "standards.takoform.com/v1",
+    "standardServiceProtocolIdentity": "opaque-reverse-dns-minimum-three-labels",
+    "specificationAxis": "independent",
+    "formMaturityAxis": "independent",
+    "specificationReleaseFormEffect": "preserve-exact-current-formrefs",
+    "providerAxis": "independent",
+    "hostAxis": "independent",
+    "packageAxis": "independent",
+    "interfaceAxis": "independent",
+    "bindingAxis": "independent"
+  },
+  "releaseTracks": [
+    {
+      "id": "specification-v1",
+      "version": "1.0",
+      "authority": "specification",
+      "normative": true,
+      "prerequisites": [
+        "specification-source-snapshot",
+        "candidate-form-corpus",
+        "reference-conformance"
+      ]
+    },
+    {
+      "id": "provider-3.0",
+      "version": "3.0.0",
+      "authority": "official-terraform-provider",
+      "normative": false,
+      "prerequisites": [
+        "provider-v3-exact-conformance",
+        "provider-v3-identity-lock",
+        "provider-v3-compatibility-migration-lock"
+      ]
+    }
+  ],
+  "candidateBaseline": {
+    "repository": "takoform",
+    "commit": "ce7fa1c8f608e423093d91632cd44be93d18365a",
+    "familyIndex": null,
+    "conformanceSuite": null
+  },
+  "retainedHistory": {
+    "path": "spec/publication-blockers.json",
+    "format": "takoform.publication-blockers@v1",
+    "lane": "forms.takoform.com/v1beta1",
+    "sha256": "8bc708163e789b95833331a537abf1c455062179c0eef5b57c583c76b8d740e0"
+  },
+  "evidence": {
+    "specification": {
+      "sourceSnapshot": null,
+      "candidateCorpus": null,
+      "referenceConformance": null
+    },
+    "provider": {
+      "exactConformance": null,
+      "identityLock": null,
+      "compatibilityMigrationLock": null
+    }
+  }
+}

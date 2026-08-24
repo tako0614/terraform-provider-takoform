@@ -3,6 +3,8 @@ package spec
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,8 +22,10 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 		"form-ref-v1beta1.schema.json":                   filepath.Join("..", "formpackage", "schemas", "form-ref-v1beta1.schema.json"),
 		"form-definition-v1beta1.schema.json":            filepath.Join("..", "formpackage", "schemas", "form-definition-v1beta1.schema.json"),
 		"form-definition-v1beta2.schema.json":            filepath.Join("..", "formpackage", "schemas", "form-definition-v1beta2.schema.json"),
+		"form-definition-v1.schema.json":                 filepath.Join("..", "formpackage", "schemas", "form-definition-v1.schema.json"),
 		"package-index-v1alpha4.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha4.schema.json"),
 		"interface-ref-v1alpha1.schema.json":             filepath.Join("..", "formpackage", "schemas", "interface-ref-v1alpha1.schema.json"),
+		"interface-definition-v1alpha1.schema.json":      filepath.Join("..", "formpackage", "schemas", "interface-definition-v1alpha1.schema.json"),
 		"binding-ref-v1alpha1.schema.json":               filepath.Join("..", "formpackage", "schemas", "binding-ref-v1alpha1.schema.json"),
 		"binding-ref-v1alpha2.schema.json":               filepath.Join("..", "formpackage", "schemas", "binding-ref-v1alpha2.schema.json"),
 		"form-ref-v1beta2.schema.json":                   filepath.Join("..", "formpackage", "schemas", "form-ref-v1beta2.schema.json"),
@@ -32,17 +36,22 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 	normativeOnly := map[string]bool{
 		"host-api-wire-v1beta1.schema.json":         true,
 		"host-discovery-v1beta1.schema.json":        true,
-		"interface-definition-v1alpha1.schema.json": true,
 		"binding-definition-v1alpha1.schema.json":   true,
 		"binding-definition-v1alpha2.schema.json":   true,
 		"artifact-manifest-v1alpha1.schema.json":    true,
 		"operation-v1alpha1.schema.json":            true,
 		"host-support-profile-v1alpha1.schema.json": true,
 		"host-support-profile-v1alpha2.schema.json": true,
+		"host-support-profile-v1.schema.json":       true,
+		"host-api-wire-v1.schema.json":              true,
+		"host-discovery-v1.schema.json":             true,
+		"form-ref-v1.schema.json":                   true,
+		"operation-v1.schema.json":                  true,
 		"host-api-wire-v1beta4.schema.json":         true,
 		"host-discovery-v1beta4.schema.json":        true,
 		"operation-v1alpha2.schema.json":            true,
 		"standard-service-ref-v1alpha1.schema.json": true,
+		"standard-service-ref-v1.schema.json":       true,
 	}
 	entries, err := os.ReadDir("schemas")
 	if err != nil {
@@ -83,5 +92,16 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 			len(implementations),
 			len(normativeOnly),
 		)
+	}
+}
+
+func TestPublishedHostSupportProfileV1Alpha2IsByteImmutable(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("schemas", "host-support-profile-v1alpha2.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "7ad631c58485644188e4bcd2b4270ee5c486ccd426882d3eb78f97cf4b85c73a"
+	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != want {
+		t.Fatalf("published host-support-profile-v1alpha2 bytes changed: sha256=%s, want %s", got, want)
 	}
 }

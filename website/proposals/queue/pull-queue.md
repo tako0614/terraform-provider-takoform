@@ -59,7 +59,7 @@ with its own identity, its own acceptance timestamp, and a receive count
 starting again — mirroring the edge QueueConsumer's dead-letter rule.
 Without the pair, only deletion or retention expiry removes a message.
 `queue` is the closed exact `{apiVersion, kind, name}` reference to
-another PullQueue, uid-pinned under the v1beta1 relation rules; a host
+another PullQueue, UID-pinned under the Host API v1 relation rules; a host
 rejects self-dead-lettering and any cycle through the dead-letter graph,
 because the move resets the receive count and nothing else bounds the loop
 ([decision 0026](../../spec/decisions/0026-attachment-claims-are-canonical-and-acyclic.md)).

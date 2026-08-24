@@ -1,40 +1,28 @@
 # Documentation
 
-This page starts with the current design target: Provider 2.1.1, Host API
-v1beta1, and the Edge Form Family v1beta1. Compatibility, migration, and
-history are kept below in a collapsed section so the old contracts remain
-reachable without competing with the current stack.
+This page starts with the open Specification 1.0 candidate: Host API v1 and
+the exact 8-family, 31-Form current corpus. Provider and historical lanes are
+kept separate so an implementation release cannot become Specification
+authority by implication.
 
-## Current design target — Provider 2.1.1 / Host API v1beta1
+## Specification 1.0 candidate / Host API v1
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                 |
 | --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Provider              | **Provider 2.1.1**                     | Registry-published stable client distribution; repository descriptor remains `candidate-only` metadata by design after owner publication. |
-| Host API              | **Host API v1beta1**                   | Beta protocol for discovery, exact Form availability, operations, fencing, and errors.                                   |
-| Form Family           | **Edge Form Family v1beta1**           | Beta family with 15 current Experimental Form definitions.                                                                  |
-| Form definition       | **definition 0.1.0**                   | Exact definition version for each current Form.                                                                          |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha4` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
+| Specification         | **Takoform 1.0 candidate**             | Open until the exact committed source, exact candidate/corpus, and reference-conformance prerequisites close.            |
+| Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                             |
+| Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental.                                                             |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
+| Provider              | **independent**                        | Provider 2.1.1 is retained Registry history; Provider 3 is a non-normative sample and cannot block the Specification.     |
 
-The provider target, Host API maturity, Form family maturity, and package
-publication state are independent facts. Provider 2.1.1 is not called Beta:
-the Host API is Beta, while the 15 Forms are Experimental. Registry readback
-establishes Provider availability; the repository descriptor remains
-`candidate-only` metadata by design after owner publication.
-The [release-policy obligations](/spec/publication-freeze.html) remain separate
-from that target status.
+The [release-evidence policy](/spec/publication-freeze.html) makes those axes
+machine-checkable. Releasing the Specification does not relabel any current
+Form as `1.0.0`; a stable Form identity requires an explicit per-Form decision.
 
-Takoform is an Experimental specification project. Provider 2.1.1 is the
-Registry-published stable client distribution; its `release/version.json`
-descriptor intentionally remains `candidate-only` metadata after owner
-publication. The pre-Beta epochs were withdrawn
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
-no current central Takoform-wide approval or admission is implied by anything
-they published.
+## Edge reference family (16 of 31 current Experimental Forms) {#beta-edge-platform-family}
 
-## Current design target — Edge Form Family v1beta1 (15 Experimental Forms) {#beta-edge-platform-family}
-
-The family speaks the Host API v1beta1, discovered at
-`/.well-known/takoform/v1beta1`, with UID/generation/revision identity,
+The versionless Edge family targets Host API v1, discovered at
+`/.well-known/takoform/v1`, with UID/generation/revision identity,
 long-running operations, and content-addressed artifact upload.
 
 A worker becomes reachable through a chain, not a single resource: an identity,
@@ -43,16 +31,15 @@ handlers those bytes export, a deployment that sends traffic to it, and an
 attachment that gives it an address. An endpoint whose worker has no active
 deployment never becomes Ready, so the whole chain is one configuration:
 
-This shape example pins the Registry-published Provider 2.1.1. The release
-descriptor's `candidate-only` value is metadata only and does not revoke the
-published client.
+This shape uses the independent Provider 3 sample. It is non-normative and its
+presence does not claim Provider publication or Specification readiness.
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.1.1"
+      version = ">= 3.0.0"
     }
   }
 }
@@ -110,10 +97,13 @@ Capability is added to a version through typed bindings; inward activation — a
 custom domain, a cron trigger, or a queue consumer — is always a separate
 attachment resource.
 
-## Current resource reference {#resource-reference}
+## Current Provider 3 resource reference {#resource-reference}
 
-These are the exact 15 typed resources in the current Edge Form Family. Every
-one is an Experimental Form at definition 0.1.0:
+The independent Provider 3 candidate maps all 31 current Experimental `0.x`
+Forms. These names are non-normative Provider metadata and do not claim a
+published Provider release.
+
+### Edge family
 
 - [module_worker](/docs/resources/module_worker.html)
 - [worker_bundle](/docs/resources/worker_bundle.html)
@@ -124,7 +114,6 @@ one is an Experimental Form at definition 0.1.0:
 - [worker_endpoint](/docs/resources/worker_endpoint.html)
 - [worker_cron_trigger](/docs/resources/worker_cron_trigger.html)
 - [edge_kv_namespace](/docs/resources/edge_kv_namespace.html)
-- [edge_object_bucket](/docs/resources/edge_object_bucket.html)
 - [sqlite_database](/docs/resources/sqlite_database.html)
 - [sqlite_migration_set](/docs/resources/sqlite_migration_set.html)
 - [sqlite_migration_application](/docs/resources/sqlite_migration_application.html)
@@ -132,6 +121,30 @@ one is an Experimental Form at definition 0.1.0:
 - [queue_consumer](/docs/resources/queue_consumer.html)
 - [durable_workflow](/docs/resources/durable_workflow.html)
 - [actor_namespace](/docs/resources/actor_namespace.html)
+
+### Function family
+
+- [function](/docs/resources/function.html)
+- [function_version](/docs/resources/function_version.html)
+- [function_deployment](/docs/resources/function_deployment.html)
+- [function_endpoint](/docs/resources/function_endpoint.html)
+
+### Container family
+
+- [container_service](/docs/resources/container_service.html)
+- [container_revision](/docs/resources/container_revision.html)
+- [container_traffic](/docs/resources/container_traffic.html)
+- [container_endpoint](/docs/resources/container_endpoint.html)
+- [container_custom_domain](/docs/resources/container_custom_domain.html)
+
+### Table, queue, topic, schedule, and vector families
+
+- [table](/docs/resources/table.html)
+- [pull_queue](/docs/resources/pull_queue.html)
+- [topic](/docs/resources/topic.html)
+- [topic_subscription](/docs/resources/topic_subscription.html)
+- [schedule](/docs/resources/schedule.html)
+- [vector_index](/docs/resources/vector_index.html)
 
 There is no generic carrier for a Form the provider was not built against: the
 typed surface gives a client a way to verify only the exact FormRefs it
@@ -151,7 +164,7 @@ Existing state follows the
 ## More project surfaces
 
 - [Form Proposals](/proposals/) — design material for Forms that have not earned a public FormRef
-- [Form inventory](/forms/) — the current 15 Forms and retained compatibility identities
+- [Form inventory](/forms/) — the current 31 Forms and retained compatibility identities
 - [Conformance evidence](/conformance/) — how compatibility is proven
 - [Release](/release/) — provider publication boundary, Form Packages, and migrations
 - [Glossary](/docs/glossary.html) — terms used across this documentation

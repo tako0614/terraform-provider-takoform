@@ -62,9 +62,12 @@ export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate
 
 export const FAMILY_CANDIDATE_SET =
   "forms/candidates/edge.forms.takoform.com/candidate-set.json";
+export const CURRENT_FAMILY_INDEX =
+  "forms/candidates/current-family-index.json";
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
 const RELEASE_VERSION = "release/version.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
+const SPECIFICATION_RELEASES = "release/specification-releases.json";
 
 export const SITE_STATUS_FIELDS = [
   // Keep the v1 field prefix byte/order-compatible for tolerant existing
@@ -88,6 +91,13 @@ export const SITE_STATUS_FIELDS = [
   // understand the original v2 prefix keep receiving the same keys/order.
   "formMaturity",
   "formPackagePublicationStatus",
+  // Specification 1.0 and the complete current corpus are appended so the
+  // original Provider/Edge prefix remains tolerant-reader compatible.
+  "specificationVersion",
+  "specificationReleaseStatus",
+  "currentFamilyIndex",
+  "currentFamilyIndexDigest",
+  "currentFamilyCount",
 ];
 
 // These names remain in the JSON document for tolerant, older readers. They
@@ -100,13 +110,21 @@ export const SITE_STATUS_DEPRECATED_FIELDS = Object.freeze({
   edgeFamilyStatus:
     "alias of formPackagePublicationStatus; not Form Family maturity",
   formPackageStatus: "alias of formPackagePublicationStatus",
+  formFamilyCurrent:
+    "retained Edge-family compatibility field; currentFamilyIndex is corpus authority",
+  candidateSetDigest:
+    "retained Edge-family compatibility digest; currentFamilyIndexDigest is corpus authority",
+  openPublicationBlockers:
+    "retained beta-history count; specificationReleaseStatus is Specification authority",
 });
 
 const ROOT_MARKERS = [
   BLOCKER_LEDGER,
   FAMILY_CANDIDATE_SET,
+  CURRENT_FAMILY_INDEX,
   RELEASE_VERSION,
   PROVIDER_RELEASE_IDENTITIES,
+  SPECIFICATION_RELEASES,
 ];
 
 /**
@@ -156,10 +174,21 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     );
   }
 
-  const hostApiCurrent = releaseVersion.versioning?.portableApiVersion;
+  const specificationReleases = readJson(repositoryRoot, SPECIFICATION_RELEASES);
+  const specificationVersion = specificationReleases.candidate?.version;
+  const hostApiCurrent = specificationReleases.candidate?.hostApiLane;
+  if (
+    specificationReleases.kind !== "takoform.specification-releases@v1" ||
+    specificationVersion !== "1.0" ||
+    !Array.isArray(specificationReleases.releases)
+  ) {
+    throw new Error(
+      `${SPECIFICATION_RELEASES}: expected the Specification 1.0 candidate and append-only releases`,
+    );
+  }
   if (typeof hostApiCurrent !== "string" || hostApiCurrent === "") {
     throw new Error(
-      `${RELEASE_VERSION}: versioning.portableApiVersion must be a non-empty string`,
+      `${SPECIFICATION_RELEASES}: candidate.hostApiLane must be a non-empty string`,
     );
   }
   const hostApiMaturityMatch = hostApiCurrent.match(/\/v\d+(alpha|beta)\d+$/);
@@ -167,9 +196,14 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     (/\/v\d+$/.test(hostApiCurrent) ? "stable" : null);
   if (hostApiMaturity === null) {
     throw new Error(
-      `${RELEASE_VERSION}: cannot derive Host API maturity from ${JSON.stringify(hostApiCurrent)}`,
+      `${SPECIFICATION_RELEASES}: cannot derive Host API maturity from ${JSON.stringify(hostApiCurrent)}`,
     );
   }
+  const specificationReleaseStatus = specificationReleases.releases.some(
+    (release) => release?.version === specificationVersion,
+  )
+    ? "released"
+    : "candidate-open";
 
   const releaseIdentities = readJson(repositoryRoot, PROVIDER_RELEASE_IDENTITIES);
   const publishedEntries = Array.isArray(releaseIdentities.entries)
@@ -187,28 +221,66 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     ? "registry-published"
     : releaseVersion.publicationStatus;
 
-  const candidateSetBytes = readFileSync(
+  const edgeCandidateSetBytes = readFileSync(
     path.join(repositoryRoot, FAMILY_CANDIDATE_SET),
   );
-  const candidateSet = JSON.parse(candidateSetBytes.toString("utf8"));
-  const formPackagePublicationStatus = candidateSet.publicationStatus;
+  const edgeCandidateSet = JSON.parse(edgeCandidateSetBytes.toString("utf8"));
+  const currentFamilyIndexBytes = readFileSync(
+    path.join(repositoryRoot, CURRENT_FAMILY_INDEX),
+  );
+  const currentFamilyIndexDocument = JSON.parse(
+    currentFamilyIndexBytes.toString("utf8"),
+  );
   if (
-    typeof formPackagePublicationStatus !== "string" ||
-    formPackagePublicationStatus === ""
+    currentFamilyIndexDocument.format !== "takoform.current-family-index@v1" ||
+    !Array.isArray(currentFamilyIndexDocument.families) ||
+    currentFamilyIndexDocument.families.length === 0
   ) {
     throw new Error(
-      `${FAMILY_CANDIDATE_SET}: publicationStatus must be a non-empty string`,
+      `${CURRENT_FAMILY_INDEX}: expected a non-empty takoform.current-family-index@v1 document`,
     );
   }
-  const formFamilyCurrent = candidateSet.family;
+  const familyCandidateSets = currentFamilyIndexDocument.families.map((family) => {
+    const candidateSetPath = family?.candidateSet;
+    if (typeof candidateSetPath !== "string" || candidateSetPath === "") {
+      throw new Error(`${CURRENT_FAMILY_INDEX}: family candidateSet must be a path`);
+    }
+    const bytes = readFileSync(path.join(repositoryRoot, candidateSetPath));
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (family.sha256 !== digest) {
+      throw new Error(
+        `${CURRENT_FAMILY_INDEX}: ${candidateSetPath} digest differs from the index`,
+      );
+    }
+    const candidateSet = JSON.parse(bytes.toString("utf8"));
+    if (
+      candidateSet.family !== family.group ||
+      !Array.isArray(candidateSet.forms) ||
+      candidateSet.forms.length !== family.formCount
+    ) {
+      throw new Error(
+        `${CURRENT_FAMILY_INDEX}: ${candidateSetPath} identity or Form count differs from the index`,
+      );
+    }
+    return candidateSet;
+  });
+  const exactSharedValue = (field) => {
+    const values = new Set(familyCandidateSets.map((family) => family[field]));
+    if (values.size !== 1 || typeof [...values][0] !== "string" || [...values][0] === "") {
+      throw new Error(`${CURRENT_FAMILY_INDEX}: every family must share one non-empty ${field}`);
+    }
+    return [...values][0];
+  };
+  const formPackagePublicationStatus = exactSharedValue("publicationStatus");
+  const formFamilyCurrent = edgeCandidateSet.family;
   // There is no family maturity axis to derive. It was read out of the version
   // segment inside the group, and a group carries none (decision 0049): a
   // channel is a property of a generation, and the family has no generations
   // left to attach one to. What survives is per-Form, which is the axis
   // formMaturity already publishes and the only one the repository can still
   // state truthfully.
-  const formMaturity = candidateSet.formMaturity;
-  const formPackageApiCurrent = candidateSet.packageApiVersion;
+  const formMaturity = exactSharedValue("formMaturity");
+  const formPackageApiCurrent = exactSharedValue("packageApiVersion");
   if (typeof formFamilyCurrent !== "string" || formFamilyCurrent === "") {
     throw new Error(`${FAMILY_CANDIDATE_SET}: family must be a non-empty string`);
   }
@@ -219,7 +291,7 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   }
   if (formMaturity !== "experimental") {
     throw new Error(
-      `${FAMILY_CANDIDATE_SET}: current Form definitions must be experimental`,
+      `${CURRENT_FAMILY_INDEX}: current Form definitions must be experimental`,
     );
   }
   if (
@@ -230,9 +302,10 @@ export function deriveSiteStatusFacts(repositoryRoot) {
       `${FAMILY_CANDIDATE_SET}: packageApiVersion must be a non-empty string`,
     );
   }
-  if (!Array.isArray(candidateSet.forms) || candidateSet.forms.length === 0) {
-    throw new Error(`${FAMILY_CANDIDATE_SET}: forms must be a non-empty array`);
-  }
+  const currentFormCount = familyCandidateSets.reduce(
+    (total, family) => total + family.forms.length,
+    0,
+  );
 
   const ledger = readJson(repositoryRoot, BLOCKER_LEDGER);
   if (!Array.isArray(ledger.blockers)) {
@@ -243,7 +316,7 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   ).length;
 
   const facts = {
-    format: "takoform.site-status@v3",
+    format: "takoform.site-status@v4",
     providerPublished,
     providerTarget: providerReleaseTarget,
     providerTargetStatus,
@@ -252,10 +325,10 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     formFamilyCurrent,
     formPackageApiCurrent,
     formPackageStatus: formPackagePublicationStatus,
-    currentFormCount: candidateSet.forms.length,
+    currentFormCount,
     formMaturity,
     formPackagePublicationStatus,
-    candidateSetDigest: `sha256:${createHash("sha256").update(candidateSetBytes).digest("hex")}`,
+    candidateSetDigest: `sha256:${createHash("sha256").update(edgeCandidateSetBytes).digest("hex")}`,
     openPublicationBlockers,
     providerCurrent: providerPublished,
     // The release descriptor intentionally remains candidate-only even after
@@ -263,6 +336,11 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     // explicit so callers cannot mistake descriptor metadata for availability.
     edgePreviewProvider: EDGE_PREVIEW_PROVIDER,
     edgeFamilyStatus: formPackagePublicationStatus,
+    specificationVersion,
+    specificationReleaseStatus,
+    currentFamilyIndex: CURRENT_FAMILY_INDEX,
+    currentFamilyIndexDigest: `sha256:${createHash("sha256").update(currentFamilyIndexBytes).digest("hex")}`,
+    currentFamilyCount: currentFamilyIndexDocument.families.length,
   };
   return Object.fromEntries(
     SITE_STATUS_FIELDS.map((field) => [field, facts[field]]),

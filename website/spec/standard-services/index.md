@@ -1,109 +1,111 @@
-# External standard services (standards.takoform.com/v1alpha1)
+# External standard services (`standards.takoform.com/v1`)
 
-Some service categories already have the portability layer Takoform exists to
-provide: object storage has the S3-compatible API, relational databases have
-the PostgreSQL wire protocol, caches have the Redis protocol, mail submission
-has SMTP. [Decision 0043](../decisions/0043-forms-target-popular-vendor-locked-primitives.md)
-forbids respecifying them as Forms. This contract is the other half of that
-decision: how a Form's runtime **reaches** such a service.
+Some service categories already have a portable protocol: S3-compatible object
+storage, PostgreSQL, Redis, SMTP, and others. Takoform does not restate those
+protocols as Forms. A Form runtime asks its Host for one through a sealed
+standard-service slot. This v1 contract is part of the stable
+`forms.takoform.com/v1` lane; the occupied beta4 lane retains its published
+v1alpha1 standard-service wire unchanged.
 
 Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
-## The model: a sealed slot with a protocol tag
+## Portable declaration
 
-An external standard service is declared exactly the way host-supplied sealed
-values already are ([`../form-families.md`](../form-families.md)): **portable
-state carries only a name and a protocol, never an endpoint and never a
-credential.** The declaration a consuming Form's desired schema embeds is:
+Portable desired state carries only a runtime binding name, an opaque protocol
+identifier, and whether the binding is required:
 
 ```json
 {
   "name": "MEDIA",
   "service": {
-    "apiVersion": "standards.takoform.com/v1alpha1",
-    "protocol": "s3-compatible"
+    "apiVersion": "standards.takoform.com/v1",
+    "protocol": "com.amazonaws.s3"
   },
   "required": true
 }
 ```
 
-- `name` matches `^[A-Z][A-Z0-9_]*$` (64 characters at most) — the
-  SCREAMING_SNAKE grammar sealed-value slots already use, because the
-  projection mints `NAME_`-prefixed members — and shares the consuming Form's
-  one runtime namespace. Uniqueness is enforced over the PROJECTED closure:
-  the union of vars keys, sensitive-value names, binding names, and every
-  member each slot projects must be collision-free, and a host refuses a
-  collision before mutation (`MEDIA_ENDPOINT` as a var beside an
-  `s3-compatible` slot named `MEDIA` is `invalid_argument`).
-- `required` is an optional boolean defaulting to true. A REQUIRED slot the
-  host cannot satisfy blocks readiness; an optional one the host does not
-  satisfy projects nothing and blocks nothing.
-- The array property embedding the slots carries the
-  `x-takoform-standard-services` annotation so a host holding only the
-  Definition derives every slot it must enforce
-  ([`../host-api/v1beta4.md`](../host-api/v1beta4.md)).
+- `name` matches `^[A-Z][A-Z0-9_]*$` and is at most 64 characters. It is the
+  key of one sealed runtime-native binding.
 - `service` validates against
-  [`standard-service-ref-v1alpha1.schema.json`](/schemas/standards/v1alpha1/standard-service-ref.schema.json).
-  The protocol vocabulary is closed: `s3-compatible`, `postgresql`, `redis`,
-  `smtp`. Widening it is a reviewed spec change held to decision 0043's test —
-  the protocol must be a de-facto standard, or the category belongs to a Form
-  Family instead. Decision 0043's landscape survey records the growth roadmap
-  (`kafka`, `amqp`, `mysql`, `mongodb`, `elasticsearch-compatible`,
-  `openai-compatible`, `otlp`).
+  [`standard-service-ref-v1.schema.json`](/schemas/standards/v1/standard-service-ref.schema.json).
+  `protocol` is a normalized reverse-DNS owner namespace followed by a
+  protocol segment, at most 253 characters. It is compared as an opaque,
+  case-sensitive string.
+- `required` is optional and defaults to `true`. An unsupported required slot
+  is refused before mutation and cannot become Ready. An unsupported optional
+  slot projects nothing and does not block readiness.
+- The array property embedding slots carries
+  `x-takoform-standard-services: standards.takoform.com/v1`, so a Host derives
+  the declarations from the exact Form Definition.
 
-The host or operator **satisfies** a slot by supplying connection material for
-a service that actually speaks the declared protocol. Where that service runs —
-a cloud provider, the host's own infrastructure, a box under a desk — is
-invisible to portable state, exactly as host placement already is. Which slots
-a host satisfies, and with what, is host/operator policy; a REQUIRED slot a
-host cannot or will not satisfy makes the Resource not Ready
-(`DependencyMissing`), and a host that knows it cannot satisfy one refuses at
-`prepare` with `unsupported_capability` rather than at runtime — `validate`
-never depends on the tenant, and satisfiability is tenant wiring. A host
-advertises per-protocol satisfiability through the `StandardServiceSupport`
-profile kind on the v1beta2 support surface, never with what would satisfy it.
+The protocol grammar is deliberately open. A protocol unknown to Takoform is
+schema-valid and needs no Takoform registry entry or release. Schema validity
+does not certify that a service conforms to the named protocol.
 
-## What each protocol projects
+## Exact Host support
 
-The slot's runtime projection is defined per protocol, so a consumer's code is
-portable across hosts. Projected member names below are **runtime names**, not
-portable state; they never appear in a Form Package or a Resource document.
-For an environment-style runtime namespace (the Worker family's `env`, a
-container revision's environment), a slot named `NAME` projects:
+A Host integration plugin owns whether it supports an identifier and how it
+materializes that protocol. The Host Support surface answers with a
+`StandardServiceSupport` profile whose `serviceRef` exactly equals the slot's
+`{apiVersion, protocol}` and whose `satisfiable` value states whether this Host
+can wire it for the requesting tenant. A missing profile, a different
+identifier, or `satisfiable: false` fails closed for a required slot.
 
-| Protocol | Projected members | Content |
-| --- | --- | --- |
-| `postgresql` | `NAME_URL` | one libpq-style `postgresql://` connection URI carrying host, port, database, and authentication |
-| `redis` | `NAME_URL` | one `redis://` or `rediss://` URI carrying host, port, and authentication |
-| `smtp` | `NAME_URL` | one `smtps://` or `smtp://` submission URI carrying host, port, and authentication; `smtp://` implies STARTTLS on the standard submission port |
-| `s3-compatible` | `NAME_ENDPOINT`, `NAME_REGION`, `NAME_BUCKET`, `NAME_ACCESS_KEY_ID`, `NAME_SECRET_ACCESS_KEY` | the five values every S3-compatible SDK takes; `NAME_REGION` MAY be the literal `auto` where the service ignores regions |
+This is capability and tenant wiring, not Form semantics. The same Form and
+provider configuration remain valid against another Host that advertises the
+exact identifier.
 
-Every projected value is sealed exactly like a sensitive variable: it MUST NOT
-appear in desired state, observed state, outputs, diagnostics, logs the host
-returns, or provider state. The observed document MAY state that a slot is
-satisfied; it MUST NOT state with what.
+## Sealed runtime binding
 
-## What this contract does not do
+Takoform guarantees one sealed runtime-native binding under the declared
+`name`. The Host integration and the protocol it implements own that binding's
+internal entries, delivery mechanism, endpoint layout, and credential shape.
+Takoform defines no protocol-to-environment-variable table and does not require
+filesystem delivery.
 
-- It grants no lifecycle authority over the external service. Takoform never
-  creates, migrates, or deletes a PostgreSQL database or an S3 bucket through
-  this contract; the slot reaches a service somebody else provisioned. A
-  category graduating from "reached" to "provisioned" is a Form Family
-  decision under decision 0043's test, not a widening of this contract.
-- It does not verify protocol conformance of the satisfied service. The host
-  vouches for what it wires; measuring it is host-side quality, not portable
-  conformance.
-- It adds nothing to the published v1beta1 Edge schemas, which are frozen
-  identities. Families minted after this contract carry the declaration from
-  birth; the Edge family adopts it when a graduation mints its next
-  identities ([decision 0037](../decisions/0037-immutability-begins-at-stable.md)).
+The slot name shares the consumer runtime's binding namespace with vars,
+sensitive-value declarations, and typed bindings. A duplicate binding name is
+`invalid_argument` before mutation. Integration-internal entry names do not
+become portable Form semantics.
+
+Every materialized value is sealed. Endpoints, regions, instance names,
+credentials, and integration-private entries MUST NOT appear in desired state,
+observed state, outputs, provider state, diagnostics, or Host-returned logs.
+Observed state MAY report whether a slot is satisfied, but never with what.
+
+## Boundary
+
+- A slot grants no portable lifecycle authority over a service instance and
+  carries no Resource/Form selector. Provisioning, placement, readiness,
+  credentials, and replacement are Host integration responsibilities.
+- The standard protocol remains the data-plane authority. Takoform owns only
+  the generic reference, sealing, exact support lookup, collision, and
+  readiness rules.
+- A call-only or externally managed service needs no Form merely to be used by
+  a runtime.
+
+## Retained v1alpha1 history
+
+[`standard-service-ref-v1alpha1.schema.json`](/schemas/standards/v1alpha1/standard-service-ref.schema.json)
+is immutable published history. Its bare closed values (`s3-compatible`,
+`postgresql`, `redis`, `smtp`) and protocol-specific projection table are not
+accepted by current `v1` slots and are not widened in place.
 
 ## Conformance
 
-The declaration shape is normative now; executable conformance arrives with
-the first family whose desired schemas embed it, as part of that family's
-corpus (plan-time `unsupported_capability` refusal, readiness gating on an
-unsatisfied REQUIRED slot, namespace-collision refusal, and the sealing of
-projected values). Until such a corpus exists, no host can claim measured
-support for this contract.
+Portable conformance is protocol-neutral. It proves:
+
+- an unknown but grammar-valid protocol survives Form, provider, and Host wire
+  handling unchanged;
+- a required protocol without an exact satisfiable Host profile fails closed;
+- optional unsatisfied slots project nothing and do not block readiness;
+- slot-name collisions are refused before mutation; and
+- no materialized endpoint, credential, or integration-private entry escapes
+  the sealed runtime boundary.
+
+Protocol-specific projection and data-plane behavior belong to the Host
+integration's own tests (for example, an S3 integration tests its endpoint,
+region, bucket, and credential materialization without placing those values in
+portable state).

@@ -43,7 +43,6 @@ var wantRelations = map[string][]string{
 	"StaticAssetBundle": nil,
 	"WorkerVersion": {
 		"/assets/bundle -> StaticAssetBundle [-] optional exact-form",
-		"/bucketBindings/*/resource -> ObjectBucket [module-worker.object-bucket] optional iface:edge.objects@1.0.0",
 		"/bundle -> WorkerBundle [-] required exact-form",
 		"/kvBindings/*/resource -> EdgeKVNamespace [module-worker.edge-kv] optional iface:edge.kv@1.0.0",
 		"/queueProducerBindings/*/resource -> AtLeastOnceQueue [module-worker.queue-producer] optional iface:edge.queue@1.0.0",
@@ -67,7 +66,6 @@ var wantRelations = map[string][]string{
 		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 	"EdgeKVNamespace":    nil,
-	"ObjectBucket":       nil,
 	"SQLiteDatabase":     nil,
 	"SQLiteMigrationSet": nil,
 	"SQLiteMigrationApplication": {
@@ -166,13 +164,13 @@ func TestEveryDeclaredReferenceIsDerived(t *testing.T) {
 	if totalDeclared != totalDerived {
 		t.Fatalf("catalog declares %d reference fields but derives %d relations", totalDeclared, totalDerived)
 	}
-	if totalDerived != 22 {
-		t.Fatalf("family derives %d relations, want the 22 in the relation table", totalDerived)
+	if totalDerived != 21 {
+		t.Fatalf("family derives %d relations, want the 21 in the relation table", totalDerived)
 	}
-	// Seven of the twenty-two are typed bindings. Every other relation was
+	// Six of the twenty-one are typed bindings. Every other relation was
 	// completely unvalidated before this lane learned to derive them.
-	if bindings != 7 {
-		t.Fatalf("family derives %d binding relations, want 7", bindings)
+	if bindings != 6 {
+		t.Fatalf("family derives %d binding relations, want 6", bindings)
 	}
 }
 

@@ -70,6 +70,22 @@ inferred element type. `required_sensitive_vars` carries only the NAMES of secre
 slots the worker requires; the values are host-owned and never enter desired
 state.
 
+## External services
+
+`external_services` declares opaque standard-service slots without carrying a
+URL, endpoint, credential, target identifier, or provider-specific configuration:
+
+```hcl
+external_services = [
+  { name = "MEDIA", protocol = "com.amazonaws.s3", required = true },
+]
+```
+
+The Host resolves the protocol out of band and answers support at plan time.
+An unsupported required slot is refused; an optional unsupported slot is
+omitted from readiness. The module does not translate legacy provider-specific
+bindings into this surface.
+
 ## Publication
 
 The address in the example above is the module's registry address. This

@@ -18,7 +18,7 @@ and deployment resources around it.
 
 The identity fixes the serverless container contract, and says exactly what
 that contract is: the exact Interface contract `container.runtime@1.0.0`,
-authored the way `worker.runtime@1.0.0` fixes the ModuleWorker ABI
+authored the way `worker.runtime@1.1.0` fixes the ModuleWorker ABI
 ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 It fixes:
 

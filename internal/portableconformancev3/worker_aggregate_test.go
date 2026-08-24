@@ -532,8 +532,16 @@ func TestEnvironmentNamespaceIsSingle(t *testing.T) {
 	f := newAggregateFixture(t)
 	f.baseAggregate()
 	f.store("EdgeKVNamespace", "cache", map[string]any{})
-	f.store("ObjectBucket", "media", map[string]any{})
 	kvBinding := []any{map[string]any{"name": "STORE", "resource": f.ref("EdgeKVNamespace", "cache")}}
+	standardService := func(name string) []any {
+		return []any{map[string]any{
+			"name": name,
+			"service": map[string]any{
+				"apiVersion": "standards.takoform.com/v1",
+				"protocol":   "com.amazonaws.s3",
+			},
+		}}
+	}
 
 	cases := []struct {
 		name    string
@@ -548,11 +556,9 @@ func TestEnvironmentNamespaceIsSingle(t *testing.T) {
 			spec["kvBindings"] = kvBinding
 			spec["requiredSensitiveVars"] = []any{"STORE"}
 		}, true},
-		{"two binding lists on one name", func(spec map[string]any) {
+		{"a FormRef binding and standard-service slot on one name", func(spec map[string]any) {
 			spec["kvBindings"] = kvBinding
-			spec["bucketBindings"] = []any{map[string]any{
-				"name": "STORE", "resource": f.ref("ObjectBucket", "media"),
-			}}
+			spec["externalServices"] = standardService("STORE")
 		}, true},
 		{"a vars key against a sealed value name", func(spec map[string]any) {
 			spec["vars"] = map[string]any{"STORE_TOKEN": "x"}
@@ -560,9 +566,7 @@ func TestEnvironmentNamespaceIsSingle(t *testing.T) {
 		}, true},
 		{"distinct names across all four sources", func(spec map[string]any) {
 			spec["kvBindings"] = kvBinding
-			spec["bucketBindings"] = []any{map[string]any{
-				"name": "MEDIA", "resource": f.ref("ObjectBucket", "media"),
-			}}
+			spec["externalServices"] = standardService("MEDIA")
 			spec["vars"] = map[string]any{"STORE_URL": "https://store.invalid"}
 			spec["requiredSensitiveVars"] = []any{"STORE_TOKEN_NAME"}
 		}, false},

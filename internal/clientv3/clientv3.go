@@ -1,5 +1,5 @@
-// Package clientv3 is the Host API v1beta4 client lane
-// (forms.takoform.com/v1beta4, spec/host-api/v1beta4.md, decisions 0039,
+// Package clientv3 is the stable Host API v1 client lane
+// (forms.takoform.com/v1, spec/host-api/v1.md, decisions 0039,
 // 0046, 0047 and 0048). It is deliberately
 // transport-only: it speaks the v1beta1 resource envelope
 // (apiVersion/kind/form/metadata/spec/status) over I-JSON, carries the
@@ -15,7 +15,7 @@
 // travels as one path segment or as two, and this client sends whichever the
 // apiVersion actually has:
 //
-//	/apis/forms.takoform.com/v1beta4/resources/edge.forms.takoform.com/ModuleWorker/app
+//	/apis/forms.takoform.com/v1/resources/edge.forms.takoform.com/ModuleWorker/app
 //
 // No path segment this client builds ever percent-encodes a slash. Proxies,
 // gateways, and web frameworks disagree about whether %2F inside a path
@@ -50,20 +50,20 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// API constants for the v1beta4 lane. Older lanes keep their own discovery
-// paths; a v1beta4 client can never select one accidentally, and a host that
-// serves only v1beta1 is not silently spoken to in a vocabulary it does not
-// have.
+// API constants for the stable v1 lane. Older lanes keep their own discovery
+// paths; a stable client can never select one accidentally, and a host that
+// serves only a retained beta lane is not silently spoken to in a vocabulary
+// it does not have.
 const (
-	APIVersion    = "forms.takoform.com/v1beta4"
-	DiscoveryPath = "/.well-known/takoform/v1beta4"
-	APIRootPath   = "/apis/forms.takoform.com/v1beta4"
+	APIVersion    = "forms.takoform.com/v1"
+	DiscoveryPath = "/.well-known/takoform/v1"
+	APIRootPath   = "/apis/forms.takoform.com/v1"
 
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
 )
 
-// requiredFeatures are the discovery capabilities every v1beta4 host must
+// requiredFeatures are the discovery capabilities every stable v1 host must
 // advertise as true.
 var requiredFeatures = []string{
 	"service_forms",
@@ -82,20 +82,18 @@ type Discovery struct {
 	Endpoints   Endpoints       `json:"endpoints"`
 }
 
-// Endpoints carries advertised service URLs from discovery. All non-issuer
-// endpoints must be same-origin with the configured endpoint.
+// Endpoints carries the one advertised stable API URL from discovery. The
+// artifact, operation, and support roots are fixed suffixes of this URL;
+// advertising them separately would make omission ambiguous and would give
+// the host a second set of endpoint identities to keep coherent.
 type Endpoints struct {
-	API        string `json:"api"`
-	Artifacts  string `json:"artifacts,omitempty"`
-	Operations string `json:"operations,omitempty"`
-	Support    string `json:"support,omitempty"`
-	OIDCIssuer string `json:"oidc_issuer,omitempty"`
+	API string `json:"api"`
 }
 
 // HasFeature reports whether a named server capability is advertised.
 func (d Discovery) HasFeature(name string) bool { return d.Features[name] }
 
-// Client is a thin Host API v1beta1 HTTP client.
+// Client is a thin stable Host API v1 HTTP client.
 type Client struct {
 	endpoint        string // normalized origin, no trailing slash
 	token           string
@@ -158,7 +156,7 @@ func NewWithOptions(endpoint, token string, httpClient *http.Client, options Opt
 // Endpoint returns the normalized endpoint origin.
 func (c *Client) Endpoint() string { return c.endpoint }
 
-// Discover performs GET {endpoint}{DiscoveryPath}, validates the v1beta1
+// Discover performs GET {endpoint}{DiscoveryPath}, validates the stable v1
 // discovery contract, and caches the negotiated API base.
 func (c *Client) Discover(ctx context.Context) (Discovery, error) {
 	if _, err := c.configuredOrigin(); err != nil {
@@ -196,26 +194,6 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 	if err != nil {
 		return fmt.Errorf("takoform: invalid discovery API endpoint: %w", err)
 	}
-	optional := []struct {
-		name, raw, path string
-	}{
-		{"artifacts", disco.Endpoints.Artifacts, APIRootPath + "/artifacts"},
-		{"operations", disco.Endpoints.Operations, APIRootPath + "/operations"},
-		{"support", disco.Endpoints.Support, APIRootPath + "/support"},
-	}
-	for _, endpoint := range optional {
-		if endpoint.raw == "" {
-			continue
-		}
-		if _, err := c.validAdvertisedEndpoint(endpoint.raw, endpoint.path); err != nil {
-			return fmt.Errorf("takoform: invalid discovery %s endpoint: %w", endpoint.name, err)
-		}
-	}
-	if disco.Endpoints.OIDCIssuer != "" {
-		if err := validateOIDCIssuer(disco.Endpoints.OIDCIssuer); err != nil {
-			return fmt.Errorf("takoform: invalid discovery OIDC issuer: %w", err)
-		}
-	}
 	c.apiBase = strings.TrimRight(apiBase, "/")
 	return nil
 }
@@ -237,14 +215,14 @@ func (c *Client) validAdvertisedEndpoint(raw, expectedPath string) (string, erro
 		return "", errors.New("endpoint must not contain userinfo, query, or fragment")
 	}
 	// The advertised path is compared in its ESCAPED form and must carry no
-	// percent-encoding at all. Every segment of a v1beta1 path is an ordinary
+	// percent-encoding at all. Every segment of a stable v1 path is an ordinary
 	// segment, so a host advertising an escaped one — most of all a
 	// percent-encoded slash — is describing a shape this lane does not have and
 	// that intermediaries would not agree on (spec/decisions/0018). Comparing the
 	// decoded path instead would let "%2Fv1beta1" pass as "/v1beta1".
 	if strings.Contains(advertised.EscapedPath(), "%") {
 		return "", errors.New(
-			"endpoint path must not percent-encode any character; v1beta1 paths are ordinary segments",
+			"endpoint path must not percent-encode any character; stable v1 paths are ordinary segments",
 		)
 	}
 	if advertised.EscapedPath() != expectedPath {
@@ -312,7 +290,7 @@ func isLoopbackHostname(hostname string) bool {
 
 func (c *Client) requireReady() error {
 	if c.apiBase == "" {
-		return errors.New("takoform: Discover must complete before using the v1beta1 API")
+		return errors.New("takoform: Discover must complete before using the stable v1 API")
 	}
 	return nil
 }
