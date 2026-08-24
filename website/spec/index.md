@@ -10,7 +10,7 @@ is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.0 open candidate; release authority is exactly committed source + exact candidate/corpus + reference conformance |
+| Specification | Takoform 1.0 open candidate; release authority is one exact committed snapshot of the normative `spec/` tree |
 | Current Form corpus | `forms/candidates/current-family-index.json` (8 versionless families; 31 exact Experimental `0.x` Forms) |
 | Current Host API wire | `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` |
 | Current package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |

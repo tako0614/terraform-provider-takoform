@@ -52,3 +52,4 @@ record does not replace them.
 - [0052 — The Specification is released on its own line](0052-the-specification-is-released-on-its-own-line.md)
 - [0053 — Specification and Provider evidence are separate release authorities](0053-specification-and-provider-release-evidence.md)
 - [0054 — Standard-service identifiers are open and integrations are Host-owned](0054-standard-service-identifiers-are-open-and-host-integrated.md)
+- [0055 — Specification release needs only the normative source](0055-specification-release-needs-only-normative-source.md)

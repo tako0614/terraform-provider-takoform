@@ -2,8 +2,8 @@
 
 This directory is the portable specification surface for Takoform. It contains
 the **Specification 1.0 candidate** and literal stable Host API v1 source; the
-numbered release remains open until its exact committed
-source/corpus/reference evidence closes. Takoform defines a small desired-state
+numbered release remains open until its exact committed normative source
+snapshot closes. Takoform defines a small desired-state
 boundary between infrastructure-as-code clients and resource hosts. It is not
 an industry standards body, certification authority, or guarantee of backend
 portability.

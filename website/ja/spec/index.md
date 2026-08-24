@@ -9,7 +9,7 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.0 open candidate。authority は committed source + exact candidate/corpus + reference conformance のみ |
+| Specification | Takoform 1.0 open candidate。authority は normative `spec/` tree の exact committed snapshot 1つだけ |
 | 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
 | 現在の Host API wire | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |

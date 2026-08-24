@@ -18,7 +18,7 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 
 | Axis | Current identity | |
 | --- | --- | --- |
-| Specification | `1.0` | candidate-open; three local prerequisites are release authority |
+| Specification | `1.0` | candidate-open; one exact committed normative source snapshot is release authority |
 | Host API lane | `forms.takoform.com/v1` | the stable Specification wire contract |
 | Current Form corpus | `forms/candidates/current-family-index.json` | 8 versionless families, 31 exact `0.x` experimental Forms |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifacts are unpublished |
@@ -35,12 +35,11 @@ assertion remains fail-closed while its committed evidence tuple is open.
 ## Specification candidate, Forms, and retained Provider history
 
 Takoform Specification 1.0 is a local **open candidate** on the literal
-`forms.takoform.com/v1` Host API. Its release authority has exactly three
-prerequisites: an exact committed source snapshot, the exact generator-owned
-multi-family candidate/corpus closure, and manifest-owned reference
-conformance. External Hosts, products, deployments, signers, and operators are
-adoption evidence, not Specification authority
-([decisions 0052 and 0053](spec/decisions/0053-specification-and-provider-release-evidence.md)).
+`forms.takoform.com/v1` Host API. Its sole release prerequisite is an exact
+committed snapshot of the normative `spec/` tree. Candidate Forms, reference
+conformance, Providers, external Hosts, products, deployments, signers, and
+operators are implementation or adoption evidence, not Specification authority
+([decision 0055](spec/decisions/0055-specification-release-needs-only-normative-source.md)).
 
 The current corpus contains 31 exact Experimental `0.x` Forms in eight
 versionless families. The Edge family contains these 16 Forms and no current

@@ -6,8 +6,9 @@
 numbered Takoform Specification ledger. Its current 1.0 object is a candidate,
 not a completed release. A numbered entry may be recorded only after
 [`../spec/publication-evidence.json`](../spec/publication-evidence.json) closes
-the exact committed source snapshot, multi-family candidate/corpus closure,
-and manifest-owned reference conformance result.
+one exact committed snapshot of the normative `spec/` tree. Candidate Forms,
+packages, reference conformance, and Provider behavior are independent evidence
+and do not block the numbered Specification.
 
 Specification 1.0 defines Host API `forms.takoform.com/v1` but does not promote
 the 31 current Experimental `0.x` FormRefs, publish their packages, or advance

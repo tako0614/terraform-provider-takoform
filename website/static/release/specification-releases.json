@@ -1,17 +1,13 @@
 {
   "kind": "takoform.specification-releases@v1",
-  "policy": "A numbered Specification release records only an exact committed source snapshot, the closed multi-family candidate and corpus closure, and the manifest-owned reference conformance result. The current Specification 1.0 entry remains a candidate until those three prerequisites are committed and closed. A Specification release does not relabel any current 0.x FormRef, publish a Form Package, or advance the independent non-normative official Provider. Recorded releases are append-only.",
+  "policy": "A numbered Specification release records one exact committed snapshot of the normative spec tree. Candidate Forms, packages, reference conformance, Provider behavior, and product adoption are independent evidence and do not block the Specification. A Specification release does not relabel any current 0.x FormRef, publish a Form Package, or advance the independent non-normative official Provider. Recorded releases are append-only.",
   "candidate": {
     "version": "1.0",
     "title": "Takoform Specification 1.0",
     "track": "specification-v1",
     "hostApiLane": "forms.takoform.com/v1",
-    "familyIndexPath": "forms/candidates/current-family-index.json",
-    "conformanceSuitePath": "conformance/takoform-v1/manifest.json",
     "prerequisites": [
-      "specification-source-snapshot",
-      "candidate-form-corpus",
-      "reference-conformance"
+      "specification-source-snapshot"
     ],
     "formMaturityEffect": "none-current-formrefs-remain-exact",
     "providerEffect": "independent-non-normative-sample"

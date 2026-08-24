@@ -22,7 +22,7 @@ SemVer、ホスト protocol、Form の identity を別々の軸として示し�
 
 | 軸                    | 現在の identity                        | 意味と利用可能性                                                                                                       |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.0 candidate**             | exact committed source・exact candidate/corpus・reference conformance が閉じるまで open。                              |
+| Specification         | **Takoform 1.0 candidate**             | normative `spec/` tree の exact committed snapshot が1つ記録されるまで open。                                      |
 | Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の stable contract。                                        |
 | Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRefs。すべて Experimental のまま。                                                              |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |

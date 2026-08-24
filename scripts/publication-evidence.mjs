@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 // Takoform has two independent release tracks. Specification 1.0 is normative
-// and closes only on committed multi-family specification bytes plus the exact
-// generator-owned reference-suite execution. The official Terraform Provider
-// is non-normative and has its own milestone. External Hosts, operators,
-// deployments, backends, and products are not authorities for either result.
+// and closes on one committed snapshot of the normative specification source.
+// Candidate Forms, the reference suite, and the official Terraform Provider
+// are useful implementation evidence, but none is normative release authority.
+// External Hosts, operators, deployments, backends, and products are likewise
+// not authorities for either result.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -47,8 +48,6 @@ export const SPECIFICATION_TRACK = "specification-v1";
 export const PROVIDER_TRACK = "provider-3.0";
 export const SPECIFICATION_PREREQUISITES = Object.freeze([
   "specification-source-snapshot",
-  "candidate-form-corpus",
-  "reference-conformance",
 ]);
 export const PROVIDER_PREREQUISITES = Object.freeze([
   "provider-v3-exact-conformance",
@@ -69,13 +68,7 @@ export const RETAINED_HISTORY_PATH = "spec/publication-blockers.json";
 export const RETAINED_HISTORY_SHA256 =
   "8bc708163e789b95833331a537abf1c455062179c0eef5b57c583c76b8d740e0";
 
-const SPECIFICATION_ROOTS = Object.freeze([
-  "spec",
-  "forms/candidates",
-  "interfaces/candidates",
-  "bindings/candidates",
-  "conformance/takoform-v1",
-]);
+const SPECIFICATION_ROOTS = Object.freeze(["spec"]);
 const SPECIFICATION_EXCLUDED_PATHS = Object.freeze([
   PUBLICATION_EVIDENCE,
   RETAINED_HISTORY_PATH,
@@ -447,14 +440,7 @@ function listCommittedInventory(repositoryRoot, commit, roots, excludedPaths = [
   return entries;
 }
 
-export function deriveSpecificationSourceSnapshot(repositoryRoot, sourceCommit) {
-  assertReachableCommit(repositoryRoot, sourceCommit, "Specification source commit");
-  if (
-    !gitPathExists(repositoryRoot, sourceCommit, FAMILY_INDEX_PATH) ||
-    !gitPathExists(repositoryRoot, sourceCommit, CONFORMANCE_SUITE_PATH)
-  ) {
-    fail("Specification source snapshot requires the canonical family index and conformance suite");
-  }
+function deriveSpecificationSourceSnapshotAtCommit(repositoryRoot, sourceCommit) {
   const inventory = listCommittedInventory(
     repositoryRoot,
     sourceCommit,
@@ -472,6 +458,11 @@ export function deriveSpecificationSourceSnapshot(repositoryRoot, sourceCommit) 
     pathSetSha256: canonicalDigest(inventory.map((entry) => entry.path)),
     documentSetSha256: canonicalDigest(inventory),
   };
+}
+
+export function deriveSpecificationSourceSnapshot(repositoryRoot, sourceCommit) {
+  assertReachableCommit(repositoryRoot, sourceCommit, "Specification source commit");
+  return deriveSpecificationSourceSnapshotAtCommit(repositoryRoot, sourceCommit);
 }
 
 function validateFormRef(ref, context, expectedGroup = null) {
@@ -1308,7 +1299,6 @@ export function deriveCandidateCorpusEvidence(repositoryRoot, baseline) {
 
 function assertEvidenceRecordCommitted(document, repositoryRoot) {
   const head = git(repositoryRoot, ["rev-parse", "HEAD"]).trim();
-  assertReachableCommit(repositoryRoot, head, "evidence record commit");
   if (!gitPathExists(repositoryRoot, head, PUBLICATION_EVIDENCE)) {
     fail(`${PUBLICATION_EVIDENCE} must be committed before evidence can close`);
   }
@@ -1319,14 +1309,33 @@ function assertEvidenceRecordCommitted(document, repositoryRoot) {
   }
 }
 
-function validateSourceEvidence(document, repositoryRoot, candidate) {
+function validateSourceEvidence(document, repositoryRoot) {
   const evidence = document.evidence.specification.sourceSnapshot;
   if (evidence === null) return false;
-  if (candidate === null) fail("sourceSnapshot cannot close without the canonical index/suite tuple");
-  const expected = deriveSpecificationSourceSnapshot(repositoryRoot, candidate.sourceCommit);
+  if (!isRecord(evidence) || typeof evidence.sourceCommit !== "string") {
+    fail("sourceSnapshot must identify one exact Specification source commit");
+  }
+  const expected = deriveSpecificationSourceSnapshot(
+    repositoryRoot,
+    evidence.sourceCommit,
+  );
   exactKeys(evidence, Object.keys(expected), "evidence.specification.sourceSnapshot");
   if (canonicalJson(evidence) !== canonicalJson(expected)) {
     fail("source snapshot evidence does not equal the exact committed normative document set");
+  }
+  assertWorktreePathsClean(
+    repositoryRoot,
+    SPECIFICATION_ROOTS,
+    "normative Specification source",
+  );
+  const head = git(repositoryRoot, ["rev-parse", "HEAD"]).trim();
+  const current = deriveSpecificationSourceSnapshotAtCommit(repositoryRoot, head);
+  if (
+    current.fileCount !== evidence.fileCount ||
+    current.pathSetSha256 !== evidence.pathSetSha256 ||
+    current.documentSetSha256 !== evidence.documentSetSha256
+  ) {
+    fail("normative Specification source at HEAD does not equal the recorded source snapshot");
   }
   return true;
 }
@@ -1812,14 +1821,18 @@ export function validatePublicationEvidence(document, options = {}) {
     "evidence.provider",
   );
 
-  const candidate = deriveCandidateCorpusEvidence(repositoryRoot, document.candidateBaseline);
+  const candidate = releaseTrack === SPECIFICATION_TRACK
+    ? null
+    : deriveCandidateCorpusEvidence(repositoryRoot, document.candidateBaseline);
   const specificationValues = releaseTrack === PROVIDER_TRACK
     ? Object.fromEntries(SPECIFICATION_PREREQUISITES.map((id) => [id, false]))
     : {
-        "specification-source-snapshot": validateSourceEvidence(document, repositoryRoot, candidate),
-        "candidate-form-corpus": validateCandidateEvidence(document, candidate),
-        "reference-conformance": validateReferenceEvidence(document, repositoryRoot, candidate),
+        "specification-source-snapshot": validateSourceEvidence(document, repositoryRoot),
       };
+  if (releaseTrack !== SPECIFICATION_TRACK) {
+    validateCandidateEvidence(document, candidate);
+    validateReferenceEvidence(document, repositoryRoot, candidate);
+  }
   const providerValues = releaseTrack === SPECIFICATION_TRACK
     ? Object.fromEntries(PROVIDER_PREREQUISITES.map((id) => [id, false]))
     : validateProviderEvidence(document, repositoryRoot, candidate);
@@ -1879,31 +1892,8 @@ export function prepareSpecificationEvidence(
   );
   const sourceCommit = git(repositoryRoot, ["rev-parse", "HEAD"]).trim();
   assertReachableCommit(repositoryRoot, sourceCommit, "Specification source commit");
-  document.candidateBaseline = {
-    repository: "takoform",
-    commit: sourceCommit,
-    familyIndex: {
-      path: FAMILY_INDEX_PATH,
-      sha256: sha256Bytes(
-        gitShowBytes(repositoryRoot, sourceCommit, FAMILY_INDEX_PATH),
-      ),
-    },
-    conformanceSuite: {
-      path: CONFORMANCE_SUITE_PATH,
-      sha256: sha256Bytes(
-        gitShowBytes(repositoryRoot, sourceCommit, CONFORMANCE_SUITE_PATH),
-      ),
-    },
-  };
-  const candidate = deriveCandidateCorpusEvidence(
-    repositoryRoot,
-    document.candidateBaseline,
-  );
   document.evidence.specification.sourceSnapshot =
     deriveSpecificationSourceSnapshot(repositoryRoot, sourceCommit);
-  document.evidence.specification.candidateCorpus = candidate;
-  document.evidence.specification.referenceConformance =
-    deriveReferenceConformanceEvidence(repositoryRoot, candidate);
   writeFileSync(
     path.join(repositoryRoot, PUBLICATION_EVIDENCE),
     `${JSON.stringify(document, null, 2)}\n`,
@@ -1938,7 +1928,7 @@ function main() {
   if (mode === "--prepare-specification-v1") {
     const document = prepareSpecificationEvidence(repositoryRoot);
     process.stdout.write(
-      `prepared exact Specification 1.0 evidence for ${document.candidateBaseline.commit}; commit the record before assertion\n`,
+      `prepared exact Specification 1.0 source evidence for ${document.evidence.specification.sourceSnapshot.sourceCommit}; commit the record before assertion\n`,
     );
     return;
   }

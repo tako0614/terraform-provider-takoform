@@ -22,7 +22,7 @@ Form identity, and package publication cannot be mistaken for one another.
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                     |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.0 candidate**             | Open until exact committed source, exact candidate/corpus, and reference conformance close.                                  |
+| Specification         | **Takoform 1.0 candidate**             | Open until one exact committed snapshot of the normative `spec/` tree is recorded.                                           |
 | Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                                |
 | Form corpus           | **8 families / 31 Forms**              | Exact current `0.x` FormRefs; every Form remains Experimental.                                                               |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |

@@ -6,12 +6,10 @@ MUST NOT be treated as authority for another.
 ## Specification 1.0
 
 The normative Specification 1.0 track defines the literal stable Host API lane
-`forms.takoform.com/v1`. It closes only when all three of these Takoform-owned
-facts are committed and exact:
-
-1. one complete Specification source snapshot;
-2. the generator-owned multi-family candidate and corpus closure; and
-3. the manifest-owned reference conformance execution.
+`forms.takoform.com/v1`. It closes when one complete snapshot of the normative
+`spec/` tree is committed and exact. Candidate Forms, packages, conformance
+corpora, and reference implementations remain quality and adoption evidence;
+they are not Specification release prerequisites.
 
 The canonical machine policy is
 [`publication-evidence.json`](publication-evidence.json), and the numbered
@@ -19,7 +17,8 @@ release candidate/ledger is
 [`../release/specification-releases.json`](../release/specification-releases.json).
 Decisions [0052](decisions/0052-the-specification-is-released-on-its-own-line.md)
 and
-[0053](decisions/0053-specification-and-provider-release-evidence.md)
+[0053](decisions/0053-specification-and-provider-release-evidence.md), and
+[0055](decisions/0055-specification-release-needs-only-normative-source.md)
 define the boundary.
 
 The current generator index contains eight versionless families and 31 exact
@@ -92,19 +91,17 @@ Provider 3 gate.
   and reports their open/ready state.
 - `bun run check:specification-releases` validates the numbered candidate and
   protects committed release entries append-only.
-- `bun run check:specification-v1-release` asserts only the three normative
-  Specification prerequisites.
+- `bun run check:specification-v1-release` asserts only the normative source
+  snapshot.
 - `bun run check:provider-v3-release` asserts only the non-normative Provider
   milestone.
 - `bun run check:takoform-milestones` asserts both as an optional project
   checkpoint.
 
-The Specification evidence record intentionally keeps its family-index and
-suite pointers and all derived evidence objects `null` until one clean,
-reachable commit contains the frozen bytes. A dirty, staged, untracked, partial,
-unreachable, caller-renamed, or digest-mismatched closure fails. A generic
-`pass`, hand-written count, external receipt, or signature policy cannot make
-it ready.
+The Specification source evidence remains `null` until one clean, reachable
+commit contains the normative bytes. Candidate and reference evidence may stay
+`null` without blocking it. A dirty, staged, unreachable, or digest-mismatched
+normative snapshot fails.
 
 There is no `stable-mint` alias. The readiness assertion does not silently
 promote Forms or packages.
