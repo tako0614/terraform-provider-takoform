@@ -119,7 +119,7 @@ func providerV3ResourceTypeLines() []v3ResourceTypeLine {
 			"FunctionEndpoint":   "takoform_function_endpoint",
 		},
 		"container.forms.takoform.com": {
-			"ContainerService":      "takoform_container_service",
+			"ContainerService":      "takoform_serverless_container_service",
 			"ContainerRevision":     "takoform_container_revision",
 			"ContainerTraffic":      "takoform_container_traffic",
 			"ContainerEndpoint":     "takoform_container_endpoint",
@@ -136,10 +136,10 @@ func providerV3ResourceTypeLines() []v3ResourceTypeLine {
 			"TopicSubscription": "takoform_topic_subscription",
 		},
 		"schedule.forms.takoform.com": {
-			"Schedule": "takoform_schedule",
+			"Schedule": "takoform_message_schedule",
 		},
 		"vector.forms.takoform.com": {
-			"VectorIndex": "takoform_vector_index",
+			"VectorIndex": "takoform_dense_vector_index",
 		},
 	}
 	retained := map[string]string{

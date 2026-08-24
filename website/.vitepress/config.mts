@@ -124,7 +124,10 @@ const currentStackResourceItems = [
     link: "/docs/resources/function_deployment.html",
   },
   { text: "Function endpoint", link: "/docs/resources/function_endpoint.html" },
-  { text: "Container service", link: "/docs/resources/container_service.html" },
+  {
+    text: "Container service",
+    link: "/docs/resources/serverless_container_service.html",
+  },
   { text: "Container revision", link: "/docs/resources/container_revision.html" },
   { text: "Container traffic", link: "/docs/resources/container_traffic.html" },
   { text: "Container endpoint", link: "/docs/resources/container_endpoint.html" },
@@ -139,8 +142,8 @@ const currentStackResourceItems = [
     text: "Topic subscription",
     link: "/docs/resources/topic_subscription.html",
   },
-  { text: "Schedule", link: "/docs/resources/schedule.html" },
-  { text: "Vector index", link: "/docs/resources/vector_index.html" },
+  { text: "Schedule", link: "/docs/resources/message_schedule.html" },
+  { text: "Vector index", link: "/docs/resources/dense_vector_index.html" },
 ];
 
 const specSidebar = [

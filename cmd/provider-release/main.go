@@ -30,11 +30,11 @@ import (
 )
 
 const (
-	descriptorPath             = "release/version.json"
-	providerIdentityLedgerPath = "release/provider-form-identities.json"
-	providerCandidateSetPath   = "forms/candidates/edge.forms.takoform.com/candidate-set.json"
-	providerFamilyAPIVersion   = "edge.forms.takoform.com/v1beta1"
-	providerHostAPIVersion     = "forms.takoform.com/v1beta1"
+	descriptorPath                 = "release/version.json"
+	providerIdentityLedgerPath     = "release/provider-form-identities.json"
+	providerCurrentFamilyIndexPath = "forms/candidates/current-family-index.json"
+	providerV211FamilyAPIVersion   = "edge.forms.takoform.com/v1beta1"
+	providerHostAPIVersion         = "forms.takoform.com/v1"
 )
 
 var (
@@ -63,7 +63,8 @@ type providerIdentityLedger struct {
 type providerIdentityRelease struct {
 	ProviderVersion    string           `json:"providerVersion"`
 	PortableAPIVersion string           `json:"portableApiVersion"`
-	Family             string           `json:"family"`
+	Family             string           `json:"family,omitempty"`
+	Families           []string         `json:"families,omitempty"`
 	FormMaturity       string           `json:"formMaturity"`
 	Forms              []providerFormID `json:"forms"`
 }
@@ -88,6 +89,18 @@ type providerCandidateSet struct {
 	PackageAPIVersion string                `json:"packageApiVersion"`
 	PublicationStatus string                `json:"publicationStatus"`
 	Forms             []providerCandidateID `json:"forms"`
+}
+
+type providerCurrentFamilyIndex struct {
+	Format   string                       `json:"format"`
+	Families []providerCurrentFamilyEntry `json:"families"`
+}
+
+type providerCurrentFamilyEntry struct {
+	Group        string `json:"group"`
+	CandidateSet string `json:"candidateSet"`
+	SHA256       string `json:"sha256"`
+	FormCount    int    `json:"formCount"`
 }
 
 // providerCandidateID is one candidate Form's IDENTITY. It carries no
@@ -1151,7 +1164,7 @@ func validateVersioningPolicy(policy versioningPolicy) error {
 	return nil
 }
 
-var providerFamilyResourceKinds = map[string]string{
+var providerV211ResourceKinds = map[string]string{
 	"takoform_module_worker":                "ModuleWorker",
 	"takoform_worker_bundle":                "WorkerBundle",
 	"takoform_static_asset_bundle":          "StaticAssetBundle",
@@ -1167,6 +1180,126 @@ var providerFamilyResourceKinds = map[string]string{
 	"takoform_sqlite_migration_application": "SQLiteMigrationApplication",
 	"takoform_at_least_once_queue":          "AtLeastOnceQueue",
 	"takoform_queue_consumer":               "QueueConsumer",
+}
+
+var providerWithdrawnV1Alpha2ResourceTypes = map[string]bool{
+	"takoform_edge_worker":         true,
+	"takoform_relational_database": true,
+	"takoform_object_bucket":       true,
+	"takoform_key_value_store":     true,
+	"takoform_queue":               true,
+	"takoform_schedule":            true,
+	"takoform_container_service":   true,
+	"takoform_stateful_entity":     true,
+	"takoform_vector_index":        true,
+}
+
+func providerFormRefKey(ref providerFormRef) string {
+	return fmt.Sprintf("%s|%s|%s|%s", ref.APIVersion, ref.Kind, ref.DefinitionVersion, ref.SchemaDigest)
+}
+
+func validateProviderV211IdentityRelease(release providerIdentityRelease) error {
+	if release.ProviderVersion != "2.1.1" || release.PortableAPIVersion != "forms.takoform.com/v1beta1" ||
+		release.Family != providerV211FamilyAPIVersion || len(release.Families) != 0 ||
+		release.FormMaturity != "experimental" || len(release.Forms) != len(providerV211ResourceKinds) {
+		return errors.New("immutable provider v2.1.1 identity ledger entry is not the exact retained 15-Form release")
+	}
+	seenResourceTypes := map[string]bool{}
+	for index, form := range release.Forms {
+		wantKind, known := providerV211ResourceKinds[form.ResourceType]
+		if !known || seenResourceTypes[form.ResourceType] || wantKind != form.FormRef.Kind ||
+			form.FormRef.APIVersion != providerV211FamilyAPIVersion || form.FormRef.DefinitionVersion != "0.1.0" {
+			return fmt.Errorf("provider v2.1.1 embedded Form identity %d is not an exact retained family entry", index)
+		}
+		seenResourceTypes[form.ResourceType] = true
+	}
+	return nil
+}
+
+func loadCurrentProviderCandidates(repo string) ([]string, map[string]providerCandidateID, error) {
+	indexRaw, err := os.ReadFile(filepath.Join(repo, providerCurrentFamilyIndexPath))
+	if err != nil {
+		return nil, nil, fmt.Errorf("read current provider family index: %w", err)
+	}
+	var index providerCurrentFamilyIndex
+	if err := json.Unmarshal(indexRaw, &index); err != nil {
+		return nil, nil, fmt.Errorf("decode current provider family index: %w", err)
+	}
+	if index.Format != "takoform.current-family-index@v1" || len(index.Families) == 0 {
+		return nil, nil, errors.New("current provider family index has an invalid envelope")
+	}
+	families := make([]string, 0, len(index.Families))
+	candidates := map[string]providerCandidateID{}
+	seenGroups := map[string]bool{}
+	for position, entry := range index.Families {
+		wantPath := fmt.Sprintf("forms/candidates/%s/candidate-set.json", entry.Group)
+		if entry.Group == "" || seenGroups[entry.Group] || entry.CandidateSet != wantPath ||
+			!regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(entry.SHA256) || entry.FormCount <= 0 {
+			return nil, nil, fmt.Errorf("current provider family index entry %d is invalid", position)
+		}
+		seenGroups[entry.Group] = true
+		families = append(families, entry.Group)
+		raw, err := os.ReadFile(filepath.Join(repo, entry.CandidateSet))
+		if err != nil {
+			return nil, nil, fmt.Errorf("read current provider candidate set %s: %w", entry.Group, err)
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(raw)) != entry.SHA256 {
+			return nil, nil, fmt.Errorf("current provider candidate set %s digest drifted", entry.Group)
+		}
+		var candidate providerCandidateSet
+		if err := json.Unmarshal(raw, &candidate); err != nil {
+			return nil, nil, fmt.Errorf("decode current provider candidate set %s: %w", entry.Group, err)
+		}
+		if candidate.Format != "takoform.form-family-candidates@v1" || candidate.Family != entry.Group ||
+			candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha5" ||
+			candidate.PublicationStatus != "unpublished" || len(candidate.Forms) != entry.FormCount {
+			return nil, nil, fmt.Errorf("current provider candidate set %s is not the exact unpublished Experimental family set", entry.Group)
+		}
+		for formIndex, form := range candidate.Forms {
+			if form.FormRef.APIVersion != entry.Group || form.FormRef.Kind == "ObjectBucket" {
+				return nil, nil, fmt.Errorf("current provider candidate %s form %d has an invalid family or withdrawn kind", entry.Group, formIndex)
+			}
+			key := providerFormRefKey(form.FormRef)
+			if _, duplicate := candidates[key]; duplicate {
+				return nil, nil, fmt.Errorf("current provider candidate index duplicates exact FormRef %s", key)
+			}
+			candidates[key] = form
+		}
+	}
+	if !sort.StringsAreSorted(families) {
+		return nil, nil, errors.New("current provider family index groups are not in canonical lexical order")
+	}
+	return families, candidates, nil
+}
+
+func validateProviderV3IdentityRelease(repo string, release providerIdentityRelease) error {
+	families, candidates, err := loadCurrentProviderCandidates(repo)
+	if err != nil {
+		return err
+	}
+	if release.ProviderVersion != "3.0.0" || release.PortableAPIVersion != providerHostAPIVersion ||
+		release.Family != "" || release.FormMaturity != "experimental" ||
+		!reflect.DeepEqual(release.Families, families) || len(release.Forms) != len(candidates) {
+		return fmt.Errorf("provider Form identity ledger has no exact %d-entry Provider 3 release for the current family index", len(candidates))
+	}
+	seenResourceTypes := map[string]bool{}
+	seenCandidates := map[string]bool{}
+	for index, form := range release.Forms {
+		if seenResourceTypes[form.ResourceType] || providerWithdrawnV1Alpha2ResourceTypes[form.ResourceType] ||
+			form.ResourceType == "takoform_edge_object_bucket" || form.FormRef.Kind == "ObjectBucket" {
+			return fmt.Errorf("provider v3 embedded Form identity %d has a duplicate or withdrawn resource type", index)
+		}
+		candidate, ok := candidates[providerFormRefKey(form.FormRef)]
+		if !ok || candidate.PackageDigest != form.PackageDigest {
+			return fmt.Errorf("provider v3 embedded Form identity %d is not an exact current-family candidate", index)
+		}
+		seenResourceTypes[form.ResourceType] = true
+		seenCandidates[providerFormRefKey(form.FormRef)] = true
+	}
+	if len(seenCandidates) != len(candidates) {
+		return errors.New("provider v3 identity ledger does not cover every current exact FormRef")
+	}
+	return nil
 }
 
 // frozenLedgerEntryDigests pins the canonical digest of every RELEASED ledger
@@ -1228,9 +1361,11 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	var current *providerIdentityRelease
 	for index := range ledger.Releases {
 		release := &ledger.Releases[index]
+		hasSingleFamily := release.Family != "" && len(release.Families) == 0
+		hasFamilySet := release.Family == "" && len(release.Families) > 0
 		if !semverPattern.MatchString(release.ProviderVersion) ||
 			release.PortableAPIVersion == "" ||
-			release.Family == "" ||
+			(!hasSingleFamily && !hasFamilySet) ||
 			release.FormMaturity == "" ||
 			len(release.Forms) == 0 {
 			return ledger, fmt.Errorf("provider Form identity ledger release %d is invalid", index)
@@ -1242,80 +1377,47 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 		if release.ProviderVersion == desc.Version {
 			current = release
 		}
+		allowedFamilies := map[string]bool{}
+		if hasSingleFamily {
+			allowedFamilies[release.Family] = true
+		} else {
+			if !sort.StringsAreSorted(release.Families) {
+				return ledger, fmt.Errorf("%s: provider family set is not in canonical lexical order", release.ProviderVersion)
+			}
+			for _, family := range release.Families {
+				if family == "" || allowedFamilies[family] {
+					return ledger, fmt.Errorf("%s: invalid or duplicate provider family %q", release.ProviderVersion, family)
+				}
+				allowedFamilies[family] = true
+			}
+		}
 		for formIndex, form := range release.Forms {
 			if !regexp.MustCompile(`^takoform_[a-z0-9_]+$`).MatchString(form.ResourceType) ||
 				!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(form.PackageDigest) ||
 				!regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`).MatchString(form.FormRef.Kind) ||
 				!semverPattern.MatchString(form.FormRef.DefinitionVersion) ||
 				!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(form.FormRef.SchemaDigest) ||
-				form.FormRef.APIVersion != release.Family {
+				!allowedFamilies[form.FormRef.APIVersion] {
 				return ledger, fmt.Errorf("%s: invalid provider-embedded Form identity at index %d", release.ProviderVersion, formIndex)
 			}
-			key := fmt.Sprintf("%s|%s|%s|%s", form.FormRef.APIVersion, form.FormRef.Kind, form.FormRef.DefinitionVersion, form.FormRef.SchemaDigest)
+			key := providerFormRefKey(form.FormRef)
 			if seenFormRefs[key] {
 				return ledger, fmt.Errorf("%s: duplicate provider-embedded FormRef %s", release.ProviderVersion, key)
 			}
 			seenFormRefs[key] = true
 		}
-	}
-	if current == nil || current.PortableAPIVersion != desc.Versioning.PortableAPIVersion ||
-		current.PortableAPIVersion != providerHostAPIVersion || current.Family != providerFamilyAPIVersion ||
-		current.FormMaturity != "experimental" || len(current.Forms) != len(providerFamilyResourceKinds) {
-		return ledger, errors.New("provider Form identity ledger has no exact 15-entry release for the descriptor")
-	}
-	seenResourceTypes := map[string]bool{}
-	for index, form := range current.Forms {
-		wantKind, known := providerFamilyResourceKinds[form.ResourceType]
-		if !known || seenResourceTypes[form.ResourceType] || wantKind != form.FormRef.Kind ||
-			form.FormRef.APIVersion != providerFamilyAPIVersion || form.FormRef.DefinitionVersion != "0.1.0" {
-			return ledger, fmt.Errorf("provider v2.1 embedded Form identity %d is not an exact Beta family entry", index)
-		}
-		seenResourceTypes[form.ResourceType] = true
-	}
-	if len(seenResourceTypes) != len(providerFamilyResourceKinds) {
-		return ledger, errors.New("provider v2.1 identity ledger does not contain the exact 15 resource types")
-	}
-
-	var candidate providerCandidateSet
-	candidateRaw, err := os.ReadFile(filepath.Join(repo, providerCandidateSetPath))
-	if err != nil {
-		return ledger, fmt.Errorf("read provider Beta candidate set: %w", err)
-	}
-	if err := json.Unmarshal(candidateRaw, &candidate); err != nil {
-		return ledger, fmt.Errorf("decode provider Beta candidate set: %w", err)
-	}
-	if candidate.Format != "takoform.form-family-candidates@v1" ||
-		candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha5" ||
-		candidate.PublicationStatus != "unpublished" {
-		return ledger, errors.New("provider Beta candidate set is not an unpublished Experimental family set")
-	}
-	if candidate.Family == current.Family {
-		// The candidate lane still builds the generation the descriptor-named
-		// release embeds, so the two must be byte-equal — which subsumes the
-		// count. Comparing counts ACROSS generations would be wrong rather
-		// than merely redundant: a later generation adds Forms by design
-		// (decision 0043), and requiring it to keep the released one's
-		// cardinality would forbid exactly that.
-		// Compared by IDENTITY, because that is what the two documents share:
-		// the ledger records the provider's authoring name for its own
-		// resources and the candidate set no longer states one.
-		released := make([]providerCandidateID, 0, len(current.Forms))
-		for _, form := range current.Forms {
-			released = append(released, providerCandidateID{FormRef: form.FormRef, PackageDigest: form.PackageDigest})
-		}
-		if !reflect.DeepEqual(candidate.Forms, released) {
-			return ledger, errors.New("provider v2.1 identity ledger differs from the exact Beta candidate set")
-		}
-	} else {
-		// The catalog has moved past the published release (decision 0046):
-		// the published entry stays byte-frozen above, and the moved candidate
-		// lane must name a family no released entry has claimed — a release's
-		// family is immutable, so a reused family version would be two
-		// generations wearing one name.
-		for _, release := range ledger.Releases {
-			if release.Family == candidate.Family {
-				return ledger, fmt.Errorf("candidate family %s is already claimed by released provider %s", candidate.Family, release.ProviderVersion)
+		if release.ProviderVersion == "2.1.1" {
+			if err := validateProviderV211IdentityRelease(*release); err != nil {
+				return ledger, err
 			}
+		}
+	}
+	if current == nil || current.PortableAPIVersion != desc.Versioning.PortableAPIVersion {
+		return ledger, errors.New("provider Form identity ledger has no release matching the descriptor")
+	}
+	if desc.Version == "3.0.0" {
+		if err := validateProviderV3IdentityRelease(repo, *current); err != nil {
+			return ledger, err
 		}
 	}
 	return ledger, nil

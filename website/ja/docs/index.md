@@ -127,7 +127,7 @@ mapping します。resource 名は非 normative な Provider metadata であり
 
 ### Container family
 
-- [container_service](/docs/resources/container_service.html)
+- [serverless_container_service](/docs/resources/serverless_container_service.html)
 - [container_revision](/docs/resources/container_revision.html)
 - [container_traffic](/docs/resources/container_traffic.html)
 - [container_endpoint](/docs/resources/container_endpoint.html)
@@ -139,8 +139,8 @@ mapping します。resource 名は非 normative な Provider metadata であり
 - [pull_queue](/docs/resources/pull_queue.html)
 - [topic](/docs/resources/topic.html)
 - [topic_subscription](/docs/resources/topic_subscription.html)
-- [schedule](/docs/resources/schedule.html)
-- [vector_index](/docs/resources/vector_index.html)
+- [message_schedule](/docs/resources/message_schedule.html)
+- [dense_vector_index](/docs/resources/dense_vector_index.html)
 
 provider が compile していない Form を運ぶ generic carrier はありません。typed
 surface が client に検証できる exact FormRef だけを提供するためです

@@ -22,29 +22,24 @@ const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
 const PROVIDER_SIGNER = "3510E75E05BBCC303B92D77934FC18AC897FB709";
-const PROVIDER_VERSION = "2.1.1";
-const PROVIDER_HOST_API = "forms.takoform.com/v1beta1";
-const PROVIDER_FORM_FAMILY = "edge.forms.takoform.com/v1beta1";
+const PROVIDER_VERSION = "3.0.0";
+const PROVIDER_HOST_API = "forms.takoform.com/v1";
 const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
-const PROVIDER_CANDIDATE_SET =
-  "forms/candidates/edge.forms.takoform.com/candidate-set.json";
-const PROVIDER_FORM_KINDS = Object.freeze({
-  takoform_module_worker: "ModuleWorker",
-  takoform_worker_bundle: "WorkerBundle",
-  takoform_static_asset_bundle: "StaticAssetBundle",
-  takoform_worker_version: "WorkerVersion",
-  takoform_worker_deployment: "WorkerDeployment",
-  takoform_worker_custom_domain: "WorkerCustomDomain",
-  takoform_worker_endpoint: "WorkerEndpoint",
-  takoform_worker_cron_trigger: "WorkerCronTrigger",
-  takoform_edge_kv_namespace: "EdgeKVNamespace",
-  takoform_edge_object_bucket: "ObjectBucket",
-  takoform_sqlite_database: "SQLiteDatabase",
-  takoform_sqlite_migration_set: "SQLiteMigrationSet",
-  takoform_sqlite_migration_application: "SQLiteMigrationApplication",
-  takoform_at_least_once_queue: "AtLeastOnceQueue",
-  takoform_queue_consumer: "QueueConsumer",
-});
+const PROVIDER_CURRENT_FAMILY_INDEX =
+  "forms/candidates/current-family-index.json";
+const PROVIDER_V211_LEDGER_DIGEST =
+  "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d";
+const PROVIDER_WITHDRAWN_V1ALPHA2_RESOURCE_TYPES = new Set([
+  "takoform_edge_worker",
+  "takoform_relational_database",
+  "takoform_object_bucket",
+  "takoform_key_value_store",
+  "takoform_queue",
+  "takoform_schedule",
+  "takoform_container_service",
+  "takoform_stateful_entity",
+  "takoform_vector_index",
+]);
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const TRUSTED_ROOT = "release/trust/trusted-root.json";
 const PINNED_GH_VERSION = "2.96.0";
@@ -55,8 +50,10 @@ const GIT_OBJECT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const PROVIDER_TAG = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u;
-const REVOCATION_TAG = /^forms\/revocations\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
+const PROVIDER_TAG =
+  /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u;
+const REVOCATION_TAG =
+  /^forms\/revocations\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
 const FORM_RELEASE_AUTHORITY_PATHS = Object.freeze([
   ".github/workflows/form-package-revocation.yml",
   TRUSTED_ROOT,
@@ -123,8 +120,7 @@ export const RELEASE_SURFACES = Object.freeze([
         "the provider-release protected Environment reviews the signed tag and release candidates; the local publisher accepts only that exact successful run/attempt and re-verifies it independently before using local GitHub authority",
       "no-overwrite":
         "requires the descriptor tag, refuses any pre-existing local/remote tag, Registry version, or GitHub Release before creation, uses zero-object-id compare-and-swap for local refs, pushes an exact ref, and accepts only an immutable release with the exact candidate inventory; recovery never mutates or deletes a tag and accepts only the exact pinned signed local/remote annotated object",
-      halt:
-        "prepare and tag stop after one exact workflow dispatch and return its URL as AWAITING_REVIEW; cancel that exact run before approval on any input or evidence mismatch, and never continue by selecting a latest run",
+      halt: "prepare and tag stop after one exact workflow dispatch and return its URL as AWAITING_REVIEW; cancel that exact run before approval on any input or evidence mismatch, and never continue by selecting a latest run",
     },
   },
   {
@@ -153,8 +149,7 @@ export const RELEASE_SURFACES = Object.freeze([
         "the form-package-release protected Environment reviews the revocation workflow run that builds and keyless-signs the exact cumulative checkpoint candidate; local publication consumes only that named successful run/attempt and independently re-verifies its checksum, deterministic tag object, and Sigstore closure before any mutation",
       "no-overwrite":
         "the exact tag must be absent locally and remotely and no GitHub Release identity may exist for it before creation; local tag creation is zero-object-id compare-and-swap over the exact reconstructed candidate object, the remote push is a create-only lease of that exact ref, and final readback accepts only one immutable release with the exact candidate inventory, so every checkpoint identity only appends",
-      halt:
-        "prepare-revocation stops after one exact workflow dispatch and returns its URL as AWAITING_REVIEW; cancel that exact run before approval if any input changes, and publish-revocation never infers or selects a latest run — it consumes only the explicitly named run/attempt",
+      halt: "prepare-revocation stops after one exact workflow dispatch and returns its URL as AWAITING_REVIEW; cancel that exact run before approval if any input changes, and publish-revocation never infers or selects a latest run — it consumes only the explicitly named run/attempt",
     },
   },
 ]);
@@ -184,12 +179,7 @@ const PHASES = {
   },
   [FORM_SURFACE]: {
     "prepare-revocation": ["tag", "expected-commit"],
-    "publish-revocation": [
-      "tag",
-      "expected-commit",
-      "run-id",
-      "run-attempt",
-    ],
+    "publish-revocation": ["tag", "expected-commit", "run-id", "run-attempt"],
     "verify-revocation": ["tag", "expected-commit"],
   },
 };
@@ -257,10 +247,7 @@ export function parseReleaseSurfaceArgs(surface, args) {
     if (values[name] && !POSITIVE_INTEGER.test(values[name])) {
       throw new Error(`--${name} must be a positive decimal integer`);
     }
-    if (
-      values[name] &&
-      !Number.isSafeInteger(Number(values[name]))
-    ) {
+    if (values[name] && !Number.isSafeInteger(Number(values[name]))) {
       throw new Error(`--${name} must be a safe positive decimal integer`);
     }
   }
@@ -291,7 +278,10 @@ export function runReleaseSurface({
   wait = blockingWait,
 }) {
   if (!repo || typeof repo !== "string") throw new Error("repo is required");
-  if (typeof process.env.GH_TOKEN !== "string" || process.env.GH_TOKEN.trim() === "") {
+  if (
+    typeof process.env.GH_TOKEN !== "string" ||
+    process.env.GH_TOKEN.trim() === ""
+  ) {
     throw new Error(
       "release blocked: non-empty GH_TOKEN is required for local owner authority",
     );
@@ -313,12 +303,7 @@ export function runReleaseSurface({
 }
 
 function blockingWait(milliseconds) {
-  Atomics.wait(
-    new Int32Array(new SharedArrayBuffer(4)),
-    0,
-    0,
-    milliseconds,
-  );
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
 function runProvider(context, options) {
@@ -357,14 +342,7 @@ function command(
   context,
   executable,
   args,
-  {
-    cwd = context.repo,
-    input,
-    echo = false,
-    label,
-    env,
-    encoding,
-  } = {},
+  { cwd = context.repo, input, echo = false, label, env, encoding } = {},
 ) {
   try {
     const output = context.execFile(executable, args, {
@@ -459,13 +437,10 @@ function gitPushEnvironment() {
   environment.GIT_CONFIG_VALUE_0 = "";
   environment.GIT_CONFIG_KEY_1 = "credential.interactive";
   environment.GIT_CONFIG_VALUE_1 = "never";
-  environment.GIT_CONFIG_KEY_2 =
-    "http.https://github.com/.extraHeader";
+  environment.GIT_CONFIG_KEY_2 = "http.https://github.com/.extraHeader";
   environment.GIT_CONFIG_VALUE_2 = "";
-  environment.GIT_CONFIG_KEY_3 =
-    "http.https://github.com/.extraHeader";
-  environment.GIT_CONFIG_VALUE_3 =
-    `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${process.env.GH_TOKEN}`, "utf8").toString("base64")}`;
+  environment.GIT_CONFIG_KEY_3 = "http.https://github.com/.extraHeader";
+  environment.GIT_CONFIG_VALUE_3 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${process.env.GH_TOKEN}`, "utf8").toString("base64")}`;
   environment.GIT_CONFIG_KEY_4 = "core.hooksPath";
   environment.GIT_CONFIG_VALUE_4 = "/dev/null";
   return environment;
@@ -614,15 +589,26 @@ function verifyLocalReleaseToolchain(context) {
   context.releaseToolchainVerified = true;
 }
 
-function assertCurrentProtectedMain(context, expectedCommit, { exact = true } = {}) {
-  const dirty = git(context, "status", "--porcelain=v1", "--untracked-files=all");
+function assertCurrentProtectedMain(
+  context,
+  expectedCommit,
+  { exact = true } = {},
+) {
+  const dirty = git(
+    context,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  );
   if (dirty !== "") {
     throw new Error(
       `release blocked: worktree is dirty\n${dirty.split("\n").slice(0, 30).join("\n")}`,
     );
   }
   if (git(context, "rev-parse", "--is-shallow-repository") !== "false") {
-    throw new Error("release blocked: shallow repositories cannot prove ancestry");
+    throw new Error(
+      "release blocked: shallow repositories cannot prove ancestry",
+    );
   }
   const origin = git(context, "remote", "get-url", "origin");
   if (!isCanonicalOrigin(origin)) {
@@ -672,29 +658,22 @@ function assertCommitAncestor(context, ancestor, descendant, label) {
     throw new Error(`${label} requires exact lowercase commits`);
   }
   command(context, "git", ["cat-file", "-e", `${ancestor}^{commit}`]);
-  command(context, "git", [
-    "merge-base",
-    "--is-ancestor",
-    ancestor,
-    descendant,
-  ], { label: `${label}: ${ancestor} must be an ancestor of ${descendant}` });
+  command(
+    context,
+    "git",
+    ["merge-base", "--is-ancestor", ancestor, descendant],
+    { label: `${label}: ${ancestor} must be an ancestor of ${descendant}` },
+  );
 }
 
-function assertRecoveryCommitAncestor(
-  context,
-  ancestor,
-  descendant,
-  label,
-) {
+function assertRecoveryCommitAncestor(context, ancestor, descendant, label) {
   if (!COMMIT.test(ancestor ?? "") || !COMMIT.test(descendant ?? "")) {
     throw new Error(`${label} requires exact lowercase commits`);
   }
   recoveryGit(context, ["cat-file", "-e", `${ancestor}^{commit}`]);
-  recoveryGit(
-    context,
-    ["merge-base", "--is-ancestor", ancestor, descendant],
-    { label: `${label}: ${ancestor} must be an ancestor of ${descendant}` },
-  );
+  recoveryGit(context, ["merge-base", "--is-ancestor", ancestor, descendant], {
+    label: `${label}: ${ancestor} must be an ancestor of ${descendant}`,
+  });
 }
 
 function assertFormReleaseAuthorityFence(
@@ -720,14 +699,7 @@ function assertFormReleaseAuthorityFence(
   command(
     context,
     "git",
-    [
-      "diff",
-      "--quiet",
-      toolingCommit,
-      currentMain,
-      "--",
-      ...authorityPaths,
-    ],
+    ["diff", "--quiet", toolingCommit, currentMain, "--", ...authorityPaths],
     {
       label: `${label}: release authority paths changed after reviewed tooling commit`,
     },
@@ -764,8 +736,7 @@ function assertProviderRecoveryFence(
   ) {
     throw new Error(`${label}: recovery diff path output is ambiguous`);
   }
-  const changed =
-    rawChanged === "" ? [] : rawChanged.slice(0, -1).split("\0");
+  const changed = rawChanged === "" ? [] : rawChanged.slice(0, -1).split("\0");
   if (
     changed.some((path) => path === "" || /[\r\n]/u.test(path)) ||
     new Set(changed).size !== changed.length
@@ -826,10 +797,7 @@ function parseCandidateMetadata(
   label,
   { profile = "compact-optional-lf" } = {},
 ) {
-  if (
-    profile !== "compact-optional-lf" &&
-    profile !== "pretty-required-lf"
-  ) {
+  if (profile !== "compact-optional-lf" && profile !== "pretty-required-lf") {
     throw new Error(`${label} uses unsupported metadata profile: ${profile}`);
   }
   let value;
@@ -838,13 +806,8 @@ function parseCandidateMetadata(
   } catch (error) {
     throw new Error(`${label} is not valid JSON: ${error.message}`);
   }
-  const canonical = Buffer.from(
-    JSON.stringify(recursivelySorted(value)),
-  );
-  const canonicalWithNewline = Buffer.concat([
-    canonical,
-    Buffer.from("\n"),
-  ]);
+  const canonical = Buffer.from(JSON.stringify(recursivelySorted(value)));
+  const canonicalWithNewline = Buffer.concat([canonical, Buffer.from("\n")]);
   const prettyWithNewline = Buffer.from(
     `${JSON.stringify(recursivelySorted(value), null, 2)}\n`,
   );
@@ -870,12 +833,138 @@ function parsePrettyCandidateMetadata(raw, label) {
   });
 }
 
+function providerFormRefKey(formRef) {
+  return JSON.stringify([
+    formRef.apiVersion,
+    formRef.kind,
+    formRef.definitionVersion,
+    formRef.schemaDigest,
+  ]);
+}
+
+function loadCurrentProviderCandidateProjection(repo) {
+  const index = readJSON(
+    join(repo, PROVIDER_CURRENT_FAMILY_INDEX),
+    "current provider family index",
+  );
+  requireExactKeys(
+    index,
+    ["bindingCandidateSet", "families", "format", "interfaceCandidateSet"],
+    "current provider family index",
+  );
+  if (
+    index.format !== "takoform.current-family-index@v1" ||
+    !Array.isArray(index.families) ||
+    index.families.length === 0
+  ) {
+    throw new Error("current provider family index has an invalid envelope");
+  }
+  const families = [];
+  const candidates = new Map();
+  for (const [entryIndex, entry] of index.families.entries()) {
+    requireExactKeys(
+      entry,
+      ["candidateSet", "formCount", "group", "sha256"],
+      `current provider family index entry ${entryIndex}`,
+    );
+    const expectedPath = `forms/candidates/${entry.group}/candidate-set.json`;
+    if (
+      typeof entry.group !== "string" ||
+      entry.group === "" ||
+      families.includes(entry.group) ||
+      entry.candidateSet !== expectedPath ||
+      !/^[0-9a-f]{64}$/u.test(entry.sha256 ?? "") ||
+      !Number.isSafeInteger(entry.formCount) ||
+      entry.formCount <= 0
+    ) {
+      throw new Error(
+        `current provider family index entry ${entryIndex} is invalid`,
+      );
+    }
+    families.push(entry.group);
+    const candidatePath = join(repo, entry.candidateSet);
+    if (fileDigest(candidatePath) !== `sha256:${entry.sha256}`) {
+      throw new Error(
+        `current provider candidate set ${entry.group} digest drifted`,
+      );
+    }
+    const candidate = readJSON(
+      candidatePath,
+      `current provider candidate set ${entry.group}`,
+    );
+    requireExactKeys(
+      candidate,
+      [
+        "authoringPolicy",
+        "authoringSource",
+        "family",
+        "formMaturity",
+        "format",
+        "forms",
+        "packageApiVersion",
+        "publicationStatus",
+      ],
+      `current provider candidate set ${entry.group}`,
+    );
+    if (
+      candidate.format !== "takoform.form-family-candidates@v1" ||
+      candidate.family !== entry.group ||
+      candidate.formMaturity !== "experimental" ||
+      candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
+      candidate.publicationStatus !== "unpublished" ||
+      !Array.isArray(candidate.forms) ||
+      candidate.forms.length !== entry.formCount
+    ) {
+      throw new Error(
+        `current provider candidate set ${entry.group} is not the exact unpublished Experimental family set`,
+      );
+    }
+    for (const [formIndex, form] of candidate.forms.entries()) {
+      requireExactKeys(
+        form.formRef,
+        ["apiVersion", "definitionVersion", "kind", "schemaDigest"],
+        `${entry.group} candidate FormRef ${formIndex}`,
+      );
+      if (
+        form.formRef.apiVersion !== entry.group ||
+        form.formRef.kind === "ObjectBucket" ||
+        !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(form.formRef.kind ?? "") ||
+        !PROVIDER_TAG.test(`v${form.formRef.definitionVersion ?? ""}`) ||
+        !SHA256.test(form.formRef.schemaDigest ?? "") ||
+        !SHA256.test(form.packageDigest ?? "")
+      ) {
+        throw new Error(
+          `${entry.group} candidate Form ${formIndex} is invalid`,
+        );
+      }
+      const key = providerFormRefKey(form.formRef);
+      if (candidates.has(key)) {
+        throw new Error(`current provider candidate index duplicates ${key}`);
+      }
+      candidates.set(key, {
+        formRef: form.formRef,
+        packageDigest: form.packageDigest,
+      });
+    }
+  }
+  if (JSON.stringify(families) !== JSON.stringify([...families].sort())) {
+    throw new Error(
+      "current provider family index is not in canonical lexical order",
+    );
+  }
+  return { families, candidates };
+}
+
 export function validateProviderIdentityLedger(repo, descriptor) {
   const ledger = readJSON(
     join(repo, PROVIDER_IDENTITY_LEDGER),
     "provider Form identity ledger",
   );
-  requireExactKeys(ledger, ["format", "releases"], "provider Form identity ledger");
+  requireExactKeys(
+    ledger,
+    ["format", "releases"],
+    "provider Form identity ledger",
+  );
   if (
     ledger.format !== "takoform.provider-form-identities@v1" ||
     !Array.isArray(ledger.releases) ||
@@ -887,16 +976,39 @@ export function validateProviderIdentityLedger(repo, descriptor) {
   const formRefs = new Set();
   let current;
   for (const [releaseIndex, release] of ledger.releases.entries()) {
-    requireExactKeys(
-      release,
-      ["family", "formMaturity", "forms", "portableApiVersion", "providerVersion"],
-      `provider Form identity ledger release ${releaseIndex}`,
-    );
+    const releaseKeys = Object.keys(release ?? {}).sort();
+    const hasSingleFamily =
+      JSON.stringify(releaseKeys) ===
+        JSON.stringify(
+          [
+            "family",
+            "formMaturity",
+            "forms",
+            "portableApiVersion",
+            "providerVersion",
+          ].sort(),
+        ) && typeof release?.family === "string";
+    const hasFamilySet =
+      JSON.stringify(releaseKeys) ===
+        JSON.stringify(
+          [
+            "families",
+            "formMaturity",
+            "forms",
+            "portableApiVersion",
+            "providerVersion",
+          ].sort(),
+        ) &&
+      Array.isArray(release?.families) &&
+      release.families.length > 0 &&
+      JSON.stringify(release.families) ===
+        JSON.stringify([...release.families].sort()) &&
+      new Set(release.families).size === release.families.length;
     if (
       typeof release.providerVersion !== "string" ||
       !PROVIDER_TAG.test(`v${release.providerVersion}`) ||
       typeof release.portableApiVersion !== "string" ||
-      typeof release.family !== "string" ||
+      (!hasSingleFamily && !hasFamilySet) ||
       release.formMaturity !== "experimental" ||
       !Array.isArray(release.forms) ||
       release.forms.length === 0
@@ -912,6 +1024,16 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     }
     providerVersions.add(release.providerVersion);
     if (release.providerVersion === descriptor.version) current = release;
+    const allowedFamilies = new Set(
+      hasSingleFamily ? [release.family] : release.families,
+    );
+    if (
+      release.providerVersion === "2.1.1" &&
+      sha256(Buffer.from(JSON.stringify(recursivelySorted(release)))) !==
+        PROVIDER_V211_LEDGER_DIGEST
+    ) {
+      throw new Error("immutable provider 2.1.1 identity ledger entry changed");
+    }
     for (const [formIndex, form] of release.forms.entries()) {
       requireExactKeys(
         form,
@@ -928,7 +1050,7 @@ export function validateProviderIdentityLedger(repo, descriptor) {
         !/^takoform_[a-z0-9_]+$/u.test(form.resourceType) ||
         !SHA256.test(form.packageDigest ?? "") ||
         typeof form.formRef.apiVersion !== "string" ||
-        form.formRef.apiVersion !== release.family ||
+        !allowedFamilies.has(form.formRef.apiVersion) ||
         !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(form.formRef.kind ?? "") ||
         !PROVIDER_TAG.test(`v${form.formRef.definitionVersion ?? ""}`) ||
         !SHA256.test(form.formRef.schemaDigest ?? "")
@@ -937,12 +1059,7 @@ export function validateProviderIdentityLedger(repo, descriptor) {
           `${release.providerVersion}: invalid provider-embedded Form identity`,
         );
       }
-      const refKey = JSON.stringify([
-        form.formRef.apiVersion,
-        form.formRef.kind,
-        form.formRef.definitionVersion,
-        form.formRef.schemaDigest,
-      ]);
+      const refKey = providerFormRefKey(form.formRef);
       if (formRefs.has(refKey)) {
         throw new Error(
           `${release.providerVersion}: duplicate provider-embedded FormRef`,
@@ -951,98 +1068,43 @@ export function validateProviderIdentityLedger(repo, descriptor) {
       formRefs.add(refKey);
     }
   }
+  const projection = loadCurrentProviderCandidateProjection(repo);
   if (
     current === undefined ||
     current.portableApiVersion !== descriptor.versioning?.portableApiVersion ||
     current.portableApiVersion !== PROVIDER_HOST_API ||
-    current.family !== PROVIDER_FORM_FAMILY ||
+    current.family !== undefined ||
+    JSON.stringify(current.families) !== JSON.stringify(projection.families) ||
     current.formMaturity !== "experimental" ||
-    current.forms.length !== Object.keys(PROVIDER_FORM_KINDS).length
+    current.forms.length !== projection.candidates.size
   ) {
     throw new Error(
-      "provider Form identity ledger has no exact 15-entry release for the descriptor",
+      `provider Form identity ledger has no exact ${projection.candidates.size}-entry release for the descriptor`,
     );
   }
   const resourceTypes = new Set();
   for (const [formIndex, form] of current.forms.entries()) {
-    const expectedKind = PROVIDER_FORM_KINDS[form.resourceType];
+    const candidate = projection.candidates.get(
+      providerFormRefKey(form.formRef),
+    );
     if (
-      expectedKind === undefined ||
       resourceTypes.has(form.resourceType) ||
-      form.formRef.kind !== expectedKind ||
-      form.formRef.apiVersion !== PROVIDER_FORM_FAMILY ||
-      form.formRef.definitionVersion !== "0.1.0"
+      PROVIDER_WITHDRAWN_V1ALPHA2_RESOURCE_TYPES.has(form.resourceType) ||
+      form.resourceType === "takoform_edge_object_bucket" ||
+      form.formRef.kind === "ObjectBucket" ||
+      candidate === undefined ||
+      candidate.packageDigest !== form.packageDigest
     ) {
       throw new Error(
-        `provider v2.1 embedded Form identity ${formIndex} is not an exact Beta family entry`,
+        `provider v3 embedded Form identity ${formIndex} is not an exact current-family entry`,
       );
     }
     resourceTypes.add(form.resourceType);
   }
-  if (resourceTypes.size !== Object.keys(PROVIDER_FORM_KINDS).length) {
+  if (resourceTypes.size !== projection.candidates.size) {
     throw new Error(
-      "provider v2.1 identity ledger does not contain the exact 15 resource types",
+      "provider v3 identity ledger does not contain one unique resource type per current Form",
     );
-  }
-
-  const candidate = readJSON(
-    join(repo, PROVIDER_CANDIDATE_SET),
-    "provider Beta candidate set",
-  );
-  requireExactKeys(
-    candidate,
-    [
-      "authoringPolicy",
-      "authoringSource",
-      "family",
-      "formMaturity",
-      "format",
-      "forms",
-      "packageApiVersion",
-      "publicationStatus",
-    ],
-    "provider Beta candidate set",
-  );
-  if (
-    candidate.format !== "takoform.form-family-candidates@v1" ||
-    candidate.formMaturity !== "experimental" ||
-    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
-    candidate.publicationStatus !== "unpublished" ||
-    !Array.isArray(candidate.forms) ||
-    candidate.forms.length === 0
-  ) {
-    throw new Error("provider Beta candidate set is not a populated Experimental family set");
-  }
-  if (candidate.family === current.family) {
-    // The candidate lane still builds the generation the descriptor-named
-    // release embeds, so the two must be byte-equal — which is also where the
-    // entry count is settled. A MOVED lane is free to carry a different
-    // number of Forms; a lane still building the released generation is not.
-    const candidateProjection = candidate.forms.map(
-      ({ resourceType, formRef, packageDigest }) => ({
-        resourceType,
-        formRef,
-        packageDigest,
-      }),
-    );
-    if (JSON.stringify(candidateProjection) !== JSON.stringify(current.forms)) {
-      throw new Error(
-        "provider v2.1 identity ledger differs from the exact Beta candidate set",
-      );
-    }
-  } else {
-    // The catalog has moved past the published release (decision 0046). The
-    // published entry above is already held byte-frozen; what the moved
-    // candidate lane must satisfy is that no released entry claims its
-    // family — a release's family is immutable, so a reused family version
-    // would be two generations wearing one name.
-    for (const release of ledger.releases) {
-      if (release.family === candidate.family) {
-        throw new Error(
-          `candidate family ${candidate.family} is already claimed by released provider ${release.providerVersion}`,
-        );
-      }
-    }
   }
   return ledger;
 }
@@ -1095,7 +1157,9 @@ export function readProviderDescriptor(repo) {
     descriptor.versioning.formPackageVersions !==
       "content-addressed-current-retained-legacy-semver"
   ) {
-    throw new Error("provider release descriptor conflates independent version streams");
+    throw new Error(
+      "provider release descriptor conflates independent version streams",
+    );
   }
   if (
     !Array.isArray(descriptor.cliMatrix) ||
@@ -1128,11 +1192,7 @@ function dispatchWorkflow(
   context,
   workflow,
   inputs,
-  {
-    headSha = inputs.expected_commit,
-    ref = "main",
-    headBranch = ref,
-  } = {},
+  { headSha = inputs.expected_commit, ref = "main", headBranch = ref } = {},
 ) {
   if (!COMMIT.test(headSha ?? "")) {
     throw new Error(`dispatch ${workflow} requires an exact head SHA`);
@@ -1165,9 +1225,7 @@ function dispatchWorkflow(
       "--json",
       "attempt,createdAt,databaseId,displayTitle,event,headBranch,headSha,status,url,workflowName",
     ];
-    const listed = JSON.parse(
-      command(context, "gh", listArguments),
-    );
+    const listed = JSON.parse(command(context, "gh", listArguments));
     return listed.filter(
       (run) =>
         run.workflowName === workflowName &&
@@ -1355,7 +1413,9 @@ export function parseStrictChecksums(raw) {
     const name = match[2];
     if (
       name.startsWith("/") ||
-      name.split("/").some((part) => part === "" || part === "." || part === "..") ||
+      name
+        .split("/")
+        .some((part) => part === "" || part === "." || part === "..") ||
       entries.has(name)
     ) {
       throw new Error(`unsafe or duplicate SHA256SUMS target: ${name}`);
@@ -1441,7 +1501,9 @@ function validateCandidateAssets(
     seen.set(asset.name, expectedDigest);
   }
   const actualNames = [...seen.keys()].sort();
-  if (JSON.stringify(actualNames) !== JSON.stringify([...expectedNames].sort())) {
+  if (
+    JSON.stringify(actualNames) !== JSON.stringify([...expectedNames].sort())
+  ) {
     throw new Error(
       `candidate public inventory differs; expected ${expectedNames.join(", ")}, got ${actualNames.join(", ")}`,
     );
@@ -1471,9 +1533,7 @@ function verifyCandidateRoot(
     JSON.stringify(rootEntries.map((entry) => entry.name)) !==
       JSON.stringify(expectedRoot) ||
     rootEntries.some((entry) =>
-      entry.name === "assets"
-        ? !entry.isDirectory()
-        : !entry.isFile(),
+      entry.name === "assets" ? !entry.isDirectory() : !entry.isFile(),
     )
   ) {
     throw new Error(
@@ -1516,7 +1576,14 @@ function recoveryLocalTagOID(context, tag) {
 
 function remoteTagState(context, tag) {
   const ref = `refs/tags/${tag}`;
-  const output = git(context, "ls-remote", "--tags", "origin", ref, `${ref}^{}`);
+  const output = git(
+    context,
+    "ls-remote",
+    "--tags",
+    "origin",
+    ref,
+    `${ref}^{}`,
+  );
   return parseRemoteTagState(output, ref);
 }
 
@@ -1628,7 +1695,8 @@ function reconstructCandidateTagObject(
 ) {
   const tagObject = readFileSync(join(root, "tag-object"));
   if (
-    metadata.objectFormat !== git(context, "rev-parse", "--show-object-format") ||
+    metadata.objectFormat !==
+      git(context, "rev-parse", "--show-object-format") ||
     !/^[0-9a-f]{40,64}$/u.test(metadata.tagObjectOid) ||
     !SHA256.test(metadata.tagObjectSha256) ||
     fileDigest(join(root, "tag-object")) !== metadata.tagObjectSha256
@@ -1648,7 +1716,9 @@ function reconstructCandidateTagObject(
     fields.type !== "commit" ||
     fields.tag !== tag
   ) {
-    throw new Error("candidate tag object does not bind the expected tag/commit");
+    throw new Error(
+      "candidate tag object does not bind the expected tag/commit",
+    );
   }
   const reconstructed = command(context, "git", ["mktag"], {
     input: tagObject,
@@ -1715,9 +1785,7 @@ function splitSignedProviderTagObject(raw, tag, expectedCommit) {
     payload.length <= expectedHeader.length ||
     !payload.subarray(0, expectedHeader.length).equals(expectedHeader)
   ) {
-    throw new Error(
-      `provider tag ${tag} signed payload identity differs`,
-    );
+    throw new Error(`provider tag ${tag} signed payload identity differs`);
   }
   return { payload, signature };
 }
@@ -1725,15 +1793,9 @@ function splitSignedProviderTagObject(raw, tag, expectedCommit) {
 function assertPinnedProviderGpgVerification(verification, tag) {
   const valid = asText(verification.output)
     .split("\n")
-    .map((line) =>
-      /^\[GNUPG:\] VALIDSIG ([0-9A-F]{40})\b/u.exec(line)?.[1],
-    )
+    .map((line) => /^\[GNUPG:\] VALIDSIG ([0-9A-F]{40})\b/u.exec(line)?.[1])
     .filter(Boolean);
-  if (
-    !verification.ok ||
-    valid.length !== 1 ||
-    valid[0] !== PROVIDER_SIGNER
-  ) {
+  if (!verification.ok || valid.length !== 1 || valid[0] !== PROVIDER_SIGNER) {
     throw new Error(
       `provider tag ${tag} is not signed by the pinned exact signer`,
     );
@@ -1747,16 +1809,10 @@ function assertExactSignedProviderTag(
 ) {
   const local = recoveryLocalTagOID(context, tag);
   const localType = local
-    ? recoveryGit(
-        context,
-        ["cat-file", "-t", `refs/tags/${tag}`],
-      ).trim()
+    ? recoveryGit(context, ["cat-file", "-t", `refs/tags/${tag}`]).trim()
     : "";
   const localCommit = local
-    ? recoveryGit(
-        context,
-        ["rev-parse", `refs/tags/${tag}^{commit}`],
-      ).trim()
+    ? recoveryGit(context, ["rev-parse", `refs/tags/${tag}^{commit}`]).trim()
     : "";
   if (
     local !== expectedObject ||
@@ -1764,11 +1820,13 @@ function assertExactSignedProviderTag(
     localCommit !== expectedCommit
   ) {
     throw new Error(
-      `provider recovery requires exact local annotated tag object ${expectedObject} -> ${expectedCommit}; observed ${JSON.stringify({
-        object: local || null,
-        type: localType || null,
-        commit: localCommit || null,
-      })}`,
+      `provider recovery requires exact local annotated tag object ${expectedObject} -> ${expectedCommit}; observed ${JSON.stringify(
+        {
+          object: local || null,
+          type: localType || null,
+          commit: localCommit || null,
+        },
+      )}`,
     );
   }
   const remote = assertRecoveryExactRemoteTag(
@@ -1814,10 +1872,7 @@ function assertExactSignedProviderTag(
       .filter((line) => line.startsWith("fpr:"))
       .map((line) => line.split(":")[9])
       .filter(Boolean);
-    if (
-      fingerprints.length !== 1 ||
-      fingerprints[0] !== PROVIDER_SIGNER
-    ) {
+    if (fingerprints.length !== 1 || fingerprints[0] !== PROVIDER_SIGNER) {
       throw new Error("provider public signing key fingerprint drifted");
     }
     command(
@@ -1892,13 +1947,18 @@ function ensureCandidateTagPublished(
 
 function pushExactTag(context, tag, expectedCommit, expectedObject) {
   progress(context, `push create-only tag ${tag}`);
-  command(context, "git", [
-    "push",
-    "--no-verify",
-    `--force-with-lease=refs/tags/${tag}:`,
-    SOURCE_REPOSITORY,
-    `refs/tags/${tag}:refs/tags/${tag}`,
-  ], { env: gitPushEnvironment() });
+  command(
+    context,
+    "git",
+    [
+      "push",
+      "--no-verify",
+      `--force-with-lease=refs/tags/${tag}:`,
+      SOURCE_REPOSITORY,
+      `refs/tags/${tag}:refs/tags/${tag}`,
+    ],
+    { env: gitPushEnvironment() },
+  );
   return assertExactRemoteTag(context, tag, expectedCommit, expectedObject);
 }
 
@@ -1928,10 +1988,7 @@ function releaseListArguments() {
 
 function parseReleasePages(raw, tag) {
   const pages = JSON.parse(raw);
-  if (
-    !Array.isArray(pages) ||
-    pages.some((page) => !Array.isArray(page))
-  ) {
+  if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) {
     throw new Error("GitHub Release list pagination response is invalid");
   }
   const releases = pages.flat();
@@ -1955,10 +2012,7 @@ function parseReleasePages(raw, tag) {
 }
 
 function releasesByTag(context, tag) {
-  return parseReleasePages(
-    command(context, "gh", releaseListArguments()),
-    tag,
-  );
+  return parseReleasePages(command(context, "gh", releaseListArguments()), tag);
 }
 
 function assertReleaseAbsent(context, tag) {
@@ -1967,7 +2021,9 @@ function assertReleaseAbsent(context, tag) {
     throw new Error(
       `no-overwrite blocked ${tag}: GitHub Release identities already exist: ` +
         releases
-          .map((release) => `${release.id}:${release.draft ? "draft" : "public"}`)
+          .map(
+            (release) => `${release.id}:${release.draft ? "draft" : "public"}`,
+          )
           .join(","),
     );
   }
@@ -2133,14 +2189,7 @@ function validateDraftBeforePublication(
 
 function readExactRetainedDraft(
   context,
-  {
-    releaseId,
-    tag,
-    prerelease = false,
-    body,
-    assets,
-    requireComplete = false,
-  },
+  { releaseId, tag, prerelease = false, body, assets, requireComplete = false },
 ) {
   assertUniqueReleaseIdentity(context, tag, releaseId, true);
   const draft = JSON.parse(
@@ -2330,16 +2379,21 @@ function resumeDraftReleaseLocally(
     );
     for (const asset of initial.missing) {
       const uploaded = JSON.parse(
-        command(context, "gh", [
-          "api",
-          "--method",
-          "POST",
-          `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
-          "--header",
-          "Content-Type: application/octet-stream",
-          "--input",
-          asset.path,
-        ], { env: githubUploadEnvironment() }),
+        command(
+          context,
+          "gh",
+          [
+            "api",
+            "--method",
+            "POST",
+            `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
+            "--header",
+            "Content-Type: application/octet-stream",
+            "--input",
+            asset.path,
+          ],
+          { env: githubUploadEnvironment() },
+        ),
       );
       if (
         !Number.isSafeInteger(uploaded.id) ||
@@ -2397,10 +2451,7 @@ function resumeDraftReleaseLocally(
         ]),
       );
     } catch (error) {
-      const observed = attemptCommand(context, "gh", [
-        "api",
-        apiTagPath(tag),
-      ]);
+      const observed = attemptCommand(context, "gh", ["api", apiTagPath(tag)]);
       if (!observed.ok) throw error;
       let release;
       try {
@@ -2531,16 +2582,21 @@ function publishReleaseLocally(
     progress(context, `upload ${orderedAssets.length} exact assets`);
     for (const asset of orderedAssets) {
       const uploaded = JSON.parse(
-        command(context, "gh", [
-          "api",
-          "--method",
-          "POST",
-          `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
-          "--header",
-          "Content-Type: application/octet-stream",
-          "--input",
-          asset.path,
-        ], { env: githubUploadEnvironment() }),
+        command(
+          context,
+          "gh",
+          [
+            "api",
+            "--method",
+            "POST",
+            `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
+            "--header",
+            "Content-Type: application/octet-stream",
+            "--input",
+            asset.path,
+          ],
+          { env: githubUploadEnvironment() },
+        ),
       );
       if (
         !Number.isSafeInteger(uploaded.id) ||
@@ -2655,10 +2711,8 @@ function publishReleaseLocally(
             expectedName: tag,
             expectedBody: body,
             expectedTargetCommitish: "main",
-            expectedAssetsURL:
-              `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
-            expectedUploadURL:
-              `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
+            expectedAssetsURL: `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
+            expectedUploadURL: `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
           }
         : {}),
     });
@@ -2687,18 +2741,17 @@ function publishReleaseLocally(
         } else if (release.tag_name === tag && release.draft === true) {
           state = "MATCHING_DRAFT_RETAINED";
         } else {
-          state = release.draft === false ? "PUBLICATION_INDETERMINATE" : "DRAFT_INDETERMINATE";
+          state =
+            release.draft === false
+              ? "PUBLICATION_INDETERMINATE"
+              : "DRAFT_INDETERMINATE";
         }
       } else {
         state = "REMOTE_STATE_UNREADABLE";
       }
     }
     if (draftCreationAttempted) {
-      const observed = attemptCommand(
-        context,
-        "gh",
-        releaseListArguments(),
-      );
+      const observed = attemptCommand(context, "gh", releaseListArguments());
       if (observed.ok) {
         try {
           const matches = parseReleasePages(observed.output, tag);
@@ -2787,8 +2840,7 @@ function registryVersions(context) {
   if (
     versions.some(
       (version) =>
-        typeof version !== "string" ||
-        !PROVIDER_TAG.test(`v${version}`),
+        typeof version !== "string" || !PROVIDER_TAG.test(`v${version}`),
     ) ||
     new Set(versions).size !== versions.length
   ) {
@@ -2881,8 +2933,7 @@ function verifyProviderReleaseProvenance(context, root, descriptor, expected) {
   ]);
   const report = JSON.parse(raw);
   if (
-    report.kind !==
-      "takoform.provider-release-provenance-verification@v1" ||
+    report.kind !== "takoform.provider-release-provenance-verification@v1" ||
     report.tag !== descriptor.tag ||
     report.provenance !== names.provenance ||
     report.subjectCount !== 13 ||
@@ -2897,14 +2948,7 @@ function verifyProviderReleaseProvenance(context, root, descriptor, expected) {
 function verifyProviderCandidate(
   context,
   root,
-  {
-    descriptor,
-    runId,
-    runAttempt,
-    requestId,
-    expectedCommit,
-    tagObjectOid,
-  },
+  { descriptor, runId, runAttempt, requestId, expectedCommit, tagObjectOid },
 ) {
   validateProviderIdentityLedger(context.repo, descriptor);
   const metadata = verifyCandidateRoot(root, {
@@ -3000,19 +3044,10 @@ function verifyProviderSignature(context, root, names) {
       .filter((line) => line.startsWith("fpr:"))
       .map((line) => line.split(":")[9])
       .filter(Boolean);
-    if (
-      fingerprints.length !== 1 ||
-      fingerprints[0] !== PROVIDER_SIGNER
-    ) {
+    if (fingerprints.length !== 1 || fingerprints[0] !== PROVIDER_SIGNER) {
       throw new Error("provider public signing key fingerprint drifted");
     }
-    command(context, "gpg", [
-      "--homedir",
-      gpgHome,
-      "--batch",
-      "--import",
-      key,
-    ]);
+    command(context, "gpg", ["--homedir", gpgHome, "--batch", "--import", key]);
     for (const [label, signature, subject] of [
       ["provider checksum", names.signature, names.checksum],
       [
@@ -3037,7 +3072,9 @@ function verifyProviderSignature(context, root, names) {
         { label: `verify ${label} signature` },
       );
       if (!status.includes(`[GNUPG:] VALIDSIG ${PROVIDER_SIGNER} `)) {
-        throw new Error(`${label} signature did not return the pinned VALIDSIG`);
+        throw new Error(
+          `${label} signature did not return the pinned VALIDSIG`,
+        );
       }
     }
   });
@@ -3059,20 +3096,25 @@ export function providerReleaseBody(descriptor) {
     descriptor?.versioning?.portableApiVersion !== PROVIDER_HOST_API
   ) {
     throw new Error(
-      "provider release body requires the exact v2.1.1 Beta Host API descriptor",
+      "provider release body requires the exact v3.0.0 stable Host API descriptor",
     );
   }
   return (
-    "Signed deterministic Takoform provider v2.1.1 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from provider v1: Provider v2.1.1 retains the published provider-v2 state compatibility lane and its historical Host API epoch forms.takoform.com/v1alpha2. Provider-v1 state remains a breaking boundary and is rejected instead of being rewritten; follow the explicit create/import/cutover migration guide: " +
+    "Signed deterministic Takoform Provider v3.0.0 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from Provider v2.1.1: Provider 3 removes the nine withdrawn v1alpha2 Terraform resource types and never reoccupies those names with a different contract. Existing state must stay pinned to Provider 2.1.1 or be explicitly forgotten or destroyed before upgrading; follow the fail-closed migration guide: " +
+    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v2-to-v3.md` +
+    "\n\nProvider v1 remains a separate migration boundary and Provider 3 does not rewrite its state. Operators coming from Provider v1 must first follow the explicit v1-to-v2 inventory and cutover guide: " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v1-to-v2.md` +
-    "\n\nThis provider release targets the Beta Host API `forms.takoform.com/v1beta1` and the Edge Platform Family `edge.forms.takoform.com/v1beta1`. Provider SemVer, Host API, Form Family, Form definition, and Form Package versions are independent axes. The exact 15 Experimental 0.1.0 FormRefs and package digests are locked in " +
+    "\n\nThis provider release targets stable Host API `forms.takoform.com/v1` and the eight versionless current Form families. Provider SemVer, Host API, Form Family, Form definition, and Form Package versions are independent axes. The exact 31 Experimental 0.x FormRefs, provider-owned Terraform resource types, and package digests are locked in " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/${PROVIDER_IDENTITY_LEDGER}` +
-    "."
+    ". Published Provider 2.1.1 identities remain immutable history."
   );
 }
 
 function providerPrepare(context, options, descriptor) {
-  const commit = assertCurrentProtectedMain(context, options["expected-commit"]);
+  const commit = assertCurrentProtectedMain(
+    context,
+    options["expected-commit"],
+  );
   assertTagAbsent(context, descriptor.tag);
   assertReleaseAbsent(context, descriptor.tag);
   assertRegistryVersionAbsent(context, descriptor.version);
@@ -3151,7 +3193,8 @@ function providerTag(context, options, descriptor) {
         { echo: true },
       );
       localObject = localTagOID(context, descriptor.tag);
-      if (!localObject) throw new Error("provider tag verifier created no local ref");
+      if (!localObject)
+        throw new Error("provider tag verifier created no local ref");
       ownerGateAndFence(context, expectedCommit);
       assertReleaseAbsent(context, descriptor.tag);
       assertRegistryVersionAbsent(context, descriptor.version);
@@ -3177,7 +3220,11 @@ function providerTag(context, options, descriptor) {
         commit: expectedCommit,
         tag: descriptor.tag,
         tagObject: localObject,
-        reviewedRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
+        reviewedRun: {
+          id: options["run-id"],
+          attempt: options["run-attempt"],
+          url: run.url,
+        },
         dispatchStatus: "DISPATCHED",
         status: "AWAITING_REVIEW",
         releaseCandidateRun: dispatched,
@@ -3196,20 +3243,24 @@ function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   const releaseBody = providerReleaseBody(descriptor);
   if (
-    !releaseBody.includes("Provider v2.1.1") ||
+    !releaseBody.includes("Provider v3.0.0") ||
     !releaseBody.includes(PROVIDER_HOST_API) ||
-    !releaseBody.includes(PROVIDER_FORM_FAMILY) ||
+    !releaseBody.includes("eight versionless current Form families") ||
     !releaseBody.includes(PROVIDER_IDENTITY_LEDGER) ||
-    !releaseBody.includes("15 Experimental") ||
+    !releaseBody.includes("31 Experimental") ||
+    !releaseBody.includes("release/migrations/v2-to-v3.md") ||
     !releaseBody.includes("release/migrations/v1-to-v2.md") ||
-    !releaseBody.includes("Breaking upgrade from provider v1") ||
-    !releaseBody.includes("forms.takoform.com/v1alpha2")
+    !releaseBody.includes("Breaking upgrade from Provider v2.1.1") ||
+    !releaseBody.includes("nine withdrawn v1alpha2 Terraform resource types")
   ) {
-    throw new Error("provider release body omits the exact v2.1 Beta identity contract");
+    throw new Error(
+      "provider release body omits the exact v3 stable identity and migration contract",
+    );
   }
   assertCurrentProtectedMain(context, expectedCommit);
   const localObject = localTagOID(context, descriptor.tag);
-  if (!localObject) throw new Error(`local signed provider tag ${descriptor.tag} is missing`);
+  if (!localObject)
+    throw new Error(`local signed provider tag ${descriptor.tag} is missing`);
   assertExactRemoteTag(context, descriptor.tag, expectedCommit, localObject);
   assertReleaseAbsent(context, descriptor.tag);
   assertRegistryVersionAbsent(context, descriptor.version);
@@ -3224,51 +3275,58 @@ function providerPublish(context, options, descriptor) {
       headBranch: descriptor.tag,
     },
   );
-  return withTemporaryDirectory("takoform-provider-publish", (temporaryRoot) => {
-    const candidate = downloadArtifact(
-      context,
-      options["run-id"],
-      `provider-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
-      join(temporaryRoot, "candidate"),
-    );
-    const assets = verifyProviderCandidate(context, candidate, {
-      descriptor,
-      runId: options["run-id"],
-      runAttempt: options["run-attempt"],
-      requestId: run.displayTitle,
-      expectedCommit,
-      tagObjectOid: localObject,
-    });
-    ownerGateAndFence(context, expectedCommit);
-    assertRegistryVersionAbsent(context, descriptor.version);
-    const release = publishReleaseLocally(context, {
-      tag: descriptor.tag,
-      assets,
-      prerelease: descriptor.version.includes("-"),
-      body: releaseBody,
-      temporaryRoot,
-      prePublishFence: () => {
-        ownerGateAndFence(context, expectedCommit);
-        assertRegistryVersionAbsent(context, descriptor.version);
-      },
-    });
-    return emit(context, {
-      kind: "takos.deploy-result@v1",
-      surface: PROVIDER_SURFACE,
-      phase: "publish",
-      target: `github-release:${GITHUB_REPOSITORY}/${descriptor.tag}`,
-      commit: expectedCommit,
-      tag: descriptor.tag,
-      candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
-      releaseId: release.id,
-      releaseUrl: release.html_url,
-      assetDigests: Object.fromEntries(
-        [...assets].map(([name, asset]) => [name, asset.sha256]),
-      ),
-      productionReadback: "EXACT_IMMUTABLE_RELEASE",
-      status: "VERIFIED",
-    });
-  });
+  return withTemporaryDirectory(
+    "takoform-provider-publish",
+    (temporaryRoot) => {
+      const candidate = downloadArtifact(
+        context,
+        options["run-id"],
+        `provider-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
+        join(temporaryRoot, "candidate"),
+      );
+      const assets = verifyProviderCandidate(context, candidate, {
+        descriptor,
+        runId: options["run-id"],
+        runAttempt: options["run-attempt"],
+        requestId: run.displayTitle,
+        expectedCommit,
+        tagObjectOid: localObject,
+      });
+      ownerGateAndFence(context, expectedCommit);
+      assertRegistryVersionAbsent(context, descriptor.version);
+      const release = publishReleaseLocally(context, {
+        tag: descriptor.tag,
+        assets,
+        prerelease: descriptor.version.includes("-"),
+        body: releaseBody,
+        temporaryRoot,
+        prePublishFence: () => {
+          ownerGateAndFence(context, expectedCommit);
+          assertRegistryVersionAbsent(context, descriptor.version);
+        },
+      });
+      return emit(context, {
+        kind: "takos.deploy-result@v1",
+        surface: PROVIDER_SURFACE,
+        phase: "publish",
+        target: `github-release:${GITHUB_REPOSITORY}/${descriptor.tag}`,
+        commit: expectedCommit,
+        tag: descriptor.tag,
+        candidateRun: {
+          id: options["run-id"],
+          attempt: options["run-attempt"],
+          url: run.url,
+        },
+        releaseId: release.id,
+        releaseUrl: release.html_url,
+        assetDigests: Object.fromEntries(
+          [...assets].map(([name, asset]) => [name, asset.sha256]),
+        ),
+        productionReadback: "EXACT_IMMUTABLE_RELEASE",
+        status: "VERIFIED",
+      });
+    },
+  );
 }
 
 function providerRecoveryMutationFence(
@@ -3298,12 +3356,7 @@ function providerRecoveryMutationFence(
   if (releaseId === undefined) {
     assertReleaseAbsent(context, descriptor.tag);
   } else {
-    assertUniqueReleaseIdentity(
-      context,
-      descriptor.tag,
-      releaseId,
-      true,
-    );
+    assertUniqueReleaseIdentity(context, descriptor.tag, releaseId, true);
   }
   return { currentMain, tag };
 }
@@ -3474,8 +3527,7 @@ function providerRecoverDraft(context, options, descriptor) {
               recoveryCommit,
               expectedObject,
               releaseId: retainedReleaseId,
-              label:
-                "provider retained-draft pre-publication recovery fence",
+              label: "provider retained-draft pre-publication recovery fence",
             }),
         });
         assertExactSignedProviderTag(context, {
@@ -3523,9 +3575,7 @@ function providerRecoverDraft(context, options, descriptor) {
 function revocationAssetNames(tag) {
   const match = REVOCATION_TAG.exec(tag);
   if (!match) {
-    throw new Error(
-      "--tag must match forms/revocations/v<canonical-semver>",
-    );
+    throw new Error("--tag must match forms/revocations/v<canonical-semver>");
   }
   const version = match[1];
   const base = `takoform-form-revocation_${version}`;
@@ -3605,9 +3655,7 @@ function verifyDeepAssetReport(context, root, report, expected) {
       return asset.name;
     })
     .sort();
-  if (
-    JSON.stringify(actual) !== JSON.stringify([...expected.names].sort())
-  ) {
+  if (JSON.stringify(actual) !== JSON.stringify([...expected.names].sort())) {
     throw new Error(`${expected.label} deep asset inventory mismatch`);
   }
 }
@@ -3628,13 +3676,7 @@ function expectedFormTagObject(
   context,
   { tag, sourceCommit, requestId, runId, runAttempt },
 ) {
-  const epoch = git(
-    context,
-    "show",
-    "-s",
-    "--format=%ct",
-    sourceCommit,
-  );
+  const epoch = git(context, "show", "-s", "--format=%ct", sourceCommit);
   if (!/^(?:0|[1-9][0-9]*)$/u.test(epoch)) {
     throw new Error("tag source commit timestamp is not a Unix epoch");
   }
@@ -3749,7 +3791,9 @@ function verifyRevocationPublicAssets(context, root, tag, { metadata } = {}) {
     (manifest.sourceCommit !== metadata.sourceCommit ||
       manifest.toolingCommit !== metadata.toolingCommit)
   ) {
-    throw new Error("revocation manifest commit binding differs from candidate");
+    throw new Error(
+      "revocation manifest commit binding differs from candidate",
+    );
   }
   const manifestNames = manifest.assets.map((asset) => asset.name).sort();
   for (const asset of manifest.assets) {
@@ -3777,8 +3821,7 @@ function verifyRevocationPublicAssets(context, root, tag, { metadata } = {}) {
         trustedRoot,
       );
       verifyDeepAssetReport(context, root, deepReport, {
-        format:
-          "takoform.form-package-revocation-directory-verification@v1",
+        format: "takoform.form-package-revocation-directory-verification@v1",
         label: "revocation",
         names: names.all,
         tag,
@@ -3850,14 +3893,10 @@ function verifyRevocationCandidate(
   }
   const names = revocationAssetNames(tag);
   const assets = validateCandidateAssets(root, metadata, names.all);
-  verifyRevocationPublicAssets(context, join(root, "assets"), tag, { metadata });
-  verifyTagObjectWorkflowBinding(
-    context,
-    root,
+  verifyRevocationPublicAssets(context, join(root, "assets"), tag, {
     metadata,
-    runId,
-    runAttempt,
-  );
+  });
+  verifyTagObjectWorkflowBinding(context, root, metadata, runId, runAttempt);
   return { assets, metadata };
 }
 
@@ -3881,8 +3920,12 @@ function readExactPublicRelease(
     output,
   ]);
   const actualNames = listRegularFiles(output);
-  if (JSON.stringify(actualNames) !== JSON.stringify([...expectedNames].sort())) {
-    throw new Error(`public release inventory differs: ${actualNames.join(", ")}`);
+  if (
+    JSON.stringify(actualNames) !== JSON.stringify([...expectedNames].sort())
+  ) {
+    throw new Error(
+      `public release inventory differs: ${actualNames.join(", ")}`,
+    );
   }
   const assets = publicAssets(output, actualNames);
   validateReleaseReadback(release, tag, assets, { prerelease });
@@ -3913,9 +3956,9 @@ function reportTagFailure(
     !observed.remoteReadable ||
     Boolean(
       materializedObject ||
-        observed.local ||
-        observed.remote?.object ||
-        observed.remote?.commit,
+      observed.local ||
+      observed.remote?.object ||
+      observed.remote?.commit,
     );
   const mutationState =
     materializedObject && observed.mutationState === "UNCHANGED"
@@ -3997,11 +4040,11 @@ function revocationPrepare(context, options) {
 }
 
 function revocationPublish(context, options) {
-  const { commit, toolingCommit: initialMain, names } = requireRevocationSource(
-    context,
-    options.tag,
-    options["expected-commit"],
-  );
+  const {
+    commit,
+    toolingCommit: initialMain,
+    names,
+  } = requireRevocationSource(context, options.tag, options["expected-commit"]);
   assertTagAbsent(context, options.tag);
   assertReleaseAbsent(context, options.tag);
   const run = requireSuccessfulRun(
@@ -4019,82 +4062,88 @@ function revocationPublish(context, options) {
     currentMain: initialMain,
     label: "revocation reviewed candidate fence",
   });
-  return withTemporaryDirectory("takoform-revocation-publish", (temporaryRoot) => {
-    const candidate = downloadArtifact(
-      context,
-      options["run-id"],
-      `form-package-revocation-candidate-${options["run-id"]}-${options["run-attempt"]}`,
-      join(temporaryRoot, "candidate"),
-    );
-    const verified = verifyRevocationCandidate(context, candidate, {
-      tag: options.tag,
-      runId: options["run-id"],
-      runAttempt: options["run-attempt"],
-      requestId: run.displayTitle,
-      expectedCommit: commit,
-      toolingCommit,
-    });
-    let tagObject = "";
-    try {
-      const mutationMain = ownerGateAndFence(context);
-      assertFormReleaseAuthorityFence(context, {
-        sourceCommit: commit,
-        toolingCommit,
-        currentMain: mutationMain,
-        label: "revocation tag mutation fence",
-      });
-      tagObject = ensureCandidateTagPublished(
+  return withTemporaryDirectory(
+    "takoform-revocation-publish",
+    (temporaryRoot) => {
+      const candidate = downloadArtifact(
         context,
-        options.tag,
-        commit,
-        candidate,
-        verified.metadata,
+        options["run-id"],
+        `form-package-revocation-candidate-${options["run-id"]}-${options["run-attempt"]}`,
+        join(temporaryRoot, "candidate"),
       );
-      const releaseMain = ownerGateAndFence(context);
-      assertFormReleaseAuthorityFence(context, {
-        sourceCommit: commit,
+      const verified = verifyRevocationCandidate(context, candidate, {
+        tag: options.tag,
+        runId: options["run-id"],
+        runAttempt: options["run-attempt"],
+        requestId: run.displayTitle,
+        expectedCommit: commit,
         toolingCommit,
-        currentMain: releaseMain,
-        label: "revocation release mutation fence",
       });
-      const release = publishReleaseLocally(context, {
-        tag: options.tag,
-        assets: verified.assets,
-        body:
-          "Append-only Takoform Form Package security revocation checkpoint. Verify the signed cumulative checkpoint before enforcement.",
-        temporaryRoot,
-        prePublishFence: () => {
-          const publishMain = ownerGateAndFence(context);
-          assertFormReleaseAuthorityFence(context, {
-            sourceCommit: commit,
-            toolingCommit,
-            currentMain: publishMain,
-            label: "revocation pre-publish fence",
-          });
-        },
-      });
-      return emit(context, {
-        kind: "takos.deploy-result@v1",
-        surface: FORM_SURFACE,
-        phase: "publish-revocation",
-        commit,
-        tag: options.tag,
-        checkpointVersion: names.version,
-        tagObject,
-        candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
-        releaseId: release.id,
-        releaseUrl: release.html_url,
-        assetDigests: Object.fromEntries(
-          [...verified.assets].map(([name, asset]) => [name, asset.sha256]),
-        ),
-        productionReadback: "EXACT_IMMUTABLE_RELEASE",
-        status: "VERIFIED",
-      });
-    } catch (error) {
-      reportTagFailure(context, options.tag, tagObject);
-      throw error;
-    }
-  });
+      let tagObject = "";
+      try {
+        const mutationMain = ownerGateAndFence(context);
+        assertFormReleaseAuthorityFence(context, {
+          sourceCommit: commit,
+          toolingCommit,
+          currentMain: mutationMain,
+          label: "revocation tag mutation fence",
+        });
+        tagObject = ensureCandidateTagPublished(
+          context,
+          options.tag,
+          commit,
+          candidate,
+          verified.metadata,
+        );
+        const releaseMain = ownerGateAndFence(context);
+        assertFormReleaseAuthorityFence(context, {
+          sourceCommit: commit,
+          toolingCommit,
+          currentMain: releaseMain,
+          label: "revocation release mutation fence",
+        });
+        const release = publishReleaseLocally(context, {
+          tag: options.tag,
+          assets: verified.assets,
+          body: "Append-only Takoform Form Package security revocation checkpoint. Verify the signed cumulative checkpoint before enforcement.",
+          temporaryRoot,
+          prePublishFence: () => {
+            const publishMain = ownerGateAndFence(context);
+            assertFormReleaseAuthorityFence(context, {
+              sourceCommit: commit,
+              toolingCommit,
+              currentMain: publishMain,
+              label: "revocation pre-publish fence",
+            });
+          },
+        });
+        return emit(context, {
+          kind: "takos.deploy-result@v1",
+          surface: FORM_SURFACE,
+          phase: "publish-revocation",
+          commit,
+          tag: options.tag,
+          checkpointVersion: names.version,
+          tagObject,
+          candidateRun: {
+            id: options["run-id"],
+            attempt: options["run-attempt"],
+            url: run.url,
+          },
+          releaseId: release.id,
+          releaseUrl: release.html_url,
+          assetDigests: Object.fromEntries(
+            [...verified.assets].map(([name, asset]) => [name, asset.sha256]),
+          ),
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          status: "VERIFIED",
+        });
+      } catch (error) {
+        reportTagFailure(context, options.tag, tagObject);
+        throw error;
+      }
+    },
+  );
 }
 
 function revocationVerify(context, options) {
@@ -4103,52 +4152,55 @@ function revocationVerify(context, options) {
     context,
     options["expected-commit"],
     {
-    exact: false,
+      exact: false,
     },
   );
   assertExactRemoteTag(context, options.tag, options["expected-commit"]);
-  return withTemporaryDirectory("takoform-revocation-verify", (temporaryRoot) => {
-    const live = readExactPublicRelease(
-      context,
-      options.tag,
-      names.all,
-      temporaryRoot,
-    );
-    const manifest = verifyRevocationPublicAssets(
-      context,
-      live.output,
-      options.tag,
-    );
-    if (manifest.sourceCommit !== options["expected-commit"]) {
-      throw new Error("public revocation source commit differs");
-    }
-    assertCommitAncestor(
-      context,
-      manifest.sourceCommit,
-      manifest.toolingCommit,
-      "public revocation source/tooling binding",
-    );
-    assertCommitAncestor(
-      context,
-      manifest.toolingCommit,
-      currentMain,
-      "public revocation tooling/current-main binding",
-    );
-    return emit(context, {
-      kind: "takos.deploy-result@v1",
-      surface: FORM_SURFACE,
-      phase: "verify-revocation",
-      tag: options.tag,
-      commit: manifest.sourceCommit,
-      toolingCommit: manifest.toolingCommit,
-      releaseId: live.release.id,
-      releaseUrl: live.release.html_url,
-      assetDigests: Object.fromEntries(
-        [...live.assets].map(([name, asset]) => [name, asset.sha256]),
-      ),
-      status: "VERIFIED",
-    });
-  });
+  return withTemporaryDirectory(
+    "takoform-revocation-verify",
+    (temporaryRoot) => {
+      const live = readExactPublicRelease(
+        context,
+        options.tag,
+        names.all,
+        temporaryRoot,
+      );
+      const manifest = verifyRevocationPublicAssets(
+        context,
+        live.output,
+        options.tag,
+      );
+      if (manifest.sourceCommit !== options["expected-commit"]) {
+        throw new Error("public revocation source commit differs");
+      }
+      assertCommitAncestor(
+        context,
+        manifest.sourceCommit,
+        manifest.toolingCommit,
+        "public revocation source/tooling binding",
+      );
+      assertCommitAncestor(
+        context,
+        manifest.toolingCommit,
+        currentMain,
+        "public revocation tooling/current-main binding",
+      );
+      return emit(context, {
+        kind: "takos.deploy-result@v1",
+        surface: FORM_SURFACE,
+        phase: "verify-revocation",
+        tag: options.tag,
+        commit: manifest.sourceCommit,
+        toolingCommit: manifest.toolingCommit,
+        releaseId: live.release.id,
+        releaseUrl: live.release.html_url,
+        assetDigests: Object.fromEntries(
+          [...live.assets].map(([name, asset]) => [name, asset.sha256]),
+        ),
+        status: "VERIFIED",
+      });
+    },
+  );
 }
 
 // Narrow executable seams for the owner-local release safety tests. Production

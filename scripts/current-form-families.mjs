@@ -661,16 +661,20 @@ function renderRegistry(generation, supportedIdentities) {
 // build creates and must equally serve. Before the catalog moved past the
 // published release the two sets were equal and the union is a no-op.
 function unionSupportedIdentities(generation, embeddedIdentities) {
+  const currentKeys = new Set(
+    generation.forms.map(({ formRef }) => canonicalJson(formRef)),
+  );
   const byKey = new Map();
   for (const form of embeddedIdentities) {
-    byKey.set(canonicalJson(form.formRef), form);
+    const key = canonicalJson(form.formRef);
+    if (!currentKeys.has(key)) byKey.set(key, form);
   }
   for (const { formRef, packageDigest } of generation.forms) {
     const key = canonicalJson(formRef);
     // A candidate contributes its IDENTITY. The provider's authoring name is
     // the provider's, and a released ledger entry that carries one keeps it
     // (decision 0047).
-    if (!byKey.has(key)) byKey.set(key, { formRef, packageDigest });
+    byKey.set(key, { formRef, packageDigest });
   }
   return [...byKey.values()];
 }
@@ -691,29 +695,36 @@ function loadProviderIdentityLedger(generation) {
     throw new Error("provider Form identity ledger has an invalid envelope");
   }
   if (
-    release?.version !== "2.1.1" ||
+    release?.version !== "3.0.0" ||
     release?.tag !== `v${release.version}` ||
     release?.publicationStatus !== "candidate-only" ||
-    release?.versioning?.portableApiVersion !== "forms.takoform.com/v1beta1"
+    release?.versioning?.portableApiVersion !== "forms.takoform.com/v1"
   ) {
-    throw new Error("provider release descriptor must name candidate-only v2.1.1 on Host API v1beta1");
+    throw new Error("provider release descriptor must name candidate-only v3.0.0 on Host API v1");
   }
   assertFrozenProviderReleaseDescriptor(release);
 
   const supported = [];
   const exactKeys = new Set();
   const providerVersions = new Set();
-  const families = new Set();
   let currentRelease;
   for (const entry of ledger.releases) {
+    const entryKeys = Object.keys(entry ?? {}).sort().join(",");
+    const hasSingleFamily =
+      entryKeys === "family,formMaturity,forms,portableApiVersion,providerVersion" &&
+      typeof entry?.family === "string";
+    const hasFamilySet =
+      entryKeys === "families,formMaturity,forms,portableApiVersion,providerVersion" &&
+      Array.isArray(entry?.families) &&
+      entry.families.length > 0 &&
+      JSON.stringify(entry.families) === JSON.stringify([...entry.families].sort()) &&
+      new Set(entry.families).size === entry.families.length;
     if (
       entry === null ||
       typeof entry !== "object" ||
-      Object.keys(entry).sort().join(",") !==
-        "family,formMaturity,forms,portableApiVersion,providerVersion" ||
+      (!hasSingleFamily && !hasFamilySet) ||
       typeof entry.providerVersion !== "string" ||
       typeof entry.portableApiVersion !== "string" ||
-      typeof entry.family !== "string" ||
       entry.formMaturity !== "experimental" ||
       !Array.isArray(entry.forms) ||
       entry.forms.length === 0
@@ -724,9 +735,12 @@ function loadProviderIdentityLedger(generation) {
       throw new Error(`provider Form identity ledger duplicates ${entry.providerVersion}`);
     }
     providerVersions.add(entry.providerVersion);
-    families.add(entry.family);
     assertFrozenProviderRelease(entry);
     if (entry.providerVersion === release.version) currentRelease = entry;
+
+    const allowedFamilies = new Set(
+      hasSingleFamily ? [entry.family] : entry.families,
+    );
 
     for (const form of entry.forms) {
       if (
@@ -739,7 +753,7 @@ function loadProviderIdentityLedger(generation) {
         typeof form.formRef !== "object" ||
         Object.keys(form.formRef).sort().join(",") !==
           "apiVersion,definitionVersion,kind,schemaDigest" ||
-        form.formRef.apiVersion !== entry.family ||
+        !allowedFamilies.has(form.formRef.apiVersion) ||
         !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(form.formRef.kind) ||
         !/^sha256:[0-9a-f]{64}$/u.test(form.formRef.schemaDigest)
       ) {
@@ -756,22 +770,13 @@ function loadProviderIdentityLedger(generation) {
   if (
     currentRelease === undefined ||
     currentRelease.portableApiVersion !== release.versioning.portableApiVersion ||
+    JSON.stringify(currentRelease.families) !==
+      JSON.stringify(generation.families.map((manifest) => manifest.family).sort()) ||
     generation.families.some(
       (manifest) => manifest.formMaturity !== currentRelease.formMaturity,
     )
   ) {
     throw new Error("provider Form identity ledger has no exact entry for the release descriptor");
-  }
-  // The versionless candidate families have moved past every provider release
-  // in this retained ledger. No released entry may already claim one of these
-  // groups; its exact bytes and Provider-owned resourceType mapping would then
-  // need a new append-only release ledger entry rather than regeneration here.
-  for (const manifest of generation.families) {
-    if (families.has(manifest.family)) {
-      throw new Error(
-        `family ${manifest.family} is already claimed by a released ledger entry; a moved catalog mints a NEW family version`,
-      );
-    }
   }
   return supported;
 }

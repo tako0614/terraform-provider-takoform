@@ -75,10 +75,10 @@ host-assigned address.
 The Provider 3 candidate also maps the other 15 current Forms:
 
 - Function: [`takoform_function`](/docs/resources/function.html), [`takoform_function_version`](/docs/resources/function_version.html), [`takoform_function_deployment`](/docs/resources/function_deployment.html), [`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
-- Container: [`takoform_container_service`](/docs/resources/container_service.html), [`takoform_container_revision`](/docs/resources/container_revision.html), [`takoform_container_traffic`](/docs/resources/container_traffic.html), [`takoform_container_endpoint`](/docs/resources/container_endpoint.html), [`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
+- Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html), [`takoform_container_revision`](/docs/resources/container_revision.html), [`takoform_container_traffic`](/docs/resources/container_traffic.html), [`takoform_container_endpoint`](/docs/resources/container_endpoint.html), [`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
 - Table and queue: [`takoform_table`](/docs/resources/table.html), [`takoform_pull_queue`](/docs/resources/pull_queue.html)
 - Topic: [`takoform_topic`](/docs/resources/topic.html), [`takoform_topic_subscription`](/docs/resources/topic_subscription.html)
-- Schedule and vector: [`takoform_schedule`](/docs/resources/schedule.html), [`takoform_vector_index`](/docs/resources/vector_index.html)
+- Schedule and vector: [`takoform_message_schedule`](/docs/resources/message_schedule.html), [`takoform_dense_vector_index`](/docs/resources/dense_vector_index.html)
 
 ::: warning Provider distribution boundary
 These resource names demonstrate the independent Provider 3 sample. They are

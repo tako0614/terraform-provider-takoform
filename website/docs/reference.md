@@ -100,7 +100,7 @@ is one of the eight families in the Specification candidate:
 
 ### Container family
 
-- [ContainerService](resources/container_service.md)
+- [ContainerService](resources/serverless_container_service.md)
 - [ContainerRevision](resources/container_revision.md)
 - [ContainerTraffic](resources/container_traffic.md)
 - [ContainerEndpoint](resources/container_endpoint.md)
@@ -112,8 +112,8 @@ is one of the eight families in the Specification candidate:
 - [PullQueue](resources/pull_queue.md)
 - [Topic](resources/topic.md)
 - [TopicSubscription](resources/topic_subscription.md)
-- [Schedule](resources/schedule.md)
-- [VectorIndex](resources/vector_index.md)
+- [Schedule](resources/message_schedule.md)
+- [VectorIndex](resources/dense_vector_index.md)
 
 The provider exposes no generic carrier
 for a Form it was not built against: a resource whose Form identity comes from
