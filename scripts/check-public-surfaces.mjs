@@ -1171,7 +1171,7 @@ const HOST_API_LANES = new Map([
     wireSchema: "spec/schemas/host-api-wire-v1.schema.json",
     document: "spec/host-api/v1.md",
     mintedFor: "graduation",
-    evidence: "exact committed Specification source, multi-family candidate/corpus closure, and manifest-owned reference conformance (decisions 0052 and 0053)",
+    evidence: "exact committed normative Specification source (decision 0055); candidate and reference evidence are non-authoritative",
   }],
   ["forms.takoform.com/v1beta4", {
     wireSchema: "spec/schemas/host-api-wire-v1beta4.schema.json",

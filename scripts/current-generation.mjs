@@ -40,7 +40,7 @@ function render(facts) {
     [
       "Specification",
       facts.specificationVersion,
-      `${facts.specificationReleaseStatus}; three local prerequisites are release authority`,
+      `${facts.specificationReleaseStatus}; one exact committed normative source snapshot is release authority`,
     ],
     ["Host API lane", facts.hostApiCurrent, "the stable Specification wire contract"],
     [

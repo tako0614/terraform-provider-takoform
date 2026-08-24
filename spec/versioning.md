@@ -354,10 +354,10 @@ content-addressed artifact upload, declared constraints, standard-service
 support, and Host Support Profiles. The exact normative contract is
 [`host-api/v1.md`](host-api/v1.md).
 
-The v1 source and suite do not by themselves claim that Specification 1.0 has
-been released. The release assertion stays red until one clean committed
-source snapshot closes the exact multi-family candidate/corpus and reference
-conformance evidence in [decision 0053](decisions/0053-specification-and-provider-release-evidence.md).
+The v1 source does not by itself claim that Specification 1.0 has been
+released. The release assertion stays red until one clean committed snapshot
+of the normative `spec/` tree is recorded as defined by
+[decision 0055](decisions/0055-specification-release-needs-only-normative-source.md).
 
 The three pre-Beta wires — `forms.takoform.com/v1alpha1` at the unversioned
 `/.well-known/takoform`, `/v1alpha2` at `/.well-known/takoform/v1alpha2`, and
@@ -391,8 +391,9 @@ Two questions were being answered as one, and they are separate
 Both halves are checked. A lane minted for a protocol change must have a wire
 contract structurally different from every other protocol lane's, compared with
 version words normalised so a rename cannot present itself as a contract. A lane
-minted for a Specification graduation must say which exact source/corpus/
-reference prerequisites it satisfied, because that is not provable from bytes.
+minted for a Specification graduation must identify the exact numbered
+Specification source snapshot that authorized it; implementation evidence does
+not mint the lane.
 `forms.takoform.com/v1beta1` is
 recorded as a graduation whose lane-specific evidence was never stated — it was
 minted with the family channel move and carries v1alpha3's wire contract
@@ -400,14 +401,14 @@ unchanged ([decision 0038](decisions/0038-a-generation-move-is-measured-not-assu
 It is frozen into Registry-published provider `v2.1.1`; the record stands as
 history rather than as a precedent.
 
-Specification 1.0 has exactly three release prerequisites: an exact committed
-source snapshot, the complete generator-owned multi-family candidate/corpus
-closure, and execution of the manifest-owned reference suite. A Form count,
-package publication, Provider major, historical admission, external Host,
+Specification 1.0 has one release prerequisite: an exact committed snapshot of
+the normative `spec/` tree. Candidate Forms, package publication, reference
+conformance, a Provider major, historical admission, an external Host,
 backend receipt, production consumer, Takoserver, Takosumi, signer, or operator
-statement cannot add to, close, or block that table
+statement cannot add to, close, or block that prerequisite
 ([decisions 0052](decisions/0052-the-specification-is-released-on-its-own-line.md)
-and [0053](decisions/0053-specification-and-provider-release-evidence.md)).
+and [0053](decisions/0053-specification-and-provider-release-evidence.md), as
+amended by [0055](decisions/0055-specification-release-needs-only-normative-source.md)).
 
 Independent Hosts, production workloads, compatibility windows,
 cross-publisher installation, deprecation exercises, and revocation exercises

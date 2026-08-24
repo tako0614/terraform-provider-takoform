@@ -3,9 +3,10 @@
 // Validate the append-only numbered Specification release ledger.
 //
 // Readiness and release are deliberately separate. The publication-evidence
-// record proves that one committed source snapshot, its complete multi-family
-// corpus, and the manifest-owned reference suite agree. This ledger records a
-// numbered Specification only after those three prerequisites are closed.
+// record proves that one committed normative source snapshot is exact. This
+// ledger records a numbered Specification after that single prerequisite is
+// closed. Candidate Forms and reference conformance remain useful but optional
+// implementation evidence.
 // Neither operation promotes a current 0.x Form, publishes a Form Package, or
 // changes the independent official Provider release stream.
 
@@ -16,8 +17,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  CONFORMANCE_SUITE_PATH,
-  FAMILY_INDEX_PATH,
   HOST_API_LANE,
   SPECIFICATION_PREREQUISITES,
   SPECIFICATION_TRACK,
@@ -46,8 +45,6 @@ export const EXPECTED_CANDIDATE = Object.freeze({
   title: "Takoform Specification 1.0",
   track: SPECIFICATION_TRACK,
   hostApiLane: HOST_API_LANE,
-  familyIndexPath: FAMILY_INDEX_PATH,
-  conformanceSuitePath: CONFORMANCE_SUITE_PATH,
   prerequisites: [...SPECIFICATION_PREREQUISITES],
   formMaturityEffect: FORM_MATURITY_EFFECT,
   providerEffect: PROVIDER_EFFECT,
@@ -94,15 +91,10 @@ function evidenceDigest(value) {
 }
 
 export function releaseFromEvidence(document) {
-  const baseline = document?.candidateBaseline;
   const specification = document?.evidence?.specification;
   if (
-    !isRecord(baseline) ||
-    !isRecord(baseline.familyIndex) ||
-    !isRecord(baseline.conformanceSuite) ||
     !isRecord(specification?.sourceSnapshot) ||
-    !isRecord(specification?.candidateCorpus) ||
-    !isRecord(specification?.referenceConformance)
+    typeof specification.sourceSnapshot.sourceCommit !== "string"
   ) {
     fail("Specification 1.0 evidence is not complete");
   }
@@ -111,27 +103,12 @@ export function releaseFromEvidence(document) {
     title: EXPECTED_CANDIDATE.title,
     track: SPECIFICATION_TRACK,
     hostApiLane: HOST_API_LANE,
-    sourceCommit: baseline.commit,
-    familyIndex: baseline.familyIndex,
-    conformanceSuite: baseline.conformanceSuite,
+    sourceCommit: specification.sourceSnapshot.sourceCommit,
     sourceSnapshotSha256: evidenceDigest(specification.sourceSnapshot),
-    candidateCorpusSha256: evidenceDigest(specification.candidateCorpus),
-    referenceConformanceSha256: evidenceDigest(specification.referenceConformance),
     prerequisites: [...SPECIFICATION_PREREQUISITES],
     formMaturityEffect: FORM_MATURITY_EFFECT,
     providerEffect: PROVIDER_EFFECT,
   };
-}
-
-function validateDigestRecord(value, expectedPath, context, problems) {
-  if (
-    !isRecord(value) ||
-    value.path !== expectedPath ||
-    typeof value.sha256 !== "string" ||
-    !SHA256.test(value.sha256)
-  ) {
-    problems.push(`${context} must pin ${expectedPath} with a lowercase SHA-256 digest`);
-  }
 }
 
 export function validateReleaseShape(release) {
@@ -143,11 +120,7 @@ export function validateReleaseShape(release) {
     "track",
     "hostApiLane",
     "sourceCommit",
-    "familyIndex",
-    "conformanceSuite",
     "sourceSnapshotSha256",
-    "candidateCorpusSha256",
-    "referenceConformanceSha256",
     "prerequisites",
     "formMaturityEffect",
     "providerEffect",
@@ -168,18 +141,7 @@ export function validateReleaseShape(release) {
   if (typeof release.sourceCommit !== "string" || !FULL_SHA.test(release.sourceCommit)) {
     problems.push(`${release.version ?? "release"}: sourceCommit must be a full lowercase commit SHA`);
   }
-  validateDigestRecord(release.familyIndex, FAMILY_INDEX_PATH, `${release.version}.familyIndex`, problems);
-  validateDigestRecord(
-    release.conformanceSuite,
-    CONFORMANCE_SUITE_PATH,
-    `${release.version}.conformanceSuite`,
-    problems,
-  );
-  for (const field of [
-    "sourceSnapshotSha256",
-    "candidateCorpusSha256",
-    "referenceConformanceSha256",
-  ]) {
+  for (const field of ["sourceSnapshotSha256"]) {
     if (typeof release[field] !== "string" || !SHA256.test(release[field])) {
       problems.push(`${release.version ?? "release"}.${field} must be a lowercase SHA-256 digest`);
     }

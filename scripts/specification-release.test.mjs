@@ -12,11 +12,7 @@ import {
   validateLedger,
   validateReleaseShape,
 } from "./specification-release.mjs";
-import {
-  CONFORMANCE_SUITE_PATH,
-  FAMILY_INDEX_PATH,
-  SPECIFICATION_PREREQUISITES,
-} from "./publication-evidence.mjs";
+import { SPECIFICATION_PREREQUISITES } from "./publication-evidence.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const LEDGER = JSON.parse(readFileSync(path.join(ROOT, LEDGER_PATH), "utf8"));
@@ -27,17 +23,15 @@ function clone(value) {
 
 function completeDocument() {
   return {
-    candidateBaseline: {
-      repository: "takoform",
-      commit: "a".repeat(40),
-      familyIndex: { path: FAMILY_INDEX_PATH, sha256: "b".repeat(64) },
-      conformanceSuite: { path: CONFORMANCE_SUITE_PATH, sha256: "c".repeat(64) },
-    },
     evidence: {
       specification: {
-        sourceSnapshot: { format: "source", fileCount: 397 },
-        candidateCorpus: { format: "corpus", familyCount: 8, formCount: 31 },
-        referenceConformance: { format: "reference", status: "passed" },
+        sourceSnapshot: {
+          format: "source",
+          sourceCommit: "a".repeat(40),
+          fileCount: 397,
+        },
+        candidateCorpus: null,
+        referenceConformance: null,
       },
     },
   };
@@ -83,15 +77,13 @@ describe("Specification release ledger", () => {
     expect(validateLedger(provider).join("\n")).toContain("exact Specification 1.0 track");
   });
 
-  test("derives a numbered release only from all three exact evidence objects", () => {
-    expect(() => releaseFromEvidence({ candidateBaseline: {}, evidence: {} })).toThrow(
+  test("derives a numbered release from the exact normative source snapshot alone", () => {
+    expect(() => releaseFromEvidence({ evidence: {} })).toThrow(
       "evidence is not complete",
     );
     const release = releaseFromEvidence(completeDocument());
     expect(validateReleaseShape(release)).toEqual([]);
     expect(release.sourceCommit).toBe("a".repeat(40));
-    expect(release.familyIndex.path).toBe(FAMILY_INDEX_PATH);
-    expect(release.conformanceSuite.path).toBe(CONFORMANCE_SUITE_PATH);
     expect(release.prerequisites).toEqual(SPECIFICATION_PREREQUISITES);
     expect(release.formMaturityEffect).toBe(FORM_MATURITY_EFFECT);
     expect(release.providerEffect).toBe(PROVIDER_EFFECT);

@@ -1,6 +1,6 @@
 {
   "format": "takoform.release-evidence@v3",
-  "policy": "Takoform has two independent release tracks. Normative Specification 1.0 closes only on an exact committed source snapshot, the fixed generator-owned multi-family candidate index reopened through every package, Definition, Interface, Binding, suite corpus, runner input, and referenced byte, and the manifest-owned deterministic reference-conformance execution. The current 0.x FormRefs remain exact and Experimental; releasing the Specification and Host API v1 does not relabel or promote them to Form 1.0.0. The current Edge family target is exactly 16/16 with no ObjectBucket Form, no edge.objects API, and no same-document bucket Resource link. The standards.takoform.com/v1 service slot accepts opaque reverse-DNS protocol identifiers unknown to Takoform; it is not a central protocol enum, while the v1alpha1 enum remains immutable history. Host-resolved endpoints and credentials never enter portable Form state. The official Terraform Provider 3.0 is an independent non-normative implementation milestone. External Hosts, backends, production consumers, Takoserver, Takosumi, and operator signatures are adoption evidence, not Takoform release authorities. Local origin/ref checks assume an already authenticated and freshly fetched canonical checkout; they prevent accidental repository substitution but are not remote provenance attestation. No status, caller list, generic pass result, or hand-written count in this file is trusted.",
+  "policy": "Takoform has two independent release tracks. Normative Specification 1.0 closes on one exact committed snapshot of the normative spec tree. Candidate Forms, packages, Interfaces, Bindings, reference conformance, official Provider behavior, external Hosts, backends, production consumers, Takoserver, Takosumi, and operator signatures are implementation or adoption evidence; none is Specification release authority. The current 0.x FormRefs remain exact and Experimental, and releasing the Specification and Host API v1 does not relabel or promote them to Form 1.0.0. The official Terraform Provider 3.0 is an independent non-normative implementation milestone. Local origin/ref checks assume an already authenticated and freshly fetched canonical checkout; they prevent accidental repository substitution but are not remote provenance attestation.",
   "repositoryAuthority": {
     "format": "takoform.repository-authority@v2",
     "repository": "takoform",
@@ -41,9 +41,7 @@
       "authority": "specification",
       "normative": true,
       "prerequisites": [
-        "specification-source-snapshot",
-        "candidate-form-corpus",
-        "reference-conformance"
+        "specification-source-snapshot"
       ]
     },
     {

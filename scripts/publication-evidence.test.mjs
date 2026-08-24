@@ -659,15 +659,20 @@ describe("current fail-closed state", () => {
     expect(`${result.stdout}${result.stderr}`).toContain("usage:");
   });
 
-  test("the Specification assertion fails only its three prerequisites", () => {
+  test("the Specification assertion fails only its normative source prerequisite", () => {
     const result = spawnSync("bun", ["scripts/publication-evidence.mjs", "--assert-specification-v1"], {
       cwd: ROOT,
       encoding: "utf8",
     });
     expect(result.status).not.toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toContain("specification-v1:");
-    expect(`${result.stdout}${result.stderr}`).not.toContain("provider-3.0:");
-    expect(`${result.stdout}${result.stderr}`).not.toContain("takoserver");
+    const output = `${result.stdout}${result.stderr}`;
+    expect(output).toContain(
+      "specification-v1:specification-source-snapshot",
+    );
+    expect(output).not.toContain("candidate-form-corpus");
+    expect(output).not.toContain("reference-conformance");
+    expect(output).not.toContain("provider-3.0:");
+    expect(output).not.toContain("takoserver");
   });
 
   test("rejects a partial or caller-renamed canonical tuple", () => {
@@ -749,7 +754,7 @@ describe("class-specific anti-false-claim validation", () => {
       result: "pass",
     };
     expect(() => validatePublicationEvidence(source, { repositoryRoot: future.root })).toThrow(
-      /sourceSnapshot keys must be exactly/,
+      /sourceSnapshot must identify one exact Specification source commit/,
     );
 
     const candidate = clone(future.document);
@@ -913,19 +918,15 @@ describe("class-specific anti-false-claim validation", () => {
 });
 
 describe("independent release tracks", () => {
-  test("the create-only writer derives all three Specification records from one exact source commit", () => {
+  test("the create-only writer derives only the normative Specification source record", () => {
     const fixture = buildSourceFixture();
     const prepared = prepareSpecificationEvidence(fixture.root);
-    expect(prepared.candidateBaseline.commit).toBe(fixture.sourceCommit);
-    expect(prepared.candidateBaseline.familyIndex).toEqual(
-      fixture.baseline.familyIndex,
-    );
-    expect(prepared.candidateBaseline.conformanceSuite).toEqual(
-      fixture.baseline.conformanceSuite,
+    expect(prepared.evidence.specification.sourceSnapshot.sourceCommit).toBe(
+      fixture.sourceCommit,
     );
     expect(prepared.evidence.specification.sourceSnapshot).not.toBeNull();
-    expect(prepared.evidence.specification.candidateCorpus).not.toBeNull();
-    expect(prepared.evidence.specification.referenceConformance).not.toBeNull();
+    expect(prepared.evidence.specification.candidateCorpus).toBeNull();
+    expect(prepared.evidence.specification.referenceConformance).toBeNull();
     expect(loadPublicationEvidence(fixture.root)).toEqual(prepared);
     expect(() => prepareSpecificationEvidence(fixture.root)).toThrow(
       "Specification evidence is already closed; preparation is create-only",
@@ -951,24 +952,79 @@ describe("independent release tracks", () => {
     expect(ownVerifier.stdout).toContain("Specification 1.0 ready");
   });
 
-  test("reopening any one of the three Specification artifacts fails stable readiness", () => {
-    for (const key of ["sourceSnapshot", "candidateCorpus", "referenceConformance"]) {
-      const root = makeCanonicalClone(
-        future.root,
-        git(future.root, "rev-parse", "HEAD"),
-        "takoform-publication-reopened-",
-      );
-      const changed = clone(future.document);
-      changed.evidence.specification[key] = null;
-      writeJson(root, "spec/publication-evidence.json", changed);
-      git(root, "add", "spec/publication-evidence.json");
-      git(root, "commit", "-m", `test: reopen ${key}`);
-      git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
-      const report = validatePublicationEvidence(changed, { repositoryRoot: root });
-      expect(() => assertPublicationEvidenceReady(report, SPECIFICATION_TRACK)).toThrow(
-        /specification-v1:/,
-      );
-    }
+  test("only reopening the normative source snapshot blocks Specification readiness", () => {
+    const root = makeCanonicalClone(
+      future.root,
+      git(future.root, "rev-parse", "HEAD"),
+      "takoform-publication-reopened-",
+    );
+    const changed = clone(future.document);
+    changed.evidence.specification.sourceSnapshot = null;
+    changed.evidence.specification.candidateCorpus = null;
+    changed.evidence.specification.referenceConformance = null;
+    writeJson(root, "spec/publication-evidence.json", changed);
+    git(root, "add", "spec/publication-evidence.json");
+    git(root, "commit", "-m", "test: reopen normative source snapshot");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    const report = validatePublicationEvidence(changed, { repositoryRoot: root });
+    expect(() => assertPublicationEvidenceReady(report, SPECIFICATION_TRACK)).toThrow(
+      /specification-v1:/,
+    );
+  }, 60_000);
+
+  test("candidate corpus and Reference Host evidence do not block the Specification", () => {
+    const root = makeCanonicalClone(
+      future.root,
+      git(future.root, "rev-parse", "HEAD"),
+      "takoform-publication-source-only-",
+    );
+    const changed = clone(future.document);
+    changed.evidence.specification.candidateCorpus = null;
+    changed.evidence.specification.referenceConformance = null;
+    writeJson(root, "spec/publication-evidence.json", changed);
+    git(root, "add", "spec/publication-evidence.json");
+    git(root, "commit", "-m", "test: keep reference evidence optional");
+    const report = validatePublicationEvidence(changed, {
+      repositoryRoot: root,
+      releaseTrack: SPECIFICATION_TRACK,
+    });
+    expect(() => assertPublicationEvidenceReady(report, SPECIFICATION_TRACK)).not.toThrow();
+  }, 60_000);
+
+  test("rejects committed or uncommitted normative changes after source evidence preparation", () => {
+    const committed = makeCanonicalClone(
+      future.root,
+      git(future.root, "rev-parse", "HEAD"),
+      "takoform-publication-source-drift-",
+    );
+    writeText(
+      committed,
+      "spec/versioning.md",
+      `${readFileSync(path.join(committed, "spec/versioning.md"), "utf8")}\nCommitted drift.\n`,
+    );
+    git(committed, "add", "spec/versioning.md");
+    git(committed, "commit", "-m", "test: mutate normative source after evidence");
+    git(committed, "update-ref", "refs/remotes/origin/main", "HEAD");
+    expect(() => validatePublicationEvidence(future.document, {
+      repositoryRoot: committed,
+      releaseTrack: SPECIFICATION_TRACK,
+    })).toThrow(/source at HEAD does not equal the recorded source snapshot/);
+
+    const staged = makeCanonicalClone(
+      future.root,
+      git(future.root, "rev-parse", "HEAD"),
+      "takoform-publication-source-staged-",
+    );
+    writeText(
+      staged,
+      "spec/versioning.md",
+      `${readFileSync(path.join(staged, "spec/versioning.md"), "utf8")}\nStaged drift.\n`,
+    );
+    git(staged, "add", "spec/versioning.md");
+    expect(() => validatePublicationEvidence(future.document, {
+      repositoryRoot: staged,
+      releaseTrack: SPECIFICATION_TRACK,
+    })).toThrow(/normative Specification source has uncommitted changes/);
   }, 60_000);
 
   test("a malformed Provider milestone cannot block the Specification assertion", () => {

@@ -3,7 +3,7 @@
 Takoform is a portable desired-state specification and tooling project. The
 repository currently contains a **Specification 1.0 candidate** and literal
 stable Host API v1 source; the numbered release remains open until its exact
-committed source/corpus/reference evidence closes. Takoform is not an industry
+committed normative source snapshot closes. Takoform is not an industry
 standards body, certification authority, universal cloud API, or a promise that
 an existing Resource can move between backends without migration.
 
@@ -28,7 +28,7 @@ The following facts MUST remain independent:
 
 | Fact | Authority | Meaning |
 | --- | --- | --- |
-| Specification release | Takoform publication evidence and numbered release ledger | One exact committed normative document/corpus/reference closure |
+| Specification release | Takoform publication evidence and numbered release ledger | One exact committed snapshot of the normative `spec/` tree |
 | Form maturity | Takoform lifecycle record | Confidence in one portable contract |
 | Package publication | Takoform publisher evidence | Exact bytes can be retrieved and authenticated |
 | Provider compatibility | Provider release and compatibility data | A provider can represent an exact FormRef and preserve its own state contract |
@@ -43,9 +43,10 @@ Takoform approval or certification.
 
 Specification 1.0 follows decisions
 [`0052`](decisions/0052-the-specification-is-released-on-its-own-line.md) and
-[`0053`](decisions/0053-specification-and-provider-release-evidence.md): only
-the exact committed source snapshot, complete multi-family candidate/corpus,
-and reference conformance close that track. Provider 3 and external Host,
+[`0053`](decisions/0053-specification-and-provider-release-evidence.md), as
+amended by [`0055`](decisions/0055-specification-release-needs-only-normative-source.md):
+only the exact committed normative source snapshot closes that track. Candidate
+Forms, reference conformance, Provider 3, and external Host,
 backend, runtime, production, signer, operator, Takoserver, and Takosumi facts
 are independent adoption evidence. Provider 2.1.1 and the v1beta1 identities
 remain immutable history.
