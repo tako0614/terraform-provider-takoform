@@ -83,7 +83,7 @@ describe("production deployment readback", () => {
 test("website snapshot copy includes the frozen identity module closure", () => {
   const deploySource = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
   expect(deploySource).toContain(
-    '"scripts/check-website-dist.mjs",\n    "scripts/frozen-public-identities.mjs",',
+    '"scripts/check-website-dist.mjs",\n    "scripts/frozen-public-identities.mjs",\n    "scripts/website-snapshot-temp.mjs",\n    "scripts/website-snapshot-temp.test.mjs",',
   );
 });
 
