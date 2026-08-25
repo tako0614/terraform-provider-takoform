@@ -101,6 +101,9 @@ describe("the committed status document", () => {
     expect(document.currentFamilyIndex).toBe(CURRENT_FAMILY_INDEX);
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
+    expect(document.providerPublished).toBe("3.0.0");
+    expect(document.providerTarget).toBe("3.0.0");
+    expect(document.providerTargetStatus).toBe("registry-published");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -128,6 +131,21 @@ describe("the committed status document", () => {
 });
 
 describe("the gate refuses", () => {
+  test("an incomplete current Provider Registry readback", () => {
+    const failures = fixture((root) => {
+      const ledger = read(root, "release/provider-release-identities.json");
+      const current = ledger.entries.find((entry) => entry.version === "3.0.0");
+      current.registryReadback.installation.resourceSchemaCount = 30;
+      write(root, "release/provider-release-identities.json", ledger);
+      return verifySiteStatusDocument(root);
+    });
+    expect(
+      failures.some((failure) =>
+        failure.includes("Registry schema count differs from the current Form count"),
+      ),
+    ).toBe(true);
+  });
+
   test("a published copy that disagrees with the repository", () => {
     const failures = fixture((root) => {
       const document = read(root, SITE_STATUS_PUBLISHED_PATH);

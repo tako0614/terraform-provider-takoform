@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "status": "architecture-decision-accepted-implementation-in-progress",
   "provider": {
-    "status": "implemented-registry-key-registered-first-install-proof-pending",
+    "status": "implemented-registry-key-registered-first-install-proof-recorded",
     "artifactDigest": "sha256",
     "releaseTagPattern": "v*",
     "signature": {

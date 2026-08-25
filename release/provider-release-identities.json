@@ -68,6 +68,47 @@
           "signed-provider-registry-readback-candidate.json": "eyJjZXJ0aWZpY2F0ZUlkZW50aXR5IjoiaHR0cHM6Ly9naXRodWIuY29tL3Rha28wNjE0L3RlcnJhZm9ybS1wcm92aWRlci10YWtvZm9ybS8uZ2l0aHViL3dvcmtmbG93cy9wcm92aWRlci1yZWdpc3RyeS1yZWFkYmFjay55bWxAcmVmcy9oZWFkcy9tYWluIiwiZm9ybWF0IjoidGFrb2Zvcm0ucHJvdmlkZXItcmVnaXN0cnktcmVhZGJhY2stc2lnbmVkLWNhbmRpZGF0ZUB2MSIsImdlbmVyYXRpb24iOiJwb3J0YWJsZS12MSIsIm1hbmlmZXN0Ijp7ImRpZ2VzdCI6InNoYTI1Njo1NDIxMGU5ZDllZWUwMzc2ZGMzMzFiOWM5ZDA3NzRiMjljZDFhNjNkNDI0NjlkMGUyN2MyYTViMjAxNDVlOWNkIiwicGF0aCI6InByb3ZpZGVyLXJlZ2lzdHJ5LXJlYWRiYWNrLW1hbmlmZXN0Lmpzb24ifSwicHJvb2ZUeXBlIjoicmVnaXN0cnktcmVhZGJhY2siLCJyZWFkYmFjayI6eyJidW5kbGVEaWdlc3QiOiJzaGEyNTY6NjIzMWZmYTI0OTFiOGIxYTdjNGI1MTYzYTU0NGM4NDNjOWI2YzhiMzg0YzRmZWRhODhhNjhhY2E4ZGI1YzY3MSIsImJ1bmRsZVBhdGgiOiJwcm92aWRlci1yZWFkYmFjay5zaWdzdG9yZS5qc29uIiwiZGlnZXN0Ijoic2hhMjU2OjcxMDljM2Q2Y2VhMzI4NzJkODYxODM2ZTY3YmNlYmY5N2EzODVkNmJhNTE5OGUxNzdiN2FkZGM5ZTVkOGI5NjUiLCJwYXRoIjoicHJvdmlkZXItcmVhZGJhY2suanNvbiJ9LCJyZXF1ZXN0SWQiOiI4YTkyMTIzYS1jYjJmLTQ4MDctOTU0Zi05MTRjNTlmZjY3M2UiLCJzb3VyY2UiOnsiY29tbWl0IjoiOTgxMDU3MGQ1NDI0MzRlZmNmMTc3NTQzZGU5ZDQ2M2JiZmRhMGQwOSIsInJlcG9zaXRvcnkiOiJodHRwczovL2dpdGh1Yi5jb20vdGFrbzA2MTQvdGVycmFmb3JtLXByb3ZpZGVyLXRha29mb3JtLmdpdCJ9LCJzdGF0dXMiOiJjYW5kaWRhdGUtb25seSIsIndvcmtmbG93IjoiLmdpdGh1Yi93b3JrZmxvd3MvcHJvdmlkZXItcmVnaXN0cnktcmVhZGJhY2sueW1sIiwid29ya2Zsb3dSdW5BdHRlbXB0IjoxLCJ3b3JrZmxvd1J1bklkIjoiMzE0MDcwOTgxMzEifQ=="
         }
       }
+    },
+    {
+      "version": "3.0.0",
+      "tag": "v3.0.0",
+      "status": "assigned",
+      "tagObject": "2c0f879b6e38d9995a4f5a4853a44a22c6aaa50a",
+      "commit": "a225cfa7c84aa551981cc8ad56c9a281fa6e051a",
+      "signingFingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709",
+      "registryReadback": {
+        "format": "takoform.provider-registry-readback@v1",
+        "checkedAt": "2026-08-24T23:47:58Z",
+        "providerAddress": "registry.terraform.io/tako0614/takoform",
+        "githubRelease": {
+          "id": 376051280,
+          "url": "https://github.com/tako0614/terraform-provider-takoform/releases/tag/v3.0.0",
+          "immutable": true,
+          "publishedAt": "2026-08-24T23:44:13Z"
+        },
+        "registry": {
+          "versionsUrl": "https://registry.terraform.io/v1/providers/tako0614/takoform/versions",
+          "downloadUrl": "https://registry.terraform.io/v1/providers/tako0614/takoform/3.0.0/download/linux/amd64",
+          "protocol": "6.0",
+          "platforms": [
+            "darwin_amd64",
+            "darwin_arm64",
+            "linux_amd64",
+            "linux_arm64",
+            "windows_amd64"
+          ],
+          "linuxAmd64Sha256": "f632146757f688dc4e48f65636fefe70fcbe2cb597d0e5e2f77cc1788a7f6585"
+        },
+        "installation": {
+          "product": "OpenTofu",
+          "version": "1.12.3",
+          "providerVersion": "3.0.0",
+          "signingKeyId": "34FC18AC897FB709",
+          "lockfileSha256": "9f222a2b4d82715a1d3950ef590a5b0800d87813a3c28e58517a8c15600d039a",
+          "schemaSha256": "0dc07fc814386e51f66745cf1c482438c050a5c14c197c1778988cab46184da6",
+          "resourceSchemaCount": 31
+        }
+      }
     }
   ]
 }

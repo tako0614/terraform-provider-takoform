@@ -19,11 +19,12 @@ history; the withdrawn resources have no successors in this documentation, and
 [the migration boundary](../release/migrations/v2-to-v3.md) says what existing
 state does.
 
-Provider `v2.1.1` is retained Registry-published history for the exact
-`v1beta1`/versioned-family identities it shipped. The official Provider 3
-sample is independent and non-normative; it cannot block Specification 1.0.
-Using either requires a compatible host, and this repository does not assert a
-hosted service's live availability.
+Provider `v3.0.0` is the current Registry-published implementation of all 31
+current Experimental Forms. It is independent and non-normative, so it cannot
+block or release Specification 1.0. Provider `v2.1.1` remains immutable
+Registry history for the exact `v1beta1` identities it shipped. Using either
+requires a compatible host; Provider publication does not assert a hosted
+service's live availability.
 
 ## Install the provider
 
@@ -35,7 +36,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.1.1"
+      version = "= 3.0.0"
     }
   }
 }
@@ -57,16 +58,16 @@ Availability is verified, not declared by this immutable documentation.
 curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v2.1.1
+git checkout --detach v3.0.0
 ```
 
 A source tag, documentation page, or local build alone is not Registry publication or installation evidence.
 
 ## Current Provider 3 Form reference
 
-The independent Provider 3 candidate maps all 31 current Experimental Forms.
-These resource type names are non-normative Provider metadata; the links below
-describe local candidate code, not a published Provider release.
+The independent Registry-published Provider 3 maps all 31 current Experimental
+Forms. These resource type names are non-normative Provider metadata; Form
+maturity and Form Package publication remain separate.
 
 ### Edge family
 

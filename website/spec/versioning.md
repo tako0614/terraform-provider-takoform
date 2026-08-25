@@ -165,10 +165,10 @@ FormRefs and definition and package digests embedded by this provider release
 are immutable provider compatibility data even while their package artifacts
 remain unpublished.
 
-The official Provider 3 work is a separate non-normative sample that may
-target Host API v1 and the exact current `0.x` FormRefs. Its implementation or
-release status cannot close or block Specification 1.0, and Specification 1.0
-does not make Provider 3 published or production-ready.
+Provider 3.0.0 is a separate Registry-published, non-normative reference
+implementation targeting Host API v1 and the exact current `0.x` FormRefs. Its
+release status cannot close or block Specification 1.0, and publication alone
+does not prove a particular Host or production deployment is ready.
 
 A later Stable `1.0.0` Form is a new exact identity. Existing Beta state remains
 bound to its Beta FormRef and codec for read, refresh, update, and delete; a

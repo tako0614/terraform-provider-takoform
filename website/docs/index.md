@@ -13,7 +13,7 @@ authority by implication.
 | Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                             |
 | Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental.                                                             |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
-| Provider              | **independent**                        | Provider 2.1.1 is retained Registry history; Provider 3 is a non-normative sample and cannot block the Specification.     |
+| Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation; it cannot block the Specification. Provider 2.1.1 is retained history. |
 
 The [release-evidence policy](/spec/publication-freeze.html) makes those axes
 machine-checkable. Releasing the Specification does not relabel any current
@@ -31,8 +31,9 @@ handlers those bytes export, a deployment that sends traffic to it, and an
 attachment that gives it an address. An endpoint whose worker has no active
 deployment never becomes Ready, so the whole chain is one configuration:
 
-This shape uses the independent Provider 3 sample. It is non-normative and its
-presence does not claim Provider publication or Specification readiness.
+This shape uses the independent Registry-published Provider 3 reference
+implementation. It is non-normative and does not claim Specification readiness
+or Form Package publication.
 
 ```hcl
 terraform {
@@ -99,9 +100,9 @@ attachment resource.
 
 ## Current Provider 3 resource reference {#resource-reference}
 
-The independent Provider 3 candidate maps all 31 current Experimental `0.x`
-Forms. These names are non-normative Provider metadata and do not claim a
-published Provider release.
+The independent Registry-published Provider 3 maps all 31 current Experimental
+`0.x` Forms. These names are non-normative Provider metadata and do not change
+Form maturity.
 
 ### Edge family
 

@@ -26,7 +26,7 @@ SemVer、ホスト protocol、Form の identity を別々の軸として示し�
 | Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の stable contract。                                        |
 | Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRefs。すべて Experimental のまま。                                                              |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |
-| Provider              | **independent**                        | Provider 2.1.1 は retained history、Provider 3 は non-normative sample。                                                |
+| Provider              | **3.0.0、Registry 公開済み**           | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。             |
 
 Specification release、Form maturity、Package publication、Provider release は
 独立しています。Specification 1.0 は current Form を `1.0.0` に昇格させず、
@@ -71,7 +71,7 @@ bytes、handler を宣言する version、traffic deployment、host が割り当
 | [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | deployment が供給する class として多段の durable 実行を持つ            |
 | [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | 実行文脈1つ・専用ストレージ・alarm 1つを持つ addressable actor         |
 
-Provider 3 candidate は、ほかの current Forms 15 個も mapping します。
+Registry 公開済み Provider 3 は、ほかの current Forms 15 個も mapping します。
 
 - Function: [`takoform_function`](/docs/resources/function.html)、[`takoform_function_version`](/docs/resources/function_version.html)、[`takoform_function_deployment`](/docs/resources/function_deployment.html)、[`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
 - Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html)、[`takoform_container_revision`](/docs/resources/container_revision.html)、[`takoform_container_traffic`](/docs/resources/container_traffic.html)、[`takoform_container_endpoint`](/docs/resources/container_endpoint.html)、[`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
@@ -80,8 +80,9 @@ Provider 3 candidate は、ほかの current Forms 15 個も mapping します�
 - Schedule / vector: [`takoform_message_schedule`](/docs/resources/message_schedule.html)、[`takoform_dense_vector_index`](/docs/resources/dense_vector_index.html)
 
 ::: warning Provider distribution boundary
-この resource 名は independent Provider 3 sample の metadata で、normative では
-なく Provider publication を主張しません。31 Form Package は unpublished です。
+この resource 名は independent Provider 3 implementation の metadata で、normative
+ではありません。Provider 3.0.0 は Registry 公開済みですが、31 Form Package は
+unpublished のままです。
 :::
 
 worker の capability は exact な
@@ -108,7 +109,7 @@ Form であり、交換可能なのはホストであって意味ではありま
 **Provider 1.0.3**（`forms.takoform.com/v1alpha1` Legacy client）は既存 state の
 維持・recovery・移行のために exact pin で今もインストールできますが、その
 resource に後継はなく、このサイトはもう文書化しません。このリポジトリから
-次に公開される release は major の `3.0.0` です。撤回された resource の利用者は
+current release は major の `3.0.0` です。撤回された resource の利用者は
 [v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) に従ってください。
 
 ## どう動くか

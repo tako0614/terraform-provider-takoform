@@ -1932,6 +1932,6 @@ if (failures.length > 0) {
   console.log(
     `Public surfaces OK: Specification 1.0 is an open candidate, ` +
       `the 8-family/31-Form corpus remains Experimental, Provider v${releaseVersion.version} ` +
-      "is an unpublished candidate, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
+      "is Registry-published, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );
 }

@@ -46,10 +46,10 @@ The Terraform Provider is an independent implementation stream. Provider
 2.1.1 and its exact Host v1beta1/versioned Edge 15-Form identities remain
 immutable Registry history.
 
-Provider 3 is an official but non-normative sample. Its evidence track may bind
+Provider 3.0.0 is a Registry-published but non-normative reference
+implementation. Its evidence track binds
 the exact current Form projection, Provider identity ledger, retained codecs,
-state continuity, and migration behavior. It can remain open while
-Specification 1.0 closes, and a green Provider milestone cannot close the
+state continuity, and migration behavior. Its publication cannot close the
 Specification track.
 
 ## Adoption evidence

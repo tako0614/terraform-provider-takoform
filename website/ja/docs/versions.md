@@ -12,19 +12,21 @@ preview や成熟度を意味しません。
 | Host API              | **`forms.takoform.com/v1`**                | stable Specification contract。                                                                                                                                                 |
 | Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Forms。すべて Experimental。                                                                                                                                |
 | Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | package artifact は unpublished。                                                                                                                                               |
-| Provider              | **independent**                            | Provider 2.1.1 は retained history、Provider 3 は non-normative sample。                                                                                                       |
+| Provider              | **3.0.0、Registry 公開済み**               | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。                                                                    |
 
-Provider の配布状態は独立した軸です。**Provider 2.1.1** は retained Registry
-公開済み client です。**Provider 2.0.0** と **Provider 1.0.3** は撤回された
+Provider の配布状態は独立した軸です。**Provider 3.0.0** が current Registry
+公開済み implementation です。**Provider 2.1.1**、**Provider 2.0.0**、
+**Provider 1.0.3** は撤回された
 pre-Beta epoch のための不変の Registry 履歴として残ります
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-このリポジトリから次に公開される release は major の **3.0.0** です
+current major release は **3.0.0** です
 ([v2 から v3 への移行境界](/release/migrations/v2-to-v3.html))。
 
 ## Published compatibility mapping
 
 | Client / distribution       | Host API          | Form と definition                                                    | 状態 / 用途                                                           |
 | --------------------------- | ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Provider 3.0.0 distribution | Host API v1       | 8 versionless families / current Experimental Form 31 個              | current Registry 公開済み non-normative reference implementation。    |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1 の immutable historical Form 15 個 | Registry 公開済みの retained client。descriptor は設計上 `candidate-only` metadata。 |
 | Provider 2.0.0 distribution | Host API v1alpha2（撤回済み epoch） | 撤回された 9 個の v1alpha2 Form | 不変の Registry 履歴。exact pin のみ、後継なし。 |
 | Provider 1.0.3 Legacy       | Host API v1alpha1（撤回済み epoch） | 撤回された v1 Form Package identity | 不変の Registry 履歴。recovery / migration のみ。 |
@@ -55,7 +57,7 @@ Form の group です。definition 0.1.0 は Form の identity であり、Provi
 - [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)
 - [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
 
-independent Provider 3 sample の resource type 名は次の version floor を使います。
+Registry 公開済み Provider 3 の resource type 名は次の version floor を使います。
 
 ```hcl
 terraform {

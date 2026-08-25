@@ -11,12 +11,12 @@
 | Host API              | **`forms.takoform.com/v1`**            | stable contract。                                                                                                       |
 | Form corpus           | **8 families / 31 Forms**              | exact `0.x` FormRefs。すべて Experimental。                                                                             |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |
-| Provider              | **independent**                        | Provider 2.1.1 は retained history、Provider 3 は non-normative sample。                                                |
+| Provider              | **3.0.0、Registry 公開済み**           | independent non-normative reference implementation。Provider 2.1.1 は retained history。                               |
 
 Specification release、Form maturity、package publication、Provider release は
 別の事実です。Specification 1.0 は current Form を `1.0.0` に昇格させません。
-Provider 2.1.1 の Registry history と Provider 3 sample は Specification authority
-ではありません。
+Provider 2.1.1 の Registry history と Provider 3.0.0 implementation は
+Specification authority ではありません。
 
 ## Edge reference family (16 Experimental Forms) {#beta-edge-platform-family}
 
@@ -30,7 +30,7 @@ worker が到達可能になるまでは 1 resource ではなく連鎖です。i
 のない endpoint は Ready になりません。
 
 ```hcl
-# Provider 3 is an independent non-normative sample, not release authority.
+# Provider 3.0.0 is Registry-published but remains non-normative.
 
 terraform {
   required_providers {
@@ -95,9 +95,10 @@ consumer など外からの activation は別の attachment resource にしま�
 
 ## Current Provider 3 resource reference {#resource-reference}
 
-独立した Provider 3 candidate は current Experimental `0.x` Forms 31 個すべてを
+独立した Registry 公開済み Provider 3 は current Experimental `0.x` Forms 31 個すべてを
 mapping します。resource 名は非 normative な Provider metadata であり、Provider
-が公開済みだという主張ではありません（詳細ページは英語のみ）。
+の公開によって Form Package や Form maturity が公開・昇格したという主張では
+ありません（詳細ページは英語のみ）。
 
 ### Edge family
 
