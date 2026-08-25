@@ -109,7 +109,7 @@ Form であり、交換可能なのはホストであって意味ではありま
 **Provider 1.0.3**（`forms.takoform.com/v1alpha1` Legacy client）は既存 state の
 維持・recovery・移行のために exact pin で今もインストールできますが、その
 resource に後継はなく、このサイトはもう文書化しません。このリポジトリから
-次に公開される release は major の `3.0.0` です。撤回された resource の利用者は
+current release は major の `3.0.0` です。撤回された resource の利用者は
 [v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) に従ってください。
 
 ## どう動くか

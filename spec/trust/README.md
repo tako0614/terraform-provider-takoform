@@ -27,9 +27,12 @@ The provider follows the Terraform Registry contract:
   key;
 - an existing version MUST NOT be overwritten;
 - the `tako0614` public namespace and pinned key ID `34FC18AC897FB709` are
-  registered; provider `v1.0.1` is published, and its retained authenticated
-  readback proves direct canonical Registry installation through both OpenTofu
-  and Terraform.
+  registered; provider `v3.0.0` is published, and the append-only provider
+  release identity ledger records a direct OpenTofu 1.12.3 Registry install,
+  the exact signing key ID, provider archive digest, dependency-lock digest,
+  31-resource schema digest, and immutable GitHub Release readback. Provider
+  `v1.0.1` remains published retained history with authenticated direct
+  Registry installation through both OpenTofu and Terraform.
 
 Form Packages do not reuse the provider GPG key. The standard Takoform
 publisher uses a keyless Sigstore blob signature and bundle bound to the exact

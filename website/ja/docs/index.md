@@ -97,7 +97,8 @@ consumer など外からの activation は別の attachment resource にしま�
 
 独立した Registry 公開済み Provider 3 は current Experimental `0.x` Forms 31 個すべてを
 mapping します。resource 名は非 normative な Provider metadata であり、Provider
-が公開済みだという主張ではありません（詳細ページは英語のみ）。
+の公開によって Form Package や Form maturity が公開・昇格したという主張では
+ありません（詳細ページは英語のみ）。
 
 ### Edge family
 
