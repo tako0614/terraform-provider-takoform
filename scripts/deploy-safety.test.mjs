@@ -400,6 +400,18 @@ test("repository Git configuration accepts only inert settings", () => {
   ).not.toThrow();
   expect(() =>
     assertSafeRepositoryGitConfiguration(
+      ordinary.replace(canonical, canonical.slice(0, -4)),
+      canonical,
+    ),
+  ).not.toThrow();
+  expect(() =>
+    assertSafeRepositoryGitConfiguration(
+      ordinary.replace(canonical, canonical.replace("https://", "http://")),
+      canonical,
+    ),
+  ).toThrow("repository origin URL is not the canonical URL");
+  expect(() =>
+    assertSafeRepositoryGitConfiguration(
       ordinary.replace("\0branch.main.remote", "\0gc.auto\n0\0branch.main.remote"),
       canonical,
     ),

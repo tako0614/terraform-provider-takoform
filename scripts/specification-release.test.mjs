@@ -665,6 +665,13 @@ describe("C3/C4 fixed-point history", () => {
 
   test("accepts only the CI checkout's disabled automatic Git GC setting", () => {
     withTransitionFixture({}, ({ release, history, root }) => {
+      fixtureGit(
+        root,
+        "remote",
+        "set-url",
+        "origin",
+        CANONICAL_ORIGIN.slice(0, -4),
+      );
       fixtureGit(root, "config", "gc.auto", "0");
       expect(validateReceiptTransitionHistory(release, history, root)).toEqual(
         [],
