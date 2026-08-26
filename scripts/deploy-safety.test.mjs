@@ -236,6 +236,26 @@ test("website snapshot copy includes its complete module closure", () => {
   expect(provenance).not.toContain("asset set by role");
 });
 
+test("website deploy materializes redirected mutable state create-only", () => {
+  const deploySource = readFileSync(
+    new URL("./deploy.mjs", import.meta.url),
+    "utf8",
+  );
+  for (const managedHome of ["snapshotGateHome", "websiteBuildHome"]) {
+    const createHome = `mkdirSync(${managedHome}, { mode: 0o700 });`;
+    const createState = `createManagedGateState(${managedHome});`;
+    const homeIndex = deploySource.indexOf(createHome);
+    const stateIndex = deploySource.indexOf(createState, homeIndex);
+    expect(homeIndex).toBeGreaterThan(-1);
+    expect(
+      deploySource.slice(homeIndex + createHome.length, stateIndex),
+    ).toMatch(/^\n\s*$/u);
+    expect(
+      deploySource.indexOf("createHardenedGateEnvironment(", stateIndex),
+    ).toBeGreaterThan(stateIndex);
+  }
+});
+
 test("published asset discovery rejects symbolic links", () => {
   const directory = mkdtempSync(join(tmpdir(), "takoform-deploy-safety-"));
   temporaryDirectories.push(directory);
@@ -455,6 +475,8 @@ test("hardened Git environment removes inherited Git configuration", () => {
 });
 
 test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
+  const fixture = safeToolFixture();
+  const state = createManagedGateState(fixture.managedHome);
   const environment = createHardenedGateEnvironment(
     {
       BUN_CONFIG_FILE: "/tmp/attacker.toml",
@@ -474,7 +496,7 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
       WRANGLER_CI_OVERRIDE_NAME: "other-worker",
     },
     "/trusted/bun/bin/bun",
-    "/private/gate-home",
+    fixture.managedHome,
   );
   expect(environment.PATH).toBe(
     "/trusted/bun/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin",
@@ -486,29 +508,61 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
   expect(environment.GOAUTH).toBe("off");
   expect(environment.GOENV).toBe("off");
   expect(environment.GOFLAGS).toBe("-mod=readonly -buildvcs=false");
-  expect(environment.GOCACHE).toBe("/private/gate-home/m/go-build");
-  expect(environment.GOMODCACHE).toBe("/private/gate-home/m/go-mod");
-  expect(environment.GOPATH).toBe("/private/gate-home/m/go-path");
+  expect(environment.GOCACHE).toBe(state.gocache);
+  expect(environment.GOMODCACHE).toBe(state.gomodcache);
+  expect(environment.GOPATH).toBe(state.gopath);
   expect(environment.GOPROXY).toBe("https://proxy.golang.org");
   expect(environment.GOSUMDB).toBe("sum.golang.org");
   expect(environment.GOTOOLCHAIN).toBe("local");
   expect(environment.GOCACHEPROG).toBeUndefined();
   expect(environment.GOVCS).toBe("*:off");
   expect(environment.GOWORK).toBe("off");
-  expect(environment.HOME).toBe("/private/gate-home");
-  expect(environment.TMPDIR).toBe("/private/gate-home/m/t");
+  expect(environment.HOME).toBe(fixture.managedHome);
+  expect(environment.TMPDIR).toBe(state.tmpdir);
   expect(environment.NODE_OPTIONS).toBeUndefined();
   expect(environment.npm_config_userconfig).toBeUndefined();
   expect(environment.SSH_ASKPASS).toBeUndefined();
   expect(environment.SSH_AUTH_SOCK).toBeUndefined();
   expect(environment.TAKOFORM_CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
   expect(environment.WRANGLER_CI_OVERRIDE_NAME).toBeUndefined();
-  expect(environment.XDG_CONFIG_HOME).toBe("/private/gate-home/.config");
+  expect(environment.XDG_CONFIG_HOME).toBe(
+    join(fixture.managedHome, ".config"),
+  );
+
+  expect(environment.TEMP).toBe(state.tmpdir);
+  expect(environment.TMP).toBe(state.tmpdir);
+  const childTemporaryDirectory = execFileSync(
+    process.execPath,
+    [
+      "-e",
+      'const { mkdtempSync } = require("node:fs"); const { tmpdir } = require("node:os"); const { join } = require("node:path"); process.stdout.write(mkdtempSync(join(tmpdir(), "child-")));',
+    ],
+    { encoding: "utf8", env: environment },
+  );
+  expect(childTemporaryDirectory.startsWith(`${state.tmpdir}/child-`)).toBe(
+    true,
+  );
+  const childMetadata = lstatSync(childTemporaryDirectory);
+  expect(childMetadata.isDirectory()).toBe(true);
+  expect(childMetadata.isSymbolicLink()).toBe(false);
+  expect(childMetadata.mode & 0o7777).toBe(0o700);
+});
+
+test("hardened gate environment rejects an uninitialized mutable root", () => {
+  const fixture = safeToolFixture();
+  expect(() =>
+    createHardenedGateEnvironment(
+      process.env,
+      "/trusted/bun/bin/bun",
+      fixture.managedHome,
+    ),
+  ).toThrow("owner gate mutable root");
 });
 
 describe("owner gate tool nomination", () => {
   test("copies user-local CLIs and never inherits their sibling PATH authority", () => {
     const { fixture, snapshot } = toolSnapshot();
+    createManagedGateState(fixture.managedHome);
     const terraformBytes = readFileSync(snapshot.tools.terraform.path);
     expect(lstatSync(snapshot.toolBin).mode & 0o7777).toBe(0o700);
     expect(lstatSync(snapshot.tools.terraform.path).mode & 0o7777).toBe(0o500);

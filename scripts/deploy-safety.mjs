@@ -1085,6 +1085,19 @@ const MANAGED_GATE_STATE_PATHS = Object.freeze({
 });
 const MANAGED_GATE_STATE_ROOT = "m";
 
+function managedGateStateForHome(managedHome) {
+  const root = join(managedHome, MANAGED_GATE_STATE_ROOT);
+  return {
+    root,
+    ...Object.fromEntries(
+      Object.entries(MANAGED_GATE_STATE_PATHS).map(([name, child]) => [
+        name,
+        join(root, child),
+      ]),
+    ),
+  };
+}
+
 export function assertManagedGateState(state) {
   if (!state || typeof state !== "object" || !isAbsolute(state.root ?? "")) {
     throw new Error("owner gate mutable state is missing");
@@ -1119,26 +1132,18 @@ export function createManagedGateState(managedHome) {
   assertSafeDirectory(managedHome, "owner gate managed HOME", {
     exactMode: 0o700,
   });
-  const root = join(managedHome, MANAGED_GATE_STATE_ROOT);
+  const state = managedGateStateForHome(managedHome);
   try {
-    mkdirSync(root, { mode: 0o700 });
+    mkdirSync(state.root, { mode: 0o700 });
     for (const child of Object.values(MANAGED_GATE_STATE_PATHS)) {
-      mkdirSync(join(root, child), { mode: 0o700 });
+      mkdirSync(join(state.root, child), { mode: 0o700 });
     }
   } catch (error) {
     throw new Error(
       `owner gate mutable state must be fresh and create-only: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  return assertManagedGateState({
-    root,
-    ...Object.fromEntries(
-      Object.entries(MANAGED_GATE_STATE_PATHS).map(([name, child]) => [
-        name,
-        join(root, child),
-      ]),
-    ),
-  });
+  return assertManagedGateState(state);
 }
 
 function makeOwnedDirectoriesRemovable(path, label) {
@@ -1193,7 +1198,9 @@ export function createHardenedGateEnvironment(
   }
   if (goRoot === undefined && goBin !== undefined) goRoot = dirname(goBin);
   if (goBin === undefined && goRoot !== undefined) goBin = join(goRoot, "bin");
-  const mutableRoot = join(managedHome, MANAGED_GATE_STATE_ROOT);
+  const managedState = assertManagedGateState(
+    managedGateStateForHome(managedHome),
+  );
   const hardened = createHardenedGitEnvironment(environment);
   for (const name of Object.keys(hardened)) {
     if (
@@ -1223,13 +1230,13 @@ export function createHardenedGateEnvironment(
     ...hardened,
     CGO_ENABLED: "0",
     GOAUTH: "off",
-    GOCACHE: join(mutableRoot, MANAGED_GATE_STATE_PATHS.gocache),
+    GOCACHE: managedState.gocache,
     GOENV: "off",
     GOFLAGS: "-mod=readonly -buildvcs=false",
-    GOMODCACHE: join(mutableRoot, MANAGED_GATE_STATE_PATHS.gomodcache),
+    GOMODCACHE: managedState.gomodcache,
     GONOPROXY: "",
     GONOSUMDB: "",
-    GOPATH: join(mutableRoot, MANAGED_GATE_STATE_PATHS.gopath),
+    GOPATH: managedState.gopath,
     GOPRIVATE: "",
     GOPROXY: "https://proxy.golang.org",
     GOSUMDB: "sum.golang.org",
@@ -1246,9 +1253,9 @@ export function createHardenedGateEnvironment(
       "/usr/bin",
       "/bin",
     ].join(":"),
-    TEMP: join(mutableRoot, MANAGED_GATE_STATE_PATHS.tmpdir),
-    TMP: join(mutableRoot, MANAGED_GATE_STATE_PATHS.tmpdir),
-    TMPDIR: join(mutableRoot, MANAGED_GATE_STATE_PATHS.tmpdir),
+    TEMP: managedState.tmpdir,
+    TMP: managedState.tmpdir,
+    TMPDIR: managedState.tmpdir,
     XDG_CACHE_HOME: join(managedHome, ".cache"),
     XDG_CONFIG_HOME: join(managedHome, ".config"),
     XDG_DATA_HOME: join(managedHome, ".local", "share"),
