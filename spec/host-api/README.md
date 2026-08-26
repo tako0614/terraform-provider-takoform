@@ -2,7 +2,7 @@
 
 ## Current Specification contract: Host API v1
 
-Takoform Specification 1.0 defines the literal
+Takoform Specification 1.1 defines the unchanged literal
 `forms.takoform.com/v1` Host API ([`v1.md`](v1.md)):
 
 - discovery: `GET /.well-known/takoform/v1`;
@@ -10,12 +10,12 @@ Takoform Specification 1.0 defines the literal
 - wire schema: [`host-api-wire-v1.schema.json`](../schemas/host-api-wire-v1.schema.json);
 - operation table: [`operations-v1.json`](operations-v1.json).
 
-The Specification release candidate remains open until one exact committed
+The Specification 1.1 release candidate remains open until one exact committed
 snapshot of the normative `spec/` tree is recorded. Candidate Forms, packages,
 reference conformance, Providers, Hosts, products, deployments, and adoption
 evidence cannot block or authorize that release. The lane's stable name does
 not promote any current `0.x` Form to Form `1.0.0` and does not release Provider
-3 ([decision 0055](../decisions/0055-specification-release-needs-only-normative-source.md)).
+3 ([decision 0057](../decisions/0057-specification-1-1-compatibility-and-independent-identities.md)).
 
 ## Retained pre-v1 design snapshot: Host API v1beta4
 
@@ -26,7 +26,7 @@ bytes describe that document's point in time; they do not select today's Host
 lane. Decisions [0052](../decisions/0052-the-specification-is-released-on-its-own-line.md)
 and [0053](../decisions/0053-specification-and-provider-release-evidence.md)
 supersede their lane-selection and release-authority conclusions. The v1beta4
-document is not rewritten into v1 and is not a Specification 1.0 prerequisite.
+document is not rewritten into v1 and is not a Specification 1.1 prerequisite.
 
 ## Retained Provider 2.1.1 lane: Host API v1beta1
 

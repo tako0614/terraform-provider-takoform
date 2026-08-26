@@ -9,14 +9,15 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.0 open candidate。authority は normative `spec/` tree の exact committed snapshot 1つだけ |
+| Specification | Takoform 1.1 open candidate。first numbered release。authority は normative `spec/` tree の exact committed snapshot 1つだけ（1.0 は公開前に撤回され再利用しない） |
 | 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
-| 現在の Host API wire | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`) |
+| Host API candidate | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、Specification とは separate and unpublished) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
-| Provider distribution | independent。`v2.1.1` は retained Registry history、Provider 3 は non-normative sample |
+| Provider distribution | independent。Provider 3.0.0 は current Registry-published non-normative reference implementation、`v2.1.1` は retained history |
 
-Specification 1.0 は current Form を `1.0.0` に昇格させず、Package や Provider
-を publish しません。
+Specification 1.1 は separate Host API v1 candidate を publish / promote せず、
+current Form を `1.0.0` に昇格させず、Package や Provider を publish せず、
+`/v1.1` / v2 lane も mint しません。
 
 pre-Beta の epoch（`forms.takoform.com/v1alpha1` と `/v1alpha2`）は撤回されました
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。

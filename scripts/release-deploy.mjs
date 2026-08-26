@@ -18,6 +18,17 @@ import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
+import {
+  LEDGER_PATH as SPECIFICATION_LEDGER_PATH,
+  SOURCE_EVIDENCE_ASSET,
+  SOURCE_EVIDENCE_PATH,
+  SPECIFICATION_TAG as SPECIFICATION_RELEASE_TAG,
+  appendReleaseReceipt,
+  releaseFromEvidence,
+  sourceSnapshotDigest,
+  validateC2DiffPaths,
+} from "./specification-release.mjs";
+
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
@@ -82,8 +93,18 @@ const PROVIDER_RECOVERY_ALLOWED_PATHS = Object.freeze([
   "scripts/release-deploy.test.mjs",
   "scripts/testdata/provider-release-candidate-30507374579-1-metadata.json",
 ]);
+const SPECIFICATION_RECOVERY_ALLOWED_PATHS = Object.freeze([
+  "package.json",
+  "release/README.md",
+  "scripts/release-deploy.mjs",
+  "scripts/release-deploy.test.mjs",
+  "scripts/specification-release.mjs",
+  "scripts/specification-release.test.mjs",
+]);
 const PROVIDER_SURFACE = "takoform-provider-release";
 const FORM_SURFACE = "takoform-form-package-release";
+export const SPECIFICATION_SURFACE = "takoform-specification-release";
+export const SPECIFICATION_TAG = SPECIFICATION_RELEASE_TAG;
 const WORKFLOW_NAMES = {
   "provider-release-tag.yml": "Author provider release tag",
   "release.yml": "Prepare provider release candidate",
@@ -152,6 +173,40 @@ export const RELEASE_SURFACES = Object.freeze([
       halt: "prepare-revocation stops after one exact workflow dispatch and returns its URL as AWAITING_REVIEW; cancel that exact run before approval if any input changes, and publish-revocation never infers or selects a latest run — it consumes only the explicitly named run/attempt",
     },
   },
+  {
+    surface: SPECIFICATION_SURFACE,
+    target:
+      "github-release:tako0614/terraform-provider-takoform/specification/1.1",
+    covers: [
+      "spec",
+      "release/specification-releases.json",
+      "spec/publication-evidence.json",
+      "scripts/specification-release.mjs",
+    ],
+    requiresScripts: [
+      "check",
+      "check:specification-releases",
+      "check:specification-1-1-release",
+    ],
+    requiresTools: ["git", "bun", "gh"],
+    requiresEnv: ["GH_TOKEN"],
+    triggers: ["authority", "published-identity", "asynchronous"],
+    obligations: {
+      provenance:
+        "uses the canonical old repository as the sole Specification 1.1 authority, requires a clean non-shallow attached main equal to freshly fetched origin/main, runs the complete owner gate, requires C2 to be the direct evidence-only child of the normative C1 commit, and binds the exact committed source-snapshot evidence bytes; the five-class compatibility report remains a separately checked W09 report and is not release authority",
+      "post-conditions":
+        "publishes at most one create-only Specification 1.1 identity bound to annotated specification/1.1 and the exact C1 source/C2 release commits, rereads the immutable release and exact downloaded source evidence bytes, and appends one C3 receipt only after authoritative tag/release readback matches; no Form, package, Provider, Host API lane, v2 schema, v2 tag, or v2 receipt is created",
+      reversal:
+        "an unpublished C1/C2 candidate may be withdrawn; an exact tag-only state or exact retained draft may be completed only by the explicit bound recovery phases, while any mismatched publication is halted for forward repair and a published numbered Specification identity is never deleted, overwritten, or reissued",
+      "failure-handling":
+        "fails closed before any mutation on missing source evidence, non-evidence C1/C2 drift, a dirty, shallow, detached, stale, or non-canonical checkout, an existing identity, or an ambiguous GitHub response; failures report the exact surface and observed local tag, remote tag, draft, and immutable release state, never delete an identity, and never retry blindly",
+      "independent-review":
+        "the operator reviews the exact C1 source/C2 release commits, separately checked five-class compatibility report, reserved 1.0/no-reuse rule, and zero Host/Form/Provider effects before invoking publish; no compatibility report, Provider, Host, product, signer, or adoption result can substitute for the normative source prerequisite",
+      "no-overwrite":
+        "requires specification/1.1 and its GitHub Release identity to be absent, creates one deterministic annotated object with a zero-object-id local compare-and-swap, uses a create-only remote lease, and rejects any existing or mismatched tag/release without transferring or reusing withdrawn 1.0",
+      halt: "prepare returns AWAITING_REVIEW after mutation-free C1 preflight; publish consumes only the exact pushed C2 commit, explicit recovery consumes only an exact tag-only or retained-draft state, verify is read-only, and record-receipt writes only the C3 ledger projections after live exact readback",
+    },
+  },
 ]);
 
 const PHASES = {
@@ -182,10 +237,43 @@ const PHASES = {
     "publish-revocation": ["tag", "expected-commit", "run-id", "run-attempt"],
     "verify-revocation": ["tag", "expected-commit"],
   },
+  [SPECIFICATION_SURFACE]: {
+    prepare: ["tag", "expected-commit"],
+    publish: ["tag", "expected-commit"],
+    "recover-tag-only": [
+      "tag",
+      "expected-release-commit",
+      "expected-tag-object",
+      "expected-recovery-commit",
+    ],
+    "recover-draft": [
+      "tag",
+      "expected-release-commit",
+      "expected-tag-object",
+      "expected-recovery-commit",
+      "release-id",
+    ],
+    verify: [
+      "tag",
+      "expected-release-commit",
+      "expected-tag-object",
+      "release-id",
+    ],
+    "record-receipt": [
+      "tag",
+      "expected-release-commit",
+      "expected-tag-object",
+      "release-id",
+    ],
+  },
 };
 
 export function isReleaseSurface(name) {
-  return name === PROVIDER_SURFACE || name === FORM_SURFACE;
+  return (
+    name === PROVIDER_SURFACE ||
+    name === FORM_SURFACE ||
+    name === SPECIFICATION_SURFACE
+  );
 }
 
 export function parseReleaseSurfaceArgs(surface, args) {
@@ -223,6 +311,11 @@ export function parseReleaseSurfaceArgs(surface, args) {
     required.some((name) => !Object.hasOwn(values, name))
   ) {
     throw usageError(surface);
+  }
+  if (surface === SPECIFICATION_SURFACE && values.tag !== SPECIFICATION_TAG) {
+    throw new Error(
+      `--tag must be exactly ${SPECIFICATION_TAG} for the create-only Specification 1.1 surface`,
+    );
   }
   for (const name of [
     "expected-commit",
@@ -299,7 +392,10 @@ export function runReleaseSurface({
   if (surface === PROVIDER_SURFACE) {
     return runProvider(context, options);
   }
-  return runForm(context, options);
+  if (surface === FORM_SURFACE) {
+    return runForm(context, options);
+  }
+  return runSpecification(context, options);
 }
 
 function blockingWait(milliseconds) {
@@ -336,6 +432,675 @@ function runForm(context, options) {
     default:
       throw usageError(FORM_SURFACE);
   }
+}
+
+function requireSpecificationTag(tag) {
+  if (tag !== SPECIFICATION_TAG) {
+    throw new Error(
+      `Specification release tag must be exactly ${SPECIFICATION_TAG}; no /v1.1 or v2 lane/tag is permitted`,
+    );
+  }
+}
+
+function runSpecification(context, options) {
+  requireSpecificationTag(options.tag);
+  switch (options.phase) {
+    case "prepare":
+      return specificationPrepare(context, options);
+    case "publish":
+      return specificationPublish(context, options);
+    case "recover-tag-only":
+      return specificationRecoverTagOnly(context, options);
+    case "recover-draft":
+      return specificationRecoverDraft(context, options);
+    case "verify":
+      return specificationVerify(context, options);
+    case "record-receipt":
+      return specificationRecordReceipt(context, options);
+    default:
+      throw usageError(SPECIFICATION_SURFACE);
+  }
+}
+
+function parseCommittedJSON(raw, label) {
+  try {
+    return JSON.parse(asText(raw));
+  } catch (error) {
+    throw new Error(
+      `${label} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function committedBytes(context, commit, relativePath) {
+  return command(context, "git", ["show", `${commit}:${relativePath}`], {
+    encoding: null,
+    label: `read committed ${relativePath} at ${commit}`,
+  });
+}
+
+function exactDiffPaths(context, base, head, { recovery = false } = {}) {
+  const runner = recovery ? recoveryGit : (ctx, args, options) =>
+    command(ctx, "git", args, options);
+  const raw = runner(
+    context,
+    [
+      "-c",
+      "diff.renames=false",
+      "diff",
+      "--no-renames",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--name-only",
+      "-z",
+      "--diff-filter=ACDMRTUXB",
+      base,
+      head,
+      "--",
+    ],
+    { label: `read exact changed paths for ${base}..${head}` },
+  );
+  if (typeof raw !== "string" || (raw !== "" && !raw.endsWith("\0"))) {
+    throw new Error("Specification release diff path output is ambiguous");
+  }
+  const paths = raw === "" ? [] : raw.slice(0, -1).split("\0");
+  if (
+    paths.some((entry) => entry === "" || /[\r\n]/u.test(entry)) ||
+    new Set(paths).size !== paths.length
+  ) {
+    throw new Error("Specification release diff contains an ambiguous path");
+  }
+  return paths;
+}
+
+function assertSpecificationC2Fence(context, sourceCommit, releaseCommit) {
+  const parent = git(context, "rev-parse", `${releaseCommit}^`);
+  if (parent !== sourceCommit) {
+    throw new Error(
+      `Specification C2 ${releaseCommit} must be the direct evidence-only child of C1 ${sourceCommit}; observed parent ${parent}`,
+    );
+  }
+  const paths = exactDiffPaths(context, sourceCommit, releaseCommit);
+  const problems = validateC2DiffPaths(paths);
+  if (problems.length !== 0) {
+    throw new Error(`Specification C1/C2 fence failed: ${problems.join("; ")}`);
+  }
+  const c1 = parseCommittedJSON(
+    committedBytes(context, sourceCommit, SOURCE_EVIDENCE_PATH),
+    `${SOURCE_EVIDENCE_PATH} at C1`,
+  );
+  if (c1?.evidence?.specification?.sourceSnapshot !== null) {
+    throw new Error("Specification C1 sourceSnapshot must be null");
+  }
+  const c2Ledger = parseCommittedJSON(
+    committedBytes(context, releaseCommit, SPECIFICATION_LEDGER_PATH),
+    `${SPECIFICATION_LEDGER_PATH} at C2`,
+  );
+  if (!Array.isArray(c2Ledger.releases) || c2Ledger.releases.length !== 0) {
+    throw new Error("Specification C2 must not contain a release receipt");
+  }
+  return paths;
+}
+
+function specificationPublicationInput(context, releaseCommit) {
+  const evidenceBytes = committedBytes(
+    context,
+    releaseCommit,
+    SOURCE_EVIDENCE_PATH,
+  );
+  const document = parseCommittedJSON(
+    evidenceBytes,
+    `${SOURCE_EVIDENCE_PATH} at C2`,
+  );
+  const sourceSnapshot = document?.evidence?.specification?.sourceSnapshot;
+  if (!sourceSnapshot || !COMMIT.test(sourceSnapshot.sourceCommit ?? "")) {
+    throw new Error(
+      "Specification C2 evidence must bind one exact C1 source commit",
+    );
+  }
+  const sourceCommit = sourceSnapshot.sourceCommit;
+  assertSpecificationC2Fence(context, sourceCommit, releaseCommit);
+  const sourceSnapshotSha256 = sourceSnapshotDigest(sourceSnapshot);
+  const sourceEvidenceSha256 = sha256(evidenceBytes);
+  const timestamp = git(context, "show", "-s", "--format=%ct", releaseCommit);
+  if (!/^(?:0|[1-9][0-9]*)$/u.test(timestamp)) {
+    throw new Error("Specification C2 commit timestamp is not canonical");
+  }
+  const tagObjectBytes = Buffer.from(
+    `object ${releaseCommit}\n` +
+      "type commit\n" +
+      `tag ${SPECIFICATION_TAG}\n` +
+      `tagger Takoform Specification Release <release@takoform.invalid> ${timestamp} +0000\n\n` +
+      "Takoform Specification 1.1\n\n" +
+      `source-commit: ${sourceCommit}\n` +
+      `release-commit: ${releaseCommit}\n` +
+      `source-snapshot-sha256: ${sourceSnapshotSha256}\n` +
+      `source-evidence-sha256: ${sourceEvidenceSha256}\n`,
+    "utf8",
+  );
+  const tagObject = asText(
+    command(context, "git", ["hash-object", "-t", "tag", "--stdin"], {
+      input: tagObjectBytes,
+      label: "hash deterministic Specification tag",
+    }),
+  ).trim();
+  if (!GIT_OBJECT.test(tagObject)) {
+    throw new Error("deterministic Specification tag object id is invalid");
+  }
+  return {
+    document,
+    evidenceBytes,
+    sourceCommit,
+    releaseCommit,
+    sourceSnapshotSha256,
+    sourceEvidenceSha256,
+    tagObjectBytes,
+    tagObject,
+  };
+}
+
+function specificationReleaseBody(input) {
+  return (
+    "Takoform Specification 1.1.\n\n" +
+    "This create-only numbered identity is derived only from the exact committed normative source snapshot. Forms, packages, Providers, Hosts, compatibility reports, and adoption evidence are independent. Specification 1.0 was never published, is withdrawn, and is never reused. No Host API /v1.1 or API v2 identity is created.\n\n" +
+    `sourceCommit: ${input.sourceCommit}\n` +
+    `releaseCommit: ${input.releaseCommit}\n` +
+    `sourceSnapshotSha256: ${input.sourceSnapshotSha256}\n` +
+    `sourceEvidenceSha256: ${input.sourceEvidenceSha256}`
+  );
+}
+
+function specificationAssets(input, temporaryRoot) {
+  const assetPath = join(temporaryRoot, SOURCE_EVIDENCE_ASSET);
+  writeFileSync(assetPath, input.evidenceBytes);
+  return new Map([
+    [
+      SOURCE_EVIDENCE_ASSET,
+      {
+        name: SOURCE_EVIDENCE_ASSET,
+        path: assetPath,
+        sha256: input.sourceEvidenceSha256,
+      },
+    ],
+  ]);
+}
+
+function materializeSpecificationTag(context, input) {
+  if (localTagOID(context, SPECIFICATION_TAG)) {
+    throw new Error(
+      `local tag ${SPECIFICATION_TAG} already exists; use exact recovery`,
+    );
+  }
+  const object = asText(
+    command(context, "git", ["mktag"], {
+      input: input.tagObjectBytes,
+      label: "materialize deterministic Specification tag object",
+    }),
+  ).trim();
+  if (object !== input.tagObject) {
+    throw new Error(
+      `Specification tag reconstructed as ${object}, expected ${input.tagObject}`,
+    );
+  }
+  command(context, "git", [
+    "update-ref",
+    `refs/tags/${SPECIFICATION_TAG}`,
+    object,
+    "0".repeat(object.length),
+  ]);
+  return assertExactLocalSpecificationTag(context, input, object).object;
+}
+
+function assertExactLocalSpecificationTag(context, input, expectedObject) {
+  if (expectedObject !== input.tagObject) {
+    throw new Error(
+      `expected tag object ${expectedObject} differs from deterministic ${input.tagObject}`,
+    );
+  }
+  const local = localTagOID(context, SPECIFICATION_TAG);
+  const localType = local
+    ? git(context, "cat-file", "-t", `refs/tags/${SPECIFICATION_TAG}`)
+    : "";
+  const localCommit = local
+    ? git(context, "rev-parse", `refs/tags/${SPECIFICATION_TAG}^{commit}`)
+    : "";
+  if (
+    local !== expectedObject ||
+    localType !== "tag" ||
+    localCommit !== input.releaseCommit
+  ) {
+    throw new Error(
+      `Specification release requires exact local annotated tag ${expectedObject} -> ${input.releaseCommit}`,
+    );
+  }
+  const raw = command(context, "git", ["cat-file", "tag", expectedObject], {
+    encoding: null,
+    label: "read exact Specification tag object",
+  });
+  if (!Buffer.from(raw).equals(input.tagObjectBytes)) {
+    throw new Error("Specification annotated tag bytes differ from C2 evidence");
+  }
+  return { object: local, type: localType, commit: localCommit };
+}
+
+function assertExactSpecificationTag(context, input, expectedObject) {
+  const local = assertExactLocalSpecificationTag(
+    context,
+    input,
+    expectedObject,
+  );
+  const remote = assertExactRemoteTag(
+    context,
+    SPECIFICATION_TAG,
+    input.releaseCommit,
+    expectedObject,
+  );
+  return {
+    local,
+    remote,
+  };
+}
+
+function assertSpecificationRecoveryFence(
+  context,
+  { releaseCommit, recoveryCommit, label },
+) {
+  assertRecoveryCommitAncestor(
+    context,
+    releaseCommit,
+    recoveryCommit,
+    `${label} release/recovery ancestry`,
+  );
+  if (releaseCommit === recoveryCommit) return [];
+  const changed = exactDiffPaths(context, releaseCommit, recoveryCommit, {
+    recovery: true,
+  });
+  if (
+    !changed.includes("scripts/release-deploy.mjs") ||
+    changed.some(
+      (relativePath) =>
+        !SPECIFICATION_RECOVERY_ALLOWED_PATHS.includes(relativePath),
+    )
+  ) {
+    throw new Error(
+      `${label}: recovery diff must contain only the exact reviewed Specification recovery implementation, tests, package command, and release documentation; observed ${changed.join(", ") || "no changes"}`,
+    );
+  }
+  return changed;
+}
+
+function specificationReadiness(context) {
+  command(
+    context,
+    "bun",
+    ["scripts/publication-evidence.mjs", "--assert-specification-1-1"],
+    { echo: true, label: "Specification publication evidence" },
+  );
+  command(
+    context,
+    "bun",
+    ["scripts/specification-release.mjs", "--assert-ready"],
+    { echo: true, label: "Specification release readiness" },
+  );
+}
+
+function specificationMutationFence(
+  context,
+  { input, expectedObject, currentCommit, releaseId, label },
+) {
+  const current = specificationOwnerGateAndFence(context, currentCommit);
+  assertSpecificationRecoveryFence(context, {
+    releaseCommit: input.releaseCommit,
+    recoveryCommit: current,
+    label,
+  });
+  assertExactSpecificationTag(context, input, expectedObject);
+  if (releaseId === null || releaseId === undefined) {
+    assertReleaseAbsent(context, SPECIFICATION_TAG);
+  } else {
+    assertUniqueReleaseIdentity(
+      context,
+      SPECIFICATION_TAG,
+      releaseId,
+      true,
+    );
+  }
+  return current;
+}
+
+function readExactSpecificationRelease(
+  context,
+  { input, expectedObject, releaseId, assets, temporaryRoot },
+) {
+  assertExactSpecificationTag(context, input, expectedObject);
+  const release = getRelease(context, SPECIFICATION_TAG);
+  if (release.id !== releaseId) {
+    throw new Error(
+      `Specification release id ${release.id} differs from expected ${releaseId}`,
+    );
+  }
+  validateReleaseReadback(release, SPECIFICATION_TAG, assets, {
+    expectedReleaseId: releaseId,
+    expectedName: SPECIFICATION_TAG,
+    expectedBody: specificationReleaseBody(input),
+    expectedTargetCommitish: "main",
+    expectedAssetsURL: `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
+    expectedUploadURL: `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
+  });
+  downloadAndCompareRelease(
+    context,
+    SPECIFICATION_TAG,
+    assets,
+    temporaryRoot,
+  );
+  assertUniqueReleaseIdentity(context, SPECIFICATION_TAG, releaseId, false);
+  const receipt = releaseFromEvidence(input.document, {
+    releaseCommit: input.releaseCommit,
+    tag: SPECIFICATION_TAG,
+    tagObject: expectedObject,
+    release: {
+      id: release.id,
+      url: release.html_url,
+      immutable: release.immutable,
+    },
+    assetDigests: Object.fromEntries(
+      [...assets].map(([name, asset]) => [name, asset.sha256]),
+    ),
+  });
+  return { release, receipt };
+}
+
+function specificationPrepare(context, options) {
+  const commit = specificationOwnerGateAndFence(
+    context,
+    options["expected-commit"],
+  );
+  assertTagAbsent(context, SPECIFICATION_TAG);
+  assertReleaseAbsent(context, SPECIFICATION_TAG);
+  return emit(context, {
+    kind: "takos.deploy-result@v1",
+    surface: SPECIFICATION_SURFACE,
+    phase: "prepare",
+    tag: SPECIFICATION_TAG,
+    commit,
+    status: "AWAITING_REVIEW",
+    mutation: "none",
+    prerequisite: "specification-source-snapshot",
+    note: "C1 create-only preflight; prepare performs no identity mutation",
+  });
+}
+
+function specificationPublish(context, options) {
+  const releaseCommit = options["expected-commit"];
+  specificationOwnerGateAndFence(context, releaseCommit);
+  specificationReadiness(context);
+  const input = specificationPublicationInput(context, releaseCommit);
+  assertTagAbsent(context, SPECIFICATION_TAG);
+  assertReleaseAbsent(context, SPECIFICATION_TAG);
+  let materializedObject = "";
+  try {
+    specificationOwnerGateAndFence(context, releaseCommit);
+    assertTagAbsent(context, SPECIFICATION_TAG);
+    materializedObject = materializeSpecificationTag(context, input);
+    specificationOwnerGateAndFence(context, releaseCommit);
+    assertReleaseAbsent(context, SPECIFICATION_TAG);
+    pushExactTag(
+      context,
+      SPECIFICATION_TAG,
+      releaseCommit,
+      materializedObject,
+    );
+    return withTemporaryDirectory(
+      "takoform-specification-publish",
+      (temporaryRoot) => {
+        const assets = specificationAssets(input, temporaryRoot);
+        const release = publishReleaseLocally(context, {
+          surface: SPECIFICATION_SURFACE,
+          tag: SPECIFICATION_TAG,
+          assets,
+          body: specificationReleaseBody(input),
+          temporaryRoot,
+          strictIdentity: true,
+          preMutationFence: (_stage, releaseId) =>
+            specificationMutationFence(context, {
+              input,
+              expectedObject: materializedObject,
+              currentCommit: releaseCommit,
+              releaseId,
+              label: "Specification publish mutation fence",
+            }),
+        });
+        assertExactSpecificationTag(context, input, materializedObject);
+        return emit(context, {
+          kind: "takos.deploy-result@v1",
+          surface: SPECIFICATION_SURFACE,
+          phase: "publish",
+          tag: SPECIFICATION_TAG,
+          sourceCommit: input.sourceCommit,
+          releaseCommit,
+          tagObject: materializedObject,
+          releaseId: release.id,
+          releaseUrl: release.html_url,
+          assetDigests: Object.fromEntries(
+            [...assets].map(([name, asset]) => [name, asset.sha256]),
+          ),
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          status: "PUBLISHED_AWAITING_C3_RECEIPT",
+        });
+      },
+    );
+  } catch (error) {
+    reportTagFailure(context, SPECIFICATION_TAG, materializedObject, {
+      surface: SPECIFICATION_SURFACE,
+      phase: "publish",
+    });
+    throw error;
+  }
+}
+
+function specificationRecoveryInput(context, options, label) {
+  const releaseCommit = options["expected-release-commit"];
+  const recoveryCommit = options["expected-recovery-commit"];
+  const current = assertCurrentProtectedMain(context, recoveryCommit);
+  assertSpecificationRecoveryFence(context, {
+    releaseCommit,
+    recoveryCommit: current,
+    label,
+  });
+  specificationReadiness(context);
+  const input = specificationPublicationInput(context, releaseCommit);
+  if (options["expected-tag-object"] !== input.tagObject) {
+    throw new Error(
+      "expected Specification tag object differs from deterministic C2 object",
+    );
+  }
+  assertExactSpecificationTag(
+    context,
+    input,
+    options["expected-tag-object"],
+  );
+  return { input, releaseCommit, recoveryCommit };
+}
+
+function specificationRecoverTagOnly(context, options) {
+  const { input, recoveryCommit } = specificationRecoveryInput(
+    context,
+    options,
+    "Specification tag-only recovery fence",
+  );
+  assertReleaseAbsent(context, SPECIFICATION_TAG);
+  return withTemporaryDirectory(
+    "takoform-specification-tag-only-recovery",
+    (temporaryRoot) => {
+      const assets = specificationAssets(input, temporaryRoot);
+      const release = publishReleaseLocally(context, {
+        surface: SPECIFICATION_SURFACE,
+        tag: SPECIFICATION_TAG,
+        assets,
+        body: specificationReleaseBody(input),
+        temporaryRoot,
+        strictIdentity: true,
+        preMutationFence: (_stage, releaseId) =>
+          specificationMutationFence(context, {
+            input,
+            expectedObject: options["expected-tag-object"],
+            currentCommit: recoveryCommit,
+            releaseId,
+            label: "Specification tag-only recovery mutation fence",
+          }),
+      });
+      assertExactSpecificationTag(
+        context,
+        input,
+        options["expected-tag-object"],
+      );
+      return emit(context, {
+        kind: "takos.deploy-result@v1",
+        surface: SPECIFICATION_SURFACE,
+        phase: "recover-tag-only",
+        tag: SPECIFICATION_TAG,
+        sourceCommit: input.sourceCommit,
+        releaseCommit: input.releaseCommit,
+        recoveryCommit,
+        tagObject: options["expected-tag-object"],
+        recoveredFrom: "EXACT_ANNOTATED_TAG_PRESENT_RELEASE_ABSENT",
+        releaseId: release.id,
+        releaseUrl: release.html_url,
+        productionReadback: "EXACT_IMMUTABLE_RELEASE",
+        status: "PUBLISHED_AWAITING_C3_RECEIPT",
+      });
+    },
+  );
+}
+
+function specificationRecoverDraft(context, options) {
+  const { input, recoveryCommit } = specificationRecoveryInput(
+    context,
+    options,
+    "Specification retained-draft recovery fence",
+  );
+  const releaseId = Number(options["release-id"]);
+  return withTemporaryDirectory(
+    "takoform-specification-draft-recovery",
+    (temporaryRoot) => {
+      const assets = specificationAssets(input, temporaryRoot);
+      const release = resumeDraftReleaseLocally(context, {
+        releaseId,
+        surface: SPECIFICATION_SURFACE,
+        tag: SPECIFICATION_TAG,
+        assets,
+        body: specificationReleaseBody(input),
+        temporaryRoot,
+        preMutationFence: (_stage, retainedReleaseId) =>
+          specificationMutationFence(context, {
+            input,
+            expectedObject: options["expected-tag-object"],
+            currentCommit: recoveryCommit,
+            releaseId: retainedReleaseId,
+            label: "Specification retained-draft recovery mutation fence",
+          }),
+      });
+      assertExactSpecificationTag(
+        context,
+        input,
+        options["expected-tag-object"],
+      );
+      return emit(context, {
+        kind: "takos.deploy-result@v1",
+        surface: SPECIFICATION_SURFACE,
+        phase: "recover-draft",
+        tag: SPECIFICATION_TAG,
+        sourceCommit: input.sourceCommit,
+        releaseCommit: input.releaseCommit,
+        recoveryCommit,
+        tagObject: options["expected-tag-object"],
+        recoveredFrom: "EXACT_RETAINED_DRAFT",
+        releaseId: release.id,
+        releaseUrl: release.html_url,
+        productionReadback: "EXACT_IMMUTABLE_RELEASE",
+        status: "PUBLISHED_AWAITING_C3_RECEIPT",
+      });
+    },
+  );
+}
+
+function specificationLiveReceipt(context, options, { exactMain }) {
+  const releaseCommit = options["expected-release-commit"];
+  const currentMain = assertCurrentProtectedMain(context, releaseCommit, {
+    exact: exactMain,
+  });
+  if (!exactMain) {
+    assertCommitAncestor(
+      context,
+      releaseCommit,
+      currentMain,
+      "Specification read-only verify release/current-main binding",
+    );
+  }
+  const input = specificationPublicationInput(context, releaseCommit);
+  if (input.tagObject !== options["expected-tag-object"]) {
+    throw new Error("live verify tag object differs from deterministic C2 object");
+  }
+  return withTemporaryDirectory(
+    "takoform-specification-live-verify",
+    (temporaryRoot) => {
+      const assets = specificationAssets(input, temporaryRoot);
+      const readback = readExactSpecificationRelease(context, {
+        input,
+        expectedObject: options["expected-tag-object"],
+        releaseId: Number(options["release-id"]),
+        assets,
+        temporaryRoot,
+      });
+      return { ...readback, input, assets, currentMain };
+    },
+  );
+}
+
+function specificationVerify(context, options) {
+  const verified = specificationLiveReceipt(context, options, {
+    exactMain: false,
+  });
+  return emit(context, {
+    kind: "takos.deploy-result@v1",
+    surface: SPECIFICATION_SURFACE,
+    phase: "verify",
+    tag: SPECIFICATION_TAG,
+    sourceCommit: verified.input.sourceCommit,
+    releaseCommit: verified.input.releaseCommit,
+    tagObject: options["expected-tag-object"],
+    releaseId: verified.release.id,
+    releaseUrl: verified.release.html_url,
+    assetDigests: Object.fromEntries(
+      [...verified.assets].map(([name, asset]) => [name, asset.sha256]),
+    ),
+    status: "VERIFIED",
+  });
+}
+
+function specificationRecordReceipt(context, options) {
+  specificationOwnerGateAndFence(
+    context,
+    options["expected-release-commit"],
+  );
+  const verified = specificationLiveReceipt(context, options, {
+    exactMain: true,
+  });
+  const ledger = appendReleaseReceipt(verified.receipt, context.repo);
+  return emit(context, {
+    kind: "takos.deploy-result@v1",
+    surface: SPECIFICATION_SURFACE,
+    phase: "record-receipt",
+    tag: SPECIFICATION_TAG,
+    sourceCommit: verified.input.sourceCommit,
+    releaseCommit: verified.input.releaseCommit,
+    tagObject: options["expected-tag-object"],
+    releaseId: verified.release.id,
+    releaseUrl: verified.release.html_url,
+    receiptCount: ledger.releases.length,
+    mutation: "C3_LEDGER_PROJECTIONS_ONLY",
+    status: "RECEIPT_WRITTEN_AWAITING_C3_COMMIT",
+  });
 }
 
 function command(
@@ -569,6 +1334,28 @@ function ownerGateAndFence(context, expectedCommit, options) {
   verifyLocalReleaseToolchain(context);
   runOwnerCheck(context);
   return assertCurrentProtectedMain(context, expectedCommit, options);
+}
+
+function specificationOwnerGateAndFence(context, expectedCommit, options) {
+  verifySpecificationReleaseToolchain(context);
+  runOwnerCheck(context);
+  const current = assertCurrentProtectedMain(context, expectedCommit, options);
+  // GitHub only makes releases immutable when the repository setting was
+  // enabled before publication. Recheck it at every Specification mutation
+  // fence so a tag or draft cannot be created under mutable-release policy.
+  assertReleaseImmutabilityEnabled(context);
+  return current;
+}
+
+function verifySpecificationReleaseToolchain(context) {
+  if (context.specificationReleaseToolchainVerified) return;
+  const ghVersion = command(context, "gh", ["--version"]);
+  if (!ghVersion.startsWith(`gh version ${PINNED_GH_VERSION} `)) {
+    throw new Error(
+      `Specification release toolchain drift: require gh ${PINNED_GH_VERSION}`,
+    );
+  }
+  context.specificationReleaseToolchainVerified = true;
 }
 
 function verifyLocalReleaseToolchain(context) {
@@ -2356,6 +3143,7 @@ function resumeDraftReleaseLocally(
     prerelease = false,
     temporaryRoot,
     surface = FORM_SURFACE,
+    preMutationFence = () => {},
     prePublishFence = () => {},
   },
 ) {
@@ -2378,6 +3166,7 @@ function resumeDraftReleaseLocally(
       `resume exact draft ${releaseId}: upload ${initial.missing.length} missing assets`,
     );
     for (const asset of initial.missing) {
+      preMutationFence("upload-asset", releaseId);
       const uploaded = JSON.parse(
         command(
           context,
@@ -2417,6 +3206,7 @@ function resumeDraftReleaseLocally(
       requireComplete: true,
     });
     prePublishFence(releaseId);
+    preMutationFence("publish-draft", releaseId);
     readExactRetainedDraft(context, {
       releaseId,
       tag,
@@ -2512,11 +3302,13 @@ function publishReleaseLocally(
   context,
   {
     tag,
+    surface = tag.startsWith("v") ? PROVIDER_SURFACE : FORM_SURFACE,
     assets,
     body,
     prerelease = false,
     temporaryRoot,
     strictIdentity = false,
+    preMutationFence = () => {},
     prePublishFence = () => {},
   },
 ) {
@@ -2526,6 +3318,7 @@ function publishReleaseLocally(
   let draftCreationAttempted = false;
   try {
     progress(context, `create local-authority draft for ${tag}`);
+    preMutationFence("create-draft", null);
     draftCreationAttempted = true;
     const created = JSON.parse(
       command(context, "gh", [
@@ -2581,6 +3374,7 @@ function publishReleaseLocally(
     }
     progress(context, `upload ${orderedAssets.length} exact assets`);
     for (const asset of orderedAssets) {
+      preMutationFence("upload-asset", releaseId);
       const uploaded = JSON.parse(
         command(
           context,
@@ -2635,6 +3429,7 @@ function publishReleaseLocally(
       });
     }
     prePublishFence(releaseId);
+    preMutationFence("publish-draft", releaseId);
     if (strictIdentity) {
       readExactRetainedDraft(context, {
         releaseId,
@@ -2783,7 +3578,7 @@ function publishReleaseLocally(
     context.stderr.write(
       `${JSON.stringify({
         kind: "takos.deploy-failure@v1",
-        surface: tag.startsWith("v") ? PROVIDER_SURFACE : FORM_SURFACE,
+        surface,
         tag,
         releaseId,
         observedReleaseIDs,
@@ -2873,7 +3668,7 @@ function assertReleaseImmutabilityEnabled(context) {
     value.enabled !== true
   ) {
     throw new Error(
-      "provider recovery requires repository immutable releases to be enabled",
+      "release publication requires repository immutable releases to be enabled",
     );
   }
 }
@@ -4208,10 +5003,13 @@ function revocationVerify(context, options) {
 // authority while exercising the same mutation and verification code paths.
 export const releaseDeployTestHooks = Object.freeze({
   assertExactSignedProviderTag,
+  assertExactSpecificationTag,
   assertPinnedProviderGpgVerification,
   assertReleaseImmutabilityEnabled,
   assertFormReleaseAuthorityFence,
   assertProviderRecoveryFence,
+  assertSpecificationC2Fence,
+  assertSpecificationRecoveryFence,
   assertReleaseAbsent,
   assertRegistryVersionAbsent,
   command,
@@ -4230,8 +5028,11 @@ export const releaseDeployTestHooks = Object.freeze({
   pushExactTag,
   reportTagFailure,
   resumeDraftReleaseLocally,
+  materializeSpecificationTag,
   reconstructCandidateTagObject,
   requireSuccessfulRun,
+  specificationPublicationInput,
+  specificationReleaseBody,
   validateReleaseReadback,
   validateDraftBeforePublication,
   verifyChecksumClosure,

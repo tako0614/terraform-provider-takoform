@@ -3,20 +3,66 @@
 ## Specification release
 
 [`specification-releases.json`](specification-releases.json) is the append-only
-numbered Takoform Specification ledger. Its current 1.0 object is a candidate,
-not a completed release. A numbered entry may be recorded only after
+numbered Takoform Specification ledger. Its current 1.1 object is a candidate,
+not a completed release; 1.0 was never published, is withdrawn, and is never
+reused. A numbered entry may be recorded only after
 [`../spec/publication-evidence.json`](../spec/publication-evidence.json) closes
 one exact committed snapshot of the normative `spec/` tree. Candidate Forms,
 packages, reference conformance, and Provider behavior are independent evidence
-and do not block the numbered Specification.
+and do not block the numbered Specification. The separately generated
+compatibility report is not release evidence, an asset, or a prerequisite.
 
-Specification 1.0 defines Host API `forms.takoform.com/v1` but does not promote
-the 31 current Experimental `0.x` FormRefs, publish their packages, or advance
-the official Provider. Provider 3 is an independent non-normative sample;
+Specification 1.1 references the unchanged Host API v1 candidate
+`forms.takoform.com/v1` but does not publish or promote that separate protocol
+identity, promote the 31 current Experimental `0.x` FormRefs, publish their
+packages, or advance the official Provider. Provider 3 is an independent non-normative sample;
 Provider 2.1.1 and its Host v1beta1/15-Form identities remain immutable
 Registry history. `bun run check:specification-releases` validates the ledger,
-while `bun run check:specification-v1-release` intentionally fails until the
-committed evidence is complete.
+while `bun run check:specification-1-1-release` intentionally fails until the
+committed source evidence is complete.
+
+`specification-compatibility.json` is generated from the current committed
+source and owning ledgers. It contains exactly five compatibility classes and
+the four explicit statuses, including a raw-byte pin for the literal Host API
+v1 candidate. It distinguishes retained history, independent future identities,
+unpublished candidates, and withdrawn-retained lanes. It is compatibility
+evidence only, not a publication receipt or release asset; no `/v1.1` Host
+lane, v2 schema, tag, or receipt is minted.
+
+The W09 workflow keeps three commits distinct: C1 is the normative freeze and
+executable tooling with an evidence-empty record; C2 is the evidence-only
+source-snapshot change; and C3 is the authoritative append-only publication
+receipt. The compatibility report is checked separately and never enters C2 or
+C3.
+
+W09's current owner is the existing
+`https://github.com/tako0614/terraform-provider-takoform.git` repository. A
+future W10 Core owner may receive writer authority for later releases only; it
+must never reissue, rewrite, or retag Specification 1.1.
+
+The owner entrypoint exposes the complete create-only protocol. These commands
+run only from a clean, non-shallow, attached canonical `main`; every
+publication phase also proves that GitHub immutable releases are already
+enabled:
+
+```console
+# C1: side-effect-free owner preflight
+bun run deploy -- takoform-specification-release prepare --tag specification/1.1 --expected-commit <C1>
+
+# C2: write and commit only the source evidence plus its static/public mirrors
+bun scripts/publication-evidence.mjs --prepare-specification-1-1
+bun run deploy -- takoform-specification-release publish --tag specification/1.1 --expected-commit <C2>
+
+# Read-only authoritative verification, then C3 receipt projection writer
+bun run deploy -- takoform-specification-release verify --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --release-id <release-id>
+bun run deploy -- takoform-specification-release record-receipt --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --release-id <release-id>
+```
+
+If publication stops after the exact annotated tag, use `recover-tag-only` with
+the original C2, exact tag object and reviewed current commit. If it stops with
+the exact retained draft, use `recover-draft` with those values and the exact
+release id. Any other observed state halts for forward repair; no command
+deletes, overwrites or retags the identity.
 
 The exact current candidate is the versionless family set rooted at
 `edge.forms.takoform.com` and the other seven groups in the current-family
@@ -32,12 +78,14 @@ The provider-specific trust lane is pinned by the release trust profile
 (internal decision identifier D-08) in
 [`../spec/trust/`](../spec/trust/). Form Packages use a separate keyless trust
 lane and never reuse this provider GPG key; its pinned Sigstore trust root
-lives at [`trust/trusted-root.json`](trust/trusted-root.json). Since
-[decision 0041](../spec/decisions/0041-form-packages-publish-with-the-provider-release.md)
-Form Packages have no independent release cadence — they publish with the
-provider release that embeds them, when the publication blockers clear — and
-only the revocation delivery lane remains a standing workflow
-(`.github/workflows/form-package-revocation.yml`).
+lives at [`trust/trusted-root.json`](trust/trusted-root.json). The historical
+Provider-embedded package rule is retained in
+[decision 0041](../spec/decisions/0041-form-packages-publish-with-the-provider-release.md),
+but it is superseded for current releases. Form Package releases evolve
+independently from Provider releases. The current Form Package cadence is
+**Proposal** only: it is not a release prerequisite and does not couple future
+package publication to a Provider release. Only the revocation delivery lane
+remains a standing workflow (`.github/workflows/form-package-revocation.yml`).
 
 The repository can build deterministic, unsigned candidate evidence:
 

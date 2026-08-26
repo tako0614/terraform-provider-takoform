@@ -12,6 +12,7 @@ type SiteStatus = {
   providerTargetStatus: string;
   hostApiCurrent: string;
   hostApiMaturity: string;
+  hostApiPublicationStatus: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
   currentFamilyCount: number;
@@ -43,7 +44,8 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
         <strong>Specification candidate</strong>:
         Takoform Specification <code>{{ status.specificationVersion }}</code> は
         <code>{{ status.specificationReleaseStatus }}</code> です。Host API
-        <code>{{ hostApiVersion }}</code> は {{ hostApiMaturity }} contract ですが、
+        <code>{{ hostApiVersion }}</code> は {{ hostApiMaturity }} contract の
+        <code>{{ status.hostApiPublicationStatus }}</code> で、
         current corpus の {{ status.currentFamilyCount }} 個の versionless family /
         {{ status.currentFormCount }} 個の exact <code>0.x</code> Form は
         {{ formMaturity }} のままです。Specification release は Form を
@@ -65,7 +67,8 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
         <strong>Specification candidate</strong>: Takoform Specification
         <code>{{ status.specificationVersion }}</code> is
         <code>{{ status.specificationReleaseStatus }}</code>. Host API
-        <code>{{ hostApiVersion }}</code> is a {{ hostApiMaturity }} contract,
+        <code>{{ hostApiVersion }}</code> is a {{ hostApiMaturity }} contract and
+        remains <code>{{ status.hostApiPublicationStatus }}</code>,
         while the current corpus's {{ status.currentFamilyCount }} versionless
         families and {{ status.currentFormCount }} exact <code>0.x</code> Forms
         remain {{ formMaturity }}. Releasing the Specification does not promote

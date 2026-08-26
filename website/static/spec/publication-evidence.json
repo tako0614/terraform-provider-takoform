@@ -1,6 +1,6 @@
 {
   "format": "takoform.release-evidence@v3",
-  "policy": "Takoform has two independent release tracks. Normative Specification 1.0 closes on one exact committed snapshot of the normative spec tree. Candidate Forms, packages, Interfaces, Bindings, reference conformance, official Provider behavior, external Hosts, backends, production consumers, Takoserver, Takosumi, and operator signatures are implementation or adoption evidence; none is Specification release authority. The current 0.x FormRefs remain exact and Experimental, and releasing the Specification and Host API v1 does not relabel or promote them to Form 1.0.0. The official Terraform Provider 3.0 is an independent non-normative implementation milestone. Local origin/ref checks assume an already authenticated and freshly fetched canonical checkout; they prevent accidental repository substitution but are not remote provenance attestation.",
+  "policy": "Takoform has two independent release tracks. The first numbered normative release is Specification 1.1 and closes on one exact committed snapshot of the normative spec tree. Specification 1.0 was never published, is withdrawn, and may never be reused. Candidate Forms, packages, Interfaces, Bindings, reference conformance, official Provider behavior, external Hosts, backends, production consumers, Takoserver, Takosumi, and operator signatures are implementation or adoption evidence; none is Specification release authority. The current 0.x FormRefs remain exact and unpublished-candidate, and Specification 1.1 does not relabel or promote them to Form 1.0.0. The literal Host API v1 remains a separate unpublished candidate and is byte-pinned separately. The official Terraform Provider 3.0 is an independent non-normative compatibility baseline. Local origin/ref checks assume an already authenticated and freshly fetched canonical checkout; they prevent accidental repository substitution but are not remote provenance attestation.",
   "repositoryAuthority": {
     "format": "takoform.repository-authority@v2",
     "repository": "takoform",
@@ -37,7 +37,7 @@
   "releaseTracks": [
     {
       "id": "specification-v1",
-      "version": "1.0",
+      "version": "1.1",
       "authority": "specification",
       "normative": true,
       "prerequisites": [

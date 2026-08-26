@@ -170,6 +170,14 @@ published packages.
 
 ## Rotation and revocation
 
+Specification 1.1 treats official and external publishers equally at the
+Form/Package contract boundary. An operator explicitly chooses the trusted
+source, issuer, signature, and revocation policy; publisher branding is not a
+trust grant. Provenance is admission evidence and remains outside exact
+`FormRef` equality. Authored, verified, published, installed, supported,
+activated, provisioned, client-supported, and offered are independent
+lifecycle facts.
+
 Provider key rotation is additive: register and pin a new public key before a
 new version, retain old public keys for historical verification, and never
 replace old release bytes. A compromise disables the release Environment,
@@ -181,9 +189,10 @@ Form Package keyless identity rotation is a reviewed change to the pinned OIDC
 issuer/repository/protected-main workflow policy. An append-only revocation
 statement references an exact package digest. The signed subject is a
 cumulative checkpoint containing every statement from sequence 1 through its
-current sequence and the previous checkpoint digest. Security revocation blocks new
-create/update and activation, but referenced package bytes remain available for
-safe observe/delete or an explicit operator evacuation path. Deprecation is not
+current sequence and the previous checkpoint digest. Security revocation blocks
+new create, update, and activation, but referenced package bytes remain
+available for safe observe/delete or an explicit operator evacuation path.
+Deprecation is not
 security revocation, and neither state replaces package bytes in place.
 
 The delivery sources are `forms/revocations/<statementVersion>.json` and

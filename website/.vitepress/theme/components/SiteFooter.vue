@@ -12,6 +12,7 @@ type SiteStatus = {
   providerTargetStatus: string;
   hostApiCurrent: string;
   hostApiMaturity: string;
+  hostApiPublicationStatus: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
   currentFamilyCount: number;
@@ -41,7 +42,8 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
       <p v-if="lang === 'ja'">
         <strong>Specification candidate</strong>:
         {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
-        Host API {{ hostApiVersion }} ({{ hostApiMaturity }});
+        Host API {{ hostApiVersion }} ({{ hostApiMaturity }},
+        {{ status.hostApiPublicationStatus }});
         {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
         exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
         Form Package {{ status.formPackageApiCurrent }} is
@@ -50,7 +52,8 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
       <p v-else>
         <strong>Specification candidate</strong>:
         {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
-        Host API {{ hostApiVersion }} ({{ hostApiMaturity }});
+        Host API {{ hostApiVersion }} ({{ hostApiMaturity }},
+        {{ status.hostApiPublicationStatus }});
         {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
         exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
         Form Package {{ status.formPackageApiCurrent }} is

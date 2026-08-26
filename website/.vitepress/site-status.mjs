@@ -91,13 +91,14 @@ export const SITE_STATUS_FIELDS = [
   // understand the original v2 prefix keep receiving the same keys/order.
   "formMaturity",
   "formPackagePublicationStatus",
-  // Specification 1.0 and the complete current corpus are appended so the
+  // Specification 1.1 and the complete current corpus are appended so the
   // original Provider/Edge prefix remains tolerant-reader compatible.
   "specificationVersion",
   "specificationReleaseStatus",
   "currentFamilyIndex",
   "currentFamilyIndexDigest",
   "currentFamilyCount",
+  "hostApiPublicationStatus",
 ];
 
 // These names remain in the JSON document for tolerant, older readers. They
@@ -224,11 +225,11 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   const hostApiCurrent = specificationReleases.candidate?.hostApiLane;
   if (
     specificationReleases.kind !== "takoform.specification-releases@v1" ||
-    specificationVersion !== "1.0" ||
+    specificationVersion !== "1.1" ||
     !Array.isArray(specificationReleases.releases)
   ) {
     throw new Error(
-      `${SPECIFICATION_RELEASES}: expected the Specification 1.0 candidate and append-only releases`,
+      `${SPECIFICATION_RELEASES}: expected the Specification 1.1 candidate and append-only releases`,
     );
   }
   if (typeof hostApiCurrent !== "string" || hostApiCurrent === "") {
@@ -236,6 +237,12 @@ export function deriveSiteStatusFacts(repositoryRoot) {
       `${SPECIFICATION_RELEASES}: candidate.hostApiLane must be a non-empty string`,
     );
   }
+  if (specificationReleases.candidate?.hostApiEffect !== "none") {
+    throw new Error(
+      `${SPECIFICATION_RELEASES}: Specification 1.1 must not publish or promote the Host API lane`,
+    );
+  }
+  const hostApiPublicationStatus = "unpublished-candidate";
   const hostApiMaturityMatch = hostApiCurrent.match(/\/v\d+(alpha|beta)\d+$/);
   const hostApiMaturity = hostApiMaturityMatch?.[1] ??
     (/\/v\d+$/.test(hostApiCurrent) ? "stable" : null);
@@ -404,6 +411,7 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     currentFamilyIndex: CURRENT_FAMILY_INDEX,
     currentFamilyIndexDigest: `sha256:${createHash("sha256").update(currentFamilyIndexBytes).digest("hex")}`,
     currentFamilyCount: currentFamilyIndexDocument.families.length,
+    hostApiPublicationStatus,
   };
   return Object.fromEntries(
     SITE_STATUS_FIELDS.map((field) => [field, facts[field]]),

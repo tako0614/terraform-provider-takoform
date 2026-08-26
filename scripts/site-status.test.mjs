@@ -96,7 +96,8 @@ describe("the committed status document", () => {
     expect(document.formPackagePublicationStatus).toBe("unpublished");
     expect(document.hostApiMaturity).toBe("stable");
     expect(document.hostApiMaturity).not.toBe(document.formMaturity);
-    expect(document.specificationVersion).toBe("1.0");
+    expect(document.hostApiPublicationStatus).toBe("unpublished-candidate");
+    expect(document.specificationVersion).toBe("1.1");
     expect(document.specificationReleaseStatus).toBe("candidate-open");
     expect(document.currentFamilyIndex).toBe(CURRENT_FAMILY_INDEX);
     expect(document.currentFamilyCount).toBe(8);
@@ -119,6 +120,69 @@ describe("the committed status document", () => {
       "candidateSetDigest",
       "openPublicationBlockers",
     ]);
+  });
+
+  test("keeps current website navigation off withdrawn and candidate Provider labels", () => {
+    const config = readFileSync(
+      path.join(repositoryRoot, "website/.vitepress/config.mts"),
+      "utf8",
+    );
+    expect(config).toContain(
+      "Specification 1.1 candidate / separate Host API v1 candidate",
+    );
+    expect(config).toContain(
+      "Provider 3 typed reference (31 current Experimental Forms)",
+    );
+    expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
+    expect(config).not.toContain("Provider 3 candidate reference");
+  });
+
+  test("keeps every live status owner on the independent current identities", () => {
+    const security = readFileSync(
+      path.join(repositoryRoot, "SECURITY.md"),
+      "utf8",
+    );
+    expect(security).toContain(
+      "Provider `v3.0.0` is the current\nRegistry-published typed client",
+    );
+    expect(security).not.toContain(
+      "Provider `v2.1.1` is the current\npublished client",
+    );
+
+    const migration = readFileSync(
+      path.join(repositoryRoot, "release/migrations/v1-to-v2.md"),
+      "utf8",
+    );
+    expect(migration).toContain("Provider 3.0.0 is the\ncurrent published provider");
+    expect(migration).not.toContain(
+      "v2.1.1 is the Registry-published current provider",
+    );
+
+    for (const relativePath of [
+      "website/index.md",
+      "website/docs/index.md",
+      "website/ja/index.md",
+      "website/ja/docs/index.md",
+    ]) {
+      const page = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
+      expect(page).toContain("separate");
+      expect(page).toContain("unpublished");
+      expect(page).not.toContain("Specification 1.1 candidate / Host API v1");
+    }
+
+    const decision = readFileSync(
+      path.join(
+        repositoryRoot,
+        "spec/decisions/0057-specification-1-1-compatibility-and-independent-identities.md",
+      ),
+      "utf8",
+    );
+    expect(decision).toContain(
+      "every published Provider identity from 1.0.1 through\n3.0.0 remains `retained`",
+    );
+    expect(decision).not.toContain(
+      "withdrawn lanes and old Provider identities remain",
+    );
   });
 
   test("is byte-identical in the source and the published copy", () => {

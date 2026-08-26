@@ -14,7 +14,7 @@ hero:
       link: /ja/spec/
 ---
 
-## Specification 1.0 candidate / Host API v1
+## Specification 1.1 candidate / separate unpublished Host API v1 candidate
 
 Takoform は Experimental specification project です。provider の人間向け
 SemVer、ホスト protocol、Form の identity を別々の軸として示し、一つの version
@@ -22,15 +22,16 @@ SemVer、ホスト protocol、Form の identity を別々の軸として示し�
 
 | 軸                    | 現在の identity                        | 意味と利用可能性                                                                                                       |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.0 candidate**             | normative `spec/` tree の exact committed snapshot が1つ記録されるまで open。                                      |
-| Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の stable contract。                                        |
+| Specification         | **Takoform 1.1 candidate**             | first numbered release。normative `spec/` tree の exact committed snapshot が1つ記録されるまで open。1.0 は公開前に撤回され再利用しない。 |
+| Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の separate unpublished protocol candidate。                |
 | Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRefs。すべて Experimental のまま。                                                              |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |
 | Provider              | **3.0.0、Registry 公開済み**           | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。             |
 
 Specification release、Form maturity、Package publication、Provider release は
-独立しています。Specification 1.0 は current Form を `1.0.0` に昇格させず、
-Provider 3 は Specification を block できません。
+独立しています。Specification 1.1 は Host API v1 を publish / promote せず、
+current Form を `1.0.0` に昇格させず、`/v1.1` / v2 lane や package を mint
+せず、Provider 3 は Specification を block できません。
 
 ```hcl
 terraform {

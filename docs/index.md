@@ -1,11 +1,11 @@
 ---
 page_title: "Takoform provider"
-description: "Takoform Specification 1.0 candidate, current Form corpus, and retained Provider history"
+description: "Takoform Specification 1.1 candidate, current Form corpus, and retained Provider history"
 ---
 
 # Takoform provider
 
-Takoform Specification 1.0 is an open source candidate on Host API
+Takoform Specification 1.1 is an open source candidate on Host API
 `forms.takoform.com/v1`. Its exact current corpus has eight versionless
 families and 31 Experimental `0.x` Forms, using package envelope
 `packages.forms.takoform.com/v1alpha5`. A Specification release does not
@@ -21,7 +21,7 @@ state does.
 
 Provider `v3.0.0` is the current Registry-published implementation of all 31
 current Experimental Forms. It is independent and non-normative, so it cannot
-block or release Specification 1.0. Provider `v2.1.1` remains immutable
+block or release Specification 1.1. Provider `v2.1.1` remains immutable
 Registry history for the exact `v1beta1` identities it shipped. Using either
 requires a compatible host; Provider publication does not assert a hosted
 service's live availability.

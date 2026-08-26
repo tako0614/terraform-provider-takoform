@@ -1,9 +1,10 @@
 # Takoform neutral Core and compiled Snapshot
 
-This document is normative source for the next compatible Takoform
-Specification minor. It defines the family-neutral compiler boundary; it does
-not publish a Core SDK, assign a Go module path, release a Form Package, select
-a publisher, or mint a Host API lane.
+This document is normative source for Specification 1.1. It defines the
+family-neutral compiler boundary; it does not publish a Core SDK, release a
+Form Package, select a publisher, or mint a Host API lane. The future public Go
+module is `github.com/tako0614/takoform`; no SDK or CLI publication from that
+coordinate is prepared in C1.
 
 ## Purpose
 
@@ -151,7 +152,8 @@ another FormRef.
 - A Terraform Provider consumes a Snapshot plus a Provider-owned projection
   that names resource types, schemas, state versions, imports, codecs, and
   every readable historical FormRef. A new package never changes a running
-  Provider's schema dynamically.
+  Provider's schema dynamically. Provider 3 remains typed and MUST NOT add an
+  opaque generic JSON resource as a substitute for a compiled projection.
 - A conformance runner consumes the same Snapshot plus explicitly selected
   generic, family, Interface/Binding, and composition corpora. Family semantics
   stay outside generic Core.
@@ -159,7 +161,9 @@ another FormRef.
   decides implementation support and activation and owns all Resources.
 
 Official Forms and external Forms use the same compile path. An official
-namespace is a publisher-policy fact, not a Core enum or import.
+namespace is a publisher-policy fact, not a Core enum or import. An external
+author follows the same public path and imports no internal Provider or
+repository package.
 
 ## Compatibility and release boundary
 

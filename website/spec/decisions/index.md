@@ -54,3 +54,4 @@ record does not replace them.
 - [0054 — Standard-service identifiers are open and integrations are Host-owned](0054-standard-service-identifiers-are-open-and-host-integrated.md)
 - [0055 — Specification release needs only the normative source](0055-specification-release-needs-only-normative-source.md)
 - [0056 — Core compiles artifacts into an immutable Snapshot](0056-core-compiles-artifacts-into-an-immutable-snapshot.md)
+- [0057 — Specification 1.1 freezes compatibility and independent identities](0057-specification-1-1-compatibility-and-independent-identities.md)

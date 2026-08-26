@@ -23,6 +23,11 @@ import {
   releaseDeployTestHooks,
   runReleaseSurface,
 } from "./release-deploy.mjs";
+import {
+  EXPECTED_CANDIDATE,
+  EXPECTED_RESERVED,
+  LEDGER_KIND as SPECIFICATION_LEDGER_KIND,
+} from "./specification-release.mjs";
 
 const repositoryRoot = resolve(import.meta.dir, "..");
 const commit = "0123456789abcdef0123456789abcdef01234567";
@@ -306,6 +311,7 @@ describe("release surface contract and strict parsing", () => {
     expect(RELEASE_SURFACES.map((surface) => surface.surface)).toEqual([
       "takoform-provider-release",
       "takoform-form-package-release",
+      "takoform-specification-release",
     ]);
     for (const surface of RELEASE_SURFACES) {
       expect(surface.requiresScripts).toContain("check");
@@ -327,6 +333,23 @@ describe("release surface contract and strict parsing", () => {
         ].sort(),
       );
     }
+    const specification = RELEASE_SURFACES.find(
+      (surface) => surface.surface === "takoform-specification-release",
+    );
+    expect(specification.covers).toEqual([
+      "spec",
+      "release/specification-releases.json",
+      "spec/publication-evidence.json",
+      "scripts/specification-release.mjs",
+    ]);
+    expect(specification.requiresScripts).toEqual([
+      "check",
+      "check:specification-releases",
+      "check:specification-1-1-release",
+    ]);
+    expect(specification.obligations.provenance).toContain(
+      "separately checked W09 report and is not release authority",
+    );
   });
 
   test("accepts only exact phase options and canonical values", () => {
@@ -418,6 +441,78 @@ describe("release surface contract and strict parsing", () => {
         commit,
       ]).phase,
     ).toBe("verify-revocation");
+    expect(
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "prepare",
+        "--tag",
+        "specification/1.1",
+        "--expected-commit",
+        commit,
+      ]),
+    ).toEqual({
+      phase: "prepare",
+      tag: "specification/1.1",
+      "expected-commit": commit,
+    });
+    expect(() =>
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "publish",
+        "--tag",
+        "specification/v1.1",
+        "--expected-commit",
+        commit,
+      ]),
+    ).toThrow();
+    expect(
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "recover-tag-only",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--expected-recovery-commit",
+        "b".repeat(40),
+      ]),
+    ).toEqual({
+      phase: "recover-tag-only",
+      tag: "specification/1.1",
+      "expected-release-commit": commit,
+      "expected-tag-object": "a".repeat(40),
+      "expected-recovery-commit": "b".repeat(40),
+    });
+    expect(
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "recover-draft",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--expected-recovery-commit",
+        "b".repeat(40),
+        "--release-id",
+        "41",
+      ])["release-id"],
+    ).toBe("41");
+    for (const phase of ["verify", "record-receipt"]) {
+      expect(
+        parseReleaseSurfaceArgs("takoform-specification-release", [
+          phase,
+          "--tag",
+          "specification/1.1",
+          "--expected-release-commit",
+          commit,
+          "--expected-tag-object",
+          "a".repeat(40),
+          "--release-id",
+          "41",
+        ]).phase,
+      ).toBe(phase);
+    }
+
     for (const withdrawn of [
       "plan",
       "prepare",
@@ -530,6 +625,96 @@ describe("release surface contract and strict parsing", () => {
         ]),
       ).toThrow();
     }
+  });
+
+  test("Specification prepare is create-only, fail-closed, and does not mutate", () => {
+    const specificationCalls = [];
+    const specificationIO = memoryIO();
+    const specificationFake = (executable, args) => {
+      specificationCalls.push({ executable, args });
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (test)\n";
+      }
+      if (
+        executable === "gh" &&
+        args.join(" ") ===
+          "api repos/tako0614/terraform-provider-takoform/immutable-releases"
+      ) {
+        return JSON.stringify({ enabled: true });
+      }
+      if (executable === "git" && args[0] === "status") return "";
+      if (
+        executable === "git" &&
+        args.join(" ") === "rev-parse --is-shallow-repository"
+      ) {
+        return "false\n";
+      }
+      if (executable === "git" && args.join(" ") === "remote get-url origin") {
+        return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+      }
+      if (executable === "git" && args[0] === "symbolic-ref") return "main\n";
+      if (executable === "git" && args[0] === "fetch") return "";
+      if (executable === "git" && args[0] === "rev-parse") return `${commit}\n`;
+      if (executable === "git" && args[0] === "cat-file") return "";
+      if (executable === "git" && args[0] === "for-each-ref") return "";
+      if (executable === "git" && args[0] === "ls-remote") return "";
+      if (executable === "gh" && isReleaseList(args)) return "[[]]";
+      if (executable === "bun") return "";
+      throw new Error(`unexpected Specification preflight command: ${executable} ${args.join(" ")}`);
+    };
+    const prepared = runReleaseSurface({
+      surface: "takoform-specification-release",
+      args: [
+        "prepare",
+        "--tag",
+        "specification/1.1",
+        "--expected-commit",
+        commit,
+      ],
+      repo: repositoryRoot,
+      stdout: specificationIO.stdout,
+      stderr: specificationIO.stderr,
+      execFile: specificationFake,
+      uuidFactory: () => requestId,
+      wait: () => {},
+    });
+    expect(prepared).toMatchObject({
+      surface: "takoform-specification-release",
+      phase: "prepare",
+      tag: "specification/1.1",
+      commit,
+      status: "AWAITING_REVIEW",
+      mutation: "none",
+      prerequisite: "specification-source-snapshot",
+    });
+    expect(specificationIO.output).toContain('"mutation": "none"');
+    expect(
+      specificationCalls.some(
+        ({ executable, args }) =>
+          executable === "git" && (args[0] === "push" || args[0] === "tag"),
+      ),
+    ).toBe(false);
+    expect(
+      specificationCalls.some(
+        ({ executable, args }) =>
+          executable === "gh" &&
+          args.join(" ") ===
+            "api repos/tako0614/terraform-provider-takoform/immutable-releases",
+      ),
+    ).toBe(true);
+    expect(
+      specificationCalls.some(
+        ({ executable, args }) =>
+          executable === "gh" &&
+          args[0] === "api" &&
+          (args.includes("POST") || args.includes("PATCH")),
+      ),
+    ).toBe(false);
+    expect(
+      specificationCalls.some(
+        ({ executable }) => executable === "cosign",
+      ),
+    ).toBe(false);
   });
 
   test("checksum closure rejects traversal, duplicates, extras, and drift", () => {
@@ -688,6 +873,509 @@ describe("release surface contract and strict parsing", () => {
         { profile: "unknown" },
       ),
     ).toThrow("unsupported metadata profile");
+  });
+});
+
+describe("Specification 1.1 deterministic C2 publication inputs", () => {
+  function createC2() {
+    const root = temporaryDirectory("specification-c2");
+    const runGit = (...args) =>
+      execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+    runGit("init", "-b", "main");
+    runGit("config", "user.name", "Takoform release test");
+    runGit("config", "user.email", "release-test@example.invalid");
+    mkdirSync(join(root, "spec"), { recursive: true });
+    mkdirSync(join(root, "release"), { recursive: true });
+    mkdirSync(join(root, "website", "static", "spec"), { recursive: true });
+    mkdirSync(join(root, "website", "static", "release"), { recursive: true });
+    mkdirSync(join(root, "website", "public", "release"), { recursive: true });
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    const c1Evidence = {
+      evidence: {
+        specification: {
+          sourceSnapshot: null,
+          candidateCorpus: null,
+          referenceConformance: null,
+        },
+      },
+    };
+    writeFileSync(
+      join(root, "spec", "publication-evidence.json"),
+      `${JSON.stringify(c1Evidence, null, 2)}\n`,
+    );
+    const ledgerRaw = `${JSON.stringify(
+      {
+        kind: SPECIFICATION_LEDGER_KIND,
+        policy: "Specification 1.0 is withdrawn; 1.1 is create-only.",
+        reserved: structuredClone(EXPECTED_RESERVED),
+        candidate: structuredClone(EXPECTED_CANDIDATE),
+        releases: [],
+      },
+      null,
+      2,
+    )}\n`;
+    for (const relativePath of [
+      ["release", "specification-releases.json"],
+      ["website", "static", "release", "specification-releases.json"],
+      ["website", "public", "release", "specification-releases.json"],
+    ]) {
+      writeFileSync(join(root, ...relativePath), ledgerRaw);
+    }
+    writeFileSync(join(root, "scripts", "release-deploy.mjs"), "C1\n");
+    runGit("add", ".");
+    runGit("commit", "-m", "Specification C1");
+    const sourceCommit = runGit("rev-parse", "HEAD");
+    const c2Evidence = structuredClone(c1Evidence);
+    c2Evidence.evidence.specification.sourceSnapshot = {
+      format: "takoform.specification-source-snapshot@v2",
+      releaseVersion: "1.1",
+      repository: "takoform",
+      sourceCommit,
+      roots: ["spec"],
+      excludedPaths: [
+        "spec/publication-evidence.json",
+        "spec/publication-blockers.json",
+      ],
+      fileCount: 1,
+      pathSetSha256: `sha256:${"a".repeat(64)}`,
+      documentSetSha256: `sha256:${"b".repeat(64)}`,
+    };
+    const c2Raw = `${JSON.stringify(c2Evidence, null, 2)}\n`;
+    writeFileSync(join(root, "spec", "publication-evidence.json"), c2Raw);
+    writeFileSync(
+      join(root, "website", "static", "spec", "publication-evidence.json"),
+      c2Raw,
+    );
+    runGit("add", ".");
+    runGit("commit", "-m", "Specification C2 evidence only");
+    return {
+      root,
+      runGit,
+      sourceCommit,
+      releaseCommit: runGit("rev-parse", "HEAD"),
+    };
+  }
+
+  test("generates and zero-OID materializes one exact source-only annotated tag", () => {
+    const fixture = createC2();
+    const execution = context(execFileSync, { repo: fixture.root });
+    const first = releaseDeployTestHooks.specificationPublicationInput(
+      execution,
+      fixture.releaseCommit,
+    );
+    const second = releaseDeployTestHooks.specificationPublicationInput(
+      execution,
+      fixture.releaseCommit,
+    );
+    expect(second.tagObject).toBe(first.tagObject);
+    expect(second.tagObjectBytes).toEqual(first.tagObjectBytes);
+    expect(first.sourceCommit).toBe(fixture.sourceCommit);
+    expect(first.tagObjectBytes.toString("utf8")).toContain(
+      `release-commit: ${fixture.releaseCommit}`,
+    );
+    expect(first.tagObjectBytes.toString("utf8")).not.toContain(
+      "compatibility",
+    );
+    expect(
+      releaseDeployTestHooks.materializeSpecificationTag(execution, first),
+    ).toBe(first.tagObject);
+    expect(
+      fixture.runGit(
+        "rev-parse",
+        "refs/tags/specification/1.1^{commit}",
+      ),
+    ).toBe(fixture.releaseCommit);
+    expect(() =>
+      releaseDeployTestHooks.materializeSpecificationTag(execution, first),
+    ).toThrow("use exact recovery");
+  });
+
+  test("rejects normative/tooling drift in C2 and fences reviewed recovery commits", () => {
+    const fixture = createC2();
+    const execution = context(execFileSync, { repo: fixture.root });
+    expect(
+      releaseDeployTestHooks.assertSpecificationC2Fence(
+        execution,
+        fixture.sourceCommit,
+        fixture.releaseCommit,
+      ),
+    ).toEqual([
+      "spec/publication-evidence.json",
+      "website/static/spec/publication-evidence.json",
+    ]);
+
+    writeFileSync(join(fixture.root, "scripts", "release-deploy.mjs"), "F\n");
+    fixture.runGit("add", ".");
+    fixture.runGit("commit", "-m", "reviewed recovery F");
+    const recoveryCommit = fixture.runGit("rev-parse", "HEAD");
+    expect(
+      releaseDeployTestHooks.assertSpecificationRecoveryFence(execution, {
+        releaseCommit: fixture.releaseCommit,
+        recoveryCommit,
+        label: "Specification recovery test",
+      }),
+    ).toEqual(["scripts/release-deploy.mjs"]);
+
+    writeFileSync(join(fixture.root, "spec", "normative.md"), "drift\n");
+    fixture.runGit("add", ".");
+    fixture.runGit("commit", "-m", "forbidden normative drift");
+    expect(() =>
+      releaseDeployTestHooks.assertSpecificationRecoveryFence(execution, {
+        releaseCommit: fixture.releaseCommit,
+        recoveryCommit: fixture.runGit("rev-parse", "HEAD"),
+        label: "Specification recovery test",
+      }),
+    ).toThrow("exact reviewed Specification recovery");
+  });
+
+  test("publishes the exact C2 source asset through create-only tag and immutable readback", () => {
+    const fixture = createC2();
+    const bare = temporaryDirectory("specification-origin");
+    execFileSync("git", ["init", "--bare", "--initial-branch=main"], {
+      cwd: bare,
+    });
+    fixture.runGit("remote", "add", "origin", bare);
+    fixture.runGit("push", "origin", "main");
+
+    const calls = [];
+    let remoteTag = null;
+    let draft = null;
+    let uploadedPath = null;
+    let uploadedBytes = null;
+    let ownerChecks = 0;
+    const releaseId = 41;
+    const assetsURL =
+      `https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets`;
+    const uploadURL =
+      `https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets{?name,label}`;
+    const list = () =>
+      JSON.stringify([
+        draft === null
+          ? []
+          : [
+              {
+                id: releaseId,
+                tag_name: "specification/1.1",
+                draft: draft.draft,
+              },
+            ],
+      ]);
+    const fake = (executable, args, options = {}) => {
+      calls.push({ executable, args: [...args] });
+      if (executable === "bun") {
+        if (args.join(" ") === "run check:release-owner-gate") ownerChecks += 1;
+        return "";
+      }
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (test)\n";
+      }
+      if (
+        executable === "gh" &&
+        args.join(" ") ===
+          "api repos/tako0614/terraform-provider-takoform/immutable-releases"
+      ) {
+        return JSON.stringify({ enabled: true });
+      }
+      if (executable === "git") {
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "ls-remote" && args.includes("--tags")) {
+          return remoteTag === null
+            ? ""
+            : `${remoteTag.object}\trefs/tags/specification/1.1\n${remoteTag.commit}\trefs/tags/specification/1.1^{}\n`;
+        }
+        if (args[0] === "push") {
+          const object = fixture.runGit(
+            "rev-parse",
+            "refs/tags/specification/1.1",
+          );
+          remoteTag = { object, commit: fixture.releaseCommit };
+          return "";
+        }
+        return execFileSync("git", args, {
+          ...options,
+          cwd: fixture.root,
+        });
+      }
+      if (executable !== "gh") {
+        throw new Error(`unexpected executable ${executable}`);
+      }
+      if (isReleaseList(args)) return list();
+      if (
+        args[0] === "api" &&
+        args.includes("--method") &&
+        args[args.indexOf("--method") + 1] === "POST" &&
+        args[3] === "repos/tako0614/terraform-provider-takoform/releases"
+      ) {
+        const value = (prefix) =>
+          args.find((entry) => entry.startsWith(prefix)).slice(prefix.length);
+        draft = {
+          id: releaseId,
+          tag_name: value("tag_name="),
+          target_commitish: "main",
+          name: value("name="),
+          body: value("body="),
+          draft: true,
+          prerelease: false,
+          immutable: false,
+          published_at: null,
+          assets_url: assetsURL,
+          upload_url: uploadURL,
+          html_url:
+            "https://github.com/tako0614/terraform-provider-takoform/releases/tag/specification/1.1",
+          assets: [],
+        };
+        return JSON.stringify(draft);
+      }
+      if (
+        args[0] === "api" &&
+        args.includes("--method") &&
+        args[args.indexOf("--method") + 1] === "POST" &&
+        args[3].startsWith("https://uploads.github.com/")
+      ) {
+        uploadedPath = args[args.indexOf("--input") + 1];
+        uploadedBytes = readFileSync(uploadedPath);
+        const name = decodeURIComponent(/\?name=(.+)$/u.exec(args[3])[1]);
+        const asset = {
+          id: 71,
+          name,
+          state: "uploaded",
+          digest: sha256(uploadedBytes),
+          size: uploadedBytes.length,
+        };
+        draft.assets.push(asset);
+        return JSON.stringify(asset);
+      }
+      if (
+        args[0] === "api" &&
+        args.includes("--method") &&
+        args[args.indexOf("--method") + 1] === "PATCH"
+      ) {
+        draft.draft = false;
+        return JSON.stringify(draft);
+      }
+      if (
+        args[0] === "api" &&
+        args[1] ===
+          "repos/tako0614/terraform-provider-takoform/releases/41"
+      ) {
+        return JSON.stringify(draft);
+      }
+      if (
+        args[0] === "api" &&
+        args[1] ===
+          "repos/tako0614/terraform-provider-takoform/releases/tags/specification%2F1.1"
+      ) {
+        return JSON.stringify({ ...draft, immutable: !draft.draft });
+      }
+      if (args[0] === "release" && args[1] === "download") {
+        const destination = args[args.indexOf("--dir") + 1];
+        mkdirSync(destination, { recursive: true });
+        writeFileSync(
+          join(destination, "takoform-specification-1.1-source-snapshot.json"),
+          uploadedBytes,
+        );
+        return "";
+      }
+      throw new Error(`unexpected gh ${args.join(" ")}`);
+    };
+
+    const io = memoryIO();
+    const result = runReleaseSurface({
+      surface: "takoform-specification-release",
+      args: [
+        "publish",
+        "--tag",
+        "specification/1.1",
+        "--expected-commit",
+        fixture.releaseCommit,
+      ],
+      repo: fixture.root,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      wait: () => {},
+    });
+    expect(result).toMatchObject({
+      surface: "takoform-specification-release",
+      phase: "publish",
+      sourceCommit: fixture.sourceCommit,
+      releaseCommit: fixture.releaseCommit,
+      tag: "specification/1.1",
+      releaseId,
+      productionReadback: "EXACT_IMMUTABLE_RELEASE",
+      status: "PUBLISHED_AWAITING_C3_RECEIPT",
+    });
+    expect(result.assetDigests).toEqual({
+      "takoform-specification-1.1-source-snapshot.json": expect.stringMatching(
+        /^sha256:[0-9a-f]{64}$/,
+      ),
+    });
+    expect(
+      calls.some(
+        ({ executable, args }) =>
+          executable === "gh" &&
+          args.join(" ") ===
+            "api repos/tako0614/terraform-provider-takoform/immutable-releases",
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("compatibility");
+    expect(ownerChecks).toBeGreaterThanOrEqual(5);
+    expect(
+      calls.filter(
+        ({ executable, args }) =>
+          executable === "gh" &&
+          args.includes("--method") &&
+          ["POST", "PATCH"].includes(args[args.indexOf("--method") + 1]),
+      ).length,
+    ).toBe(3);
+    expect(io.errors).toBe("");
+
+    // Exercise both explicit recovery entrypoints against their exact
+    // authoritative partial states. The fake remote is reset directly; the
+    // production code itself never issues DELETE or rewrites the tag.
+    draft = null;
+    const recoveredTagOnly = runReleaseSurface({
+      surface: "takoform-specification-release",
+      args: [
+        "recover-tag-only",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        fixture.releaseCommit,
+        "--expected-tag-object",
+        result.tagObject,
+        "--expected-recovery-commit",
+        fixture.releaseCommit,
+      ],
+      repo: fixture.root,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      wait: () => {},
+    });
+    expect(recoveredTagOnly).toMatchObject({
+      phase: "recover-tag-only",
+      recoveredFrom: "EXACT_ANNOTATED_TAG_PRESENT_RELEASE_ABSENT",
+      status: "PUBLISHED_AWAITING_C3_RECEIPT",
+    });
+
+    draft.draft = true;
+    draft.immutable = false;
+    draft.published_at = null;
+    const recoveredDraft = runReleaseSurface({
+      surface: "takoform-specification-release",
+      args: [
+        "recover-draft",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        fixture.releaseCommit,
+        "--expected-tag-object",
+        result.tagObject,
+        "--expected-recovery-commit",
+        fixture.releaseCommit,
+        "--release-id",
+        String(releaseId),
+      ],
+      repo: fixture.root,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      wait: () => {},
+    });
+    expect(recoveredDraft).toMatchObject({
+      phase: "recover-draft",
+      recoveredFrom: "EXACT_RETAINED_DRAFT",
+      status: "PUBLISHED_AWAITING_C3_RECEIPT",
+    });
+    expect(
+      calls.some(
+        ({ executable, args }) =>
+          executable === "gh" &&
+          (args.includes("DELETE") || args.includes("--method=DELETE")),
+      ),
+    ).toBe(false);
+
+    const liveArgs = [
+      "--tag",
+      "specification/1.1",
+      "--expected-release-commit",
+      fixture.releaseCommit,
+      "--expected-tag-object",
+      result.tagObject,
+      "--release-id",
+      String(releaseId),
+    ];
+    const correctDigest = draft.assets[0].digest;
+    draft.assets[0].digest = `sha256:${"0".repeat(64)}`;
+    expect(() =>
+      runReleaseSurface({
+        surface: "takoform-specification-release",
+        args: ["verify", ...liveArgs],
+        repo: fixture.root,
+        stdout: io.stdout,
+        stderr: io.stderr,
+        execFile: fake,
+        wait: () => {},
+      }),
+    ).toThrow("published asset mismatch");
+    draft.assets[0].digest = correctDigest;
+
+    const verified = runReleaseSurface({
+      surface: "takoform-specification-release",
+      args: ["verify", ...liveArgs],
+      repo: fixture.root,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      wait: () => {},
+    });
+    expect(verified.status).toBe("VERIFIED");
+    const recorded = runReleaseSurface({
+      surface: "takoform-specification-release",
+      args: ["record-receipt", ...liveArgs],
+      repo: fixture.root,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      wait: () => {},
+    });
+    expect(recorded).toMatchObject({
+      phase: "record-receipt",
+      receiptCount: 1,
+      mutation: "C3_LEDGER_PROJECTIONS_ONLY",
+      status: "RECEIPT_WRITTEN_AWAITING_C3_COMMIT",
+    });
+    const receiptLedger = JSON.parse(
+      readFileSync(
+        join(fixture.root, "release", "specification-releases.json"),
+        "utf8",
+      ),
+    );
+    expect(receiptLedger.releases[0]).toMatchObject({
+      sourceCommit: fixture.sourceCommit,
+      releaseCommit: fixture.releaseCommit,
+      tag: "specification/1.1",
+      tagObject: result.tagObject,
+      release: { id: releaseId, immutable: true },
+    });
+    expect(JSON.stringify(receiptLedger.releases[0])).not.toContain(
+      "compatibility",
+    );
+    expect(
+      fixture
+        .runGit("status", "--porcelain=v1")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => line.trim().split(/\s+/u).at(-1))
+        .sort(),
+    ).toEqual([
+      "release/specification-releases.json",
+      "website/public/release/specification-releases.json",
+      "website/static/release/specification-releases.json",
+    ]);
   });
 });
 
@@ -1782,8 +2470,10 @@ describe("local immutable GitHub Release publication", () => {
     expect(calls.some((args) => args[0] === "release")).toBe(false);
   });
 
-  test("lost POST response finds and retains the exact visible draft", () => {
+  test("lost POST response reports the explicit surface and retains the exact visible draft", () => {
     const fixture = assetFixture();
+    const tag = "specification/1.1";
+    const surface = "takoform-specification-release";
     let listCalls = 0;
     const calls = [];
     const execution = context((_executable, args) => {
@@ -1796,7 +2486,7 @@ describe("local immutable GitHub Release publication", () => {
               [
                 {
                   id: 7,
-                  tag_name: "v1.0.0",
+                  tag_name: tag,
                   draft: true,
                 },
               ],
@@ -1809,7 +2499,8 @@ describe("local immutable GitHub Release publication", () => {
     });
     expect(() =>
       releaseDeployTestHooks.publishReleaseLocally(execution, {
-        tag: "v1.0.0",
+        tag,
+        surface,
         assets: fixture.assets,
         body: "exact release",
         temporaryRoot: fixture.root,
@@ -1818,10 +2509,12 @@ describe("local immutable GitHub Release publication", () => {
     expect(listCalls).toBe(2);
     expect(calls.some((args) => args.includes("DELETE"))).toBe(false);
     expect(execution.io.errors).toContain("MATCHING_DRAFT_RETAINED");
+    expect(execution.io.errors).toContain(`"surface":"${surface}"`);
     expect(execution.io.errors).toContain('"observedReleaseIDs":[7]');
     expect(() =>
       releaseDeployTestHooks.publishReleaseLocally(execution, {
-        tag: "v1.0.0",
+        tag,
+        surface,
         assets: fixture.assets,
         body: "exact release",
         temporaryRoot: fixture.root,

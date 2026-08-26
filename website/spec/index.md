@@ -10,15 +10,24 @@ is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.0 open candidate; release authority is one exact committed snapshot of the normative `spec/` tree |
+| Specification | Takoform 1.1 open candidate; first numbered release; authority is one exact committed snapshot of the normative `spec/` tree (identity 1.0 was never published, is withdrawn, and may not be reused) |
 | Current Form corpus | `forms/candidates/current-family-index.json` (8 versionless families; 31 exact Experimental `0.x` Forms) |
-| Current Host API wire | `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` |
+| Host API candidate | `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` (separate and unpublished) |
 | Current package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
-| Provider distribution | Independent: **Provider 2.1.1** is retained Registry history; Provider 3 is a non-normative sample |
+| Provider distribution | Independent: **Provider 3.0.0** is the current Registry-published non-normative reference implementation; Provider 2.1.1 is retained history |
 
-Specification 1.0 does not relabel any current Form as `1.0.0`, publish a Form
-Package, or release Provider 3. External Hosts, products, deployments, signers,
-and operators are optional adoption evidence rather than release authority.
+Specification 1.1 does not publish or promote the separate Host API v1
+candidate, relabel any current Form as `1.0.0`, publish a Form Package, mint a
+`/v1.1` or v2 lane, or release Provider 3. External Hosts, products,
+deployments, signers, and operators are optional adoption evidence rather than
+release authority.
+
+The separately generated five-class compatibility report is compatibility
+evidence only. It is not part of the publication-evidence document, a release
+asset, or a prerequisite. W09 keeps C1 (normative freeze and executable
+tooling), C2 (evidence-only source snapshot), and C3 (authoritative append-only
+publication receipt) as distinct boundaries; W10 may write only future
+releases and may never reissue Specification 1.1.
 
 The pre-Beta epochs (`forms.takoform.com/v1alpha1` and `/v1alpha2`) were
 withdrawn ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));

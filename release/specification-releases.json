@@ -1,16 +1,25 @@
 {
   "kind": "takoform.specification-releases@v1",
-  "policy": "A numbered Specification release records one exact committed snapshot of the normative spec tree. Candidate Forms, packages, reference conformance, Provider behavior, and product adoption are independent evidence and do not block the Specification. A Specification release does not relabel any current 0.x FormRef, publish a Form Package, or advance the independent non-normative official Provider. Recorded releases are append-only.",
+  "policy": "The first numbered Specification release is 1.1. Specification 1.0 was never published, is withdrawn, and its identity may never be reused. A numbered release records only one exact committed snapshot of the normative spec tree; the separately generated compatibility report is not release evidence, an asset, or a prerequisite. Candidate Forms, packages, reference conformance, Provider behavior, Host adoption, and product adoption are independent evidence and do not block the Specification. Specification 1.1 does not publish or promote the separate Host API v1 candidate, mint a /v1.1 lane, relabel a current 0.x FormRef, publish a Form Package, or advance the independent Provider. Recorded releases are append-only; W10 may transfer only the future writer and must not reissue 1.1.",
+  "reserved": [
+    {
+      "version": "1.0",
+      "status": "withdrawn-retained",
+      "noReuse": true,
+      "reason": "reserved as a never-published Specification identity and withdrawn before publication"
+    }
+  ],
   "candidate": {
-    "version": "1.0",
-    "title": "Takoform Specification 1.0",
+    "version": "1.1",
+    "title": "Takoform Specification 1.1",
     "track": "specification-v1",
     "hostApiLane": "forms.takoform.com/v1",
     "prerequisites": [
       "specification-source-snapshot"
     ],
-    "formMaturityEffect": "none-current-formrefs-remain-exact",
-    "providerEffect": "independent-non-normative-sample"
+    "hostApiEffect": "none",
+    "formPublicationEffect": "none",
+    "providerEffect": "none"
   },
   "releases": []
 }
