@@ -582,10 +582,12 @@ describe("owner gate tool nomination", () => {
   test("detects copied bytes, Go bytes, and tool-bin closure changes after the gate", () => {
     for (const mutate of [
       ({ snapshot }) => {
+        chmodSync(snapshot.tools.tofu.path, 0o700);
         writeFileSync(snapshot.tools.tofu.path, "changed\n");
         chmodSync(snapshot.tools.tofu.path, 0o500);
       },
       ({ snapshot }) => {
+        chmodSync(snapshot.go.gofmt.path, 0o700);
         writeFileSync(snapshot.go.gofmt.path, "changed\n");
         chmodSync(snapshot.go.gofmt.path, 0o500);
       },
