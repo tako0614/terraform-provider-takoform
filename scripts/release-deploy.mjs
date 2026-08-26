@@ -1599,12 +1599,7 @@ function assertProviderRecoveryFence(
 }
 
 function isCanonicalOrigin(origin) {
-  return [
-    `https://github.com/${GITHUB_REPOSITORY}.git`,
-    `https://github.com/${GITHUB_REPOSITORY}`,
-    `git@github.com:${GITHUB_REPOSITORY}.git`,
-    `ssh://git@github.com/${GITHUB_REPOSITORY}.git`,
-  ].includes(origin);
+  return [SOURCE_REPOSITORY, SOURCE_REPOSITORY.slice(0, -4)].includes(origin);
 }
 
 function readJSON(path, label) {
@@ -5079,6 +5074,7 @@ export const releaseDeployTestHooks = Object.freeze({
   githubCommandEnvironment,
   githubUploadEnvironment,
   gitPushEnvironment,
+  isCanonicalOrigin,
   normalGitEnvironment,
   ownerGateAndFence,
   runOwnerCheck,
