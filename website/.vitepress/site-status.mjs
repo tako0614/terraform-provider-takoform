@@ -38,7 +38,12 @@
 // copy is frozen at one commit and has nothing newer to say.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 export const SITE_STATUS_ROUTE = "/.well-known/takoform-site.json";
@@ -443,9 +448,42 @@ function readCommitted(filePath) {
  * It returns the facts the footer renders, which are exactly the facts the
  * JSON document states.
  */
-export function prepareSiteStatus(siteDirectory) {
+export function prepareSiteStatus(siteDirectory, { write = true } = {}) {
+  if (typeof write !== "boolean") {
+    throw new TypeError("prepareSiteStatus write option must be a boolean");
+  }
+
   const statusPath = path.join(siteDirectory, SITE_STATUS_SITE_PATH);
   const repositoryRoot = findRepositoryRoot(siteDirectory);
+
+  if (!write) {
+    if (repositoryRoot === null) {
+      throw new Error(
+        `${SITE_STATUS_SITE_PATH} cannot be prepared read-only because no ` +
+          "repository root is reachable from this copy",
+      );
+    }
+
+    const facts = deriveSiteStatusFacts(repositoryRoot);
+    let committedBytes;
+    try {
+      committedBytes = readFileSync(statusPath);
+    } catch (error) {
+      throw new Error(
+        `${SITE_STATUS_REPOSITORY_PATH} is missing or unreadable in read-only ` +
+          `mode (${error.message})`,
+      );
+    }
+    const expectedBytes = Buffer.from(renderSiteStatusDocument(facts), "utf8");
+    if (!committedBytes.equals(expectedBytes)) {
+      throw new Error(
+        `${SITE_STATUS_REPOSITORY_PATH} is stale: committed bytes do not ` +
+          "match renderSiteStatusDocument(repository facts) in read-only mode; " +
+          "run bun run website:build",
+      );
+    }
+    return facts;
+  }
 
   if (repositoryRoot === null) {
     const committed = readCommitted(statusPath);

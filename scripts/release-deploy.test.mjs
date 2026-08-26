@@ -132,6 +132,7 @@ function context(execFile, overrides = {}) {
   const io = memoryIO();
   return {
     repo: repositoryRoot,
+    githubConfigDirectory: temporaryDirectory("release-gh-config"),
     stdout: io.stdout,
     stderr: io.stderr,
     execFile,
@@ -1476,14 +1477,66 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
 });
 
 describe("workflow dispatch authority and correlation", () => {
+  test("pins ordinary GitHub CLI authority to github.com and an isolated config", () => {
+    const names = [
+      "GH_CONFIG_DIR",
+      "GH_HOST",
+      "GH_REPO",
+      "GITHUB_API_URL",
+      "GITHUB_SERVER_URL",
+      "HTTPS_PROXY",
+      "NODE_OPTIONS",
+    ];
+    const previous = Object.fromEntries(
+      names.map((name) => [name, process.env[name]]),
+    );
+    process.env.GH_CONFIG_DIR = "/tmp/attacker-gh-config";
+    process.env.GH_HOST = "example.invalid";
+    process.env.GH_REPO = "attacker/repository";
+    process.env.GITHUB_API_URL = "https://example.invalid/api/v3";
+    process.env.GITHUB_SERVER_URL = "https://example.invalid";
+    process.env.HTTPS_PROXY = "https://example.invalid";
+    process.env.NODE_OPTIONS = "--require=/tmp/attacker.cjs";
+    try {
+      const execution = context(() => "");
+      const environment =
+        releaseDeployTestHooks.githubCommandEnvironment(execution);
+      expect(environment.GH_HOST).toBe("github.com");
+      expect(environment.GH_CONFIG_DIR).toBe(
+        execution.githubConfigDirectory,
+      );
+      expect(environment.GH_TOKEN).toBe("operator-only-test-token");
+      expect(environment.GH_PROMPT_DISABLED).toBe("1");
+      expect(environment.GH_NO_UPDATE_NOTIFIER).toBe("1");
+      expect(environment.GH_REPO).toBeUndefined();
+      expect(environment.GITHUB_API_URL).toBeUndefined();
+      expect(environment.GITHUB_SERVER_URL).toBeUndefined();
+      expect(environment.HTTPS_PROXY).toBeUndefined();
+      expect(environment.NODE_OPTIONS).toBeUndefined();
+      expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+      expect(environment.GIT_CONFIG_SYSTEM).toBe("/dev/null");
+    } finally {
+      for (const name of names) {
+        if (previous[name] === undefined) delete process.env[name];
+        else process.env[name] = previous[name];
+      }
+    }
+  });
+
   test("scopes upload authority to the absolute uploads host without argv exposure", () => {
     process.env.GH_ENTERPRISE_TOKEN = "ambient-enterprise-token";
     process.env.GITHUB_ENTERPRISE_TOKEN = "ambient-enterprise-token";
-    const environment = releaseDeployTestHooks.githubUploadEnvironment();
+    const execution = context(() => "");
+    const environment =
+      releaseDeployTestHooks.githubUploadEnvironment(execution);
     expect(environment.GH_TOKEN).toBeUndefined();
     expect(environment.GITHUB_TOKEN).toBeUndefined();
     expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
     expect(environment.GH_ENTERPRISE_TOKEN).toBe("operator-only-test-token");
+    expect(environment.GH_HOST).toBe("github.com");
+    expect(environment.GH_CONFIG_DIR).toBe(
+      execution.githubConfigDirectory,
+    );
   });
 
   test("scrubs authority from non-gh children and binds one UUID run", () => {
@@ -1645,14 +1698,85 @@ describe("owner gate final fence and pinned release tools", () => {
     return null;
   }
 
+  test("runs the complete owner gate with pinned Go and managed-home authority", () => {
+    const names = [
+      "BUN_CONFIG_FILE",
+      "CGO_CFLAGS",
+      "GH_HOST",
+      "GOENV",
+      "GOFLAGS",
+      "GOPROXY",
+      "GOTOOLCHAIN",
+      "GOWORK",
+      "HOME",
+      "NODE_OPTIONS",
+      "PATH",
+      "TMPDIR",
+    ];
+    const previous = Object.fromEntries(
+      names.map((name) => [name, process.env[name]]),
+    );
+    let environment;
+    const execution = context((executable, args, options) => {
+      expect(executable).toBe("bun");
+      expect(args).toEqual(["run", "check:release-owner-gate"]);
+      environment = options.env;
+      return "";
+    });
+    process.env.BUN_CONFIG_FILE = "/tmp/attacker-bun.toml";
+    process.env.CGO_CFLAGS = "-include /tmp/attacker.h";
+    process.env.GH_HOST = "example.invalid";
+    process.env.GOENV = "/tmp/attacker-goenv";
+    process.env.GOFLAGS = "-run=never";
+    process.env.GOPROXY = "https://example.invalid";
+    process.env.GOTOOLCHAIN = "path";
+    process.env.GOWORK = "/tmp/attacker.work";
+    process.env.HOME = "/tmp/attacker-home";
+    process.env.NODE_OPTIONS = "--require=/tmp/attacker.cjs";
+    process.env.PATH = "/tmp/attacker-bin:/usr/bin";
+    process.env.TMPDIR = "/tmp/attacker-tmp";
+    try {
+      releaseDeployTestHooks.runOwnerCheck(execution);
+      expect(environment.CGO_ENABLED).toBe("0");
+      expect(environment.GOENV).toBe("off");
+      expect(environment.GOFLAGS).toBe("-mod=readonly -buildvcs=false");
+      expect(environment.GOPROXY).toBe("https://proxy.golang.org");
+      expect(environment.GOTOOLCHAIN).toBe("local");
+      expect(environment.GOWORK).toBe("off");
+      expect(environment.HOME).not.toBe("/tmp/attacker-home");
+      expect(environment.HOME.startsWith("/")).toBe(true);
+      expect(environment.TMPDIR).toBe(join(environment.HOME, "tmp"));
+      expect(environment.TMP).toBe(environment.TMPDIR);
+      expect(environment.TEMP).toBe(environment.TMPDIR);
+      expect(environment.PATH).not.toContain("attacker-bin");
+      expect(environment.BUN_CONFIG_FILE).toBeUndefined();
+      expect(environment.CGO_CFLAGS).toBeUndefined();
+      expect(environment.GH_HOST).toBeUndefined();
+      expect(environment.GH_TOKEN).toBeUndefined();
+      expect(environment.NODE_OPTIONS).toBeUndefined();
+      expect(environment.GIT_NO_REPLACE_OBJECTS).toBe("1");
+      expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+    } finally {
+      for (const name of names) {
+        if (previous[name] === undefined) delete process.env[name];
+        else process.env[name] = previous[name];
+      }
+    }
+  });
+
   test("blocks mutation when origin/main advances after the owner check", () => {
     const calls = [];
     const advanced = "89abcdef0123456789abcdef0123456789abcdef";
+    let ownerChecks = 0;
+    let remoteMainReads = 0;
     const fake = (executable, args) => {
       calls.push({ executable, args: [...args] });
       const version = toolOutput(executable, args);
       if (version !== null) return version;
-      if (executable === "bun") return "";
+      if (executable === "bun") {
+        ownerChecks += 1;
+        return "";
+      }
       if (executable === "git") {
         if (args.join(" ") === "config --local -z --list") {
           return safeReleaseGitConfiguration();
@@ -1674,14 +1798,18 @@ describe("owner gate final fence and pinned release tools", () => {
         if (args[0] === "fetch") return "";
         if (args.join(" ") === "rev-parse HEAD") return `${commit}\n`;
         if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
-          return `${advanced}\n`;
+          remoteMainReads += 1;
+          return `${remoteMainReads === 1 ? commit : advanced}\n`;
         }
+        if (args[0] === "cat-file") return "";
       }
       throw new Error(`unexpected ${executable} ${args.join(" ")}`);
     };
     expect(() =>
       releaseDeployTestHooks.ownerGateAndFence(context(fake), commit),
     ).toThrow("is not fresh origin/main");
+    expect(ownerChecks).toBe(1);
+    expect(remoteMainReads).toBe(2);
     expect(
       calls.some(
         (call) =>

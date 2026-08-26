@@ -20,6 +20,7 @@ import process from "node:process";
 
 import {
   assertSafeRepositoryGitConfiguration,
+  createHardenedGateEnvironment,
   createHardenedGitEnvironment,
 } from "./deploy-safety.mjs";
 import {
@@ -383,23 +384,30 @@ export function runReleaseSurface({
       "release blocked: non-empty GH_TOKEN is required for local owner authority",
     );
   }
-  const context = {
-    repo: resolve(repo),
-    stdout,
-    stderr,
-    execFile,
-    uuidFactory,
-    now,
-    wait,
-  };
-  const options = parseReleaseSurfaceArgs(surface, args);
-  if (surface === PROVIDER_SURFACE) {
-    return runProvider(context, options);
-  }
-  if (surface === FORM_SURFACE) {
-    return runForm(context, options);
-  }
-  return runSpecification(context, options);
+  return withTemporaryDirectory(
+    "takoform-release-gh-config",
+    (githubConfigDirectory) => {
+      chmodSync(githubConfigDirectory, 0o700);
+      const context = {
+        repo: resolve(repo),
+        stdout,
+        stderr,
+        execFile,
+        uuidFactory,
+        now,
+        wait,
+        githubConfigDirectory: realpathSync(githubConfigDirectory),
+      };
+      const options = parseReleaseSurfaceArgs(surface, args);
+      if (surface === PROVIDER_SURFACE) {
+        return runProvider(context, options);
+      }
+      if (surface === FORM_SURFACE) {
+        return runForm(context, options);
+      }
+      return runSpecification(context, options);
+    },
+  );
 }
 
 function blockingWait(milliseconds) {
@@ -1137,7 +1145,7 @@ function command(
           : encoding,
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 128 * 1024 * 1024,
-      env: env ?? subprocessEnvironment(executable),
+      env: env ?? subprocessEnvironment(context, executable),
     });
     if (echo && output) context.stdout.write(output);
     return output;
@@ -1161,7 +1169,7 @@ function attemptCommand(context, executable, args, options = {}) {
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
         maxBuffer: 128 * 1024 * 1024,
-        env: options.env ?? subprocessEnvironment(executable),
+        env: options.env ?? subprocessEnvironment(context, executable),
       }),
       stderr: "",
       status: 0,
@@ -1179,17 +1187,46 @@ function attemptCommand(context, executable, args, options = {}) {
 
 function environmentWithoutGitHubAuthority() {
   const environment = { ...process.env };
-  delete environment.GH_TOKEN;
-  delete environment.GH_ENTERPRISE_TOKEN;
-  delete environment.GITHUB_TOKEN;
-  delete environment.GITHUB_ENTERPRISE_TOKEN;
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith("GH_") || name.startsWith("GITHUB_")) {
+      delete environment[name];
+    }
+  }
   return environment;
 }
 
-function subprocessEnvironment(executable) {
+function isolatedGitHubConfigDirectory(context) {
+  const directory = context?.githubConfigDirectory;
+  if (typeof directory !== "string" || !isAbsolute(directory)) {
+    throw new Error(
+      "release blocked: GitHub CLI requires an isolated absolute config directory",
+    );
+  }
+  const metadata = lstatSync(directory);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    throw new Error(
+      "release blocked: GitHub CLI config path must be a real directory",
+    );
+  }
+  return realpathSync(directory);
+}
+
+function githubCommandEnvironment(context) {
+  const environment = createHardenedGitEnvironment(
+    environmentWithoutGitHubAuthority(),
+  );
+  environment.GH_CONFIG_DIR = isolatedGitHubConfigDirectory(context);
+  environment.GH_HOST = "github.com";
+  environment.GH_NO_UPDATE_NOTIFIER = "1";
+  environment.GH_PROMPT_DISABLED = "1";
+  environment.GH_TOKEN = process.env.GH_TOKEN;
+  return environment;
+}
+
+function subprocessEnvironment(context, executable) {
   if (executable === "git") return normalGitEnvironment();
+  if (executable === "gh") return githubCommandEnvironment(context);
   const environment = environmentWithoutGitHubAuthority();
-  if (executable === "gh") environment.GH_TOKEN = process.env.GH_TOKEN;
   return environment;
 }
 
@@ -1203,10 +1240,9 @@ function normalGitEnvironment() {
   return environment;
 }
 
-function githubUploadEnvironment() {
-  const environment = environmentWithoutGitHubAuthority();
-  delete environment.GH_ENTERPRISE_TOKEN;
-  delete environment.GITHUB_ENTERPRISE_TOKEN;
+function githubUploadEnvironment(context) {
+  const environment = githubCommandEnvironment(context);
+  delete environment.GH_TOKEN;
   environment.GH_ENTERPRISE_TOKEN = process.env.GH_TOKEN;
   return environment;
 }
@@ -1299,11 +1335,23 @@ function runOwnerCheck(context) {
   // green after publication has already happened. Gating publication on it
   // would make the first release of any new Form version unreachable, so the
   // owner gate stops at publication authority and admission keeps its own gate.
-  progress(context, "bun run check:release-owner-gate");
-  command(context, "bun", ["run", "check:release-owner-gate"], {
-    echo: true,
-    env: normalGitEnvironment(),
-    label: "owner gate",
+  return withTemporaryDirectory("takoform-owner-gate", (managedHome) => {
+    const managedTemporaryDirectory = join(managedHome, "tmp");
+    mkdirSync(managedTemporaryDirectory, { recursive: true });
+    const environment = createHardenedGateEnvironment(
+      environmentWithoutGitHubAuthority(),
+      process.execPath,
+      managedHome,
+    );
+    environment.TEMP = managedTemporaryDirectory;
+    environment.TMP = managedTemporaryDirectory;
+    environment.TMPDIR = managedTemporaryDirectory;
+    progress(context, "bun run check:release-owner-gate");
+    return command(context, "bun", ["run", "check:release-owner-gate"], {
+      echo: true,
+      env: environment,
+      label: "owner gate",
+    });
   });
 }
 
@@ -2344,7 +2392,12 @@ function verifyCandidateRoot(
 }
 
 function withTemporaryDirectory(prefix, operation) {
-  const root = mkdtempSync(join(tmpdir(), `${prefix}-`));
+  const configuredRoot = process.platform === "win32" ? tmpdir() : "/tmp";
+  const trustedRoot = realpathSync(configuredRoot);
+  if (!lstatSync(trustedRoot).isDirectory()) {
+    throw new Error("release blocked: trusted temporary root is not a directory");
+  }
+  const root = mkdtempSync(join(trustedRoot, `${prefix}-`));
   try {
     return operation(root);
   } finally {
@@ -3189,7 +3242,7 @@ function resumeDraftReleaseLocally(
             "--input",
             asset.path,
           ],
-          { env: githubUploadEnvironment() },
+          { env: githubUploadEnvironment(context) },
         ),
       );
       if (
@@ -3397,7 +3450,7 @@ function publishReleaseLocally(
             "--input",
             asset.path,
           ],
-          { env: githubUploadEnvironment() },
+          { env: githubUploadEnvironment(context) },
         ),
       );
       if (
@@ -5023,10 +5076,12 @@ export const releaseDeployTestHooks = Object.freeze({
   command,
   dispatchWorkflow,
   expectedFormTagObject,
+  githubCommandEnvironment,
   githubUploadEnvironment,
   gitPushEnvironment,
   normalGitEnvironment,
   ownerGateAndFence,
+  runOwnerCheck,
   observeTagFailureState,
   parseCandidateMetadata,
   parseCanonicalCandidateMetadata,

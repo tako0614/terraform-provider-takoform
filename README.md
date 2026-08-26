@@ -57,11 +57,12 @@ asset, or a prerequisite. Specification 1.1 has no Host API, Form publication,
 or Provider effect; it does not mint a `/v1.1` lane, a v2 lane, schema, tag, or
 receipt. Identity `1.0` was never published, is withdrawn, and is never reused.
 
-The W09 release has three explicit boundaries: C1 freezes the normative tree
+The W09 release has four explicit boundaries: C1 freezes the normative tree
 and executable tooling while publication-evidence fields stay `null`; C2 is an
-evidence-only source-snapshot change; and C3 is the authoritative append-only
-publication receipt. The compatibility report is checked separately and is
-never a C2/C3 asset or prerequisite.
+evidence-only source-snapshot change; C3 is the authoritative append-only
+publication receipt; and C4 is its direct generated-output-only child that
+refreshes the released public state. The compatibility report is checked
+separately and is never a C2/C3 asset or prerequisite.
 
 W09's current owner is the existing
 `https://github.com/tako0614/terraform-provider-takoform.git` repository. A

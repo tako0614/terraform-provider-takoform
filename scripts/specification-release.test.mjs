@@ -330,6 +330,16 @@ function withTransitionFixture(options, assertion) {
 }
 
 describe("Specification 1.1 owner ledger", () => {
+  test("documents all four W09 commit boundaries at the root", () => {
+    const readme = readFileSync(path.join(ROOT, "README.md"), "utf8");
+    expect(readme).toContain("four explicit boundaries");
+    expect(readme).toContain("C1 freezes the normative tree");
+    expect(readme).toContain("C2 is an");
+    expect(readme).toContain("C3 is the authoritative append-only");
+    expect(readme).toContain("C4 is its direct generated-output-only child");
+    expect(readme).not.toContain("three explicit boundaries");
+  });
+
   test("keeps C1 open with withdrawn 1.0 and sourceSnapshot as the sole authority", () => {
     const ledger = c1Ledger();
     expect(validateLedger(ledger)).toEqual([]);
