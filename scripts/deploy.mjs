@@ -35,6 +35,7 @@ import {
   createCommittedSnapshot,
   createHardenedGateEnvironment,
   createHardenedGitEnvironment,
+  createManagedGateState,
   createPinnedWranglerInstallation,
   createPublicationManifest,
   createPublicationManifestFromEntries,
@@ -524,6 +525,7 @@ const ledgerObjectAt = (revision) => {
 };
 const snapshotGateHome = resolve(publicationRepo, "..", "snapshot-gate-home");
 mkdirSync(snapshotGateHome, { mode: 0o700 });
+createManagedGateState(snapshotGateHome);
 const snapshotGateEnvironment = createHardenedGateEnvironment(
   process.env,
   process.execPath,
@@ -609,6 +611,7 @@ let websiteBuildHome;
 try {
   websiteBuildHome = resolve(publicationRepo, "..", "website-build-home");
   mkdirSync(websiteBuildHome, { mode: 0o700 });
+  createManagedGateState(websiteBuildHome);
   const siteRoot = join(websiteBuildHome, "site");
   const copiedPrefixes = [
     "package.json",
