@@ -662,6 +662,20 @@ describe("C3/C4 fixed-point history", () => {
       ).toThrow("repository Git configuration can influence publication");
     });
   });
+
+  test("accepts only the CI checkout's disabled automatic Git GC setting", () => {
+    withTransitionFixture({}, ({ release, history, root }) => {
+      fixtureGit(root, "config", "gc.auto", "0");
+      expect(validateReceiptTransitionHistory(release, history, root)).toEqual(
+        [],
+      );
+
+      fixtureGit(root, "config", "gc.auto", "1");
+      expect(() =>
+        validateReceiptTransitionHistory(release, history, root),
+      ).toThrow("gc.auto must be exactly 0");
+    });
+  });
 });
 
 describe("release-state-neutral current wording", () => {

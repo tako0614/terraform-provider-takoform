@@ -212,7 +212,16 @@ export function assertSafeRepositoryGitConfiguration(raw, canonicalOrigin) {
       /^branch\..+\.(?:merge|remote|vscode-merge-base)$/u.test(name);
     const allowedRemote =
       name === "remote.origin.fetch" || name === "remote.origin.url";
-    if (!allowedCore.has(name) && !allowedBranch && !allowedRemote) {
+    const allowedDisabledAutomaticGc = name === "gc.auto" && value === "0";
+    if (
+      !allowedCore.has(name) &&
+      !allowedBranch &&
+      !allowedRemote &&
+      !allowedDisabledAutomaticGc
+    ) {
+      if (name === "gc.auto") {
+        throw new Error("repository Git configuration gc.auto must be exactly 0");
+      }
       throw new Error(
         `repository Git configuration can influence publication: ${name}`,
       );

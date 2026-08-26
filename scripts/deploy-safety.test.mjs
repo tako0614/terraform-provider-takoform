@@ -381,7 +381,7 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
   );
 });
 
-test("repository Git configuration rejects local transport rewrites", () => {
+test("repository Git configuration accepts only inert settings", () => {
   const canonical =
     "https://github.com/tako0614/terraform-provider-takoform.git";
   const ordinary = [
@@ -398,6 +398,18 @@ test("repository Git configuration rejects local transport rewrites", () => {
   expect(() =>
     assertSafeRepositoryGitConfiguration(ordinary, canonical),
   ).not.toThrow();
+  expect(() =>
+    assertSafeRepositoryGitConfiguration(
+      ordinary.replace("\0branch.main.remote", "\0gc.auto\n0\0branch.main.remote"),
+      canonical,
+    ),
+  ).not.toThrow();
+  expect(() =>
+    assertSafeRepositoryGitConfiguration(
+      ordinary.replace("\0branch.main.remote", "\0gc.auto\n1\0branch.main.remote"),
+      canonical,
+    ),
+  ).toThrow("gc.auto must be exactly 0");
   expect(() =>
     assertSafeRepositoryGitConfiguration(
       ordinary.replace(
