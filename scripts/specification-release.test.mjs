@@ -1,13 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  C2_ALLOWED_PATHS,
+  C3_ALLOWED_PATHS,
   EXPECTED_CANDIDATE,
-  FORM_MATURITY_EFFECT,
+  EXPECTED_RESERVED,
+  FORM_PUBLICATION_EFFECT,
+  HOST_API_EFFECT,
+  LEDGER_KIND,
   LEDGER_PATH,
   PROVIDER_EFFECT,
+  RELEASE_RECEIPT_FORMAT,
+  SOURCE_EVIDENCE_ASSET,
+  SOURCE_EVIDENCE_PATH,
+  appendReleaseReceipt,
   releaseFromEvidence,
+  validateC2DiffPaths,
+  validateC3DiffPaths,
   validateCommittedHistory,
   validateLedger,
   validateReleaseShape,
@@ -15,10 +33,23 @@ import {
 import { SPECIFICATION_PREREQUISITES } from "./publication-evidence.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const LEDGER = JSON.parse(readFileSync(path.join(ROOT, LEDGER_PATH), "utf8"));
+const sourceCommit = "a".repeat(40);
+const releaseCommit = "b".repeat(40);
+const tagObject = "c".repeat(40);
+const sourceEvidenceSha256 = `sha256:${"d".repeat(64)}`;
 
 function clone(value) {
   return structuredClone(value);
+}
+
+function c1Ledger() {
+  return {
+    kind: LEDGER_KIND,
+    policy: "Specification 1.0 is withdrawn; 1.1 is create-only.",
+    reserved: clone(EXPECTED_RESERVED),
+    candidate: clone(EXPECTED_CANDIDATE),
+    releases: [],
+  };
 }
 
 function completeDocument() {
@@ -26,9 +57,18 @@ function completeDocument() {
     evidence: {
       specification: {
         sourceSnapshot: {
-          format: "source",
-          sourceCommit: "a".repeat(40),
+          format: "takoform.specification-source-snapshot@v2",
+          releaseVersion: "1.1",
+          repository: "takoform",
+          sourceCommit,
+          roots: ["spec"],
+          excludedPaths: [
+            "spec/publication-evidence.json",
+            "spec/publication-blockers.json",
+          ],
           fileCount: 397,
+          pathSetSha256: `sha256:${"e".repeat(64)}`,
+          documentSetSha256: `sha256:${"f".repeat(64)}`,
         },
         candidateCorpus: null,
         referenceConformance: null,
@@ -37,61 +77,91 @@ function completeDocument() {
   };
 }
 
-describe("Specification release ledger", () => {
-  test("records an exact open candidate and no false release", () => {
-    expect(validateLedger(LEDGER)).toEqual([]);
-    expect(LEDGER.candidate).toEqual(EXPECTED_CANDIDATE);
-    expect(LEDGER.candidate.prerequisites).toEqual(SPECIFICATION_PREREQUISITES);
-    expect(LEDGER.releases).toEqual([]);
-    expect(JSON.stringify(LEDGER)).not.toContain("stable-mint");
-    expect(JSON.stringify(LEDGER)).not.toContain("Form 1.0.0");
+function exactReadback() {
+  return {
+    releaseCommit,
+    tag: "specification/1.1",
+    tagObject,
+    release: {
+      id: 41,
+      url: "https://github.com/tako0614/terraform-provider-takoform/releases/tag/specification/1.1",
+      immutable: true,
+    },
+    assetDigests: {
+      [SOURCE_EVIDENCE_ASSET]: sourceEvidenceSha256,
+    },
+  };
+}
+
+function receipt() {
+  return releaseFromEvidence(completeDocument(), exactReadback());
+}
+
+describe("Specification 1.1 owner ledger", () => {
+  test("keeps C1 open with withdrawn 1.0 and sourceSnapshot as the sole authority", () => {
+    const ledger = c1Ledger();
+    expect(validateLedger(ledger)).toEqual([]);
+    expect(ledger.candidate).toEqual(EXPECTED_CANDIDATE);
+    expect(ledger.candidate.prerequisites).toEqual(
+      SPECIFICATION_PREREQUISITES,
+    );
+    expect(ledger.releases).toEqual([]);
+    expect(JSON.stringify(ledger)).not.toContain("compatibilityManifest");
+    expect(JSON.stringify(ledger)).not.toContain("v1.1");
+    expect(JSON.stringify(ledger)).not.toContain("@v2");
   });
 
-  test("does not let Provider, external Host, production, or signer evidence replace a prerequisite", () => {
-    for (const replacement of [
-      "provider-v3-exact-conformance",
-      "two-independent-hosts",
-      "production-runtime",
-      "takosumi-adoption",
-      "operator-signature",
+  test("builds the C3 receipt only from source evidence plus exact live publication readback", () => {
+    expect(() => releaseFromEvidence({ evidence: {} }, exactReadback())).toThrow(
+      "evidence is not complete",
+    );
+    const release = receipt();
+    expect(validateReleaseShape(release)).toEqual([]);
+    expect(release).toMatchObject({
+      format: RELEASE_RECEIPT_FORMAT,
+      version: "1.1",
+      sourceCommit,
+      releaseCommit,
+      sourceSnapshotSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      tag: "specification/1.1",
+      tagObject,
+      annotatedTag: true,
+      release: {
+        id: 41,
+        immutable: true,
+      },
+      assets: [
+        {
+          name: SOURCE_EVIDENCE_ASSET,
+          sourcePath: SOURCE_EVIDENCE_PATH,
+          sha256: sourceEvidenceSha256,
+        },
+      ],
+      hostApiEffect: HOST_API_EFFECT,
+      formPublicationEffect: FORM_PUBLICATION_EFFECT,
+      providerEffect: PROVIDER_EFFECT,
+    });
+    expect(JSON.stringify(release)).not.toContain("compatibility");
+  });
+
+  test("rejects mutable, mismatched, v2, /v1.1, and incomplete live receipt shapes", () => {
+    for (const mutate of [
+      (value) => (value.release.immutable = false),
+      (value) => (value.tag = "specification/v1.1"),
+      (value) => (value.format = "takoform.specification-release-receipt@v2"),
+      (value) => (value.releaseCommit = value.sourceCommit),
+      (value) => (value.assets[0].sha256 = `sha256:${"0".repeat(64)}`),
+      (value) => value.assets.push(clone(value.assets[0])),
+      (value) => (value.compatibilityManifestSha256 = "0".repeat(64)),
     ]) {
-      const changed = clone(LEDGER);
-      changed.candidate.prerequisites[0] = replacement;
-      expect(validateLedger(changed).join("\n")).toContain(
-        "candidate must state the exact Specification 1.0 track",
-      );
+      const changed = receipt();
+      mutate(changed);
+      expect(validateReleaseShape(changed).length).toBeGreaterThan(0);
     }
   });
 
-  test("rejects changing the literal v1 suite or implying Form and Provider promotion", () => {
-    const lane = clone(LEDGER);
-    lane.candidate.hostApiLane = "forms.takoform.com/v1beta4";
-    expect(validateLedger(lane).join("\n")).toContain("exact Specification 1.0 track");
-
-    const forms = clone(LEDGER);
-    forms.candidate.formMaturityEffect = "promote-all-to-1.0.0";
-    expect(validateLedger(forms).join("\n")).toContain("exact Specification 1.0 track");
-
-    const provider = clone(LEDGER);
-    provider.candidate.providerEffect = "required-provider-3.0.0";
-    expect(validateLedger(provider).join("\n")).toContain("exact Specification 1.0 track");
-  });
-
-  test("derives a numbered release from the exact normative source snapshot alone", () => {
-    expect(() => releaseFromEvidence({ evidence: {} })).toThrow(
-      "evidence is not complete",
-    );
-    const release = releaseFromEvidence(completeDocument());
-    expect(validateReleaseShape(release)).toEqual([]);
-    expect(release.sourceCommit).toBe("a".repeat(40));
-    expect(release.prerequisites).toEqual(SPECIFICATION_PREREQUISITES);
-    expect(release.formMaturityEffect).toBe(FORM_MATURITY_EFFECT);
-    expect(release.providerEffect).toBe(PROVIDER_EFFECT);
-  });
-
-  test("preserves every committed numbered release byte-for-byte and in order", () => {
-    const release = releaseFromEvidence(completeDocument());
-    const historical = { ...clone(LEDGER), releases: [release] };
+  test("preserves every committed receipt byte-for-byte and in order", () => {
+    const historical = { ...c1Ledger(), releases: [receipt()] };
     expect(
       validateCommittedHistory(historical, [
         { commit: "d".repeat(40), ledger: historical },
@@ -99,7 +169,7 @@ describe("Specification release ledger", () => {
     ).toEqual([]);
 
     const mutated = clone(historical);
-    mutated.releases[0].title = "rewritten";
+    mutated.releases[0].release.url += "?rewritten=1";
     expect(
       validateCommittedHistory(mutated, [
         { commit: "d".repeat(40), ledger: historical },
@@ -107,18 +177,96 @@ describe("Specification release ledger", () => {
     ).toContain("was mutated");
 
     expect(
-      validateCommittedHistory(LEDGER, [
+      validateCommittedHistory(c1Ledger(), [
         { commit: "d".repeat(40), ledger: historical },
       ]).join("\n"),
     ).toContain("was deleted or reordered");
   });
 });
 
-test("package commands keep validation separate from the fail-closed readiness assertion", () => {
+describe("C1/C2/C3 commit fences", () => {
+  test("C2 permits only the evidence record and exact static/public projections", () => {
+    expect(validateC2DiffPaths(C2_ALLOWED_PATHS)).toEqual([]);
+    expect(validateC2DiffPaths(["spec/publication-evidence.json"])).toEqual([]);
+    for (const pathName of [
+      "spec/core/README.md",
+      "scripts/release-deploy.mjs",
+      "release/specification-compatibility.json",
+      "website/static/forms/new-v2.json",
+    ]) {
+      expect(
+        validateC2DiffPaths([
+          "spec/publication-evidence.json",
+          pathName,
+        ]).join("\n"),
+      ).toContain("evidence-only");
+    }
+  });
+
+  test("C3 permits only the append-only ledger and its exact projections", () => {
+    expect(validateC3DiffPaths(C3_ALLOWED_PATHS)).toEqual([]);
+    expect(
+      validateC3DiffPaths([LEDGER_PATH, "scripts/release-deploy.mjs"]).join(
+        "\n",
+      ),
+    ).toContain("receipt/ledger projection-only");
+    expect(validateC3DiffPaths([LEDGER_PATH]).join("\n")).toContain(
+      "static projection",
+    );
+  });
+});
+
+test("receipt writer is create-only and writes only the ledger projections", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "takoform-spec-receipt-"));
+  for (const relativePath of [
+    "release",
+    "spec",
+    "website/static/release",
+    "website/public/release",
+  ]) {
+    mkdirSync(path.join(root, relativePath), { recursive: true });
+  }
+  const ledger = c1Ledger();
+  const initial = `${JSON.stringify(ledger, null, 2)}\n`;
+  for (const relativePath of [
+    LEDGER_PATH,
+    "website/static/release/specification-releases.json",
+    "website/public/release/specification-releases.json",
+  ]) {
+    writeFileSync(path.join(root, relativePath), initial);
+  }
+
+  const evidenceRaw = `${JSON.stringify(completeDocument(), null, 2)}\n`;
+  writeFileSync(path.join(root, SOURCE_EVIDENCE_PATH), evidenceRaw);
+  const writerReadback = exactReadback();
+  writerReadback.assetDigests[SOURCE_EVIDENCE_ASSET] =
+    `sha256:${createHash("sha256").update(evidenceRaw).digest("hex")}`;
+  const writerReceipt = releaseFromEvidence(completeDocument(), writerReadback);
+
+  const written = appendReleaseReceipt(writerReceipt, root);
+  expect(written.releases).toEqual([writerReceipt]);
+  const canonical = readFileSync(path.join(root, LEDGER_PATH), "utf8");
+  expect(
+    readFileSync(
+      path.join(root, "website/static/release/specification-releases.json"),
+      "utf8",
+    ),
+  ).toBe(canonical);
+  expect(
+    readFileSync(
+      path.join(root, "website/public/release/specification-releases.json"),
+      "utf8",
+    ),
+  ).toBe(canonical);
+  expect(() => appendReleaseReceipt(writerReceipt, root)).toThrow("create-only");
+});
+
+test("package commands keep network-free validation separate from publication", () => {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
   expect(pkg.scripts["check:specification-releases"]).toContain("--check");
-  expect(pkg.scripts["check:specification-v1-release"]).toContain(
-    "--assert-specification-v1",
+  expect(pkg.scripts["check:specification-1-1-release"]).toContain(
+    "--assert-specification-1-1",
   );
+  expect(pkg.scripts["check:specification-v2-release"]).toBeUndefined();
   expect(pkg.scripts["check:stable-mint"]).toBeUndefined();
 });

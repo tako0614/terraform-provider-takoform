@@ -7,6 +7,12 @@ operations)` descriptors of the withdrawn v1alpha2 lane
 that lane's projection contract was withdrawn with its epoch and stays in
 this repository's git history (decision 0042).
 
+Official and external authors use this same public contract path. An external
+author MUST import only the eventual public Core module and MUST NOT depend on
+internal Provider or repository packages. Specification 1.1 records this
+authoring boundary without publishing a new Interface lane or changing any
+existing Interface identity.
+
 ## InterfaceRef
 
 ```json

@@ -99,6 +99,12 @@ function verifyOneCopy(document, relativePath, facts, failures) {
         "Form definitions",
     );
   }
+  if (document.hostApiPublicationStatus !== "unpublished-candidate") {
+    failures.push(
+      `${relativePath}: hostApiPublicationStatus must keep Host API v1 separate ` +
+        "and unpublished while Specification 1.1 is released independently",
+    );
+  }
   if (
     document.formPackageStatus !== document.formPackagePublicationStatus ||
     document.edgeFamilyStatus !== document.formPackagePublicationStatus

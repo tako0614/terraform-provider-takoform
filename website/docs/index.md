@@ -1,23 +1,25 @@
 # Documentation
 
-This page starts with the open Specification 1.0 candidate: Host API v1 and
-the exact 8-family, 31-Form current corpus. Provider and historical lanes are
-kept separate so an implementation release cannot become Specification
-authority by implication.
+This page starts with two independent unpublished candidates—Specification
+1.1 and Host API v1—and the exact 8-family, 31-Form current corpus. Provider
+and historical lanes are kept separate so an implementation release cannot
+become Specification authority by implication.
 
-## Specification 1.0 candidate / Host API v1
+## Specification 1.1 candidate; separate Host API v1 candidate
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                 |
 | --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform 1.0 candidate**             | Open until one exact committed snapshot of the normative `spec/` tree is recorded.                                      |
-| Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                             |
+| Specification         | **Takoform 1.1 candidate**             | First numbered release; open until one exact committed snapshot of the normative `spec/` tree is recorded. Identity 1.0 was withdrawn before publication and may not be reused. |
+| Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.          |
 | Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental.                                                             |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
 | Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation; it cannot block the Specification. Provider 2.1.1 is retained history. |
 
 The [release-evidence policy](/spec/publication-freeze.html) makes those axes
-machine-checkable. Releasing the Specification does not relabel any current
-Form as `1.0.0`; a stable Form identity requires an explicit per-Form decision.
+machine-checkable. Releasing Specification 1.1 does not publish or promote Host
+API v1, relabel any current Form as `1.0.0`, mint a `/v1.1` or v2 lane, or
+publish a package; a stable Form identity requires an explicit per-Form
+decision.
 
 ## Edge reference family (16 of 31 current Experimental Forms) {#beta-edge-platform-family}
 

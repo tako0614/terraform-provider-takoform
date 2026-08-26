@@ -233,6 +233,7 @@ const staticDirectories = [
         file === "trust/trusted-root.json" ||
         file === "public-schema-identities.json" ||
         file === "specification-releases.json" ||
+        file === "specification-compatibility.json" ||
         file === "provider-form-identities.json" ||
         file === "published-document-lanes.json" ||
         file.startsWith("migrations/")) &&

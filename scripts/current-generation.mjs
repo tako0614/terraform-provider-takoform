@@ -42,7 +42,11 @@ function render(facts) {
       facts.specificationVersion,
       `${facts.specificationReleaseStatus}; one exact committed normative source snapshot is release authority`,
     ],
-    ["Host API lane", facts.hostApiCurrent, "the stable Specification wire contract"],
+    [
+      "Host API candidate",
+      facts.hostApiCurrent,
+      `${facts.hostApiPublicationStatus}; separate protocol identity`,
+    ],
     [
       "Current Form corpus",
       facts.currentFamilyIndex,
@@ -54,9 +58,9 @@ function render(facts) {
       `package artifacts are ${facts.formPackagePublicationStatus}`,
     ],
     [
-      "Retained Provider distribution",
+      "Provider distribution",
       facts.providerPublished,
-      "independent Registry-readback history; not Specification authority",
+      "current Registry-published typed reference implementation; not Specification authority",
     ],
   ];
   return [
@@ -66,9 +70,10 @@ function render(facts) {
     "| --- | --- | --- |",
     ...rows.map(([axis, value, note]) => `| ${axis} | \`${value}\` | ${note} |`),
     "",
-    "These identities are independent. A Specification 1.0 release does not",
-    "relabel any current Form as `1.0.0`, publish a Form Package, or release the",
-    "non-normative Provider sample. This table is generated from repository bytes",
+    "These identities are independent. A Specification 1.1 release does not",
+    "publish or promote the separate Host API v1 candidate, relabel any current",
+    "Form as `1.0.0`, publish a Form Package, or release the non-normative Provider.",
+    "This table is generated from repository bytes",
     "by `bun run sync:current-generation`; the explicit Specification release",
     "assertion remains fail-closed while its committed evidence tuple is open.",
     "",

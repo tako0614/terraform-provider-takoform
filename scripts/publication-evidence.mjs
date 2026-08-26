@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Takoform has two independent release tracks. Specification 1.0 is normative
+// Takoform has two independent release tracks. Specification 1.1 is normative
 // and closes on one committed snapshot of the normative specification source.
 // Candidate Forms, the reference suite, and the official Terraform Provider
 // are useful implementation evidence, but none is normative release authority.
@@ -19,6 +19,7 @@ export const REPORT_FORMAT = "takoform.release-evidence-report@v3";
 export const REPOSITORY_POLICY_FORMAT = "takoform.repository-authority@v2";
 export const SPECIFICATION_SOURCE_FORMAT =
   "takoform.specification-source-snapshot@v2";
+export const SPECIFICATION_VERSION = "1.1";
 export const CANDIDATE_CORPUS_FORMAT =
   "takoform.multi-family-candidate-corpus@v1";
 export const REFERENCE_CONFORMANCE_FORMAT =
@@ -83,12 +84,16 @@ const REFERENCE_IMPLEMENTATION_ROOTS = Object.freeze(["."]);
 const REFERENCE_IMPLEMENTATION_EXCLUDED_PATHS = Object.freeze([
   PUBLICATION_EVIDENCE,
   SPECIFICATION_RELEASE_LEDGER,
+  // The compatibility report is a separately generated report, not release
+  // evidence or reference implementation input.
+  "release/specification-compatibility.json",
   ...EVIDENCE_PROJECTION_PATHS,
 ]);
 const REFERENCE_EXECUTION_PATHS = Object.freeze([
   ".",
   `:(exclude)${PUBLICATION_EVIDENCE}`,
   `:(exclude)${SPECIFICATION_RELEASE_LEDGER}`,
+  ":(exclude)release/specification-compatibility.json",
   ...EVIDENCE_PROJECTION_PATHS.map((relativePath) => `:(exclude)${relativePath}`),
 ]);
 const PROVIDER_IMPLEMENTATION_ROOTS = Object.freeze([
@@ -452,7 +457,7 @@ function deriveSpecificationSourceSnapshotAtCommit(repositoryRoot, sourceCommit)
   );
   return {
     format: SPECIFICATION_SOURCE_FORMAT,
-    releaseVersion: "1.0",
+    releaseVersion: SPECIFICATION_VERSION,
     repository: "takoform",
     sourceCommit,
     roots: [...SPECIFICATION_ROOTS],
@@ -1744,17 +1749,17 @@ function validateAxes(document) {
 
 function validateTracks(document) {
   if (!Array.isArray(document.releaseTracks) || document.releaseTracks.length !== 2) {
-    fail("releaseTracks must contain exactly Specification 1.0 and Provider 3.0");
+    fail("releaseTracks must contain exactly Specification 1.1 and Provider 3.0");
   }
   const [specification, provider] = document.releaseTracks;
   exactKeys(specification, ["id", "version", "authority", "normative", "prerequisites"], "releaseTracks[0]");
   if (
     specification.id !== SPECIFICATION_TRACK ||
-    specification.version !== "1.0" ||
+    specification.version !== SPECIFICATION_VERSION ||
     specification.authority !== "specification" ||
     specification.normative !== true
   ) {
-    fail("releaseTracks[0] must be the normative Specification 1.0 track");
+    fail("releaseTracks[0] must be the normative Specification 1.1 track");
   }
   exactArray(specification.prerequisites, SPECIFICATION_PREREQUISITES, "Specification prerequisites");
   exactKeys(provider, ["id", "version", "authority", "normative", "prerequisites"], "releaseTracks[1]");
@@ -1918,8 +1923,10 @@ export function assertPublicationEvidenceReady(report, trackId = null) {
 function main() {
   const mode = process.argv[2];
   const allowed = [
+    "--prepare-specification-1-1",
     "--prepare-specification-v1",
     "--check",
+    "--assert-specification-1-1",
     "--assert-specification-v1",
     "--assert-provider-3",
     "--assert-all",
@@ -1928,14 +1935,14 @@ function main() {
     fail(`usage: bun scripts/publication-evidence.mjs ${allowed.join("|")}`);
   }
   const repositoryRoot = path.resolve(import.meta.dirname, "..");
-  if (mode === "--prepare-specification-v1") {
+  if (mode === "--prepare-specification-1-1" || mode === "--prepare-specification-v1") {
     const document = prepareSpecificationEvidence(repositoryRoot);
     process.stdout.write(
-      `prepared exact Specification 1.0 source evidence for ${document.evidence.specification.sourceSnapshot.sourceCommit}; commit the record before assertion\n`,
+      `prepared exact Specification 1.1 source evidence for ${document.evidence.specification.sourceSnapshot.sourceCommit}; commit the record before assertion\n`,
     );
     return;
   }
-  const releaseTrack = mode === "--assert-specification-v1"
+  const releaseTrack = mode === "--assert-specification-1-1" || mode === "--assert-specification-v1"
     ? SPECIFICATION_TRACK
     : mode === "--assert-provider-3"
       ? PROVIDER_TRACK
@@ -1944,7 +1951,7 @@ function main() {
     repositoryRoot,
     releaseTrack,
   });
-  if (mode === "--assert-specification-v1") {
+  if (mode === "--assert-specification-1-1" || mode === "--assert-specification-v1") {
     assertPublicationEvidenceReady(report, SPECIFICATION_TRACK);
   } else if (mode === "--assert-provider-3") {
     assertPublicationEvidenceReady(report, PROVIDER_TRACK);
@@ -1956,7 +1963,7 @@ function main() {
     ? `${report.candidate.familyCount} families, ${report.candidate.totalCandidateForms}/${report.candidate.totalRunnerForms} Forms`
     : "canonical family index/conformance suite absent";
   process.stdout.write(
-    `release evidence OK: ${tuple}; Specification 1.0 ${specification.status}; Provider 3.0 ${provider.status}\n`,
+    `release evidence OK: ${tuple}; Specification 1.1 ${specification.status}; Provider 3.0 ${provider.status}\n`,
   );
 }
 

@@ -8,7 +8,7 @@ pre-release label for another axis.
 
 | Axis                  | Current identity                           | Meaning and availability                                                                                                                                                                     |
 | --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.0 candidate**                 | Open until one exact committed snapshot of the normative `spec/` tree is recorded.                                                                                                           |
+| Specification         | **Takoform 1.1 candidate**                 | First numbered release; open until one exact committed snapshot of the normative `spec/` tree is recorded. Identity 1.0 was withdrawn before publication and may not be reused. |
 | Host API              | **`forms.takoform.com/v1`**                | Stable Specification contract for discovery, exact Form availability, operations, fencing, and errors.                                                                                       |
 | Form corpus           | **8 versionless families / 31 Forms**     | Exact current `0.x` FormRefs; all remain Experimental and independently versioned.                                                                                                           |
 | Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | Separate package/distribution identifier. Package artifacts remain unpublished.                                                                                                              |
@@ -20,7 +20,7 @@ Registry-published implementation. **Provider 2.1.1**, **Provider 2.0.0**, and
 installable Registry history for earlier epochs
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
 ([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)). Provider 3
-cannot block or authorize Specification 1.0.
+cannot block or authorize Specification 1.1.
 
 ## Published compatibility mapping
 
@@ -33,7 +33,7 @@ cannot block or authorize Specification 1.0.
 
 The current Host API v1 contract and versionless Form families are not
 interchangeable labels. A Form's own definition SemVer does not change either
-the Specification or Provider SemVer, and Specification 1.0 does not silently
+the Specification or Provider SemVer, and Specification 1.1 does not silently
 mint Form `1.0.0` identities.
 
 ## Current Edge reference family (16 Experimental Forms)

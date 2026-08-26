@@ -10,7 +10,7 @@ Provider 3 authoring identity for one.
 The exact retained Definition and package bytes, not this prose, are the
 historical authority. They remain under
 `forms/candidates/edge/v1beta1/object-bucket` and in the append-only Provider
-identity ledger. Nothing in Specification 1.0 re-identifies or republishes
+identity ledger. Nothing in Specification 1.1 re-identifies or republishes
 them.
 
 ## Historical workload and consumer

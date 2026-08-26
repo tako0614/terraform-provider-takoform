@@ -6,6 +6,11 @@ content-addressed upload API owned by the host
 Desired state references only immutable manifest digests; raw code bytes,
 upload endpoints, and transport details never enter client state.
 
+Specification 1.1 retains this artifact-transport identity byte-for-byte. It
+does not create an artifact `/v1.1` or v2 lane, and transport compatibility is
+independent of Form maturity, package publication, Provider projection, and
+Host adoption.
+
 ## Endpoints
 
 Relative to the discovered `endpoints.api` base

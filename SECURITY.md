@@ -1,7 +1,8 @@
 # Security Policy
 
-Takoform is an **Experimental project**. Provider `v2.1.1` is the current
-published client; provider `v2.0.0` is its published compatibility predecessor;
+Takoform is an **Experimental project**. Provider `v3.0.0` is the current
+Registry-published typed client. Provider `v2.1.1` is retained Host API
+v1beta1 history; provider `v2.0.0` is its published compatibility predecessor;
 provider `v1.0.3` is the published Legacy client. The 34
 published Form Package identities are immutable **Legacy** evidence, not a
 current central approval or admission set.
@@ -14,18 +15,18 @@ Include the affected provider version, a minimal reproduction with all secrets r
 
 ## Supported versions
 
-The current `main` branch and provider `v2.1.1` receive security fixes as the
-current-epoch line. Published provider `v2.0.0` remains the compatibility
-predecessor, and published provider `v1.0.3` remains the
-security-maintained Legacy line for retained state and explicit migration.
-Historical release bytes remain available for verification and migration;
-support never means replacing them.
+The current `main` branch and provider 3 release line receive current-line
+security fixes. The exact Provider `v2.1.1` and `v1.0.3` contract lines remain
+security-maintained for retained state and explicit migration; provider
+`v2.0.0` remains a historical compatibility predecessor. A fix is always a new
+SemVer release on the affected line. Historical release bytes remain available
+for verification and migration; support never means replacing them.
 
-`release/version.json` names the stable `v2.1.1` release target and keeps
+`release/version.json` names the stable `v3.0.0` release target and keeps
 `publicationStatus: candidate-only` as descriptor metadata even after the
 release owner publishes it; it is not live availability state. The retained
 signed release, pinned tag identity, and canonical Registry readback establish
-that `v2.1.1` is the current published provider. Provider publication does not
+that `v3.0.0` is the current published provider. Provider publication does not
 promote the Experimental Forms, publish their Form Packages, or establish Host
 Support, activation, or Cloud availability.
 

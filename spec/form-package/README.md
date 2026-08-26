@@ -132,8 +132,15 @@ go run ./cmd/form-package validate-revocation-checkpoint CHECKPOINT.json
 
 ## Release boundary
 
-Form Packages have no independent release cadence: they publish with the
-provider release that embeds them, when the publication blockers clear
+Form Package release cadence is a **Proposal** only; no cadence is a
+Specification 1.1 prerequisite. Existing package evolution stays within this
+content-addressed mechanism: a new Definition or package digest is an
+independent identity with an explicit migration disposition, and does not
+require a Specification bump while the Host API and package envelope remain
+compatible. Any future publication must use one create-only publisher path;
+official and external publishers follow the same verification and admission
+rules. Historical Provider-embedded publication is retained only as immutable
+history and does not grant current candidates publication authority
 ([decision 0041](../decisions/0041-form-packages-publish-with-the-provider-release.md)).
 [`cmd/form-package-release`](../../cmd/form-package-release/) remains the
 tooling that re-verifies, canonicalizes, deterministically archives, describes

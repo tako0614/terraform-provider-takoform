@@ -232,7 +232,7 @@ const edgeProposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Specification 1.0 candidate / Host API v1",
+      text: "Specification 1.1 candidate / separate Host API v1 candidate",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -241,7 +241,7 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Provider 3 candidate reference (31 current Experimental Forms)",
+      text: "Provider 3 typed reference (31 current Experimental Forms)",
       items: currentStackResourceItems,
     },
     {
@@ -296,7 +296,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Specification 1.0 candidate / Host API v1",
+      text: "Specification 1.1 candidate / separate Host API v1 candidate",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -307,7 +307,7 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Provider 3 candidate reference (current 31 Forms)",
+      text: "Provider 3 typed reference (current 31 Forms)",
       items: currentStackResourceItems,
     },
     {

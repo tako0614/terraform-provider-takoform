@@ -14,7 +14,7 @@ hero:
       link: /spec/
 ---
 
-## Specification 1.0 candidate / Host API v1
+## Specification 1.1 candidate; separate Host API v1 candidate
 
 Takoform is an Experimental specification project. The current stack is
 described on five independent axes so a client version, a host protocol, a
@@ -22,15 +22,16 @@ Form identity, and package publication cannot be mistaken for one another.
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                     |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.0 candidate**             | Open until one exact committed snapshot of the normative `spec/` tree is recorded.                                           |
-| Host API              | **`forms.takoform.com/v1`**            | Stable contract lane for discovery, exact Form availability, operations, fencing, and errors.                                |
+| Specification         | **Takoform 1.1 candidate**             | First numbered release; open until one exact committed snapshot of the normative `spec/` tree is recorded. Identity 1.0 was withdrawn before publication and may not be reused. |
+| Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.             |
 | Form corpus           | **8 families / 31 Forms**              | Exact current `0.x` FormRefs; every Form remains Experimental.                                                               |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |
 | Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained history.             |
 
 Specification release, Form maturity, Form Package publication, and Provider
-release are independent. Specification 1.0 does not promote current Forms to
-`1.0.0`; Provider 3 cannot block it. Provider 2.1.1 remains immutable Registry
+release are independent. Specification 1.1 does not publish or promote Host API
+v1, promote current Forms to `1.0.0`, mint `/v1.1` or v2 lanes, or publish a
+package; Provider 3 cannot block it. Provider 2.1.1 remains immutable Registry
 history for the historical identities it shipped.
 
 ```hcl

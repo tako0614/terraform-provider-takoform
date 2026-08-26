@@ -1,5 +1,10 @@
 # Typed Binding contracts (bindings.takoform.com/v1alpha2)
 
+Specification 1.1 keeps this Binding identity and its artifact/service
+transport relationships unchanged. Official and external publishers follow
+the same public authoring and admission path; an external author MUST NOT
+import internal Provider packages. No `/v1.1` or v2 Binding lane is minted.
+
 A Binding is a digest-bound contract that grants one consumer resource a
 typed capability on one target resource: the runtime API and the permission
 arrive together, and credentials never cross the boundary. Bindings replace
@@ -234,4 +239,4 @@ its own typed list attribute — `actor_bindings`, `kv_bindings`,
 current `bucket_bindings` authoring surface. Retained Provider 2.1.1 codecs keep
 their historical ObjectBucket mapping without defining the current contract.
 There is no generic connection block in Host API v1. Provider mapping is
-implementation evidence and cannot add to or block Specification 1.0.
+implementation evidence and cannot add to or block Specification 1.1.

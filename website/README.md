@@ -206,11 +206,14 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: provider `v2.1.1` is the published,
-Registry readback-verified current Provider distribution on retained Host API
-v1beta1; provider `v2.0.0` is the published compatibility predecessor; provider
-`v1.0.3` is the published Legacy client; Takoform Specification 1.0 and literal
-Host API v1 are still an open release candidate; and the 34
+repository. The current public truth is: Provider `v3.0.0` is the published,
+Registry readback-verified current typed distribution for the 31 exact current
+Forms; Provider `v2.1.1` remains immutable retained Host API v1beta1 history;
+Provider `v2.0.0` is the published compatibility predecessor; Provider
+`v1.0.3` is the published Legacy client; Takoform Specification 1.1 is an open
+numbered candidate and literal Host API v1 is a separate unpublished protocol
+candidate (Specification 1.0 was withdrawn before publication and may not be
+reused); and the 34
 published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The current generated corpus
 contains eight versionless families and 31 exact Experimental `0.x` FormRefs;
@@ -233,6 +236,6 @@ release owner publishes it; the descriptor must not be presented as live
 publication state. The append-only release identity ledger independently
 establishes `v3.0.0` as the current Registry-published provider and retains
 `v2.1.1` history. Provider 3 remains non-normative and cannot close or block
-Specification 1.0. See
+Specification 1.1. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
 and the repository [`AGENTS.md`](../AGENTS.md).

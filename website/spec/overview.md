@@ -1,9 +1,10 @@
 # Takoform portable specification
 
 This directory is the portable specification surface for Takoform. It contains
-the **Specification 1.0 candidate** and literal stable Host API v1 source; the
-numbered release remains open until its exact committed normative source
-snapshot closes. Takoform defines a small desired-state
+the **Specification 1.1 candidate** and the literal Host API v1 source
+candidate. Host API v1 is a separate, unpublished protocol identity; publishing
+Specification 1.1 does not publish or promote it. The numbered release remains
+open until its exact committed normative source snapshot closes. Takoform defines a small desired-state
 boundary between infrastructure-as-code clients and resource hosts. It is not
 an industry standards body, certification authority, or guarantee of backend
 portability.
@@ -67,6 +68,35 @@ and the local evidence map is
 
 ## Current status
 
+Specification 1.1 is the first numbered release. Identity 1.0 was never
+published, is withdrawn, and is never reused. The separately generated
+five-class compatibility report at
+[`../release/specification-compatibility.json`](../release/specification-compatibility.json)
+binds raw source bytes to owning ledgers and migration dispositions and
+byte-pins the literal Host API v1 candidate. It is compatibility evidence only,
+not publication evidence, a release asset, or a prerequisite. Current Forms,
+packages, and Host API v1 remain unpublished candidates; no `/v1.1` or v2
+lane/schema/tag/receipt is created.
+
+## C1, C2, and C3 release boundaries
+
+The W09 workflow keeps three commits distinct:
+
+- **C1 — normative freeze:** the normative `spec/` tree and executable
+  validation tooling are frozen; every publication-evidence field remains
+  `null`.
+- **C2 — source evidence:** an evidence-only change records one exact committed
+  Specification source snapshot and its static projection. Candidate corpus,
+  reference conformance, Provider, Host, and compatibility-report data remain
+  outside this evidence record.
+- **C3 — publication receipt:** a later authoritative receipt appends one
+  immutable Specification 1.1 entry to the numbered ledger and its projections;
+  it carries only the source-snapshot prerequisite and live publication
+  readback.
+
+The compatibility report is generated and checked separately. It is never a C2
+or C3 asset, prerequisite, or release identity.
+
 The FormRef, Form Definition, package-index, revocation, and cumulative
 revocation-checkpoint schemas, the RFC 8785/I-JSON library, the closed local
 verifier, the positive/negative corpus, the protected keyless Sigstore release
@@ -104,14 +134,15 @@ schema for that purpose. Historical `standard` and `portable-standard` fields
 in those immutable bytes do not define a current approved subset, and nothing
 derives current approval or admission from that history.
 
-Specification 1.0 defines Host API wire `forms.takoform.com/v1`, reached through
-`/.well-known/takoform/v1` with API root
-`/apis/forms.takoform.com/v1`. The release assertion remains open while its
-committed evidence pointers are null. The Host API group is a protocol
-compatibility identity independent of every Form group and Form maturity. The
-current package envelope is `packages.forms.takoform.com/v1alpha5`; Interface and
-Binding refs remain `interfaces.takoform.com/v1alpha1` and
-`bindings.takoform.com/v1alpha2`. The Terraform provider identity is
+The literal Host API v1 candidate uses wire `forms.takoform.com/v1`, reached
+through `/.well-known/takoform/v1` with API root
+`/apis/forms.takoform.com/v1`. The Specification release assertion remains
+open while its committed evidence pointers are null. The Host API group is a
+protocol compatibility identity independent of every Form group and Form
+maturity; Specification 1.1 publication does not publish or promote this Host
+API candidate. The current package envelope is
+`packages.forms.takoform.com/v1alpha5`; Interface and Binding refs remain
+`interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha2`. The Terraform provider identity is
 `registry.terraform.io/tako0614/takoform`; current Provider `v3.0.0` is
 Registry-published for the 31 current Forms, while `v2.1.1` on retained Host
 API `forms.takoform.com/v1beta1` is immutable history. Both are independent
@@ -120,11 +151,11 @@ from all of these current API identities. The
 after owner publication.
 
 Provider 3 is a separate Registry-published, non-normative reference
-implementation. It may
-implement the exact current `0.x` Forms without defining their semantics or
-blocking Specification 1.0. Releasing Specification/Host API v1 does not
-promote those Forms to `1.0.0`; a future Stable Form requires an explicit
-per-Form decision.
+implementation. It may implement the exact current `0.x` Forms without
+defining their semantics or blocking Specification 1.1. Publishing
+Specification 1.1 does not promote those Forms to `1.0.0`; publishing the
+separate Host API v1 candidate would not do so either. A future Stable Form
+requires an explicit per-Form decision.
 
 ## Normative consistency audit
 

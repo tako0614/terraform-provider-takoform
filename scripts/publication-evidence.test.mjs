@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -46,6 +53,12 @@ import {
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DOCUMENT = loadPublicationEvidence(ROOT);
 const rootsToRemove = new Set();
+
+// Reference-evidence adversarial cases repeatedly clone and hash the complete
+// committed repository. The generated website is intentionally part of that
+// closure, so a five-second unit-test default is not a meaningful correctness
+// limit as the immutable public corpus grows.
+setDefaultTimeout(30_000);
 
 function clone(value) {
   return structuredClone(value);
@@ -630,11 +643,11 @@ let future;
 
 beforeAll(() => {
   future = buildSpecificationFuture();
-});
+}, 30_000);
 
 afterAll(() => {
   for (const root of rootsToRemove) rmSync(root, { recursive: true, force: true });
-});
+}, 30_000);
 
 describe("current fail-closed state", () => {
   test("keeps the absent canonical multi-family tuple and both tracks open", () => {
@@ -646,6 +659,15 @@ describe("current fail-closed state", () => {
       [SPECIFICATION_TRACK, "open"],
       [PROVIDER_TRACK, "open"],
     ]);
+  });
+
+  test("keeps compatibility reporting outside the publication-evidence shape", () => {
+    expect(DOCUMENT.evidence.specification).toEqual({
+      sourceSnapshot: null,
+      candidateCorpus: null,
+      referenceConformance: null,
+    });
+    expect(JSON.stringify(DOCUMENT)).not.toContain("compatibilityManifest");
   });
 
   test("has no trusted status, signer policy, or writer mode", () => {
@@ -949,7 +971,7 @@ describe("independent release tracks", () => {
       encoding: "utf8",
     });
     expect(ownVerifier.status).toBe(0);
-    expect(ownVerifier.stdout).toContain("Specification 1.0 ready");
+    expect(ownVerifier.stdout).toContain("Specification 1.1");
   });
 
   test("only reopening the normative source snapshot blocks Specification readiness", () => {
@@ -1048,7 +1070,7 @@ describe("independent release tracks", () => {
       { cwd: root, encoding: "utf8" },
     );
     expect(specification.status).toBe(0);
-    expect(specification.stdout).toContain("Specification 1.0 ready");
+      expect(specification.stdout).toContain("Specification 1.1");
     const fullCheck = spawnSync("bun", ["scripts/publication-evidence.mjs", "--check"], {
       cwd: root,
       encoding: "utf8",
@@ -1073,7 +1095,7 @@ describe("independent release tracks", () => {
 
 test("package scripts expose independent assertions without a false Stable mint alias", () => {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
-  expect(pkg.scripts["check:specification-v1-release"]).toContain("--assert-specification-v1");
+  expect(pkg.scripts["check:specification-1-1-release"]).toContain("--assert-specification-1-1");
   expect(pkg.scripts["check:provider-v3-release"]).toContain("--assert-provider-3");
   expect(pkg.scripts["check:takoform-milestones"]).toContain("--assert-all");
   expect(pkg.scripts["check:stable-mint"]).toBeUndefined();

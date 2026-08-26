@@ -1166,7 +1166,7 @@ const HOST_API_LANES = new Map([
     wireSchema: "spec/schemas/host-api-wire-v1.schema.json",
     document: "spec/host-api/v1.md",
     mintedFor: "graduation",
-    evidence: "exact committed normative Specification source (decision 0055); candidate and reference evidence are non-authoritative",
+    evidence: "exact committed normative Specification 1.1 source (decision 0057); candidate and reference evidence are non-authoritative",
   }],
   ["forms.takoform.com/v1beta4", {
     wireSchema: "spec/schemas/host-api-wire-v1beta4.schema.json",
@@ -1856,7 +1856,7 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Public surfaces OK: Specification 1.0 is an open candidate, ` +
+    `Public surfaces OK: Specification 1.1 is an open candidate, ` +
       `the 8-family/31-Form corpus remains Experimental, Provider v${releaseVersion.version} ` +
       "is Registry-published, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );

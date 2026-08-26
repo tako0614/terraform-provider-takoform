@@ -9,7 +9,7 @@ defined in [`project-lifecycle.md`](project-lifecycle.md).
 
 | Concern      | Identifier                                      | Meaning                                                                                    |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Host API     | API group such as Specification 1.0's `forms.takoform.com/v1` | Protocol envelope, discovery, and lifecycle compatibility                              |
+| Host API     | API group carried by the separate Host API v1 candidate, `forms.takoform.com/v1` | Protocol envelope, discovery, and lifecycle compatibility                              |
 | Form group   | Versionless reverse-DNS API group inside an exact `FormRef` | Namespace boundary between current Form Families; occupied older groups remain exact history |
 | Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its group                      |
 | Form Package | Exact package identity plus content digest      | Immutable distribution of one exact Form and its fixtures                                  |
@@ -52,12 +52,13 @@ retained history and stay as they are — the rule binds what is minted next.
 
 ### Current source and retained release history
 
-The current Specification 1.0 source uses the literal Host API lane
-`forms.takoform.com/v1`, eight versionless Form Family groups, 31 exact current
-FormRefs, and the `packages.forms.takoform.com/v1alpha5` package envelope. The
-current FormRefs keep their independent `0.x` Definition versions and
-Experimental maturity. A Specification or Host API v1 release does not rewrite
-them as Form `1.0.0`.
+The current Specification 1.1 source references the separate, unpublished
+Host API v1 candidate at `forms.takoform.com/v1`, eight versionless Form Family
+groups, 31 exact current FormRefs, and the `packages.forms.takoform.com/v1alpha5`
+package envelope. The current FormRefs keep their independent `0.x` Definition
+versions and Experimental maturity. Publishing Specification 1.1 does not
+publish or promote Host API v1 and does not rewrite the Forms as `1.0.0`;
+publishing Host API v1 separately would not rewrite them either.
 
 Provider 2.1.1 is an independent retained release projection: Host
 `forms.takoform.com/v1beta1`, the versioned
@@ -106,17 +107,19 @@ remain retired or retained with their own epochs.
 the same manifest shape while following earlier FormRef schema identities.
 `v1alpha5` succeeds the occupied v1alpha4 schema because its referenced FormRef
 grammar now accepts versionless family groups. It does not identify a Form
-generation or inherit Specification 1.0 maturity. A later envelope moves only
+generation or inherit Specification 1.1 maturity. A later envelope moves only
 when the manifest validation contract changes, never merely because a Form or
 Provider version moves.
 
-**Takoform's own Form Packages publish with the provider release that embeds
-them** ([decision 0041](decisions/0041-form-packages-publish-with-the-provider-release.md)):
-one release train, with each release's exact package digests locked append-only
-in [`../release/provider-form-identities.json`](../release/provider-form-identities.json).
-The identity stays content-addressed and provider-free; another publisher may
-publish under its own cadence. Content-addressed packages have no independent
-SemVer. Their exact package digest produces the publication artifact ID
+**Form Package releases evolve independently from Provider releases.** The
+Provider-embedded package rule in [decision 0041](decisions/0041-form-packages-publish-with-the-provider-release.md)
+is historical and superseded for the current release policy. A package
+publisher owns its own release decision and locks each exact package digest
+append-only in the applicable package ledger; a Provider release neither
+publishes nor versions that package. The identity stays content-addressed and
+provider-free; another publisher may publish under its own cadence. No fixed
+Form Package cadence has been adopted. Content-addressed packages have no
+independent SemVer. Their exact package digest produces the publication artifact ID
 `sha256-<hex>` and therefore the source path and tag. The withdrawn epochs'
 `packageVersion` values and package profiles are retired identities; their
 bytes stay in git history and `forms/*` release tags, where the `formpackage`
@@ -167,7 +170,7 @@ remain unpublished.
 
 Provider 3.0.0 is a separate Registry-published, non-normative reference
 implementation targeting Host API v1 and the exact current `0.x` FormRefs. Its
-release status cannot close or block Specification 1.0, and publication alone
+release status cannot close or block Specification 1.1, and publication alone
 does not prove a particular Host or production deployment is ready.
 
 A later Stable `1.0.0` Form is a new exact identity. Existing Beta state remains
@@ -223,8 +226,9 @@ serves and not what an installed client can do.
 The current generator index names 31 exact Experimental Forms across eight
 versionless families; Edge contains 16 and has no `ObjectBucket`. Each Form
 keeps its own `0.x` Definition version. A breaking correction advances only
-that Form's SemVer and digest. It does not mint a family generation, and a
-Specification/Host API v1 release does not promote it. The occupied
+that Form's SemVer and digest. It does not mint a family generation, and
+publishing Specification 1.1 or the separate Host API v1 candidate does not
+promote it. The occupied
 v1beta1/Provider 2.1.1 FormRefs and published-schema bytes remain immutable
 history.
 
@@ -346,7 +350,7 @@ new Form SemVer unless the Form contract itself changed.
 
 ## Host API group
 
-Specification 1.0 defines the literal stable Host API wire
+The repository carries the literal Host API v1 candidate wire
 `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` with API base
 `/apis/forms.takoform.com/v1`. It carries versionless family groups, exact
 FormRefs, UID/generation/revision identity, long-running Operations,
@@ -354,9 +358,10 @@ content-addressed artifact upload, declared constraints, standard-service
 support, and Host Support Profiles. The exact normative contract is
 [`host-api/v1.md`](host-api/v1.md).
 
-The v1 source does not by itself claim that Specification 1.0 has been
-released. The release assertion stays red until one clean committed snapshot
-of the normative `spec/` tree is recorded as defined by
+The v1 source does not by itself claim that Specification 1.1 has been
+released, and publishing Specification 1.1 does not publish or promote this
+Host API candidate. The release assertion stays red until one clean committed
+snapshot of the normative `spec/` tree is recorded as defined by
 [decision 0055](decisions/0055-specification-release-needs-only-normative-source.md).
 
 The three pre-Beta wires — `forms.takoform.com/v1alpha1` at the unversioned
@@ -401,7 +406,7 @@ unchanged ([decision 0038](decisions/0038-a-generation-move-is-measured-not-assu
 It is frozen into Registry-published provider `v2.1.1`; the record stands as
 history rather than as a precedent.
 
-Specification 1.0 has one release prerequisite: an exact committed snapshot of
+Specification 1.1 has one release prerequisite: an exact committed snapshot of
 the normative `spec/` tree. Candidate Forms, package publication, reference
 conformance, a Provider major, historical admission, an external Host,
 backend receipt, production consumer, Takoserver, Takosumi, signer, or operator

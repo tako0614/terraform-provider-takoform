@@ -45,9 +45,10 @@ the prose table is a readable projection, not a second registry:
 | `topic.forms.takoform.com` | 2 |
 | `vector.forms.takoform.com` | 1 |
 
-Those eight groups contain 31 exact Experimental `0.x` FormRefs. Specification
-1.0 and Host API v1 do not promote any of them to Form `1.0.0`; a future Stable
-Form starts at `1.0.0` only by an explicit decision for that Form.
+Those eight groups contain 31 exact Experimental `0.x` FormRefs. Publishing
+Specification 1.1 does not promote any of them to Form `1.0.0`; neither would
+publishing the separate Host API v1 candidate. A future Stable Form starts at
+`1.0.0` only by an explicit decision for that Form.
 
 Publisher identity never enters the FormRef. Semantic identity (FormRef),
 distribution bytes (package digest), publisher trust (signature policy), and
@@ -194,7 +195,7 @@ advertises the exact subset it actually supports.
   Form Definition.
 - It does not grant maturity: all 31 current FormRefs are exact Experimental
   `0.x` identities, including the Edge family's 16. The stable Host lane and
-  Specification 1.0 do not make them Stable, and their package artifacts
+  Specification 1.1 do not make them Stable, and their package artifacts
   remain a separate unpublished fact.
 - It does not constrain hosts: a host may support any subset of a family and
   states that subset in its Host Support Profile.
