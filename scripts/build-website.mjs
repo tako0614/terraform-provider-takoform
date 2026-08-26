@@ -15,6 +15,7 @@ import {
   FROZEN_HASHMAP_ENTRIES,
   FROZEN_PUBLIC_IDENTITIES,
 } from "./frozen-public-identities.mjs";
+import { normalizeGeneratedHtml } from "./website-html-normalization.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -53,11 +54,11 @@ function pinFrozenHashmap() {
   writeFileSync(hashmapPath, JSON.stringify(hashmap));
 }
 
-function normalizeGeneratedHtml(directory) {
+function normalizeGeneratedHtmlTree(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      normalizeGeneratedHtml(entryPath);
+      normalizeGeneratedHtmlTree(entryPath);
       continue;
     }
     if (
@@ -68,7 +69,7 @@ function normalizeGeneratedHtml(directory) {
       continue;
     }
     const generated = readFileSync(entryPath, "utf8");
-    const normalized = generated.replace(/[ \t]+$/gmu, "");
+    const normalized = normalizeGeneratedHtml(generated);
     if (normalized !== generated) {
       writeFileSync(entryPath, normalized);
     }
@@ -76,13 +77,17 @@ function normalizeGeneratedHtml(directory) {
 }
 
 try {
+  const buildEnvironment = { ...process.env, VITE_EXTRA_EXTENSIONS: "tf" };
+  // Snapshot checks alone may ask the config to derive and verify status
+  // without writing it. A real website build must always regenerate it.
+  delete buildEnvironment.TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY;
   execFileSync(process.execPath, [vitepressBinary, "build", "website"], {
     cwd: repositoryRoot,
     stdio: "inherit",
-    env: { ...process.env, VITE_EXTRA_EXTENSIONS: "tf" },
+    env: buildEnvironment,
   });
   pinFrozenHashmap();
-  normalizeGeneratedHtml(path.join(repositoryRoot, "website", "public"));
+  normalizeGeneratedHtmlTree(path.join(repositoryRoot, "website", "public"));
 } finally {
   for (const [filePath, bytes] of preserved) {
     writeFileSync(filePath, bytes);

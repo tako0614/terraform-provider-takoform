@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -15,6 +23,8 @@ import {
   SITE_STATUS_DEPRECATED_FIELDS,
   SITE_STATUS_FIELDS,
   deriveSiteStatusFacts,
+  prepareSiteStatus,
+  renderSiteStatusDocument,
 } from "../website/.vitepress/site-status.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
@@ -203,6 +213,83 @@ describe("the committed status document", () => {
         readFileSync(path.join(repositoryRoot, SITE_STATUS_PUBLISHED_PATH)),
       ),
     ).toBe(true);
+  });
+});
+
+describe("read-only site status preparation", () => {
+  test("fails closed for invalid snapshot flag values", () => {
+    for (const value of ["", "0", "true"]) {
+      expect(() =>
+        execFileSync(
+          process.execPath,
+          ["-e", 'import("./website/.vitepress/config.mts")'],
+          {
+            cwd: repositoryRoot,
+            env: {
+              ...process.env,
+              TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY: value,
+            },
+            stdio: "pipe",
+          },
+        ),
+      ).toThrow(
+        'TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY must be exactly "1" when set',
+      );
+    }
+  });
+
+  test("leaves committed bytes and stat metadata unchanged", () => {
+    fixture((root) => {
+      const statusPath = path.join(root, SITE_STATUS_REPOSITORY_PATH);
+      const beforeBytes = readFileSync(statusPath);
+      const stableStat = () => {
+        const stats = statSync(statusPath, { bigint: true });
+        return {
+          mode: stats.mode,
+          size: stats.size,
+          mtimeNs: stats.mtimeNs,
+          ctimeNs: stats.ctimeNs,
+        };
+      };
+      const beforeStat = stableStat();
+
+      const facts = prepareSiteStatus(path.join(root, "website"), {
+        write: false,
+      });
+
+      const afterStat = stableStat();
+      const afterBytes = readFileSync(statusPath);
+      expect(afterBytes.equals(beforeBytes)).toBe(true);
+      expect(afterBytes.toString("utf8")).toBe(renderSiteStatusDocument(facts));
+      expect(afterStat).toEqual(beforeStat);
+    });
+  });
+
+  test("rejects stale committed bytes without replacing them", () => {
+    fixture((root) => {
+      const statusPath = path.join(root, SITE_STATUS_REPOSITORY_PATH);
+      const staleBytes = Buffer.concat([
+        readFileSync(statusPath),
+        Buffer.from("stale\n"),
+      ]);
+      writeFileSync(statusPath, staleBytes);
+
+      expect(() =>
+        prepareSiteStatus(path.join(root, "website"), { write: false }),
+      ).toThrow(/is stale: committed bytes do not match/);
+      expect(readFileSync(statusPath).equals(staleBytes)).toBe(true);
+    });
+  });
+
+  test("rejects a missing committed status document", () => {
+    fixture((root) => {
+      const statusPath = path.join(root, SITE_STATUS_REPOSITORY_PATH);
+      rmSync(statusPath);
+
+      expect(() =>
+        prepareSiteStatus(path.join(root, "website"), { write: false }),
+      ).toThrow(/is missing or unreadable in read-only mode/);
+    });
   });
 });
 

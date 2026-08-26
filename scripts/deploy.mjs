@@ -598,14 +598,12 @@ try {
   die("the public snapshot gate failed before publication; production is unchanged");
 }
 
-// VitePress/Vue scoped-style hashes depend on the absolute build path, so a
-// byte-for-byte rebuild comparison of the HTML and the content-addressed
-// assets is impossible. This step instead proves that the committed website
-// output is not stale: a fresh pinned build, run in a managed install home
-// outside the archive, must reproduce every committed page semantically, every
-// other published file byte-for-byte, and the asset set by role. The source
-// copy is first proved equal to the frozen commit's Git blobs via the
-// committed publication manifest.
+// A fresh pinned Bun build with its dependency tree installed under the same
+// checkout prefix deterministically reproduces the content-addressed assets.
+// This step therefore requires exact generated asset names and bytes, HTML
+// bytes after the writer's trailing-whitespace-only normalization, and exact
+// bytes for every other published file. The source copy is first proved equal
+// to the frozen commit's Git blobs via the committed publication manifest.
 process.stdout.write(`\n==> verifying the committed website dist with a fresh pinned build\n`);
 let websiteBuildHome;
 try {
@@ -617,6 +615,7 @@ try {
     "bun.lock",
     "scripts/check-website-dist.mjs",
     "scripts/frozen-public-identities.mjs",
+    "scripts/website-html-normalization.mjs",
     "scripts/website-snapshot-temp.mjs",
     "scripts/website-snapshot-temp.test.mjs",
     "website",

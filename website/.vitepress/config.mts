@@ -10,15 +10,23 @@ const github = "https://github.com/tako0614/terraform-provider-takoform";
 // The published/preview facts are derived from the repository once, here, at
 // build time. They reach the footer through themeConfig so every page states
 // them as static HTML, and they reach machines through the JSON document this
-// call writes. Every one of them is a pure function of committed repository
-// bytes, so a fresh build reproduces the whole published tree; no commit id
-// appears anywhere in it (see .vitepress/site-status.mjs).
+// call normally writes. Every one of them is a pure function of committed
+// repository bytes, so a fresh build reproduces the whole published tree; no
+// commit id appears anywhere in it (see .vitepress/site-status.mjs).
 const siteDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
+const snapshotReadOnlyFlag = process.env.TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY;
+if (snapshotReadOnlyFlag !== undefined && snapshotReadOnlyFlag !== "1") {
+  throw new Error(
+    "TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY must be exactly \"1\" when set",
+  );
+}
 const siteStatus = {
-  ...prepareSiteStatus(siteDirectory),
+  ...prepareSiteStatus(siteDirectory, {
+    write: snapshotReadOnlyFlag === undefined,
+  }),
   route: SITE_STATUS_ROUTE,
 };
 
@@ -360,6 +368,10 @@ export default defineConfig({
     },
     publicDir: "static",
   },
+  // Local search indexes pages concurrently by default. Serializing that
+  // pass keeps MiniSearch insertion order (and its emitted chunk hash) stable
+  // across fresh builds, including the isolated snapshot output.
+  buildConcurrency: 1,
   themeConfig: {
     outline: { level: [2, 3] },
     search: {
