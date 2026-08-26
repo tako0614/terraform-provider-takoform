@@ -70,7 +70,22 @@
   },
   "evidence": {
     "specification": {
-      "sourceSnapshot": null,
+      "sourceSnapshot": {
+        "format": "takoform.specification-source-snapshot@v2",
+        "releaseVersion": "1.1",
+        "repository": "takoform",
+        "sourceCommit": "00ae5ee4e2ea2eb62ea796499a93081374dc36b9",
+        "roots": [
+          "spec"
+        ],
+        "excludedPaths": [
+          "spec/publication-evidence.json",
+          "spec/publication-blockers.json"
+        ],
+        "fileCount": 118,
+        "pathSetSha256": "4934e5e717899a150917b5368b8afbf3dd1ca926b7cbaff764c07a9d14c07347",
+        "documentSetSha256": "3ba2e859f29a90d0c2668dc0467a710de558c2aa23f42a57c850c84ebf672442"
+      },
       "candidateCorpus": null,
       "referenceConformance": null
     },
