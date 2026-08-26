@@ -321,7 +321,7 @@ test("website deploy contract declares the published identity obligation", () =>
     "static public-surface gate",
   );
   expect(website.obligations.provenance).toContain(
-    "fresh VitePress build",
+    "two concurrent read-only VitePress builds",
   );
   expect(website.obligations["no-overwrite"]).toContain(
     INITIAL_SCHEMA_ORIGIN_MINT_ACK,
