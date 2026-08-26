@@ -8,7 +8,7 @@ preview や成熟度を意味しません。
 
 | 軸                    | 現在の identity                            | 意味と利用可能性                                                                                                                                                               |
 | --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform 1.1 candidate**                 | first numbered release。normative `spec/` tree の exact committed snapshot が1つ記録されるまで open。1.0 は公開前に撤回され再利用しない。 |
+| Specification         | **Takoform 1.1**                           | first numbered release。公開状態は exact append-only release ledger だけから導出する。1.0 は公開前に撤回され再利用しない。             |
 | Host API              | **`forms.takoform.com/v1`**                | stable Specification contract。                                                                                                                                                 |
 | Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Forms。すべて Experimental。                                                                                                                                |
 | Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | package artifact は unpublished。                                                                                                                                               |

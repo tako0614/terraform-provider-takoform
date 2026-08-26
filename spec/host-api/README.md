@@ -10,8 +10,9 @@ Takoform Specification 1.1 defines the unchanged literal
 - wire schema: [`host-api-wire-v1.schema.json`](../schemas/host-api-wire-v1.schema.json);
 - operation table: [`operations-v1.json`](operations-v1.json).
 
-The Specification 1.1 release candidate remains open until one exact committed
-snapshot of the normative `spec/` tree is recorded. Candidate Forms, packages,
+Specification 1.1 readiness is derived from one exact committed snapshot of the
+normative `spec/` tree, and publication state is derived from its numbered
+ledger. Candidate Forms, packages,
 reference conformance, Providers, Hosts, products, deployments, and adoption
 evidence cannot block or authorize that release. The lane's stable name does
 not promote any current `0.x` Form to Form `1.0.0` and does not release Provider

@@ -74,8 +74,9 @@ function render(facts) {
     "publish or promote the separate Host API v1 candidate, relabel any current",
     "Form as `1.0.0`, publish a Form Package, or release the non-normative Provider.",
     "This table is generated from repository bytes",
-    "by `bun run sync:current-generation`; the explicit Specification release",
-    "assertion remains fail-closed while its committed evidence tuple is open.",
+    "by `bun run sync:current-generation`; the numbered release ledger derives",
+    "the Specification row as `candidate-open` or `released` without changing any",
+    "Host API, Form, package, or Provider identity.",
     "",
     END,
   ].join("\n");

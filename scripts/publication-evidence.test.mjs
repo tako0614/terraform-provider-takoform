@@ -111,7 +111,9 @@ function writeJson(root, relativePath, value) {
 function makeCanonicalClone(source, commit, prefix = "takoform-publication-evidence-") {
   const root = mkdtempSync(path.join(tmpdir(), prefix));
   rootsToRemove.add(root);
-  execFileSync("git", ["clone", "--shared", source, root], { stdio: "ignore" });
+  execFileSync("git", ["clone", "--no-local", source, root], {
+    stdio: "ignore",
+  });
   git(root, "checkout", "--detach", commit);
   git(root, "config", "user.name", "Publication Evidence Test");
   git(root, "config", "user.email", "publication-evidence@example.invalid");
@@ -792,6 +794,106 @@ describe("canonical repository authority", () => {
     expect(() => validatePublicationEvidence(changed, { repositoryRoot: root })).toThrow(
       /not reachable from an allowed canonical ref/,
     );
+  });
+
+  test("derives committed source bytes from the unreplaced object view despite ambient Git overrides", () => {
+    const root = makeClone();
+    const sourceCommit = DOCUMENT.candidateBaseline.commit;
+    const expected = deriveSpecificationSourceSnapshot(root, sourceCommit);
+    writeText(root, "spec/ambient-replacement.md", "attacker replacement bytes\n");
+    git(root, "add", "spec/ambient-replacement.md");
+    git(root, "commit", "-m", "attacker replacement commit");
+    const replacementCommit = git(root, "rev-parse", "HEAD");
+    git(root, "replace", sourceCommit, replacementCommit);
+
+    const names = [
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+      "GIT_CONFIG_COUNT",
+      "GIT_CONFIG_GLOBAL",
+      "GIT_CONFIG_KEY_0",
+      "GIT_CONFIG_VALUE_0",
+      "GIT_INDEX_FILE",
+      "GIT_OBJECT_DIRECTORY",
+      "GIT_REPLACE_REF_BASE",
+      "GIT_WORK_TREE",
+    ];
+    const previous = Object.fromEntries(
+      names.map((name) => [name, process.env[name]]),
+    );
+    const globalConfig = path.join(root, "attacker.gitconfig");
+    writeFileSync(globalConfig, "[core]\n\tuseReplaceRefs = true\n");
+    process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = "/tmp/attacker-alternates";
+    process.env.GIT_CONFIG_COUNT = "1";
+    process.env.GIT_CONFIG_GLOBAL = globalConfig;
+    process.env.GIT_CONFIG_KEY_0 = "core.useReplaceRefs";
+    process.env.GIT_CONFIG_VALUE_0 = "true";
+    process.env.GIT_INDEX_FILE = "/tmp/attacker-index";
+    process.env.GIT_OBJECT_DIRECTORY = "/tmp/attacker-objects";
+    process.env.GIT_REPLACE_REF_BASE = "refs/attacker/";
+    process.env.GIT_WORK_TREE = "/tmp/attacker-worktree";
+    try {
+      expect(deriveSpecificationSourceSnapshot(root, sourceCommit)).toEqual(
+        expected,
+      );
+    } finally {
+      for (const name of names) {
+        if (previous[name] === undefined) delete process.env[name];
+        else process.env[name] = previous[name];
+      }
+      git(root, "replace", "-d", sourceCommit);
+    }
+  });
+
+  test("rejects repository URL rewrites and alternate object authority", () => {
+    const rewritten = makeClone();
+    git(
+      rewritten,
+      "config",
+      "url.file:///tmp/attacker/.insteadOf",
+      "https://github.com/",
+    );
+    expect(() =>
+      validatePublicationEvidence(DOCUMENT, { repositoryRoot: rewritten }),
+    ).toThrow(/configuration can influence evidence/);
+
+    const alternate = makeClone();
+    const commonDirectory = git(
+      alternate,
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+    );
+    writeText(
+      commonDirectory,
+      "objects/info/alternates",
+      `${path.join(ROOT, ".git", "objects")}\n`,
+    );
+    expect(() => deriveSpecificationSourceSnapshot(
+      alternate,
+      DOCUMENT.candidateBaseline.commit,
+    )).toThrow(/forbidden objects\/info\/alternates/);
+  });
+
+  test("rejects a shallow repository before making history or reachability claims", () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), "takoform-publication-evidence-shallow-"),
+    );
+    rootsToRemove.add(root);
+    execFileSync(
+      "git",
+      ["clone", "--depth", "1", `file://${ROOT}`, root],
+      { stdio: "ignore" },
+    );
+    git(root, "remote", "set-url", "origin", CANONICAL_ORIGIN);
+    git(
+      root,
+      "config",
+      "remote.origin.fetch",
+      "+refs/heads/*:refs/remotes/origin/*",
+    );
+    expect(() =>
+      validatePublicationEvidence(DOCUMENT, { repositoryRoot: root }),
+    ).toThrow(/complete and non-shallow/);
   });
 });
 

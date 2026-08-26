@@ -155,6 +155,20 @@ function sha256(raw) {
   return `sha256:${createHash("sha256").update(raw).digest("hex")}`;
 }
 
+function safeReleaseGitConfiguration() {
+  return [
+    "core.repositoryformatversion\n0",
+    "core.filemode\ntrue",
+    "core.bare\nfalse",
+    "core.logallrefupdates\ntrue",
+    "remote.origin.url\nhttps://github.com/tako0614/terraform-provider-takoform.git",
+    "remote.origin.fetch\n+refs/heads/*:refs/remotes/origin/*",
+    "branch.main.remote\norigin",
+    "branch.main.merge\nrefs/heads/main",
+    "",
+  ].join("\0");
+}
+
 function isReleaseList(args) {
   return (
     args[0] === "api" &&
@@ -632,6 +646,12 @@ describe("release surface contract and strict parsing", () => {
     const specificationIO = memoryIO();
     const specificationFake = (executable, args) => {
       specificationCalls.push({ executable, args });
+      if (
+        executable === "git" &&
+        args.join(" ") === "config --local -z --list"
+      ) {
+        return safeReleaseGitConfiguration();
+      }
       if (executable === "gh" && args[0] === "--version") {
         return "gh version 2.96.0 (test)\n";
       }
@@ -981,6 +1001,44 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     expect(first.tagObjectBytes.toString("utf8")).not.toContain(
       "compatibility",
     );
+
+    fixture.runGit("replace", fixture.releaseCommit, fixture.sourceCommit);
+    const overriddenNames = [
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+      "GIT_CONFIG_COUNT",
+      "GIT_CONFIG_KEY_0",
+      "GIT_CONFIG_VALUE_0",
+      "GIT_INDEX_FILE",
+      "GIT_OBJECT_DIRECTORY",
+      "GIT_REPLACE_REF_BASE",
+      "GIT_WORK_TREE",
+    ];
+    const previous = Object.fromEntries(
+      overriddenNames.map((name) => [name, process.env[name]]),
+    );
+    process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = "/tmp/attacker-objects";
+    process.env.GIT_CONFIG_COUNT = "1";
+    process.env.GIT_CONFIG_KEY_0 = "core.useReplaceRefs";
+    process.env.GIT_CONFIG_VALUE_0 = "true";
+    process.env.GIT_INDEX_FILE = "/tmp/attacker-index";
+    process.env.GIT_OBJECT_DIRECTORY = "/tmp/attacker-object-directory";
+    process.env.GIT_REPLACE_REF_BASE = "refs/attacker/";
+    process.env.GIT_WORK_TREE = "/tmp/attacker-worktree";
+    try {
+      const isolated = releaseDeployTestHooks.specificationPublicationInput(
+        execution,
+        fixture.releaseCommit,
+      );
+      expect(isolated.tagObject).toBe(first.tagObject);
+      expect(isolated.tagObjectBytes).toEqual(first.tagObjectBytes);
+      expect(isolated.releaseCommit).toBe(fixture.releaseCommit);
+    } finally {
+      for (const name of overriddenNames) {
+        if (previous[name] === undefined) delete process.env[name];
+        else process.env[name] = previous[name];
+      }
+      fixture.runGit("replace", "-d", fixture.releaseCommit);
+    }
     expect(
       releaseDeployTestHooks.materializeSpecificationTag(execution, first),
     ).toBe(first.tagObject);
@@ -1034,6 +1092,21 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     ).toThrow("exact reviewed Specification recovery");
   });
 
+  test("rejects a merge-parent C2 even when its resulting tree is evidence-only", () => {
+    const fixture = createC2();
+    fixture.runGit("switch", "-c", "merge-c2", fixture.sourceCommit);
+    fixture.runGit("merge", "--no-ff", "--no-commit", "main");
+    fixture.runGit("commit", "-m", "forbidden merge-parent C2");
+    const mergeCommit = fixture.runGit("rev-parse", "HEAD");
+    expect(() =>
+      releaseDeployTestHooks.assertSpecificationC2Fence(
+        context(execFileSync, { repo: fixture.root }),
+        fixture.sourceCommit,
+        mergeCommit,
+      ),
+    ).toThrow("direct single-parent evidence-only child");
+  });
+
   test("publishes the exact C2 source asset through create-only tag and immutable readback", () => {
     const fixture = createC2();
     const bare = temporaryDirectory("specification-origin");
@@ -1049,6 +1122,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     let uploadedPath = null;
     let uploadedBytes = null;
     let ownerChecks = 0;
+    const ownerGateEnvironments = [];
     const releaseId = 41;
     const assetsURL =
       `https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets`;
@@ -1069,7 +1143,10 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     const fake = (executable, args, options = {}) => {
       calls.push({ executable, args: [...args] });
       if (executable === "bun") {
-        if (args.join(" ") === "run check:release-owner-gate") ownerChecks += 1;
+        if (args.join(" ") === "run check:release-owner-gate") {
+          ownerChecks += 1;
+          ownerGateEnvironments.push({ ...options.env });
+        }
         return "";
       }
       if (executable === "gh" && args[0] === "--version") {
@@ -1083,6 +1160,9 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
         return JSON.stringify({ enabled: true });
       }
       if (executable === "git") {
+        if (args.join(" ") === "config --local -z --list") {
+          return safeReleaseGitConfiguration();
+        }
         if (args.join(" ") === "remote get-url origin") {
           return "https://github.com/tako0614/terraform-provider-takoform.git\n";
         }
@@ -1228,6 +1308,16 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     ).toBe(true);
     expect(JSON.stringify(result)).not.toContain("compatibility");
     expect(ownerChecks).toBeGreaterThanOrEqual(5);
+    for (const environment of ownerGateEnvironments) {
+      expect(environment.GH_TOKEN).toBeUndefined();
+      expect(environment.GITHUB_TOKEN).toBeUndefined();
+      expect(environment.GIT_NO_REPLACE_OBJECTS).toBe("1");
+      expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+      expect(environment.GIT_CONFIG_SYSTEM).toBe("/dev/null");
+      expect(environment.GIT_OBJECT_DIRECTORY).toBeUndefined();
+      expect(environment.GIT_ALTERNATE_OBJECT_DIRECTORIES).toBeUndefined();
+      expect(environment.GIT_WORK_TREE).toBeUndefined();
+    }
     expect(
       calls.filter(
         ({ executable, args }) =>
@@ -1564,6 +1654,15 @@ describe("owner gate final fence and pinned release tools", () => {
       if (version !== null) return version;
       if (executable === "bun") return "";
       if (executable === "git") {
+        if (args.join(" ") === "config --local -z --list") {
+          return safeReleaseGitConfiguration();
+        }
+        if (
+          args.join(" ") ===
+          "rev-parse --path-format=absolute --git-common-dir"
+        ) {
+          return `${join(repositoryRoot, ".git")}\n`;
+        }
         if (args[0] === "status") return "";
         if (args.join(" ") === "rev-parse --is-shallow-repository") {
           return "false\n";
@@ -1663,6 +1762,15 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
   const fake = (executable, args) => {
     calls.push({ executable, args: [...args] });
     if (executable === "git") {
+      if (args.join(" ") === "config --local -z --list") {
+        return safeReleaseGitConfiguration();
+      }
+      if (
+        args.join(" ") ===
+        "rev-parse --path-format=absolute --git-common-dir"
+      ) {
+        return `${join(repo, ".git")}\n`;
+      }
       if (args[0] === "status") return "";
       if (args.join(" ") === "rev-parse --is-shallow-repository") {
         return "false\n";
@@ -1809,6 +1917,15 @@ test("top-level public verify cannot emit VERIFIED after deep semantic rejection
   const fake = (executable, args) => {
     calls.push({ executable, args: [...args] });
     if (executable === "git") {
+      if (args.join(" ") === "config --local -z --list") {
+        return safeReleaseGitConfiguration();
+      }
+      if (
+        args.join(" ") ===
+        "rev-parse --path-format=absolute --git-common-dir"
+      ) {
+        return `${join(repo, ".git")}\n`;
+      }
       if (args[0] === "status") return "";
       if (args.join(" ") === "rev-parse --is-shallow-repository") {
         return "false\n";
@@ -3211,6 +3328,13 @@ describe("local immutable GitHub Release publication", () => {
     expect(pushEnvironment.GH_TOKEN).toBeUndefined();
     expect(pushEnvironment.GITHUB_TOKEN).toBeUndefined();
     expect(pushEnvironment.GIT_TERMINAL_PROMPT).toBe("0");
+    expect(pushEnvironment.GIT_NO_REPLACE_OBJECTS).toBe("1");
+    expect(pushEnvironment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+    expect(pushEnvironment.GIT_CONFIG_SYSTEM).toBe("/dev/null");
+    expect(pushEnvironment.GIT_OBJECT_DIRECTORY).toBeUndefined();
+    expect(pushEnvironment.GIT_ALTERNATE_OBJECT_DIRECTORIES).toBeUndefined();
+    expect(pushEnvironment.GIT_INDEX_FILE).toBeUndefined();
+    expect(pushEnvironment.GIT_WORK_TREE).toBeUndefined();
     expect(pushEnvironment.GIT_CONFIG_VALUE_0).toBe("");
     expect(pushEnvironment.GIT_CONFIG_VALUE_2).toBe("");
     expect(pushEnvironment.GIT_CONFIG_VALUE_3).toStartWith(
@@ -3227,6 +3351,47 @@ describe("local immutable GitHub Release publication", () => {
     ).toBe("x-access-token:operator-only-test-token");
     expect(pushEnvironment.GIT_CONFIG_KEY_4).toBe("core.hooksPath");
     expect(pushEnvironment.GIT_CONFIG_VALUE_4).toBe("/dev/null");
+  });
+
+  test("normal Git reads scrub ambient authority, object, worktree, command, and protocol overrides", () => {
+    const names = [
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+      "GIT_CONFIG_COUNT",
+      "GIT_CONFIG_KEY_0",
+      "GIT_CONFIG_VALUE_0",
+      "GIT_EXTERNAL_DIFF",
+      "GIT_INDEX_FILE",
+      "GIT_OBJECT_DIRECTORY",
+      "GIT_PROXY_COMMAND",
+      "GIT_REPLACE_REF_BASE",
+      "GIT_SSH_COMMAND",
+      "GIT_WORK_TREE",
+    ];
+    const previous = Object.fromEntries(
+      names.map((name) => [name, process.env[name]]),
+    );
+    for (const name of names) process.env[name] = "/tmp/ambient-attacker";
+    process.env.GIT_CONFIG_COUNT = "1";
+    process.env.GIT_CONFIG_KEY_0 = "url.file:///tmp/attacker/.insteadOf";
+    process.env.GIT_CONFIG_VALUE_0 = "https://github.com/";
+    try {
+      const environment = releaseDeployTestHooks.normalGitEnvironment();
+      expect(environment.GH_TOKEN).toBeUndefined();
+      expect(environment.GH_ENTERPRISE_TOKEN).toBeUndefined();
+      expect(environment.GITHUB_TOKEN).toBeUndefined();
+      expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
+      expect(environment.GIT_NO_REPLACE_OBJECTS).toBe("1");
+      expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+      expect(environment.GIT_CONFIG_SYSTEM).toBe("/dev/null");
+      for (const name of names) {
+        expect(environment[name]).toBeUndefined();
+      }
+    } finally {
+      for (const name of names) {
+        if (previous[name] === undefined) delete process.env[name];
+        else process.env[name] = previous[name];
+      }
+    }
   });
 
   test("tag-only recovery reconstructs the reviewed object without changing a ref", () => {
