@@ -2,13 +2,18 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  closeSync,
   copyFileSync,
   constants as fsConstants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
+  readlinkSync,
   readdirSync,
   realpathSync,
   rmSync,
@@ -27,6 +32,26 @@ import {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+function digestFile(path) {
+  let descriptor;
+  try {
+    descriptor = openSync(
+      path,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+    );
+    const hash = createHash("sha256");
+    const buffer = Buffer.allocUnsafe(1024 * 1024);
+    while (true) {
+      const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+    return hash.digest("hex");
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
 
 // diagnostics renders what actually went wrong, whatever threw.
 //
@@ -159,9 +184,16 @@ export function createHardenedGitEnvironment(environment = process.env) {
 
 const COPIED_GATE_TOOLS = Object.freeze(["tofu", "terraform"]);
 const GO_BINARIES = Object.freeze(["go", "gofmt"]);
+const MANAGED_GOROOT_DIRECTORY_MODE = 0o500;
+const MANAGED_GOROOT_EXECUTABLE_MODE = 0o500;
+const MANAGED_GOROOT_FILE_MODE = 0o400;
 
 function currentUserId() {
   return typeof process.getuid === "function" ? process.getuid() : undefined;
+}
+
+function currentGroupId() {
+  return typeof process.getgid === "function" ? process.getgid() : undefined;
 }
 
 function pathMetadata(path, label) {
@@ -176,10 +208,22 @@ function pathMetadata(path, label) {
 
 function assertTrustedOwner(metadata, path, label) {
   const uid = currentUserId();
-  if (metadata.uid !== 0 && (uid === undefined || metadata.uid !== uid)) {
+  const owner = Number(metadata.uid);
+  if (owner !== 0 && (uid === undefined || owner !== uid)) {
     throw new Error(
       `${label} must be owned by root or the current user: ${path}`,
     );
+  }
+}
+
+function assertCurrentOwner(metadata, path, label) {
+  const uid = currentUserId();
+  const gid = currentGroupId();
+  if (uid !== undefined && Number(metadata.uid) !== uid) {
+    throw new Error(`${label} must be owned by the current user: ${path}`);
+  }
+  if (gid !== undefined && Number(metadata.gid) !== gid) {
+    throw new Error(`${label} must use the current user's group: ${path}`);
   }
 }
 
@@ -274,8 +318,489 @@ function inspectSafeExecutable(path, label, { checkAncestors = true } = {}) {
   return {
     path: resolvedPath,
     mode: resolved.mode & 0o7777,
-    sha256: digest(readFileSync(resolvedPath)),
+    sha256: digestFile(resolvedPath),
   };
+}
+
+function bigintMetadata(path, label) {
+  try {
+    return lstatSync(path, { bigint: true });
+  } catch (error) {
+    throw new Error(
+      `${label} cannot be inspected: ${path} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+}
+
+function sourceMetadata(metadata) {
+  return {
+    mode: Number(metadata.mode & 0o7777n),
+    uid: Number(metadata.uid),
+    gid: Number(metadata.gid),
+    dev: metadata.dev.toString(),
+    ino: metadata.ino.toString(),
+    nlink: metadata.nlink.toString(),
+  };
+}
+
+function assertSafeSourceMetadata(metadata, path, label) {
+  assertTrustedOwner(metadata, path, label);
+  const mode = Number(metadata.mode & 0o7777n);
+  if (metadata.isDirectory()) {
+    if ((mode & 0o022) !== 0) {
+      throw new Error(`${label} must not be group/other-writable: ${path}`);
+    }
+    return "directory";
+  }
+  if (metadata.isFile()) {
+    if ((mode & 0o022) !== 0) {
+      throw new Error(`${label} must not be group/other-writable: ${path}`);
+    }
+    if ((mode & 0o6000) !== 0) {
+      throw new Error(`${label} must not be setuid or setgid: ${path}`);
+    }
+    return "file";
+  }
+  throw new Error(`${label} must not contain a special file: ${path}`);
+}
+
+// Resolve one absolute path using the kernel's component-by-component symlink
+// semantics without executing anything from the nominated toolchain.  Doing
+// this ourselves, instead of accepting realpathSync as the whole proof, keeps
+// the raw link topology in the source manifest and validates every physical
+// directory crossed by relative and absolute links.
+function resolveSafeSourceNode(path, label) {
+  if (!isAbsolute(path)) throw new Error(`${label} must be absolute: ${path}`);
+  const physicalRoot = bigintMetadata(sep, `${label} physical root`);
+  if (!physicalRoot.isDirectory()) {
+    throw new Error(`${label} physical root is not a directory: ${sep}`);
+  }
+  assertSafeSourceMetadata(physicalRoot, sep, `${label} physical root`);
+  let current = sep;
+  let pending = path.slice(sep.length).split(sep);
+  const links = [];
+  const visitedLinks = new Set();
+  let linkCount = 0;
+
+  while (pending.length > 0) {
+    const component = pending.shift();
+    if (component === "" || component === ".") continue;
+    if (component === "..") {
+      current = dirname(current);
+      continue;
+    }
+    const candidate = join(current, component);
+    const metadata = bigintMetadata(candidate, label);
+    if (metadata.isSymbolicLink()) {
+      assertTrustedOwner(metadata, candidate, `${label} symbolic link`);
+      const identity = `${metadata.dev}:${metadata.ino}`;
+      if (visitedLinks.has(identity) || linkCount >= 128) {
+        throw new Error(
+          `${label} contains a cyclic symbolic link: ${candidate}`,
+        );
+      }
+      visitedLinks.add(identity);
+      linkCount += 1;
+      const target = readlinkSync(candidate);
+      links.push({
+        path: candidate,
+        target,
+        ...sourceMetadata(metadata),
+      });
+      pending = [...target.split(sep), ...pending];
+      current = isAbsolute(target) ? sep : dirname(candidate);
+      continue;
+    }
+    if (pending.length > 0) {
+      if (!metadata.isDirectory()) {
+        throw new Error(
+          `${label} physical ancestor is not a directory: ${candidate}`,
+        );
+      }
+      assertSafeSourceMetadata(
+        metadata,
+        candidate,
+        `${label} physical ancestor`,
+      );
+    }
+    current = candidate;
+  }
+
+  const metadata = bigintMetadata(current, label);
+  return { links, metadata, path: current };
+}
+
+function readStableSourceFile(path, initial, label) {
+  let descriptor;
+  try {
+    descriptor = openSync(
+      path,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+    );
+    const opened = fstatSync(descriptor, { bigint: true });
+    const beforeIdentity = JSON.stringify(sourceMetadata(initial));
+    if (
+      !opened.isFile() ||
+      beforeIdentity !== JSON.stringify(sourceMetadata(opened))
+    ) {
+      throw new Error(`${label} changed before it was read: ${path}`);
+    }
+    const hash = createHash("sha256");
+    const buffer = Buffer.allocUnsafe(1024 * 1024);
+    let bytes = 0;
+    while (true) {
+      const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      bytes += bytesRead;
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+    const after = fstatSync(descriptor, { bigint: true });
+    if (
+      !after.isFile() ||
+      beforeIdentity !== JSON.stringify(sourceMetadata(after)) ||
+      after.size !== BigInt(bytes) ||
+      initial.size !== after.size
+    ) {
+      throw new Error(`${label} changed while it was inspected: ${path}`);
+    }
+    return { bytes, sha256: hash.digest("hex") };
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function canonicalManifest(entries) {
+  const sorted = [...entries].sort(sortPaths);
+  return {
+    entries: sorted,
+    sha256: digest(Buffer.from(JSON.stringify(sorted))),
+  };
+}
+
+function addHardlinkTopology(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    if (entry.type !== "file" || entry.nlink === "1") continue;
+    const identity = `${entry.dev}:${entry.ino}`;
+    const paths = groups.get(identity) ?? [];
+    paths.push(entry.path);
+    groups.set(identity, paths);
+  }
+  return entries.map((entry) => ({
+    ...entry,
+    ...(entry.type === "file"
+      ? {
+          hardlinks:
+            entry.nlink === "1"
+              ? []
+              : [...(groups.get(`${entry.dev}:${entry.ino}`) ?? [])].sort(),
+        }
+      : {}),
+  }));
+}
+
+function createSourceGoRootManifest(sourceRoot) {
+  const entries = [];
+  const copySources = new Map();
+
+  function visit(logicalPath, physicalPath, physicalAncestors) {
+    const label = `owner gate source GOROOT entry ${logicalPath}`;
+    const resolved = resolveSafeSourceNode(physicalPath, label);
+    const type = assertSafeSourceMetadata(
+      resolved.metadata,
+      resolved.path,
+      label,
+    );
+    const metadata = sourceMetadata(resolved.metadata);
+    const base = {
+      path: logicalPath,
+      type,
+      resolvedPath: resolved.path,
+      ...metadata,
+      links: resolved.links,
+    };
+    if (type === "file") {
+      const content = readStableSourceFile(
+        resolved.path,
+        resolved.metadata,
+        label,
+      );
+      entries.push({
+        ...base,
+        ...content,
+        executable: (metadata.mode & 0o111) !== 0,
+      });
+      copySources.set(logicalPath, resolved.path);
+      return;
+    }
+
+    const identity = `${metadata.dev}:${metadata.ino}`;
+    if (physicalAncestors.has(identity)) {
+      throw new Error(
+        `owner gate source GOROOT contains a cyclic directory link at ${logicalPath}`,
+      );
+    }
+    entries.push(base);
+    const nextAncestors = new Set(physicalAncestors);
+    nextAncestors.add(identity);
+    let children;
+    try {
+      children = readdirSync(resolved.path).sort();
+    } catch (error) {
+      throw new Error(
+        `${label} cannot be enumerated: ${resolved.path} (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+    for (const child of children) {
+      visit(
+        logicalPath === "." ? child : `${logicalPath}/${child}`,
+        join(resolved.path, child),
+        nextAncestors,
+      );
+    }
+  }
+
+  const root = resolveSafeSourceNode(sourceRoot, "owner gate source GOROOT");
+  if (root.path !== sourceRoot || root.links.length !== 0) {
+    throw new Error(
+      `owner gate source GOROOT must be a physical directory: ${sourceRoot}`,
+    );
+  }
+  visit(".", sourceRoot, new Set());
+  return {
+    manifest: canonicalManifest(addHardlinkTopology(entries)),
+    copySources,
+  };
+}
+
+function normalizedGoRootEntries(sourceManifest) {
+  return sourceManifest.entries.map((entry) => ({
+    path: entry.path,
+    type: entry.type,
+    mode:
+      entry.type === "directory"
+        ? MANAGED_GOROOT_DIRECTORY_MODE
+        : entry.executable
+          ? MANAGED_GOROOT_EXECUTABLE_MODE
+          : MANAGED_GOROOT_FILE_MODE,
+    ...(entry.type === "file"
+      ? {
+          bytes: entry.bytes,
+          sha256: entry.sha256,
+          executable: entry.executable,
+        }
+      : {}),
+  }));
+}
+
+function exactManifestDifference(before, after) {
+  const beforeByPath = new Map(
+    before.entries.map((entry) => [entry.path, entry]),
+  );
+  const afterByPath = new Map(
+    after.entries.map((entry) => [entry.path, entry]),
+  );
+  for (const path of [
+    ...new Set([...beforeByPath.keys(), ...afterByPath.keys()]),
+  ].sort()) {
+    if (
+      JSON.stringify(beforeByPath.get(path)) !==
+      JSON.stringify(afterByPath.get(path))
+    ) {
+      return path;
+    }
+  }
+  return undefined;
+}
+
+function assertExactManifest(before, after, label) {
+  if (
+    before.sha256 !== after.sha256 ||
+    JSON.stringify(before.entries) !== JSON.stringify(after.entries)
+  ) {
+    const path = exactManifestDifference(before, after);
+    throw new Error(`${label} changed${path ? ` at ${path}` : ""}`);
+  }
+}
+
+function managedPath(root, logicalPath) {
+  if (logicalPath === ".") return root;
+  const path = join(root, ...logicalPath.split("/"));
+  const name = relative(root, path).split(sep).join("/");
+  if (name !== logicalPath || name.startsWith("../")) {
+    throw new Error(
+      `owner gate managed GOROOT path escaped its root: ${logicalPath}`,
+    );
+  }
+  return path;
+}
+
+function materializeManagedGoRoot({
+  copySources,
+  expectedEntries,
+  managedRoot,
+  sourceRoot,
+  testHooks,
+}) {
+  const directories = expectedEntries
+    .filter((entry) => entry.type === "directory")
+    .sort((left, right) => {
+      const depth = (entry) => entry.path.split("/").length;
+      return depth(left) - depth(right) || sortPaths(left, right);
+    });
+  const files = expectedEntries.filter((entry) => entry.type === "file");
+  try {
+    for (const entry of directories) {
+      const destination = managedPath(managedRoot, entry.path);
+      mkdirSync(destination, { mode: 0o700 });
+      testHooks?.afterCopyEntry?.({
+        logicalPath: entry.path,
+        managedRoot,
+        sourceRoot,
+      });
+    }
+    for (const entry of files) {
+      const source = copySources.get(entry.path);
+      const destination = managedPath(managedRoot, entry.path);
+      if (typeof source !== "string") {
+        throw new Error(
+          `owner gate source GOROOT copy source is missing: ${entry.path}`,
+        );
+      }
+      copyFileSync(source, destination, fsConstants.COPYFILE_EXCL);
+      chmodSync(destination, entry.mode);
+      testHooks?.afterCopyEntry?.({
+        logicalPath: entry.path,
+        managedRoot,
+        sourceRoot,
+      });
+    }
+    for (const entry of [...directories].reverse()) {
+      chmodSync(managedPath(managedRoot, entry.path), entry.mode);
+    }
+  } catch (error) {
+    throw new Error(
+      `owner gate managed GOROOT could not be materialized create-only: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function collectManagedGoRootManifest(managedRoot, expectedEntries) {
+  const expected = new Map(expectedEntries.map((entry) => [entry.path, entry]));
+  const entries = [];
+
+  function visit(logicalPath, path) {
+    const label = `owner gate managed GOROOT entry ${logicalPath}`;
+    const metadata = bigintMetadata(path, label);
+    if (metadata.isSymbolicLink()) {
+      throw new Error(`${label} must not be a symbolic link: ${path}`);
+    }
+    assertCurrentOwner(metadata, path, label);
+    const expectedEntry = expected.get(logicalPath);
+    if (!expectedEntry) {
+      throw new Error(
+        `${label} is outside the nominated logical GOROOT closure`,
+      );
+    }
+    const observedMode = Number(metadata.mode & 0o7777n);
+    if (metadata.isDirectory()) {
+      if (expectedEntry.type !== "directory") {
+        throw new Error(`${label} changed from a file to a directory`);
+      }
+      if (observedMode !== MANAGED_GOROOT_DIRECTORY_MODE) {
+        throw new Error(`${label} must have mode 0500: ${path}`);
+      }
+      entries.push({
+        path: logicalPath,
+        type: "directory",
+        mode: observedMode,
+        uid: Number(metadata.uid),
+        gid: Number(metadata.gid),
+        dev: metadata.dev.toString(),
+        ino: metadata.ino.toString(),
+        nlink: metadata.nlink.toString(),
+      });
+      for (const child of readdirSync(path).sort()) {
+        visit(
+          logicalPath === "." ? child : `${logicalPath}/${child}`,
+          join(path, child),
+        );
+      }
+      return;
+    }
+    if (!metadata.isFile()) {
+      throw new Error(`${label} must not be a special file: ${path}`);
+    }
+    if (expectedEntry.type !== "file") {
+      throw new Error(`${label} changed from a directory to a file`);
+    }
+    if (metadata.nlink !== 1n) {
+      throw new Error(`${label} must have exactly one link: ${path}`);
+    }
+    if (observedMode !== expectedEntry.mode) {
+      throw new Error(
+        `${label} must have mode ${expectedEntry.mode.toString(8).padStart(4, "0")}: ${path}`,
+      );
+    }
+    const content = readStableSourceFile(path, metadata, label);
+    entries.push({
+      path: logicalPath,
+      type: "file",
+      mode: observedMode,
+      uid: Number(metadata.uid),
+      gid: Number(metadata.gid),
+      dev: metadata.dev.toString(),
+      ino: metadata.ino.toString(),
+      nlink: metadata.nlink.toString(),
+      ...content,
+      executable: (observedMode & 0o111) !== 0,
+    });
+  }
+
+  visit(".", managedRoot);
+  const observedPaths = new Set(entries.map((entry) => entry.path));
+  for (const path of expected.keys()) {
+    if (!observedPaths.has(path)) {
+      throw new Error(`owner gate managed GOROOT entry is missing: ${path}`);
+    }
+  }
+  const normalized = entries.map((entry) => ({
+    path: entry.path,
+    type: entry.type,
+    mode: entry.mode,
+    ...(entry.type === "file"
+      ? {
+          bytes: entry.bytes,
+          sha256: entry.sha256,
+          executable: entry.executable,
+        }
+      : {}),
+  }));
+  assertExactManifest(
+    canonicalManifest(expectedEntries),
+    canonicalManifest(normalized),
+    "owner gate managed GOROOT logical closure",
+  );
+  return canonicalManifest(entries);
+}
+
+function assertSourceGoBinClosure(sourceManifest) {
+  const executableEntries = sourceManifest.entries
+    .filter(
+      (entry) =>
+        entry.type === "file" &&
+        entry.executable &&
+        entry.path.startsWith("bin/") &&
+        !entry.path.slice(4).includes("/"),
+    )
+    .map((entry) => entry.path.slice(4))
+    .sort();
+  const expected = [...GO_BINARIES].sort();
+  if (JSON.stringify(executableEntries) !== JSON.stringify(expected)) {
+    throw new Error(
+      `owner gate Go bin executable closure changed (expected ${expected.join(", ")}, observed ${executableEntries.join(", ")})`,
+    );
+  }
 }
 
 function nominatedExecutable(name, environment) {
@@ -306,7 +831,7 @@ function nominatedExecutable(name, environment) {
 }
 
 function copyGateTool(source, destination, label) {
-  const before = digest(readFileSync(source.path));
+  const before = digestFile(source.path);
   if (before !== source.sha256) {
     throw new Error(`${label} changed before it could be copied`);
   }
@@ -369,10 +894,16 @@ function assertSnapshotExecutable(
 export function createManagedToolSnapshot({
   environment = process.env,
   managedHome,
+  testHooks,
 } = {}) {
   assertSafeDirectory(managedHome, "owner gate managed HOME", {
     exactMode: 0o700,
   });
+  assertCurrentOwner(
+    pathMetadata(managedHome, "owner gate managed HOME"),
+    managedHome,
+    "owner gate managed HOME",
+  );
   const toolBin = join(managedHome, "tool-bin");
   try {
     mkdirSync(toolBin, { mode: 0o700 });
@@ -391,17 +922,26 @@ export function createManagedToolSnapshot({
       nominatedExecutable(name, environment),
     ]),
   );
-  const goBin = dirname(nominated.go.path);
-  const goRoot = dirname(goBin);
-  assertSafeDirectory(goRoot, "owner gate GOROOT");
-  assertSafeAncestors(goRoot, "owner gate GOROOT");
-  assertSafeDirectory(goBin, "owner gate Go bin");
-  assertSafeAncestors(goBin, "owner gate Go bin");
-  const gofmt = inspectSafeExecutable(
-    join(goBin, "gofmt"),
-    "owner gate gofmt candidate",
+  const sourceGoBin = dirname(nominated.go.path);
+  const sourceGoRoot = dirname(sourceGoBin);
+  const sourceBefore = createSourceGoRootManifest(sourceGoRoot);
+  assertSourceGoBinClosure(sourceBefore.manifest);
+  const sourceEntries = new Map(
+    sourceBefore.manifest.entries.map((entry) => [entry.path, entry]),
   );
-  assertExactExecutableClosure(goBin, GO_BINARIES, "owner gate Go bin");
+  const nominatedGo = sourceEntries.get("bin/go");
+  const nominatedGofmt = sourceEntries.get("bin/gofmt");
+  if (
+    nominatedGo?.type !== "file" ||
+    nominatedGo.resolvedPath !== nominated.go.path ||
+    nominatedGo.sha256 !== nominated.go.sha256 ||
+    nominatedGofmt?.type !== "file" ||
+    !nominatedGofmt.executable
+  ) {
+    throw new Error(
+      "owner gate nominated Go is not the exact bin/go and bin/gofmt closure of its physical GOROOT",
+    );
+  }
 
   const tools = {};
   for (const name of COPIED_GATE_TOOLS) {
@@ -411,15 +951,53 @@ export function createManagedToolSnapshot({
       `owner gate ${name}`,
     );
   }
+  const managedGoRoot = join(managedHome, "goroot");
+  const expectedEntries = normalizedGoRootEntries(sourceBefore.manifest);
+  materializeManagedGoRoot({
+    copySources: sourceBefore.copySources,
+    expectedEntries,
+    managedRoot: managedGoRoot,
+    sourceRoot: sourceGoRoot,
+    testHooks,
+  });
+  const sourceAfter = createSourceGoRootManifest(sourceGoRoot);
+  assertExactManifest(
+    sourceBefore.manifest,
+    sourceAfter.manifest,
+    "owner gate source GOROOT",
+  );
+  const managedManifest = collectManagedGoRootManifest(
+    managedGoRoot,
+    expectedEntries,
+  );
+  const managedEntries = new Map(
+    managedManifest.entries.map((entry) => [entry.path, entry]),
+  );
+  const managedGoBin = join(managedGoRoot, "bin");
+  const executableSnapshot = (name) => {
+    const entry = managedEntries.get(`bin/${name}`);
+    if (entry?.type !== "file") {
+      throw new Error(`owner gate managed ${name} executable is missing`);
+    }
+    return {
+      path: join(managedGoBin, name),
+      mode: entry.mode,
+      sha256: entry.sha256,
+    };
+  };
   const snapshot = {
     managedHome,
     toolBin,
     tools,
     go: {
-      root: goRoot,
-      bin: goBin,
-      go: nominated.go,
-      gofmt,
+      sourceRoot: sourceGoRoot,
+      sourceManifest: sourceBefore.manifest,
+      root: managedGoRoot,
+      bin: managedGoBin,
+      expectedManifest: canonicalManifest(expectedEntries),
+      manifest: managedManifest,
+      go: executableSnapshot("go"),
+      gofmt: executableSnapshot("gofmt"),
     },
   };
   assertManagedToolSnapshot(snapshot);
@@ -433,6 +1011,11 @@ export function assertManagedToolSnapshot(snapshot) {
   assertSafeDirectory(snapshot.managedHome, "owner gate managed HOME", {
     exactMode: 0o700,
   });
+  assertCurrentOwner(
+    pathMetadata(snapshot.managedHome, "owner gate managed HOME"),
+    snapshot.managedHome,
+    "owner gate managed HOME",
+  );
   assertSafeDirectory(snapshot.toolBin, "owner gate managed tool-bin", {
     exactMode: 0o700,
   });
@@ -453,16 +1036,25 @@ export function assertManagedToolSnapshot(snapshot) {
   }
 
   if (
+    typeof snapshot.go?.sourceRoot !== "string" ||
     typeof snapshot.go?.root !== "string" ||
     typeof snapshot.go?.bin !== "string" ||
-    dirname(snapshot.go.bin) !== snapshot.go.root
+    snapshot.go.root !== join(snapshot.managedHome, "goroot") ||
+    snapshot.go.bin !== join(snapshot.go.root, "bin") ||
+    !Array.isArray(snapshot.go?.expectedManifest?.entries) ||
+    !Array.isArray(snapshot.go?.manifest?.entries)
   ) {
     throw new Error("owner gate Go toolchain snapshot is invalid");
   }
-  assertSafeDirectory(snapshot.go.root, "owner gate GOROOT");
-  assertSafeAncestors(snapshot.go.root, "owner gate GOROOT");
-  assertSafeDirectory(snapshot.go.bin, "owner gate Go bin");
-  assertSafeAncestors(snapshot.go.bin, "owner gate Go bin");
+  const observedManifest = collectManagedGoRootManifest(
+    snapshot.go.root,
+    snapshot.go.expectedManifest.entries,
+  );
+  assertExactManifest(
+    snapshot.go.manifest,
+    observedManifest,
+    "owner gate managed GOROOT snapshot",
+  );
   assertExactExecutableClosure(
     snapshot.go.bin,
     GO_BINARIES,
@@ -479,9 +1071,98 @@ export function assertManagedToolSnapshot(snapshot) {
       expected.path,
       expected,
       `owner gate ${name} executable`,
+      { checkAncestors: false },
     );
   }
   return snapshot;
+}
+
+const MANAGED_GATE_STATE_PATHS = Object.freeze({
+  gocache: "go-build",
+  gomodcache: "go-mod",
+  gopath: "go-path",
+  tmpdir: "t",
+});
+const MANAGED_GATE_STATE_ROOT = "m";
+
+export function assertManagedGateState(state) {
+  if (!state || typeof state !== "object" || !isAbsolute(state.root ?? "")) {
+    throw new Error("owner gate mutable state is missing");
+  }
+  const expectedPaths = new Map([
+    ["root", state.root],
+    ...Object.entries(MANAGED_GATE_STATE_PATHS).map(([name, child]) => [
+      name,
+      join(state.root, child),
+    ]),
+  ]);
+  for (const [name, expected] of expectedPaths) {
+    if (state[name] !== expected) {
+      throw new Error(`owner gate mutable ${name} path changed`);
+    }
+    const metadata = assertSafeDirectory(
+      expected,
+      `owner gate mutable ${name}`,
+      { exactMode: 0o700 },
+    );
+    assertCurrentOwner(metadata, expected, `owner gate mutable ${name}`);
+    if (realpathSync(expected) !== expected) {
+      throw new Error(
+        `owner gate mutable ${name} must not contain a symbolic path`,
+      );
+    }
+  }
+  return state;
+}
+
+export function createManagedGateState(managedHome) {
+  assertSafeDirectory(managedHome, "owner gate managed HOME", {
+    exactMode: 0o700,
+  });
+  const root = join(managedHome, MANAGED_GATE_STATE_ROOT);
+  try {
+    mkdirSync(root, { mode: 0o700 });
+    for (const child of Object.values(MANAGED_GATE_STATE_PATHS)) {
+      mkdirSync(join(root, child), { mode: 0o700 });
+    }
+  } catch (error) {
+    throw new Error(
+      `owner gate mutable state must be fresh and create-only: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return assertManagedGateState({
+    root,
+    ...Object.fromEntries(
+      Object.entries(MANAGED_GATE_STATE_PATHS).map(([name, child]) => [
+        name,
+        join(root, child),
+      ]),
+    ),
+  });
+}
+
+function makeOwnedDirectoriesRemovable(path, label) {
+  const metadata = bigintMetadata(path, label);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) return;
+  assertCurrentOwner(metadata, path, label);
+  chmodSync(path, 0o700);
+  for (const child of readdirSync(path)) {
+    const childPath = join(path, child);
+    const childMetadata = bigintMetadata(childPath, `${label} child`);
+    if (childMetadata.isDirectory() && !childMetadata.isSymbolicLink()) {
+      makeOwnedDirectoriesRemovable(childPath, label);
+    }
+  }
+}
+
+// Call only from a cleanup/finally path.  The managed GOROOT stays sealed for
+// every command and every assertion; this makes its owned directories
+// removable immediately before the enclosing temporary HOME is deleted.
+export function prepareManagedHomeForRemoval(managedHome) {
+  if (!isAbsolute(managedHome)) {
+    throw new Error("owner gate managed HOME cleanup path must be absolute");
+  }
+  makeOwnedDirectoriesRemovable(managedHome, "owner gate managed HOME cleanup");
 }
 
 export function createHardenedGateEnvironment(
@@ -512,6 +1193,7 @@ export function createHardenedGateEnvironment(
   }
   if (goRoot === undefined && goBin !== undefined) goRoot = dirname(goBin);
   if (goBin === undefined && goRoot !== undefined) goBin = join(goRoot, "bin");
+  const mutableRoot = join(managedHome, MANAGED_GATE_STATE_ROOT);
   const hardened = createHardenedGitEnvironment(environment);
   for (const name of Object.keys(hardened)) {
     if (
@@ -527,6 +1209,7 @@ export function createHardenedGateEnvironment(
       name.startsWith("GO") ||
       name.startsWith("NODE_") ||
       name.startsWith("NPM_CONFIG_") ||
+      name.startsWith("SSH_") ||
       name.startsWith("TAKOFORM_CLOUDFLARE_") ||
       /^TOFU_/u.test(name) ||
       /^TF_/u.test(name) ||
@@ -540,13 +1223,13 @@ export function createHardenedGateEnvironment(
     ...hardened,
     CGO_ENABLED: "0",
     GOAUTH: "off",
-    GOCACHE: join(managedHome, "go-build"),
+    GOCACHE: join(mutableRoot, MANAGED_GATE_STATE_PATHS.gocache),
     GOENV: "off",
     GOFLAGS: "-mod=readonly -buildvcs=false",
-    GOMODCACHE: join(managedHome, "go", "pkg", "mod"),
+    GOMODCACHE: join(mutableRoot, MANAGED_GATE_STATE_PATHS.gomodcache),
     GONOPROXY: "",
     GONOSUMDB: "",
-    GOPATH: join(managedHome, "go"),
+    GOPATH: join(mutableRoot, MANAGED_GATE_STATE_PATHS.gopath),
     GOPRIVATE: "",
     GOPROXY: "https://proxy.golang.org",
     GOSUMDB: "sum.golang.org",
@@ -555,14 +1238,17 @@ export function createHardenedGateEnvironment(
     GOWORK: "off",
     HOME: managedHome,
     PATH: [
-      ...(managedToolBin ? [managedToolBin] : []),
       ...(goBin ? [goBin] : []),
+      ...(managedToolBin ? [managedToolBin] : []),
       dirname(bunExecutable),
       "/usr/local/go/bin",
       "/usr/local/bin",
       "/usr/bin",
       "/bin",
     ].join(":"),
+    TEMP: join(mutableRoot, MANAGED_GATE_STATE_PATHS.tmpdir),
+    TMP: join(mutableRoot, MANAGED_GATE_STATE_PATHS.tmpdir),
+    TMPDIR: join(mutableRoot, MANAGED_GATE_STATE_PATHS.tmpdir),
     XDG_CACHE_HOME: join(managedHome, ".cache"),
     XDG_CONFIG_HOME: join(managedHome, ".config"),
     XDG_DATA_HOME: join(managedHome, ".local", "share"),
