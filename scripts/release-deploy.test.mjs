@@ -90,13 +90,29 @@ function writeExecutable(path) {
   chmodSync(path, 0o500);
 }
 
+function replaceManagedReadOnlyFile(path, bytes = "mutated\n", mode = 0o400) {
+  chmodSync(path, 0o700);
+  writeFileSync(path, bytes);
+  chmodSync(path, mode);
+}
+
 function nominateOwnerGateTools() {
   const root = trustedTemporaryDirectory("owner-gate-tools");
   const tofuBin = join(root, "tofu-bin");
   const terraformBin = join(root, "terraform-user-bin");
   const goRoot = join(root, "go-root");
   const goBin = join(goRoot, "bin");
-  for (const directory of [tofuBin, terraformBin, goBin]) {
+  const goToolDir = join(goRoot, "pkg", "tool", "linux_amd64");
+  const goIncludeDir = join(goRoot, "pkg", "include");
+  const goSourceDir = join(goRoot, "src", "runtime");
+  for (const directory of [
+    tofuBin,
+    terraformBin,
+    goBin,
+    goToolDir,
+    goIncludeDir,
+    goSourceDir,
+  ]) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
   }
   for (const path of [
@@ -104,9 +120,14 @@ function nominateOwnerGateTools() {
     join(terraformBin, "terraform"),
     join(goBin, "go"),
     join(goBin, "gofmt"),
+    join(goToolDir, "compile"),
   ]) {
     writeExecutable(path);
   }
+  writeFileSync(join(goIncludeDir, "textflag.h"), "#define TEXTFLAG 1\n");
+  writeFileSync(join(goSourceDir, "runtime.go"), "package runtime\n");
+  chmodSync(join(goIncludeDir, "textflag.h"), 0o400);
+  chmodSync(join(goSourceDir, "runtime.go"), 0o400);
   writeExecutable(join(terraformBin, "bun"));
   process.env.PATH = [
     tofuBin,
@@ -116,13 +137,30 @@ function nominateOwnerGateTools() {
     "/usr/bin",
     "/bin",
   ].join(":");
-  return { goBin, goRoot, terraformBin, tofuBin };
+  return {
+    goBin,
+    goIncludeDir,
+    goRoot,
+    goSourceDir,
+    goToolDir,
+    terraformBin,
+    tofuBin,
+  };
 }
 
 function ownerGateToolOutput(tools, executable, args, overrides = {}) {
   const name = basename(executable);
-  if (name === "go" && args.join(" ") === "env GOROOT") {
-    return `${overrides.goroot ?? tools.goRoot}\n`;
+  if (name === "go" && args.join(" ") === "env GOROOT GOTOOLDIR GOOS GOARCH") {
+    const managedRoot =
+      overrides.goroot ?? dirname(dirname(resolve(executable)));
+    const goos = overrides.goos ?? "linux";
+    const goarch = overrides.goarch ?? "amd64";
+    const gotooldir =
+      typeof overrides.gotooldir === "function"
+        ? overrides.gotooldir(managedRoot)
+        : (overrides.gotooldir ??
+          join(managedRoot, "pkg", "tool", `${goos}_${goarch}`));
+    return `${managedRoot}\n${gotooldir}\n${goos}\n${goarch}\n`;
   }
   if (name === "go" && args.join(" ") === "version") {
     return `${overrides.goVersion ?? "go version go1.26.5 linux/amd64"}\n`;
@@ -1822,12 +1860,17 @@ describe("owner gate final fence and pinned release tools", () => {
       "GPG_TTY",
       "GOENV",
       "GOFLAGS",
+      "GOCACHEPROG",
       "GOPROXY",
       "GOTOOLCHAIN",
       "GOWORK",
       "HOME",
       "NODE_OPTIONS",
       "PATH",
+      "SSH_ASKPASS",
+      "SSH_ASKPASS_REQUIRE",
+      "SSH_AUTH_SOCK",
+      "SSH_AGENT_PID",
       "TF_CLI_ARGS",
       "TMPDIR",
       "TOFU_CLI_ARGS",
@@ -1857,11 +1900,16 @@ describe("owner gate final fence and pinned release tools", () => {
     process.env.GPG_TTY = "/dev/attacker";
     process.env.GOENV = "/tmp/attacker-goenv";
     process.env.GOFLAGS = "-run=never";
+    process.env.GOCACHEPROG = "/tmp/attacker-cache-program";
     process.env.GOPROXY = "https://example.invalid";
     process.env.GOTOOLCHAIN = "path";
     process.env.GOWORK = "/tmp/attacker.work";
     process.env.HOME = "/tmp/attacker-home";
     process.env.NODE_OPTIONS = "--require=/tmp/attacker.cjs";
+    process.env.SSH_ASKPASS = "/tmp/attacker-askpass";
+    process.env.SSH_ASKPASS_REQUIRE = "force";
+    process.env.SSH_AUTH_SOCK = "/tmp/attacker-agent.sock";
+    process.env.SSH_AGENT_PID = "12345";
     ownerGateTools = nominateOwnerGateTools();
     process.env.TF_CLI_ARGS = "-plugin-dir=/tmp/attacker";
     process.env.TMPDIR = "/tmp/attacker-tmp";
@@ -1871,12 +1919,34 @@ describe("owner gate final fence and pinned release tools", () => {
       expect(environment.CGO_ENABLED).toBe("0");
       expect(environment.GOENV).toBe("off");
       expect(environment.GOFLAGS).toBe("-mod=readonly -buildvcs=false");
+      expect(environment.GOCACHEPROG).toBeUndefined();
+      expect(environment.GOCACHE).toBe(join(environment.HOME, "m", "go-build"));
+      expect(environment.GOMODCACHE).toBe(
+        join(environment.HOME, "m", "go-mod"),
+      );
+      expect(environment.GOPATH).toBe(join(environment.HOME, "m", "go-path"));
+      expect(
+        new Set([
+          environment.GOCACHE,
+          environment.GOMODCACHE,
+          environment.GOPATH,
+          environment.TMPDIR,
+        ]).size,
+      ).toBe(4);
+      for (const path of [
+        environment.GOCACHE,
+        environment.GOMODCACHE,
+        environment.GOPATH,
+        environment.TMPDIR,
+      ]) {
+        expect(path.startsWith(join(environment.HOME, "m") + "/")).toBe(true);
+      }
       expect(environment.GOPROXY).toBe("https://proxy.golang.org");
       expect(environment.GOTOOLCHAIN).toBe("local");
       expect(environment.GOWORK).toBe("off");
       expect(environment.HOME).not.toBe("/tmp/attacker-home");
       expect(environment.HOME.startsWith("/")).toBe(true);
-      expect(environment.TMPDIR).toBe(join(environment.HOME, "tmp"));
+      expect(environment.TMPDIR).toBe(join(environment.HOME, "m", "t"));
       expect(environment.TMP).toBe(environment.TMPDIR);
       expect(environment.TEMP).toBe(environment.TMPDIR);
       expect(environment.PATH).not.toContain("attacker-bin");
@@ -1890,6 +1960,10 @@ describe("owner gate final fence and pinned release tools", () => {
       expect(environment.GPG_AGENT_INFO).toBeUndefined();
       expect(environment.GPG_TTY).toBeUndefined();
       expect(environment.NODE_OPTIONS).toBeUndefined();
+      expect(environment.SSH_ASKPASS).toBeUndefined();
+      expect(environment.SSH_ASKPASS_REQUIRE).toBeUndefined();
+      expect(environment.SSH_AUTH_SOCK).toBeUndefined();
+      expect(environment.SSH_AGENT_PID).toBeUndefined();
       expect(environment.TF_CLI_ARGS).toBeUndefined();
       expect(environment.TOFU_CLI_ARGS).toBeUndefined();
       expect(environment.GIT_NO_REPLACE_OBJECTS).toBe("1");
@@ -1943,6 +2017,16 @@ describe("owner gate final fence and pinned release tools", () => {
         "Go toolchain root drift",
       ],
       [
+        "wrong GOTOOLDIR",
+        { gotooldir: (root) => join(root, "pkg", "tool", "wrong") },
+        "Go toolchain GOTOOLDIR drift",
+      ],
+      [
+        "escaped GOTOOLDIR",
+        { gotooldir: "/tmp/owner-gate-escaped-tool-dir" },
+        "Go toolchain GOTOOLDIR escaped managed pkg/tool",
+      ],
+      [
         "mismatched gofmt version",
         {
           gofmtBuild: (path) => `${path}: go1.26.4\n\tpath\tcmd/gofmt\n`,
@@ -1987,7 +2071,7 @@ describe("owner gate final fence and pinned release tools", () => {
       const output = ownerGateToolOutput(ownerGateTools, executable, args);
       if (output !== null) return output;
       if (executable === "bun") {
-        writeFileSync(join(options.env.PATH.split(":", 1)[0], "extra"), "x");
+        writeFileSync(join(options.env.PATH.split(":")[1], "extra"), "x");
         return "";
       }
       throw new Error(`unexpected owner gate command: ${executable}`);
@@ -1995,6 +2079,99 @@ describe("owner gate final fence and pinned release tools", () => {
     expect(() => releaseDeployTestHooks.runOwnerCheck(execution)).toThrow(
       "managed tool-bin closure changed",
     );
+  });
+
+  test("rejects managed Go compiler, source, and include mutations during warmup", () => {
+    const targets = [
+      [
+        "compiler",
+        (root) => join(root, "pkg", "tool", "linux_amd64", "compile"),
+        0o500,
+      ],
+      ["source", (root) => join(root, "src", "runtime", "runtime.go"), 0o400],
+      ["include", (root) => join(root, "pkg", "include", "textflag.h"), 0o400],
+    ];
+    for (const [, target, mode] of targets) {
+      const ownerGateTools = nominateOwnerGateTools();
+      let bunCalls = 0;
+      let mutated = false;
+      const execution = context((executable, args, options) => {
+        const output = ownerGateToolOutput(ownerGateTools, executable, args);
+        if (output !== null) {
+          if (!mutated && args.join(" ") === "test -run ^$ ./...") {
+            replaceManagedReadOnlyFile(
+              target(options.env.GOROOT),
+              "mutated\n",
+              mode,
+            );
+            mutated = true;
+          }
+          return output;
+        }
+        if (executable === "bun") {
+          bunCalls += 1;
+          return "";
+        }
+        throw new Error(`unexpected owner gate command: ${executable}`);
+      });
+      expect(() => releaseDeployTestHooks.runOwnerCheck(execution)).toThrow(
+        "managed GOROOT",
+      );
+      expect(mutated).toBe(true);
+      expect(bunCalls).toBe(0);
+    }
+  });
+
+  test("rejects mutable state topology mutation during warmup", () => {
+    const ownerGateTools = nominateOwnerGateTools();
+    let bunCalls = 0;
+    let mutated = false;
+    const execution = context((executable, args, options) => {
+      const output = ownerGateToolOutput(ownerGateTools, executable, args);
+      if (output !== null) {
+        if (!mutated && args.join(" ") === "test -run ^$ ./...") {
+          rmSync(options.env.GOCACHE, { recursive: true, force: true });
+          mutated = true;
+        }
+        return output;
+      }
+      if (executable === "bun") {
+        bunCalls += 1;
+        return "";
+      }
+      throw new Error(`unexpected owner gate command: ${executable}`);
+    });
+    expect(() => releaseDeployTestHooks.runOwnerCheck(execution)).toThrow(
+      "owner gate mutable gocache",
+    );
+    expect(mutated).toBe(true);
+    expect(bunCalls).toBe(0);
+  });
+
+  test("rejects managed GOROOT mutation performed during Bun before returning", () => {
+    const ownerGateTools = nominateOwnerGateTools();
+    let bunCalls = 0;
+    let mutated = false;
+    const execution = context((executable, args, options) => {
+      const output = ownerGateToolOutput(ownerGateTools, executable, args);
+      if (output !== null) return output;
+      if (executable === "bun") {
+        bunCalls += 1;
+        replaceManagedReadOnlyFile(
+          join(options.env.GOROOT, "pkg", "tool", "linux_amd64", "compile"),
+          "mutated\n",
+          0o500,
+        );
+        mutated = true;
+        return "";
+      }
+      throw new Error(`unexpected owner gate command: ${executable}`);
+    });
+    expect(() => releaseDeployTestHooks.runOwnerCheck(execution)).toThrow(
+      "managed GOROOT",
+    );
+    expect(mutated).toBe(true);
+    expect(bunCalls).toBe(1);
   });
 
   test("blocks mutation when origin/main advances after the owner check", () => {

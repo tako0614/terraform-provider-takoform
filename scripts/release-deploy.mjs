@@ -14,16 +14,19 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, isAbsolute, join, resolve } from "node:path";
+import { delimiter, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
 import {
   assertSafeRepositoryGitConfiguration,
+  assertManagedGateState,
   assertManagedToolSnapshot,
   createHardenedGateEnvironment,
   createHardenedGitEnvironment,
+  createManagedGateState,
   createManagedToolSnapshot,
+  prepareManagedHomeForRemoval,
 } from "./deploy-safety.mjs";
 import {
   LEDGER_PATH as SPECIFICATION_LEDGER_PATH,
@@ -1406,16 +1409,146 @@ function ownerGateToolVersion(context, executable, expected, environment) {
   }
 }
 
-function verifyOwnerGateToolchain(context, snapshot, expected, environment) {
-  const goroot = command(context, snapshot.go.go.path, ["env", "GOROOT"], {
-    env: environment,
-    label: "Go GOROOT",
-  }).trim();
+const GO_ENV_COMPONENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+
+function assertManagedGateStateClosure(state) {
+  assertManagedGateState(state);
+  const expected = ["go-build", "go-mod", "go-path", "t"].sort();
+  const observed = readdirSync(state.root).sort();
+  if (JSON.stringify(observed) !== JSON.stringify(expected)) {
+    throw new Error(
+      `owner gate mutable state topology changed (expected ${expected.join(", ")}, observed ${observed.join(", ")})`,
+    );
+  }
+  return state;
+}
+
+function assertManagedGateEnvironment(environment, managedState) {
+  if (Object.hasOwn(environment, "GOCACHEPROG")) {
+    throw new Error("owner gate GOCACHEPROG must be scrubbed");
+  }
+  if (managedState === undefined) return environment;
+  for (const [environmentName, stateName] of [
+    ["GOCACHE", "gocache"],
+    ["GOMODCACHE", "gomodcache"],
+    ["GOPATH", "gopath"],
+    ["TMPDIR", "tmpdir"],
+  ]) {
+    if (environment[environmentName] !== managedState[stateName]) {
+      throw new Error(
+        `owner gate ${environmentName} must use managed mutable state`,
+      );
+    }
+  }
+  return environment;
+}
+
+function readManagedGoEnvironment(context, snapshot, environment) {
+  const raw = asText(
+    command(
+      context,
+      snapshot.go.go.path,
+      ["env", "GOROOT", "GOTOOLDIR", "GOOS", "GOARCH"],
+      { env: environment, label: "Go toolchain environment" },
+    ),
+  ).replace(/\r\n/gu, "\n");
+  if (!raw.endsWith("\n")) {
+    throw new Error(
+      "Go toolchain environment output must contain exactly GOROOT, GOTOOLDIR, GOOS, and GOARCH",
+    );
+  }
+  const values = raw.slice(0, -1).split("\n");
+  if (values.length !== 4 || values.some((value) => value.length === 0)) {
+    throw new Error(
+      "Go toolchain environment output must contain exactly GOROOT, GOTOOLDIR, GOOS, and GOARCH",
+    );
+  }
+  const [goroot, gotooldir, goos, goarch] = values;
   if (goroot !== snapshot.go.root) {
     throw new Error(
       `Go toolchain root drift: require ${snapshot.go.root}, observed ${goroot || "missing"}`,
     );
   }
+  if (!GO_ENV_COMPONENT.test(goos) || !GO_ENV_COMPONENT.test(goarch)) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR platform drift: require safe GOOS/GOARCH, observed ${goos}/${goarch}`,
+    );
+  }
+  const managedToolRoot = resolve(snapshot.go.root, "pkg", "tool");
+  const expectedToolDirectory = resolve(managedToolRoot, `${goos}_${goarch}`);
+  const expectedRelative = relative(managedToolRoot, expectedToolDirectory);
+  if (
+    expectedRelative.length === 0 ||
+    expectedRelative === ".." ||
+    expectedRelative.startsWith(`..${sep}`) ||
+    isAbsolute(expectedRelative) ||
+    expectedRelative.includes(sep)
+  ) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR escaped managed pkg/tool: ${expectedToolDirectory}`,
+    );
+  }
+  if (!isAbsolute(gotooldir)) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR escaped managed pkg/tool: ${gotooldir || "missing"}`,
+    );
+  }
+  const observedRelative = relative(managedToolRoot, gotooldir);
+  if (
+    observedRelative === ".." ||
+    observedRelative.startsWith(`..${sep}`) ||
+    isAbsolute(observedRelative)
+  ) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR escaped managed pkg/tool: ${gotooldir}`,
+    );
+  }
+  if (gotooldir !== expectedToolDirectory) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR drift: require ${expectedToolDirectory}, observed ${gotooldir || "missing"}`,
+    );
+  }
+  let toolDirectory;
+  try {
+    toolDirectory = lstatSync(expectedToolDirectory);
+  } catch (error) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR is not a real safe directory: ${expectedToolDirectory} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+  if (
+    toolDirectory.isSymbolicLink() ||
+    !toolDirectory.isDirectory() ||
+    (toolDirectory.mode & 0o7777) !== 0o500 ||
+    realpathSync(expectedToolDirectory) !== expectedToolDirectory
+  ) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR is not a real safe directory: ${expectedToolDirectory}`,
+    );
+  }
+  const logicalToolDirectory = `pkg/tool/${goos}_${goarch}`;
+  const manifestEntry = snapshot.go.manifest.entries.find(
+    (entry) => entry.path === logicalToolDirectory,
+  );
+  if (manifestEntry?.type !== "directory" || manifestEntry.mode !== 0o500) {
+    throw new Error(
+      `Go toolchain GOTOOLDIR is not a real safe directory: ${expectedToolDirectory}`,
+    );
+  }
+  return { goroot, gotooldir, goos, goarch };
+}
+
+function verifyOwnerGateToolchain(
+  context,
+  snapshot,
+  expected,
+  environment,
+  managedState,
+) {
+  assertManagedToolSnapshot(snapshot);
+  if (managedState !== undefined) assertManagedGateStateClosure(managedState);
+  assertManagedGateEnvironment(environment, managedState);
+  readManagedGoEnvironment(context, snapshot, environment);
   const goVersion = command(context, snapshot.go.go.path, ["version"], {
     env: environment,
     label: "Go version",
@@ -1463,9 +1596,14 @@ function verifyOwnerGateToolchain(context, snapshot, expected, environment) {
     environment,
   );
   assertManagedToolSnapshot(snapshot);
+  if (managedState !== undefined) assertManagedGateStateClosure(managedState);
+  assertManagedGateEnvironment(environment, managedState);
 }
 
-function warmOwnerGateGoCaches(context, snapshot, environment) {
+function warmOwnerGateGoCaches(context, snapshot, environment, managedState) {
+  assertManagedToolSnapshot(snapshot);
+  if (managedState !== undefined) assertManagedGateStateClosure(managedState);
+  assertManagedGateEnvironment(environment, managedState);
   const commands = [
     [["mod", "download"], context.repo, "owner gate root module download"],
     [
@@ -1490,8 +1628,13 @@ function warmOwnerGateGoCaches(context, snapshot, environment) {
       env: environment,
       label,
     });
+    assertManagedToolSnapshot(snapshot);
+    if (managedState !== undefined) assertManagedGateStateClosure(managedState);
+    assertManagedGateEnvironment(environment, managedState);
   }
   assertManagedToolSnapshot(snapshot);
+  if (managedState !== undefined) assertManagedGateStateClosure(managedState);
+  assertManagedGateEnvironment(environment, managedState);
 }
 
 function runOwnerCheck(context) {
@@ -1500,43 +1643,52 @@ function runOwnerCheck(context) {
   // green after publication has already happened. Gating publication on it
   // would make the first release of any new Form version unreachable, so the
   // owner gate stops at publication authority and admission keeps its own gate.
-  return withTemporaryDirectory("tfog", (managedHome) => {
-    const nominationEnvironment = environmentWithoutGitHubAuthority();
-    const expected = ownerGateToolchain(context.repo);
-    const snapshot = createManagedToolSnapshot({
-      environment: nominationEnvironment,
-      managedHome,
-    });
-    const managedTemporaryDirectory = join(managedHome, "tmp");
-    mkdirSync(managedTemporaryDirectory, { recursive: true });
-    const environment = createHardenedGateEnvironment(
-      nominationEnvironment,
-      process.execPath,
-      managedHome,
-      {
-        managedToolBin: snapshot.toolBin,
-        goBin: snapshot.go.bin,
-        goRoot: snapshot.go.root,
-      },
-    );
-    environment.TEMP = managedTemporaryDirectory;
-    environment.TMP = managedTemporaryDirectory;
-    environment.TMPDIR = managedTemporaryDirectory;
-    verifyOwnerGateToolchain(context, snapshot, expected, environment);
-    warmOwnerGateGoCaches(context, snapshot, environment);
-    progress(context, "bun run check:release-owner-gate");
-    const result = command(
-      context,
-      "bun",
-      ["run", "check:release-owner-gate"],
-      {
-        echo: true,
-        env: environment,
-        label: "owner gate",
-      },
-    );
-    assertManagedToolSnapshot(snapshot);
-    return result;
+  return withTemporaryDirectory("t", (managedHome) => {
+    try {
+      const nominationEnvironment = environmentWithoutGitHubAuthority();
+      const expected = ownerGateToolchain(context.repo);
+      const snapshot = createManagedToolSnapshot({
+        environment: nominationEnvironment,
+        managedHome,
+      });
+      const managedState = createManagedGateState(managedHome);
+      assertManagedGateStateClosure(managedState);
+      const environment = createHardenedGateEnvironment(
+        nominationEnvironment,
+        process.execPath,
+        managedHome,
+        {
+          managedToolBin: snapshot.toolBin,
+          goBin: snapshot.go.bin,
+          goRoot: snapshot.go.root,
+        },
+      );
+      verifyOwnerGateToolchain(
+        context,
+        snapshot,
+        expected,
+        environment,
+        managedState,
+      );
+      warmOwnerGateGoCaches(context, snapshot, environment, managedState);
+      progress(context, "bun run check:release-owner-gate");
+      const result = command(
+        context,
+        "bun",
+        ["run", "check:release-owner-gate"],
+        {
+          echo: true,
+          env: environment,
+          label: "owner gate",
+        },
+      );
+      assertManagedToolSnapshot(snapshot);
+      assertManagedGateStateClosure(managedState);
+      assertManagedGateEnvironment(environment, managedState);
+      return result;
+    } finally {
+      prepareManagedHomeForRemoval(managedHome);
+    }
   });
 }
 

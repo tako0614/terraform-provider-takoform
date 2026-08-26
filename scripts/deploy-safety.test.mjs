@@ -4,20 +4,23 @@ import {
   chmodSync,
   chownSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 import {
   assertPublicationManifest,
+  assertManagedGateState,
   assertManagedToolSnapshot,
   assertSafeRepositoryGitConfiguration,
   collectRegularFiles,
@@ -25,6 +28,7 @@ import {
   createCommittedSnapshot,
   createHardenedGateEnvironment,
   createHardenedGitEnvironment,
+  createManagedGateState,
   createManagedToolSnapshot,
   createPublicationManifest,
   createPublicationManifestFromEntries,
@@ -32,40 +36,70 @@ import {
   inspectUncommittedPublicationPaths,
   parseCurrentProductionDeployment,
   pinnedWranglerInvocation,
+  prepareManagedHomeForRemoval,
 } from "./deploy-safety.mjs";
 
 const repositoryRoot = resolve(import.meta.dir, "..");
 const temporaryDirectories = [];
+const managedHomes = [];
 
 afterEach(() => {
+  for (const managedHome of managedHomes.splice(0)) {
+    if (existsSync(managedHome)) prepareManagedHomeForRemoval(managedHome);
+  }
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { force: true, recursive: true });
   }
 });
 
-function safeToolFixture() {
+function safeToolFixture({ debianLayout = false } = {}) {
   const root = mkdtempSync(
     join(dirname(repositoryRoot), ".takoform-deploy-tool-test-"),
   );
   temporaryDirectories.push(root);
   const tofuBin = join(root, "tofu-bin");
   const terraformBin = join(root, "terraform-user-bin");
-  const goRoot = join(root, "go-root");
+  const goRoot = debianLayout
+    ? join(root, "usr", "lib", "go-1.26")
+    : join(root, "go-root");
   const goBin = join(goRoot, "bin");
+  const goToolDir = join(goRoot, "pkg", "tool", "linux_amd64");
+  const goIncludeDir = join(goRoot, "pkg", "include");
+  const goSourceDir = join(goRoot, "src", "runtime");
+  const goEmptyDir = join(goRoot, "misc", "empty");
   const managedHome = join(root, "managed-home");
-  for (const directory of [tofuBin, terraformBin, goBin, managedHome]) {
+  for (const directory of [
+    tofuBin,
+    terraformBin,
+    goBin,
+    goToolDir,
+    goIncludeDir,
+    goSourceDir,
+    goEmptyDir,
+    managedHome,
+  ]) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
   }
+  managedHomes.push(managedHome);
   const paths = {
+    compile: join(goToolDir, "compile"),
     go: join(goBin, "go"),
     gofmt: join(goBin, "gofmt"),
+    include: join(goIncludeDir, "textflag.h"),
+    source: join(goSourceDir, "runtime.go"),
     terraform: join(terraformBin, "terraform"),
     tofu: join(tofuBin, "tofu"),
   };
-  for (const [name, path] of Object.entries(paths)) {
+  for (const [name, path] of Object.entries(paths).filter(
+    ([name]) => name !== "include" && name !== "source",
+  )) {
     writeFileSync(path, `#!/bin/sh\n# ${name}\nexit 0\n`);
     chmodSync(path, 0o500);
   }
+  writeFileSync(paths.include, "#define TEXTFLAG 1\n");
+  writeFileSync(paths.source, "package runtime\n");
+  chmodSync(paths.include, 0o400);
+  chmodSync(paths.source, 0o400);
   const siblingBun = join(terraformBin, "bun");
   writeFileSync(siblingBun, "#!/bin/sh\nexit 97\n");
   chmodSync(siblingBun, 0o500);
@@ -74,9 +108,14 @@ function safeToolFixture() {
       PATH: [tofuBin, terraformBin, goBin, "/usr/bin"].join(":"),
     },
     goBin,
+    goEmptyDir,
+    goIncludeDir,
     goRoot,
+    goSourceDir,
+    goToolDir,
     managedHome,
     paths,
+    root,
     siblingBun,
     terraformBin,
     tofuBin,
@@ -91,6 +130,33 @@ function toolSnapshot(fixture = safeToolFixture()) {
       managedHome: fixture.managedHome,
     }),
   };
+}
+
+function managedFixturePath(fixture, snapshot, sourcePath) {
+  return join(snapshot.go.root, relative(fixture.goRoot, sourcePath));
+}
+
+function collectTreeKinds(root, logicalPath = ".") {
+  const path = logicalPath === "." ? root : join(root, logicalPath);
+  const metadata = lstatSync(path);
+  const found = [{ logicalPath, metadata }];
+  if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
+    for (const child of readdirSync(path).sort()) {
+      found.push(
+        ...collectTreeKinds(
+          root,
+          logicalPath === "." ? child : join(logicalPath, child),
+        ),
+      );
+    }
+  }
+  return found;
+}
+
+function replaceReadOnlyFile(path, bytes) {
+  chmodSync(path, 0o700);
+  writeFileSync(path, bytes);
+  chmodSync(path, 0o500);
 }
 
 describe("production deployment readback", () => {
@@ -402,6 +468,8 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
       NODE_OPTIONS: "--require=/tmp/attacker.cjs",
       npm_config_userconfig: "/tmp/attacker-npmrc",
       PATH: "/tmp/fake-bin:/usr/bin",
+      SSH_ASKPASS: "/tmp/attacker-askpass",
+      SSH_AUTH_SOCK: "/tmp/attacker-agent.sock",
       TAKOFORM_CLOUDFLARE_ACCOUNT_ID: "a".repeat(32),
       WRANGLER_CI_OVERRIDE_NAME: "other-worker",
     },
@@ -418,16 +486,21 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
   expect(environment.GOAUTH).toBe("off");
   expect(environment.GOENV).toBe("off");
   expect(environment.GOFLAGS).toBe("-mod=readonly -buildvcs=false");
-  expect(environment.GOMODCACHE).toBe("/private/gate-home/go/pkg/mod");
-  expect(environment.GOPATH).toBe("/private/gate-home/go");
+  expect(environment.GOCACHE).toBe("/private/gate-home/m/go-build");
+  expect(environment.GOMODCACHE).toBe("/private/gate-home/m/go-mod");
+  expect(environment.GOPATH).toBe("/private/gate-home/m/go-path");
   expect(environment.GOPROXY).toBe("https://proxy.golang.org");
   expect(environment.GOSUMDB).toBe("sum.golang.org");
   expect(environment.GOTOOLCHAIN).toBe("local");
+  expect(environment.GOCACHEPROG).toBeUndefined();
   expect(environment.GOVCS).toBe("*:off");
   expect(environment.GOWORK).toBe("off");
   expect(environment.HOME).toBe("/private/gate-home");
+  expect(environment.TMPDIR).toBe("/private/gate-home/m/t");
   expect(environment.NODE_OPTIONS).toBeUndefined();
   expect(environment.npm_config_userconfig).toBeUndefined();
+  expect(environment.SSH_ASKPASS).toBeUndefined();
+  expect(environment.SSH_AUTH_SOCK).toBeUndefined();
   expect(environment.TAKOFORM_CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
   expect(environment.WRANGLER_CI_OVERRIDE_NAME).toBeUndefined();
   expect(environment.XDG_CONFIG_HOME).toBe("/private/gate-home/.config");
@@ -464,7 +537,7 @@ describe("owner gate tool nomination", () => {
       },
     );
     expect(
-      environment.PATH.startsWith(`${snapshot.toolBin}:${fixture.goBin}:`),
+      environment.PATH.startsWith(`${snapshot.go.bin}:${snapshot.toolBin}:`),
     ).toBe(true);
     expect(environment.PATH).not.toContain(fixture.terraformBin);
     expect(environment.PATH).not.toContain(fixture.tofuBin);
@@ -472,6 +545,290 @@ describe("owner gate tool nomination", () => {
     expect(environment.GITHUB_TOKEN).toBeUndefined();
     expect(environment.TF_CLI_ARGS).toBeUndefined();
     expect(environment.TOFU_CLI_ARGS).toBeUndefined();
+  });
+
+  test("materializes the complete logical GOROOT as a sealed private tree", () => {
+    const { fixture, snapshot } = toolSnapshot();
+    expect(snapshot.go.sourceRoot).toBe(fixture.goRoot);
+    expect(snapshot.go.root).toBe(join(fixture.managedHome, "goroot"));
+    expect(snapshot.go.bin).toBe(join(snapshot.go.root, "bin"));
+    expect(snapshot.go.go.path).toBe(join(snapshot.go.bin, "go"));
+    expect(snapshot.go.gofmt.path).toBe(join(snapshot.go.bin, "gofmt"));
+
+    for (const sourcePath of [
+      fixture.paths.compile,
+      fixture.paths.include,
+      fixture.paths.source,
+    ]) {
+      const managedPath = managedFixturePath(fixture, snapshot, sourcePath);
+      expect(readFileSync(managedPath)).toEqual(readFileSync(sourcePath));
+      expect(lstatSync(managedPath).nlink).toBe(1);
+    }
+    expect(
+      lstatSync(managedFixturePath(fixture, snapshot, fixture.goEmptyDir))
+        .mode & 0o7777,
+    ).toBe(0o500);
+    for (const { metadata } of collectTreeKinds(snapshot.go.root)) {
+      expect(metadata.isSymbolicLink()).toBe(false);
+      if (metadata.isDirectory()) expect(metadata.mode & 0o7777).toBe(0o500);
+      if (metadata.isFile()) {
+        expect([0o400, 0o500]).toContain(metadata.mode & 0o7777);
+      }
+    }
+    expect(snapshot.go.sourceManifest.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "misc/empty", type: "directory" }),
+        expect.objectContaining({
+          path: "pkg/tool/linux_amd64/compile",
+          executable: true,
+        }),
+        expect.objectContaining({ path: "pkg/include/textflag.h" }),
+        expect.objectContaining({ path: "src/runtime/runtime.go" }),
+      ]),
+    );
+    expect(snapshot.go.manifest.entries).toHaveLength(
+      snapshot.go.expectedManifest.entries.length,
+    );
+    expect(() => assertManagedToolSnapshot(snapshot)).not.toThrow();
+  });
+
+  test("copies source hardlinks independently and leaves every managed file at nlink one", () => {
+    const fixture = safeToolFixture();
+    const alias = join(fixture.goSourceDir, "runtime_alias.go");
+    linkSync(fixture.paths.source, alias);
+    expect(lstatSync(fixture.paths.source).nlink).toBe(2);
+
+    const snapshot = createManagedToolSnapshot({
+      environment: fixture.environment,
+      managedHome: fixture.managedHome,
+    });
+    const sourceEntry = snapshot.go.sourceManifest.entries.find(
+      (entry) => entry.path === "src/runtime/runtime.go",
+    );
+    expect(sourceEntry.nlink).toBe("2");
+    expect(sourceEntry.hardlinks).toEqual([
+      "src/runtime/runtime.go",
+      "src/runtime/runtime_alias.go",
+    ]);
+    const managedOriginal = managedFixturePath(
+      fixture,
+      snapshot,
+      fixture.paths.source,
+    );
+    const managedAlias = managedFixturePath(fixture, snapshot, alias);
+    expect(lstatSync(managedOriginal).nlink).toBe(1);
+    expect(lstatSync(managedAlias).nlink).toBe(1);
+    expect(lstatSync(managedOriginal).ino).not.toBe(
+      lstatSync(managedAlias).ino,
+    );
+  });
+
+  test("dereferences safe Debian-style external and absolute GOROOT links", () => {
+    const fixture = safeToolFixture({ debianLayout: true });
+    const sharedRoot = join(fixture.root, "usr", "share", "go-1.26");
+    const sharedSource = join(sharedRoot, "src");
+    const sharedInclude = join(sharedRoot, "pkg", "include");
+    mkdirSync(dirname(sharedSource), { recursive: true, mode: 0o700 });
+    mkdirSync(dirname(sharedInclude), { recursive: true, mode: 0o700 });
+    renameSync(join(fixture.goRoot, "src"), sharedSource);
+    renameSync(fixture.goIncludeDir, sharedInclude);
+    symlinkSync("../../share/go-1.26/src", join(fixture.goRoot, "src"));
+    symlinkSync("../../../share/go-1.26/pkg/include", fixture.goIncludeDir);
+    const absoluteTarget = join(fixture.root, "absolute-misc");
+    renameSync(join(fixture.goRoot, "misc"), absoluteTarget);
+    symlinkSync(absoluteTarget, join(fixture.goRoot, "misc"));
+
+    const snapshot = createManagedToolSnapshot({
+      environment: fixture.environment,
+      managedHome: fixture.managedHome,
+    });
+    expect(
+      readFileSync(join(snapshot.go.root, "src/runtime/runtime.go")),
+    ).toEqual(readFileSync(join(sharedSource, "runtime", "runtime.go")));
+    expect(
+      readFileSync(join(snapshot.go.root, "pkg/include/textflag.h")),
+    ).toEqual(readFileSync(join(sharedInclude, "textflag.h")));
+    expect(lstatSync(join(snapshot.go.root, "misc")).isDirectory()).toBe(true);
+    expect(
+      collectTreeKinds(snapshot.go.root).some(({ metadata }) =>
+        metadata.isSymbolicLink(),
+      ),
+    ).toBe(false);
+    expect(
+      snapshot.go.sourceManifest.entries.find((entry) => entry.path === "src")
+        .links[0].target,
+    ).toBe("../../share/go-1.26/src");
+    expect(
+      snapshot.go.sourceManifest.entries.find((entry) => entry.path === "misc")
+        .links[0].target,
+    ).toBe(absoluteTarget);
+  });
+
+  test("fails when the source GOROOT changes during its create-only copy", () => {
+    const cases = [
+      [
+        "added path",
+        (fixture) =>
+          writeFileSync(
+            join(fixture.goSourceDir, "added.go"),
+            "package runtime\n",
+          ),
+      ],
+      ["deleted path", (fixture) => rmSync(fixture.paths.source)],
+      ["file mode", (fixture) => chmodSync(fixture.paths.include, 0o500)],
+      ["directory mode", (fixture) => chmodSync(fixture.goEmptyDir, 0o500)],
+      [
+        "compiler bytes",
+        (fixture) => replaceReadOnlyFile(fixture.paths.compile, "changed\n"),
+      ],
+    ];
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      cases.push([
+        "owner",
+        (fixture) => chownSync(fixture.paths.include, 65534, 65534),
+      ]);
+    }
+    for (const [, mutate] of cases) {
+      const fixture = safeToolFixture();
+      let changed = false;
+      expect(() =>
+        createManagedToolSnapshot({
+          environment: fixture.environment,
+          managedHome: fixture.managedHome,
+          testHooks: {
+            afterCopyEntry: ({ logicalPath }) => {
+              if (!changed && logicalPath === "src/runtime/runtime.go") {
+                changed = true;
+                mutate(fixture);
+              }
+            },
+          },
+        }),
+      ).toThrow("owner gate source GOROOT");
+    }
+  });
+
+  test("rejects unsafe, dangling, cyclic, set-id, and special source closure entries", () => {
+    const cases = [
+      [
+        "writable external target",
+        (fixture) => {
+          const target = join(fixture.root, "unsafe-source");
+          renameSync(join(fixture.goRoot, "src"), target);
+          chmodSync(target, 0o770);
+          symlinkSync(target, join(fixture.goRoot, "src"));
+        },
+        "must not be group/other-writable",
+      ],
+      [
+        "dangling target",
+        (fixture) => {
+          rmSync(fixture.paths.source);
+          symlinkSync("missing.go", fixture.paths.source);
+        },
+        "cannot be inspected",
+      ],
+      [
+        "cyclic target",
+        (fixture) => {
+          rmSync(join(fixture.goRoot, "src"), { recursive: true });
+          symlinkSync("src", join(fixture.goRoot, "src"));
+        },
+        "cyclic symbolic link",
+      ],
+      [
+        "set-id file",
+        (fixture) =>
+          execFileSync("/usr/bin/chmod", ["4500", fixture.paths.compile]),
+        "must not be setuid or setgid",
+      ],
+      [
+        "group-writable file",
+        (fixture) => chmodSync(fixture.paths.include, 0o420),
+        "must not be group/other-writable",
+      ],
+      [
+        "special file",
+        (fixture) => {
+          const fifo = join(fixture.root, "compiler.pipe");
+          execFileSync("/usr/bin/mkfifo", [fifo]);
+          rmSync(fixture.paths.source);
+          symlinkSync(fifo, fixture.paths.source);
+        },
+        "must not contain a special file",
+      ],
+    ];
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      cases.push([
+        "foreign target owner",
+        (fixture) => {
+          const target = join(fixture.root, "foreign-source");
+          renameSync(join(fixture.goRoot, "src"), target);
+          chownSync(target, 65534, 65534);
+          symlinkSync(target, join(fixture.goRoot, "src"));
+        },
+        "owned by root or the current user",
+      ]);
+    }
+    for (const [, mutate, message] of cases) {
+      const fixture = safeToolFixture();
+      mutate(fixture);
+      expect(() =>
+        createManagedToolSnapshot({
+          environment: fixture.environment,
+          managedHome: fixture.managedHome,
+        }),
+      ).toThrow(message);
+    }
+  });
+
+  test("recursively detects compiler, source, include, empty-directory, and ownership drift", () => {
+    const mutations = [
+      ({ fixture, snapshot }) =>
+        replaceReadOnlyFile(
+          managedFixturePath(fixture, snapshot, fixture.paths.compile),
+          "changed compiler\n",
+        ),
+      ({ fixture, snapshot }) => {
+        const source = managedFixturePath(
+          fixture,
+          snapshot,
+          fixture.paths.source,
+        );
+        chmodSync(dirname(source), 0o700);
+        rmSync(source);
+        chmodSync(dirname(source), 0o500);
+      },
+      ({ fixture, snapshot }) => {
+        const include = managedFixturePath(
+          fixture,
+          snapshot,
+          fixture.paths.include,
+        );
+        chmodSync(dirname(include), 0o700);
+        writeFileSync(join(dirname(include), "added.h"), "added\n");
+        chmodSync(dirname(include), 0o500);
+      },
+      ({ fixture, snapshot }) =>
+        chmodSync(
+          managedFixturePath(fixture, snapshot, fixture.goEmptyDir),
+          0o700,
+        ),
+    ];
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      mutations.push(({ fixture, snapshot }) =>
+        chownSync(
+          managedFixturePath(fixture, snapshot, fixture.paths.include),
+          65534,
+          65534,
+        ),
+      );
+    }
+    for (const mutate of mutations) {
+      const state = toolSnapshot();
+      mutate(state);
+      expect(() => assertManagedToolSnapshot(state.snapshot)).toThrow();
+    }
   });
 
   test("follows a safe nominated symlink but snapshots only its resolved bytes", () => {
@@ -597,6 +954,71 @@ describe("owner gate tool nomination", () => {
       mutate(state);
       expect(() => assertManagedToolSnapshot(state.snapshot)).toThrow();
     }
+  });
+});
+
+describe("owner gate private mutable state and cleanup", () => {
+  test("creates fresh real cache, module, GOPATH, and temporary roots", () => {
+    const fixture = safeToolFixture();
+    const state = createManagedGateState(fixture.managedHome);
+    expect(state).toEqual({
+      root: join(fixture.managedHome, "m"),
+      gocache: join(fixture.managedHome, "m", "go-build"),
+      gomodcache: join(fixture.managedHome, "m", "go-mod"),
+      gopath: join(fixture.managedHome, "m", "go-path"),
+      tmpdir: join(fixture.managedHome, "m", "t"),
+    });
+    expect(() => assertManagedGateState(state)).not.toThrow();
+    for (const path of Object.values(state)) {
+      expect(lstatSync(path).isDirectory()).toBe(true);
+      expect(lstatSync(path).isSymbolicLink()).toBe(false);
+      expect(lstatSync(path).mode & 0o7777).toBe(0o700);
+    }
+
+    rmSync(state.gocache, { recursive: true });
+    symlinkSync(state.gopath, state.gocache);
+    expect(() => assertManagedGateState(state)).toThrow("real directory");
+  });
+
+  test("rejects preexisting managed GOROOT and mutable state create-only", () => {
+    const gorootFixture = safeToolFixture();
+    mkdirSync(join(gorootFixture.managedHome, "goroot"), { mode: 0o700 });
+    writeFileSync(join(gorootFixture.managedHome, "goroot", "sentinel"), "x");
+    expect(() =>
+      createManagedToolSnapshot({
+        environment: gorootFixture.environment,
+        managedHome: gorootFixture.managedHome,
+      }),
+    ).toThrow("could not be materialized create-only");
+    expect(
+      readFileSync(
+        join(gorootFixture.managedHome, "goroot", "sentinel"),
+        "utf8",
+      ),
+    ).toBe("x");
+
+    const stateFixture = safeToolFixture();
+    mkdirSync(join(stateFixture.managedHome, "m"), { mode: 0o700 });
+    expect(() => createManagedGateState(stateFixture.managedHome)).toThrow(
+      "must be fresh and create-only",
+    );
+  });
+
+  test("unseals owned directories only when cleanup begins", () => {
+    const { fixture, snapshot } = toolSnapshot();
+    const state = createManagedGateState(fixture.managedHome);
+    const moduleDirectory = join(state.gomodcache, "example.invalid", "module");
+    mkdirSync(moduleDirectory, { recursive: true, mode: 0o500 });
+    chmodSync(dirname(moduleDirectory), 0o500);
+    expect(lstatSync(snapshot.go.root).mode & 0o7777).toBe(0o500);
+    expect(lstatSync(moduleDirectory).mode & 0o7777).toBe(0o500);
+
+    prepareManagedHomeForRemoval(fixture.managedHome);
+    expect(lstatSync(snapshot.go.root).mode & 0o7777).toBe(0o700);
+    expect(lstatSync(moduleDirectory).mode & 0o7777).toBe(0o700);
+    expect(() =>
+      rmSync(fixture.managedHome, { recursive: true, force: true }),
+    ).not.toThrow();
   });
 });
 
