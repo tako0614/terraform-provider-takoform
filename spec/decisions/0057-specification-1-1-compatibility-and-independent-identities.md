@@ -120,17 +120,29 @@ visible and unprepared. C1 freezes the normative source and executable tooling
 while the evidence record is empty. C2 records only the exact source-snapshot
 evidence and its two byte-identical website projections. C3 appends only the
 authoritative publication receipt and its two byte-identical projections. C4,
-as the direct child of C3, refreshes only deterministic non-authoritative public
-truth such as current-generation text, the compatibility report, site status,
-and website output. The compatibility report never enters C2, C3, the release
-asset set, or release authority.
+as the direct single-parent child of C3 and first ancestry commit after it,
+refreshes only the explicitly bounded deterministic non-authoritative public
+outputs: current-generation text, the compatibility report, site status, and
+reproducible website output. C4 is not publication authority. The compatibility
+report never enters C2, C3, the release asset set, or release authority.
+
+The bounded C4 paths are `README.md`; the canonical/static/public compatibility
+report; the static/public site-status documents; all generated VitePress
+`website/public/**/*.html` pages, including `404.html`; and only the
+content-hashed `website/public/assets/**` closure changed by the deterministic
+build. The immutable runtime-ABI fixture
+`website/public/conformance/runtime-abi-v1/bundles/unsupported-media-type/page.html`,
+`website/docs/reference.md`, and `website/public/hashmap.json` remain unchanged
+and are outside C4.
 
 C3 is intentionally not a green final tree because the receipt changes the
 derived Specification status before those non-authoritative projections are
 regenerated. C3 and C4 must be reviewed and pushed together without squashing,
 leaving exact C3 visible in history and the branch head green at C4. C4 must not
-change normative `spec/**`, the source evidence, the release ledger, or either
-C3 ledger projection. A create-only release surface may prepare and publish
+change normative `spec/**`, the source evidence, any publication evidence,
+release ledger or projection, release authority/tooling, Provider/Form/Host
+source, or an unrelated file. Later descendants remain valid after the exact
+C3-to-C4 fixed point. A create-only release surface may prepare and publish
 1.1 only from one exact reviewed W09 owner commit and must fail closed on a
 pre-existing 1.1 identity. C1 does not execute that surface. W10 may own future
 releases but must never reissue, rewrite, or retag 1.1.

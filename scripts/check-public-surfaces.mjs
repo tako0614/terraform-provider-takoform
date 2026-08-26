@@ -13,6 +13,10 @@ import {
 } from "./public-schema-manifest.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
 import {
+  RELEASE_STATE_NEUTRAL_SOURCE_PATHS,
+  staleSpecificationReleaseWording,
+} from "./specification-release.mjs";
+import {
   FAMILY_CANDIDATE_SET,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
@@ -551,6 +555,36 @@ function checkStaleWebsiteContent() {
   for (const rule of forbidden) {
     if (rule.pattern.test(rule.source)) {
       fail(`website/public: ${rule.label}`);
+    }
+  }
+}
+
+function checkSpecificationReleaseWording() {
+  for (const relativePath of RELEASE_STATE_NEUTRAL_SOURCE_PATHS) {
+    const source = read(path.join(repositoryRoot, relativePath));
+    if (staleSpecificationReleaseWording(source)) {
+      fail(
+        `${relativePath}: current Specification wording hard-codes 1.1 as candidate/open`,
+      );
+    }
+  }
+
+  const ledger = readJson(
+    path.join(repositoryRoot, "release", "specification-releases.json"),
+  );
+  const released = Array.isArray(ledger.releases) &&
+    ledger.releases.some((entry) => entry?.version === "1.1");
+  if (!released) return;
+  const servedPages = walkFiles(publicRoot, (filePath) =>
+    filePath.endsWith(".html"),
+  );
+  for (const filePath of servedPages) {
+    const relativePath = relative(filePath);
+    const source = visibleHtmlText(read(filePath));
+    if (staleSpecificationReleaseWording(source)) {
+      fail(
+        `${relativePath}: served current page still calls Specification 1.1 candidate/open after its receipt`,
+      );
     }
   }
 }
@@ -1832,6 +1866,7 @@ checkHtmlFiles();
 checkResourceInventory(formDocNames);
 checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
+checkSpecificationReleaseWording();
 checkContractLaneDocumentation();
 checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();

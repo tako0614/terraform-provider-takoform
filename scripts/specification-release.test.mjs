@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +14,8 @@ import path from "node:path";
 import {
   C2_ALLOWED_PATHS,
   C3_ALLOWED_PATHS,
+  C4_REQUIRED_PATHS,
+  C4_PRESERVED_PUBLIC_PATHS,
   EXPECTED_CANDIDATE,
   EXPECTED_RESERVED,
   FORM_PUBLICATION_EFFECT,
@@ -19,18 +23,26 @@ import {
   LEDGER_KIND,
   LEDGER_PATH,
   PROVIDER_EFFECT,
+  RELEASE_STATE_CURRENT_PUBLIC_PATHS,
+  RELEASE_STATE_NEUTRAL_SOURCE_PATHS,
   RELEASE_RECEIPT_FORMAT,
   SOURCE_EVIDENCE_ASSET,
   SOURCE_EVIDENCE_PATH,
   appendReleaseReceipt,
   releaseFromEvidence,
+  staleSpecificationReleaseWording,
   validateC2DiffPaths,
   validateC3DiffPaths,
+  validateC4DiffPaths,
   validateCommittedHistory,
   validateLedger,
+  validateReceiptTransitionHistory,
   validateReleaseShape,
 } from "./specification-release.mjs";
-import { SPECIFICATION_PREREQUISITES } from "./publication-evidence.mjs";
+import {
+  CANONICAL_ORIGIN,
+  SPECIFICATION_PREREQUISITES,
+} from "./publication-evidence.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const sourceCommit = "a".repeat(40);
@@ -95,6 +107,226 @@ function exactReadback() {
 
 function receipt() {
   return releaseFromEvidence(completeDocument(), exactReadback());
+}
+
+function fixtureGit(root, ...args) {
+  return execFileSync("git", ["-C", root, ...args], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_EMAIL: "specification-release@example.invalid",
+      GIT_AUTHOR_NAME: "Specification Release Test",
+      GIT_COMMITTER_EMAIL: "specification-release@example.invalid",
+      GIT_COMMITTER_NAME: "Specification Release Test",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_NO_REPLACE_OBJECTS: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
+function writeFixture(root, relativePath, value) {
+  const absolutePath = path.join(root, relativePath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, value);
+}
+
+function writeFixtureJson(root, relativePath, value) {
+  writeFixture(root, relativePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function commitFixture(root, message, { allowEmpty = false } = {}) {
+  fixtureGit(root, "add", "-A");
+  fixtureGit(
+    root,
+    "commit",
+    ...(allowEmpty ? ["--allow-empty"] : []),
+    "-m",
+    message,
+  );
+  return fixtureGit(root, "rev-parse", "HEAD");
+}
+
+function candidateCompatibility() {
+  return {
+    classes: [
+      {
+        entries: [
+          {
+            identity: "takoform.specification@1.1",
+            publication: "candidate",
+            status: "candidate",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function releasedCompatibility() {
+  return {
+    classes: [
+      {
+        entries: [
+          {
+            identity: "takoform.specification@1.1",
+            publication: "retained",
+            status: "retained",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function writeC4Inputs(root, state) {
+  const compatibility =
+    state === "released" ? releasedCompatibility() : candidateCompatibility();
+  const status = {
+    specificationVersion: "1.1",
+    specificationReleaseStatus:
+      state === "released" ? "released" : "candidate-open",
+  };
+  const readme =
+    state === "released"
+      ? "| Specification | `1.1` | released; one exact committed normative source snapshot is release authority |\n"
+      : "Specification 1.1 is an open candidate.\n";
+  const html =
+    state === "released"
+      ? "<!doctype html><title>Specification 1.1</title><p>Release state is ledger-derived.</p>\n"
+      : "<!doctype html><title>Specification 1.1 candidate-open</title>\n";
+
+  writeFixture(root, "README.md", readme);
+  for (const relativePath of [
+    "release/specification-compatibility.json",
+    "website/static/release/specification-compatibility.json",
+    "website/public/release/specification-compatibility.json",
+  ]) {
+    writeFixtureJson(root, relativePath, compatibility);
+  }
+  for (const relativePath of [
+    "website/static/.well-known/takoform-site.json",
+    "website/public/.well-known/takoform-site.json",
+  ]) {
+    writeFixtureJson(root, relativePath, status);
+  }
+  writeFixtureJson(root, "website/public/hashmap.json", {
+    generated: true,
+  });
+  for (const relativePath of [
+    ...RELEASE_STATE_CURRENT_PUBLIC_PATHS,
+    "website/public/404.html",
+  ]) {
+    writeFixture(root, relativePath, html);
+  }
+  const candidateAsset = "website/public/assets/app.CAND0001.js";
+  const releasedAsset = "website/public/assets/app.RELS0001.js";
+  rmSync(path.join(root, state === "released" ? candidateAsset : releasedAsset), {
+    force: true,
+  });
+  writeFixture(
+    root,
+    state === "released" ? releasedAsset : candidateAsset,
+    `export const specificationReleaseStatus = ${JSON.stringify(state)};\n`,
+  );
+  for (const relativePath of C4_PRESERVED_PUBLIC_PATHS) {
+    writeFixture(
+      root,
+      relativePath,
+      "<!doctype html><title>Immutable conformance fixture</title>\n",
+    );
+  }
+}
+
+function transitionFixture(options = {}) {
+  const root = mkdtempSync(path.join(tmpdir(), "takoform-spec-transition-"));
+  fixtureGit(root, "init", "-b", "main");
+  fixtureGit(root, "remote", "add", "origin", CANONICAL_ORIGIN);
+
+  const initialLedger = c1Ledger();
+  const initialBytes = `${JSON.stringify(initialLedger, null, 2)}\n`;
+  for (const relativePath of C3_ALLOWED_PATHS) {
+    writeFixture(root, relativePath, initialBytes);
+  }
+  writeC4Inputs(root, "candidate");
+  const c1 = commitFixture(root, "test: C1 frozen source");
+  const c2 = commitFixture(root, "test: C2 publication", { allowEmpty: true });
+
+  const release = receipt();
+  release.sourceCommit = c1;
+  release.releaseCommit = c2;
+  const releasedLedger = { ...c1Ledger(), releases: [release] };
+  const releasedBytes = `${JSON.stringify(releasedLedger, null, 2)}\n`;
+  for (const [index, relativePath] of C3_ALLOWED_PATHS.entries()) {
+    writeFixture(
+      root,
+      relativePath,
+      options.c3ProjectionDrift && index === 1
+        ? `${JSON.stringify({ ...releasedLedger, drift: true }, null, 2)}\n`
+        : releasedBytes,
+    );
+  }
+  if (options.squashC4IntoC3) writeC4Inputs(root, "released");
+  const c3 = commitFixture(root, "test: C3 receipt");
+
+  let c4 = null;
+  if (!options.omitC4 && !options.squashC4IntoC3) {
+    if (options.extraBeforeC4) {
+      commitFixture(root, "test: unexpected commit between C3 and C4", {
+        allowEmpty: true,
+      });
+    }
+    if (options.mergeC4) {
+      fixtureGit(root, "switch", "-c", "test-side", c3);
+      writeFixture(root, "side.txt", "merge-parent\n");
+      commitFixture(root, "test: side parent");
+      fixtureGit(root, "switch", "main");
+      fixtureGit(root, "merge", "--no-ff", "--no-commit", "test-side");
+    }
+    writeC4Inputs(root, "released");
+    if (options.keepGeneratedHtmlStale) {
+      writeFixture(
+        root,
+        options.keepGeneratedHtmlStale,
+        "<!doctype html><title>Specification 1.1 candidate-open</title>\n",
+      );
+    }
+    if (options.c3ProjectionDrift) {
+      writeFixture(root, C3_ALLOWED_PATHS[1], releasedBytes);
+    }
+    if (options.forbiddenC4Path) {
+      writeFixture(root, options.forbiddenC4Path, "forbidden at C4\n");
+    }
+    c4 = commitFixture(root, "test: C4 derived public refresh");
+  }
+  if (options.laterDescendant) {
+    writeFixture(root, "later-unrelated.txt", "allowed after C4\n");
+    commitFixture(root, "test: later descendant");
+  }
+
+  return {
+    c1,
+    c2,
+    c3,
+    c4,
+    history: [
+      { commit: c3, ledger: releasedLedger },
+      { commit: c1, ledger: initialLedger },
+    ],
+    release,
+    root,
+  };
+}
+
+function withTransitionFixture(options, assertion) {
+  const fixture = transitionFixture(options);
+  try {
+    assertion(fixture);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
 }
 
 describe("Specification 1.1 owner ledger", () => {
@@ -229,6 +461,232 @@ describe("C1/C2/C3 commit fences", () => {
     ).toContain(
       "website/public/release/specification-releases.json",
     );
+  });
+});
+
+describe("C3/C4 fixed-point history", () => {
+  test("C4 permits only the explicit generated/public set", () => {
+    expect(
+      validateC4DiffPaths([
+        ...C4_REQUIRED_PATHS,
+        "website/public/assets/app.CAND0001.js",
+        "website/public/assets/app.RELS0001.js",
+      ]),
+    ).toEqual([]);
+    expect(
+      validateC4DiffPaths([
+        ...C4_REQUIRED_PATHS,
+        "website/public/assets/index.01234567.js",
+        "website/public/spec/core/index.html",
+      ]),
+    ).toEqual([]);
+    for (const relativePath of [
+      "spec/README.md",
+      "spec/publication-evidence.json",
+      "release/specification-releases.json",
+      "website/static/release/specification-releases.json",
+      "website/public/release/specification-releases.json",
+      "website/docs/reference.md",
+      "website/public/hashmap.json",
+      "scripts/release-deploy.mjs",
+      "provider/resource_worker.go",
+      "forms/candidates/index.json",
+      "host/reference/main.go",
+      "website/public/assets/evil.txt",
+      "website/public/assets/app.not-a-hash.js",
+      ...C4_PRESERVED_PUBLIC_PATHS,
+      "unrelated.txt",
+    ]) {
+      expect(
+        validateC4DiffPaths([...C4_REQUIRED_PATHS, relativePath]).join("\n"),
+      ).toContain("forbidden paths");
+    }
+  });
+
+  test("accepts exact C3/C4 followed by a later descendant", () => {
+    withTransitionFixture({ laterDescendant: true }, ({ release, history, root }) => {
+      expect(validateReceiptTransitionHistory(release, history, root)).toEqual(
+        [],
+      );
+    });
+  });
+
+  test("rejects a missing C4", () => {
+    withTransitionFixture({ omitC4: true }, ({ release, history, root }) => {
+      expect(
+        validateReceiptTransitionHistory(release, history, root).join("\n"),
+      ).toContain("C4 derived-public commit is missing");
+    });
+  });
+
+  test("rejects a squashed C3/C4 and an extra commit between them", () => {
+    withTransitionFixture(
+      { omitC4: true, squashC4IntoC3: true },
+      ({ release, history, root }) => {
+        const result = validateReceiptTransitionHistory(
+          release,
+          history,
+          root,
+        ).join("\n");
+        expect(result).toContain("receipt/ledger projection-only");
+        expect(result).toContain("C4 derived-public commit is missing");
+      },
+    );
+    withTransitionFixture(
+      { extraBeforeC4: true },
+      ({ release, history, root }) => {
+        expect(
+          validateReceiptTransitionHistory(release, history, root).join("\n"),
+        ).toContain("C4 derived-public diff must include README.md");
+      },
+    );
+  });
+
+  test("rejects C3 projection byte drift even when C4 repairs it", () => {
+    withTransitionFixture(
+      { c3ProjectionDrift: true },
+      ({ release, history, root }) => {
+        const result = validateReceiptTransitionHistory(
+          release,
+          history,
+          root,
+        ).join("\n");
+        expect(result).toContain(
+          "C3 canonical/static/public Specification ledger bytes must be identical",
+        );
+        expect(result).toContain("forbidden paths");
+      },
+    );
+  });
+
+  test("rejects a C4 that leaves one generated served page at candidate-open", () => {
+    withTransitionFixture(
+      { keepGeneratedHtmlStale: "website/public/spec/overview.html" },
+      ({ release, history, root }) => {
+        const result = validateReceiptTransitionHistory(
+          release,
+          history,
+          root,
+        ).join("\n");
+        expect(result).toContain("must refresh every served HTML page");
+        expect(result).toContain("website/public/spec/overview.html");
+      },
+    );
+  });
+
+  test("rejects normative, authority, and unrelated C4 changes", () => {
+    for (const forbiddenC4Path of [
+      "spec/README.md",
+      "spec/publication-evidence.json",
+      "release/specification-releases.json",
+      "scripts/specification-release.mjs",
+      "provider/resource_worker.go",
+      "forms/candidates/index.json",
+      "host/reference/main.go",
+      "unrelated.txt",
+      "website/public/attacker.html",
+      "website/public/assets/evil.01234567.js",
+      "website/public/assets/app.EVIL0001.js",
+    ]) {
+      withTransitionFixture(
+        { forbiddenC4Path },
+        ({ release, history, root }) => {
+          expect(
+            validateReceiptTransitionHistory(release, history, root).join(
+              "\n",
+            ),
+          ).toContain(forbiddenC4Path);
+        },
+      );
+    }
+  });
+
+  test("rejects a merge-parent C4", () => {
+    withTransitionFixture({ mergeC4: true }, ({ release, history, root }) => {
+      expect(
+        validateReceiptTransitionHistory(release, history, root).join("\n"),
+      ).toContain("must be the direct single-parent child of C3");
+    });
+  });
+
+  test("reads C3/C4 from the unreplaced object view despite ambient Git overrides", () => {
+    withTransitionFixture({}, ({ c3, c4, release, history, root }) => {
+      fixtureGit(root, "replace", c4, c3);
+      const overrides = {
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: "/tmp/attacker-objects",
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.useReplaceRefs",
+        GIT_CONFIG_VALUE_0: "true",
+        GIT_INDEX_FILE: "/tmp/attacker-index",
+        GIT_OBJECT_DIRECTORY: "/tmp/attacker-object-directory",
+        GIT_REPLACE_REF_BASE: "refs/replace",
+        GIT_WORK_TREE: "/tmp/attacker-worktree",
+      };
+      const previous = new Map(
+        Object.keys(overrides).map((name) => [name, process.env[name]]),
+      );
+      try {
+        Object.assign(process.env, overrides);
+        expect(validateReceiptTransitionHistory(release, history, root)).toEqual(
+          [],
+        );
+      } finally {
+        for (const [name, value] of previous) {
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        }
+      }
+    });
+  });
+
+  test("rejects repository-local URL rewrite configuration", () => {
+    withTransitionFixture({}, ({ release, history, root }) => {
+      fixtureGit(
+        root,
+        "config",
+        "url.file:///tmp/attacker/.insteadOf",
+        "https://github.com/",
+      );
+      expect(() =>
+        validateReceiptTransitionHistory(release, history, root),
+      ).toThrow("repository Git configuration can influence publication");
+    });
+  });
+});
+
+describe("release-state-neutral current wording", () => {
+  test("rejects stale candidate/open claims without rejecting the separate Host candidate", () => {
+    for (const stale of [
+      "Specification 1.1 candidate",
+      "Specification 1.1 release candidate remains open",
+      "Takoform Specification 1.1 is an open numbered candidate",
+      "Takoform 1.1 candidate",
+      "Takoform 1.1 open candidate",
+      "Takoform 1.1 is open until one exact committed snapshot exists",
+      "Specification: 1.1 (candidate-open, release status is ledger-derived)",
+      "The numbered release remains open until evidence exists",
+      "The Specification release assertion remains fail-closed while its evidence is open",
+    ]) {
+      expect(staleSpecificationReleaseWording(stale)).toBe(true);
+    }
+    for (const neutral of [
+      "Specification 1.1 publication state is ledger-derived.",
+      "Specification 1.1 does not publish the separate Host API v1 candidate.",
+      "The Host API v1 candidate remains separately unpublished.",
+    ]) {
+      expect(staleSpecificationReleaseWording(neutral)).toBe(false);
+    }
+  });
+
+  test("keeps every normative or curated current source release-state-neutral", () => {
+    for (const relativePath of RELEASE_STATE_NEUTRAL_SOURCE_PATHS) {
+      expect(
+        staleSpecificationReleaseWording(
+          readFileSync(path.join(ROOT, relativePath), "utf8"),
+        ),
+        relativePath,
+      ).toBe(false);
+    }
   });
 });
 

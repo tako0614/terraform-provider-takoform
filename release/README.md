@@ -19,8 +19,8 @@ identity, promote the 31 current Experimental `0.x` FormRefs, publish their
 packages, or advance the official Provider. Provider 3 is an independent non-normative sample;
 Provider 2.1.1 and its Host v1beta1/15-Form identities remain immutable
 Registry history. `bun run check:specification-releases` validates the ledger,
-while `bun run check:specification-1-1-release` intentionally fails until the
-committed source evidence is complete.
+while `bun run check:specification-1-1-release` derives readiness solely from
+the exact committed source evidence.
 
 `specification-compatibility.json` is generated from the current committed
 source and owning ledgers. It contains exactly five compatibility classes and
@@ -39,6 +39,15 @@ only derived public truth: the README generation table, the informational
 compatibility report, the machine-readable site status, and reproducible
 website output. The compatibility report is checked separately and never
 enters C2, C3, the release asset set, or release authority.
+
+The enforced C4 write set is exact and bounded: `README.md`; the canonical,
+static, and public Specification compatibility JSON; the static and public
+site-status JSON; every generated VitePress `website/public/**/*.html` page
+(including `404.html`); and only the content-hashed `website/public/assets/**`
+closure changed by that deterministic build. The immutable runtime-ABI fixture
+`website/public/conformance/runtime-abi-v1/bundles/unsupported-media-type/page.html`,
+source projection `website/docs/reference.md`, public `hashmap.json`, ledgers,
+and all other paths remain byte-identical and are outside C4.
 
 W09's current owner is the existing
 `https://github.com/tako0614/terraform-provider-takoform.git` repository. A
@@ -77,7 +86,11 @@ that deterministic projection gap. C3 and C4 are reviewed and pushed together,
 without squashing, so the remote branch ends on green C4 while the exact C3
 authority transition remains visible in history. C4 MUST NOT change `spec/**`,
 `spec/publication-evidence.json`, `release/specification-releases.json`, or
-either C3 ledger projection.
+either C3 ledger projection. It also MUST NOT change publication evidence,
+release authority or tooling, any Provider/Form/Host source, any other ledger
+or projection, or an unrelated file. The release gate locates C4 as the first
+ancestry commit after C3, requires a direct single-parent edge, and permits
+later descendants only after that exact fixed point.
 
 If publication stops after the exact annotated tag, use `recover-tag-only` with
 the original C2, exact tag object and reviewed current commit. If it stops with

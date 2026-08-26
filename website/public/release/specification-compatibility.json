@@ -4656,7 +4656,7 @@
           "sources": [
             {
               "path": "spec/project-lifecycle.md",
-              "sha256": "sha256:ed3c841c2a2c0863024b6cde596d9f8edf4db108f4795b93b51ca09788c292a4"
+              "sha256": "sha256:f043dcfb12695dffbd11d370deff7c8ee3b545478992312ee1d1616d36d6bb42"
             },
             {
               "path": "spec/versioning.md",
@@ -4664,7 +4664,7 @@
             },
             {
               "path": "spec/publication-freeze.md",
-              "sha256": "sha256:2a76f67fe926485e32516c6dc1e970209c011000ed8749e81f85a2c3e6787fa0"
+              "sha256": "sha256:1828286b630758980a1a36c85321f7759c7134aeb05df0bba7953edfd942002c"
             }
           ],
           "owningLedger": "spec/project-lifecycle.md",

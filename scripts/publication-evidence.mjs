@@ -9,9 +9,11 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { createHardenedGitEnvironment } from "./deploy-safety.mjs";
 
 export const PUBLICATION_EVIDENCE = "spec/publication-evidence.json";
 export const EVIDENCE_FORMAT = "takoform.release-evidence@v3";
@@ -291,10 +293,30 @@ function assertRelativePath(value, context) {
   }
 }
 
+function environmentWithoutGitHubAuthority(environment = process.env) {
+  const sanitized = { ...environment };
+  delete sanitized.GH_TOKEN;
+  delete sanitized.GH_ENTERPRISE_TOKEN;
+  delete sanitized.GITHUB_TOKEN;
+  delete sanitized.GITHUB_ENTERPRISE_TOKEN;
+  return sanitized;
+}
+
+function gitEnvironment() {
+  const environment = createHardenedGitEnvironment(
+    environmentWithoutGitHubAuthority(),
+  );
+  delete environment.SSH_ASKPASS;
+  delete environment.SSH_ASKPASS_REQUIRE;
+  delete environment.GCM_INTERACTIVE;
+  return environment;
+}
+
 function git(repositoryRoot, args, encoding = "utf8") {
   try {
     return execFileSync("git", ["-C", repositoryRoot, ...args], {
       encoding,
+      env: gitEnvironment(),
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 64 * 1024 * 1024,
     });
@@ -306,7 +328,10 @@ function git(repositoryRoot, args, encoding = "utf8") {
 
 function gitSucceeds(repositoryRoot, args) {
   try {
-    execFileSync("git", ["-C", repositoryRoot, ...args], { stdio: "ignore" });
+    execFileSync("git", ["-C", repositoryRoot, ...args], {
+      env: gitEnvironment(),
+      stdio: "ignore",
+    });
     return true;
   } catch {
     return false;
@@ -329,6 +354,7 @@ function gitShowBytes(repositoryRoot, commit, relativePath, context = relativePa
   try {
     return execFileSync("git", ["-C", repositoryRoot, "show", `${commit}:${relativePath}`], {
       encoding: "buffer",
+      env: gitEnvironment(),
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 64 * 1024 * 1024,
     });
@@ -364,6 +390,79 @@ function normalizeOriginUrl(value) {
   return normalized;
 }
 
+function localGitConfiguration(repositoryRoot) {
+  const raw = String(
+    git(repositoryRoot, ["config", "--local", "-z", "--list"]),
+  );
+  const configuration = new Map();
+  const allowedCore = new Set([
+    "core.bare",
+    "core.filemode",
+    "core.logallrefupdates",
+    "core.repositoryformatversion",
+  ]);
+  for (const record of raw.split("\0")) {
+    if (record === "") continue;
+    const separator = record.indexOf("\n");
+    if (separator <= 0) fail("repository Git configuration has an invalid entry");
+    const name = record.slice(0, separator);
+    const value = record.slice(separator + 1);
+    const allowedBranch = /^branch\..+\.(?:merge|remote)$/u.test(name);
+    const allowedRemote =
+      name === "remote.origin.fetch" || name === "remote.origin.url";
+    const allowedFixtureIdentity = name === "user.name" || name === "user.email";
+    if (
+      !allowedCore.has(name) &&
+      !allowedBranch &&
+      !allowedRemote &&
+      !allowedFixtureIdentity
+    ) {
+      fail(`repository Git configuration can influence evidence: ${name}`);
+    }
+    if (configuration.has(name)) {
+      fail(`repository Git configuration is duplicated: ${name}`);
+    }
+    configuration.set(name, value);
+  }
+  if (
+    configuration.get("core.repositoryformatversion") !== "0" ||
+    configuration.get("core.bare") !== "false" ||
+    !new Set(["true", "false"]).has(configuration.get("core.filemode"))
+  ) {
+    fail("repository Git configuration is not the canonical evidence shape");
+  }
+  if (
+    configuration.has("remote.origin.url") &&
+    configuration.get("remote.origin.fetch") !==
+      "+refs/heads/*:refs/remotes/origin/*"
+  ) {
+    fail("repository Git configuration is not the canonical evidence shape");
+  }
+  return configuration;
+}
+
+function assertSelfContainedGitObjectStore(repositoryRoot) {
+  if (
+    String(
+      git(repositoryRoot, ["rev-parse", "--is-shallow-repository"]),
+    ).trim() !== "false"
+  ) {
+    fail("repository must be complete and non-shallow");
+  }
+  const commonDirectory = String(
+    git(repositoryRoot, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+    ]),
+  ).trim();
+  for (const relativePath of ["objects/info/alternates", "info/grafts"]) {
+    if (existsSync(path.join(commonDirectory, relativePath))) {
+      fail(`repository Git object authority uses forbidden ${relativePath}`);
+    }
+  }
+}
+
 function matchingRefs(repositoryRoot, pattern) {
   const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
   const refs = String(
@@ -392,16 +491,20 @@ function validateRepositoryAuthority(document, repositoryRoot) {
     fail("repositoryAuthority must pin the canonical Takoform repository");
   }
   exactArray(policy.allowedReachableRefs, ALLOWED_REACHABLE_REFS, "allowedReachableRefs");
-  if (!gitSucceeds(repositoryRoot, ["remote", "get-url", "origin"])) {
+  const configuration = localGitConfiguration(repositoryRoot);
+  assertSelfContainedGitObjectStore(repositoryRoot);
+  const configuredOrigin = configuration.get("remote.origin.url");
+  if (typeof configuredOrigin !== "string") {
     fail("the Takoform checkout has no origin remote");
   }
-  const origin = git(repositoryRoot, ["remote", "get-url", "origin"]).trim();
+  const origin = configuredOrigin;
   if (normalizeOriginUrl(origin) !== CANONICAL_ORIGIN) {
     fail(`origin ${JSON.stringify(origin)} is not the canonical Takoform repository`);
   }
 }
 
 function assertReachableCommit(repositoryRoot, commit, context) {
+  assertSelfContainedGitObjectStore(repositoryRoot);
   if (typeof commit !== "string" || !COMMIT.test(commit)) {
     fail(`${context} must be a full lowercase Git commit SHA`);
   }
@@ -1436,7 +1539,19 @@ function implementationDigest(repositoryRoot, commit, roots, excludedPaths = [])
 }
 
 function assertCheckoutMatchesCommit(repositoryRoot, commit, roots, context) {
-  if (!gitSucceeds(repositoryRoot, ["diff", "--quiet", commit, "HEAD", "--", ...roots])) {
+  if (!gitSucceeds(repositoryRoot, [
+    "-c",
+    "diff.renames=false",
+    "diff",
+    "--quiet",
+    "--no-renames",
+    "--no-ext-diff",
+    "--no-textconv",
+    commit,
+    "HEAD",
+    "--",
+    ...roots,
+  ])) {
     fail(`${context} implementation at HEAD differs from source commit ${commit}`);
   }
   assertWorktreePathsClean(repositoryRoot, roots, `${context} implementation`);

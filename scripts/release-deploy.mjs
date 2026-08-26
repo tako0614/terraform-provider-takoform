@@ -19,6 +19,10 @@ import { tmpdir } from "node:os";
 import process from "node:process";
 
 import {
+  assertSafeRepositoryGitConfiguration,
+  createHardenedGitEnvironment,
+} from "./deploy-safety.mjs";
+import {
   LEDGER_PATH as SPECIFICATION_LEDGER_PATH,
   SOURCE_EVIDENCE_ASSET,
   SOURCE_EVIDENCE_PATH,
@@ -514,10 +518,22 @@ function exactDiffPaths(context, base, head, { recovery = false } = {}) {
 }
 
 function assertSpecificationC2Fence(context, sourceCommit, releaseCommit) {
-  const parent = git(context, "rev-parse", `${releaseCommit}^`);
-  if (parent !== sourceCommit) {
+  const ancestry = git(
+    context,
+    "rev-list",
+    "--parents",
+    "-n",
+    "1",
+    releaseCommit,
+  ).split(" ");
+  const parents = ancestry[0] === releaseCommit ? ancestry.slice(1) : [];
+  if (
+    ancestry.some((entry) => !COMMIT.test(entry)) ||
+    parents.length !== 1 ||
+    parents[0] !== sourceCommit
+  ) {
     throw new Error(
-      `Specification C2 ${releaseCommit} must be the direct evidence-only child of C1 ${sourceCommit}; observed parent ${parent}`,
+      `Specification C2 ${releaseCommit} must be the direct single-parent evidence-only child of C1 ${sourceCommit}; observed parents ${parents.join(", ") || "unreadable"}`,
     );
   }
   const paths = exactDiffPaths(context, sourceCommit, releaseCommit);
@@ -1164,13 +1180,26 @@ function attemptCommand(context, executable, args, options = {}) {
 function environmentWithoutGitHubAuthority() {
   const environment = { ...process.env };
   delete environment.GH_TOKEN;
+  delete environment.GH_ENTERPRISE_TOKEN;
   delete environment.GITHUB_TOKEN;
+  delete environment.GITHUB_ENTERPRISE_TOKEN;
   return environment;
 }
 
 function subprocessEnvironment(executable) {
+  if (executable === "git") return normalGitEnvironment();
   const environment = environmentWithoutGitHubAuthority();
   if (executable === "gh") environment.GH_TOKEN = process.env.GH_TOKEN;
+  return environment;
+}
+
+function normalGitEnvironment() {
+  const environment = createHardenedGitEnvironment(
+    environmentWithoutGitHubAuthority(),
+  );
+  delete environment.SSH_ASKPASS;
+  delete environment.SSH_ASKPASS_REQUIRE;
+  delete environment.GCM_INTERACTIVE;
   return environment;
 }
 
@@ -1183,17 +1212,7 @@ function githubUploadEnvironment() {
 }
 
 function gitPushEnvironment() {
-  const environment = environmentWithoutGitHubAuthority();
-  delete environment.GIT_CONFIG_COUNT;
-  for (const name of Object.keys(environment)) {
-    if (
-      /^GIT_CONFIG_(?:KEY|VALUE)_[0-9]+$/u.test(name) ||
-      /^GIT_TRACE/u.test(name) ||
-      name === "GIT_CURL_VERBOSE"
-    ) {
-      delete environment[name];
-    }
-  }
+  const environment = normalGitEnvironment();
   environment.GIT_TERMINAL_PROMPT = "0";
   environment.GIT_ASKPASS = "/bin/false";
   environment.SSH_ASKPASS = "/bin/false";
@@ -1212,50 +1231,7 @@ function gitPushEnvironment() {
 }
 
 function recoveryReadOnlyGitEnvironment() {
-  const environment = environmentWithoutGitHubAuthority();
-  const unsafeNames = new Set([
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_ASKPASS",
-    "GIT_ATTR_NOSYSTEM",
-    "GIT_CEILING_DIRECTORIES",
-    "GIT_COMMON_DIR",
-    "GIT_CONFIG_PARAMETERS",
-    "GIT_DIFF_OPTS",
-    "GIT_DIR",
-    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
-    "GIT_EXEC_PATH",
-    "GIT_EXTERNAL_DIFF",
-    "GIT_GRAFT_FILE",
-    "GIT_INDEX_FILE",
-    "GIT_INTERNAL_SUPER_PREFIX",
-    "GIT_NAMESPACE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_PREFIX",
-    "GIT_PROXY_COMMAND",
-    "GIT_QUARANTINE_PATH",
-    "GIT_REPLACE_REF_BASE",
-    "GIT_SHALLOW_FILE",
-    "GIT_SSH",
-    "GIT_SSH_COMMAND",
-    "GIT_TEMPLATE_DIR",
-    "GIT_WORK_TREE",
-    "SSH_ASKPASS",
-  ]);
-  for (const name of Object.keys(environment)) {
-    if (
-      unsafeNames.has(name) ||
-      /^GIT_CONFIG_/u.test(name) ||
-      /^GIT_TRACE/u.test(name)
-    ) {
-      delete environment[name];
-    }
-  }
-  environment.GIT_CONFIG_NOSYSTEM = "1";
-  environment.GIT_CONFIG_GLOBAL = "/dev/null";
-  environment.GIT_CONFIG_SYSTEM = "/dev/null";
-  environment.GIT_NO_REPLACE_OBJECTS = "1";
-  environment.GIT_OPTIONAL_LOCKS = "0";
-  return environment;
+  return normalGitEnvironment();
 }
 
 function recoveryGit(context, args, options = {}) {
@@ -1326,18 +1302,21 @@ function runOwnerCheck(context) {
   progress(context, "bun run check:release-owner-gate");
   command(context, "bun", ["run", "check:release-owner-gate"], {
     echo: true,
+    env: normalGitEnvironment(),
     label: "owner gate",
   });
 }
 
 function ownerGateAndFence(context, expectedCommit, options) {
   verifyLocalReleaseToolchain(context);
+  assertCurrentProtectedMain(context, expectedCommit, options);
   runOwnerCheck(context);
   return assertCurrentProtectedMain(context, expectedCommit, options);
 }
 
 function specificationOwnerGateAndFence(context, expectedCommit, options) {
   verifySpecificationReleaseToolchain(context);
+  assertCurrentProtectedMain(context, expectedCommit, options);
   runOwnerCheck(context);
   const current = assertCurrentProtectedMain(context, expectedCommit, options);
   // GitHub only makes releases immutable when the repository setting was
@@ -1381,6 +1360,35 @@ function assertCurrentProtectedMain(
   expectedCommit,
   { exact = true } = {},
 ) {
+  const localConfiguration = command(
+    context,
+    "git",
+    ["config", "--local", "-z", "--list"],
+    { label: "read release repository Git configuration" },
+  );
+  try {
+    assertSafeRepositoryGitConfiguration(
+      localConfiguration,
+      SOURCE_REPOSITORY,
+    );
+  } catch (error) {
+    throw new Error(
+      `release blocked: repository Git configuration is not publication-safe: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const commonDirectory = git(
+    context,
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-common-dir",
+  );
+  for (const relativePath of ["objects/info/alternates", "info/grafts"]) {
+    if (existsSync(join(commonDirectory, relativePath))) {
+      throw new Error(
+        `release blocked: repository Git object authority uses forbidden ${relativePath}`,
+      );
+    }
+  }
   const dirty = git(
     context,
     "status",
@@ -5016,6 +5024,8 @@ export const releaseDeployTestHooks = Object.freeze({
   dispatchWorkflow,
   expectedFormTagObject,
   githubUploadEnvironment,
+  gitPushEnvironment,
+  normalGitEnvironment,
   ownerGateAndFence,
   observeTagFailureState,
   parseCandidateMetadata,
@@ -5030,6 +5040,7 @@ export const releaseDeployTestHooks = Object.freeze({
   resumeDraftReleaseLocally,
   materializeSpecificationTag,
   reconstructCandidateTagObject,
+  recoveryReadOnlyGitEnvironment,
   requireSuccessfulRun,
   specificationPublicationInput,
   specificationReleaseBody,

@@ -10,7 +10,7 @@ is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.1 open candidate; first numbered release; authority is one exact committed snapshot of the normative `spec/` tree (identity 1.0 was never published, is withdrawn, and may not be reused) |
+| Specification | Takoform 1.1; first numbered release identity; publication state is derived from the append-only numbered ledger and authority is one exact committed snapshot of the normative `spec/` tree (identity 1.0 was never published, is withdrawn, and may not be reused) |
 | Current Form corpus | `forms/candidates/current-family-index.json` (8 versionless families; 31 exact Experimental `0.x` Forms) |
 | Host API candidate | `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` (separate and unpublished) |
 | Current package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
@@ -25,9 +25,12 @@ release authority.
 The separately generated five-class compatibility report is compatibility
 evidence only. It is not part of the publication-evidence document, a release
 asset, or a prerequisite. W09 keeps C1 (normative freeze and executable
-tooling), C2 (evidence-only source snapshot), and C3 (authoritative append-only
-publication receipt) as distinct boundaries; W10 may write only future
-releases and may never reissue Specification 1.1.
+tooling), C2 (evidence-only source snapshot), C3 (authoritative append-only
+publication receipt), and its direct-child C4 (bounded deterministic public
+refresh) as distinct linear boundaries. C4 cannot change normative source,
+evidence, ledgers, release tooling, Provider/Form/Host source, or unrelated
+files. W10 may write only future releases and may never reissue Specification
+1.1.
 
 The pre-Beta epochs (`forms.takoform.com/v1alpha1` and `/v1alpha2`) were
 withdrawn ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));

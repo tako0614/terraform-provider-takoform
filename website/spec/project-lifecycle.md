@@ -1,11 +1,11 @@
 # Project and Form lifecycle
 
 Takoform is a portable desired-state specification and tooling project. The
-repository currently contains a **Specification 1.1 candidate** and a literal
-Host API v1 source candidate. Host API v1 is a separate, unpublished protocol
-identity; publishing Specification 1.1 does not publish or promote it. The
-numbered release remains open until its exact committed normative source
-snapshot closes. Takoform is not an industry
+repository defines **Specification 1.1** and carries a literal Host API v1
+source candidate. Host API v1 is a separate, unpublished protocol identity;
+publishing Specification 1.1 does not publish or promote it. Specification
+publication state is derived from the append-only numbered release ledger, not
+hard-coded in this lifecycle document. Takoform is not an industry
 standards body, certification authority, universal cloud API, or a promise that
 an existing Resource can move between backends without migration.
 
@@ -49,7 +49,8 @@ which amends decisions
 [`0052`](decisions/0052-the-specification-is-released-on-its-own-line.md) and
 [`0053`](decisions/0053-specification-and-provider-release-evidence.md), as
 amended by [`0055`](decisions/0055-specification-release-needs-only-normative-source.md):
-only the exact committed normative source snapshot closes that track. Candidate
+only the exact committed normative source snapshot satisfies release readiness,
+and the numbered ledger records publication. Candidate
 Forms, reference conformance, Provider 3, and external Host,
 backend, runtime, production, signer, operator, Takoserver, and Takosumi facts
 are independent adoption evidence. Provider 2.1.1 and the v1beta1 identities
@@ -181,8 +182,8 @@ Stable commits Takoform to the stable SemVer rules in
 [`versioning.md`](versioning.md). It does not guarantee that every host supports
 the Form or that a commercial platform offers it.
 
-No Takosumi or other product GA milestone triggers a transition. Releasing
-Publishing Specification 1.1 likewise leaves every current `0.x` Form
+No Takosumi or other product GA milestone triggers a transition. Publishing
+Specification 1.1 likewise leaves every current `0.x` Form
 Experimental; publishing the separate Host API v1 candidate has the same
 non-effect. The machine record requires the exact transition history
 `proposal → experimental → stable`, the per-Form decision and bound contract

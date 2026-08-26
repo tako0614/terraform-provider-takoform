@@ -9,7 +9,7 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.1 open candidate。first numbered release。authority は normative `spec/` tree の exact committed snapshot 1つだけ（1.0 は公開前に撤回され再利用しない） |
+| Specification | Takoform 1.1。first numbered release identity。publication state は append-only numbered ledger から導出し、authority は normative `spec/` tree の exact committed snapshot 1つだけ（1.0 は公開前に撤回され再利用しない） |
 | 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
 | Host API candidate | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、Specification とは separate and unpublished) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
@@ -18,6 +18,12 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 Specification 1.1 は separate Host API v1 candidate を publish / promote せず、
 current Form を `1.0.0` に昇格させず、Package や Provider を publish せず、
 `/v1.1` / v2 lane も mint しません。
+
+W09 は C1（normative freeze）、C2（source evidence のみ）、C3（authoritative
+receipt のみ）、その direct child である C4（bounded deterministic public
+refresh）を squash しない linear boundary として保持します。C4 は normative
+source、evidence、ledger、release tooling、Provider/Form/Host source、unrelated
+file を変更できません。
 
 pre-Beta の epoch（`forms.takoform.com/v1alpha1` と `/v1alpha2`）は撤回されました
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
