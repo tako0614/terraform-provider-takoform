@@ -1,0 +1,70 @@
+{
+  "apiVersion": "constraints.publisher.example",
+  "kind": "StructuralConstraintHolder",
+  "definitionVersion": "0.1.0",
+  "title": "StructuralConstraintHolder independent constraint fixture",
+  "description": "External publisher Definition for the family-neutral declared-constraint matrix.",
+  "role": "policy",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "lower": {
+        "type": "integer"
+      },
+      "upper": {
+        "type": "integer"
+      },
+      "rows": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 8,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ]
+        }
+      }
+    },
+    "required": [
+      "lower",
+      "upper",
+      "rows"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "orderedPair",
+      "references": [
+        "/lower",
+        "/upper"
+      ]
+    },
+    {
+      "kind": "uniqueBy",
+      "list": "/rows",
+      "member": "key"
+    }
+  ]
+}

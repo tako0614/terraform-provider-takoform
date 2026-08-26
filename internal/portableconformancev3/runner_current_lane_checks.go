@@ -629,7 +629,7 @@ func (r *v3Runner) checkCancelPastSafeStop(target probeTarget) error {
 // slot sealed rather than merely typed — that nothing about WHICH service
 // answers ever enters portable desired state.
 func (r *v3Runner) checkExternalServiceSlotsSealed(version probeTarget) error {
-	slots := r.contract.RunnerInput.ExternalServices
+	slots := r.semanticExternalServices()
 	if len(slots.Protocols) == 0 {
 		return errors.New("the corpus declares no external standard-service protocol vocabulary")
 	}
@@ -750,17 +750,28 @@ func (r *v3Runner) checkExternalServiceSlotsSealed(version probeTarget) error {
 }
 
 // checkStableStandardServiceSupportEnforced measures the stable split between
-// an open opaque identifier grammar and this Host's exact support set. It uses
-// a supported structured S3 identifier plus the same unknown-valid identifier
-// in required and optional slots, so syntax, support, mutation ordering, and
-// projection behavior are independently observable.
+// an open opaque identifier grammar and this Host's exact support set. Every
+// protocol and slot name comes from the corpus probe, so the mechanism never
+// embeds one provider's service vocabulary.
 func (r *v3Runner) checkStableStandardServiceSupportEnforced(version probeTarget) error {
-	slots := r.contract.RunnerInput.ExternalServices
+	slots := r.semanticExternalServices()
 	if slots.ServiceAPIVersion != formpackage.StandardServiceAPIVersion ||
-		!containsString(slots.Protocols, "com.amazonaws.s3") ||
+		len(slots.Protocols) == 0 ||
 		len(slots.DesiredSpec) == 0 || len(slots.UnknownProtocolSpec) == 0 ||
 		len(slots.OptionalUnsupportedSpec) == 0 {
 		return errors.New("the stable corpus does not pin supported, required-unsupported, and optional-unsupported service slots")
+	}
+	supportedProtocol := slots.Protocols[0]
+	unknownProtocol, _, err := stableExternalServiceSlotFacts(slots, slots.UnknownProtocolSpec)
+	if err != nil {
+		return err
+	}
+	optionalProtocol, optionalNames, err := stableExternalServiceSlotFacts(slots, slots.OptionalUnsupportedSpec)
+	if err != nil {
+		return err
+	}
+	if containsString(slots.Protocols, unknownProtocol) || optionalProtocol != unknownProtocol {
+		return errors.New("the stable corpus's unsupported service probes do not name one unsupported protocol")
 	}
 
 	checkSupport := func(protocol string, want bool) error {
@@ -790,10 +801,9 @@ func (r *v3Runner) checkStableStandardServiceSupportEnforced(version probeTarget
 		}
 		return nil
 	}
-	if err := checkSupport("com.amazonaws.s3", true); err != nil {
+	if err := checkSupport(supportedProtocol, true); err != nil {
 		return err
 	}
-	unknownProtocol := "com.example.future-store"
 	if err := checkSupport(unknownProtocol, false); err != nil {
 		return err
 	}
@@ -804,7 +814,7 @@ func (r *v3Runner) checkStableStandardServiceSupportEnforced(version probeTarget
 	if _, _, err := r.applyResource(supported, applyOptions{
 		Create: true, IdempotencyKey: "key-stable-standard-service-supported",
 	}, http.StatusCreated); err != nil {
-		return fmt.Errorf("creating a resource with supported S3 service slot: %w", err)
+		return fmt.Errorf("creating a resource with supported standard-service slot: %w", err)
 	}
 	if err := r.deleteExisting(supported, "key-stable-standard-service-supported-delete"); err != nil {
 		return err
@@ -842,7 +852,8 @@ func (r *v3Runner) checkStableStandardServiceSupportEnforced(version probeTarget
 		return fmt.Errorf("creating a resource with optional unsupported slot: %w", err)
 	}
 	if created.Status != nil {
-		for _, forbidden := range []string{"FUTURE_STORE", "endpoint", "credential", "secret", "url"} {
+		forbiddenOutputs := append(optionalNames, "endpoint", "credential", "secret", "url")
+		for _, forbidden := range forbiddenOutputs {
 			if _, projected := created.Status.Outputs[forbidden]; projected {
 				return fmt.Errorf("optional unsupported standard-service slot projected %q", forbidden)
 			}
@@ -854,6 +865,37 @@ func (r *v3Runner) checkStableStandardServiceSupportEnforced(version probeTarget
 
 	r.complete("stable-standard-service-support-enforced")
 	return nil
+}
+
+func stableExternalServiceSlotFacts(
+	probe ExternalServiceProbe,
+	spec map[string]any,
+) (string, []string, error) {
+	rawEntries, ok := spec[probe.Property].([]any)
+	if !ok || len(rawEntries) == 0 {
+		return "", nil, fmt.Errorf("standard-service probe property %q carries no slots", probe.Property)
+	}
+	protocol := ""
+	names := make([]string, 0, len(rawEntries))
+	for _, rawEntry := range rawEntries {
+		entry, ok := rawEntry.(map[string]any)
+		if !ok {
+			return "", nil, errors.New("standard-service probe slot is not an object")
+		}
+		service, ok := entry["service"].(map[string]any)
+		if !ok {
+			return "", nil, errors.New("standard-service probe slot omits service")
+		}
+		candidate, _ := service["protocol"].(string)
+		if candidate == "" || (protocol != "" && candidate != protocol) {
+			return "", nil, errors.New("standard-service probe slots do not name one protocol")
+		}
+		protocol = candidate
+		if name, _ := entry["name"].(string); name != "" {
+			names = append(names, name)
+		}
+	}
+	return protocol, names, nil
 }
 
 func containsString(values []string, want string) bool {

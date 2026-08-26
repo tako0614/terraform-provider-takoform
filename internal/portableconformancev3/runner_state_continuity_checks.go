@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 )
 
@@ -86,8 +87,10 @@ func (r *v3Runner) checkOperationResumableAfterSettlement(queue probeTarget) err
 		return err
 	}
 	mutated := first
-	mutated.Spec = cloneJSONMap(first.Spec)
-	mutated.Spec["deliveryDelaySeconds"] = json.Number("30")
+	mutated.Spec = r.desiredMutation(queue, 0, cloneJSONMap(first.Spec))
+	if reflect.DeepEqual(mutated.Spec, first.Spec) {
+		mutated.Spec["deliveryDelaySeconds"] = json.Number("30")
+	}
 	updated, _, err := r.applyResource(mutated, applyOptions{
 		ExpectedGeneration: current.Metadata.Generation,
 		IdempotencyKey:     "key-resume-update",

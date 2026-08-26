@@ -2,83 +2,749 @@
   "format": "takoform.generic-host-corpus@v1",
   "hostApiLane": "forms.takoform.com/v1",
   "requiredChecks": [
+    "apply-idempotency-replay",
+    "artifact-commit-binds-declared-size",
+    "artifact-digest-mismatch",
+    "artifact-upload-missing-blob",
+    "async-operation-flow",
+    "create-conflict-when-exists",
     "declared-constraint-semantics-enforced",
-    "exact-form-ref-resolution",
-    "generic-lifecycle-semantics",
-    "optional-unsupported-standard-service-omitted",
-    "required-unsupported-standard-service-refused-before-mutation",
-    "supported-standard-service-resolved"
+    "declared-exclusive-holds-enforced",
+    "delete-generation-fence",
+    "delete-revision-fence",
+    "delete-then-recreate-uid-changes",
+    "error-envelope-taxonomy",
+    "exact-form-ref-fails-closed-on-unknown-definition",
+    "fence-matrix-observed",
+    "operation-bound-to-its-creating-principal",
+    "operation-cancel",
+    "operation-replay-terminal",
+    "operation-resumable-after-settlement",
+    "portable-defaults-materialized",
+    "prepare-binds-exact-spec",
+    "prepare-is-tenant-scoped",
+    "prepare-requires-update-fence",
+    "replay-record-retires-with-its-incarnation",
+    "spec-change-bumps-generation",
+    "stale-revision-rejected",
+    "status-change-bumps-revision-not-generation",
+    "unauthenticated-request-refused",
+    "upload-session-bound-to-its-creating-principal"
   ],
-  "scenarios": [
+  "snapshotInputs": [
     {
-      "check": "declared-constraint-semantics-enforced",
-      "input": {
-        "operation": "portable-host-self-test",
-        "portableHostCheck": "declared-constraint-semantics-enforced"
-      },
-      "expected": {
-        "status": "passed",
-        "mutationBoundary": "preserved"
-      }
+      "name": "external-family",
+      "packages": [
+        {
+          "path": "generic-host/external-family/assigned-counter/package-index.json",
+          "packageDigest": "sha256:39439cba780caad74d8cd1d16d87b264da9cff1e8a51eccf5c7422953478bf53"
+        },
+        {
+          "path": "generic-host/external-family/constraint-claim-alternate/package-index.json",
+          "packageDigest": "sha256:e6c38093b04d77e33f0f06343b2f3e5236ea4f198497adc80bd2dfc929d91a5f"
+        },
+        {
+          "path": "generic-host/external-family/constraint-claim-primary/package-index.json",
+          "packageDigest": "sha256:e38229bc7a8a089c01ee10b82989078f7576fb936b951b3f94735410eeb9aa42"
+        },
+        {
+          "path": "generic-host/external-family/constraint-distinct-pair/package-index.json",
+          "packageDigest": "sha256:c3ca3e2dae4c4e3c90a195dd2138ee154aae06be46ec0d3fb27e9db8c058e9a9"
+        },
+        {
+          "path": "generic-host/external-family/constraint-member/package-index.json",
+          "packageDigest": "sha256:85af5a9d9308b3f8a960a42ca8352828220f6617a30ebb7a68806e9ab3de5655"
+        },
+        {
+          "path": "generic-host/external-family/constraint-node/package-index.json",
+          "packageDigest": "sha256:e32c8b5cf390ac923b9aee3ea60e414889000a138bb5f02bd8f230889339f731"
+        },
+        {
+          "path": "generic-host/external-family/constraint-same-target/package-index.json",
+          "packageDigest": "sha256:6601155c57e539d9d8d715b05f26068be262a210c5c1e4a84cf5ef97e5d6ef26"
+        },
+        {
+          "path": "generic-host/external-family/constraint-structural/package-index.json",
+          "packageDigest": "sha256:c2ce163907d9351f3d5a8fa93e03a92307e90be1e58339408e0d0688f29b8fa1"
+        },
+        {
+          "path": "generic-host/external-family/constraint-sum/package-index.json",
+          "packageDigest": "sha256:caed70a96b7da57d7dbe58878db845bf32ad723a9b84b9f477e0f6adbd0ccdb0"
+        },
+        {
+          "path": "generic-host/external-family/constraint-unique-pair-second/package-index.json",
+          "packageDigest": "sha256:fb890a927c48a664b83bf40898df06d842917bdcf3849f0cca76ba13a30ee8f5"
+        },
+        {
+          "path": "generic-host/external-family/constraint-unique-pair/package-index.json",
+          "packageDigest": "sha256:f2b00580b6bf28b40dd84631b1573f1f8a2436e8b8ea3d9f518f7f9121ca9e7b"
+        },
+        {
+          "path": "generic-host/external-family/counter-lease-v0-2/package-index.json",
+          "packageDigest": "sha256:eded30c8673c59a8da7e0bc62c97520018be6bdc4c3116f783c4b7abbb014b7d"
+        },
+        {
+          "path": "generic-host/external-family/counter-lease/package-index.json",
+          "packageDigest": "sha256:0e4a65ff9cc516f8136b637aa5b19e7e73aeed0faa3031694f3b9c13de6dc846"
+        },
+        {
+          "path": "generic-host/external-family/counter-reservation/package-index.json",
+          "packageDigest": "sha256:3af4d09e2939b533a800fba945a85fb7a168ca8fae3454727a028505e38981d7"
+        },
+        {
+          "path": "generic-host/external-family/other-range-gauge/package-index.json",
+          "packageDigest": "sha256:b53e78631f3b6d6b18bd62814505525dbcfc2cf8801749610276dcba3ce77619"
+        },
+        {
+          "path": "generic-host/external-family/range-counter-v0-2/package-index.json",
+          "packageDigest": "sha256:b364da0e1f57eae4ca17dfde913d912d4c1f7bb02eb477db2fc071c60bffee03"
+        },
+        {
+          "path": "generic-host/external-family/range-counter/package-index.json",
+          "packageDigest": "sha256:99b3bb00ce461b2c6d25cc4405a921d7cc35f864695c8256fc4eaa5d2f078641"
+        },
+        {
+          "path": "generic-host/external-family/range-gauge/package-index.json",
+          "packageDigest": "sha256:b67207d0777954336fcd57029fccade1c0a8d10c97f1194b229a1d49b434e559"
+        },
+        {
+          "path": "generic-host/external-family/range-sequence/package-index.json",
+          "packageDigest": "sha256:f8189eaba052d4eec252f744d83ac74107c24cb2d32203059fbab0ca4b7a40c8"
+        },
+        {
+          "path": "generic-host/external-family/revision-note/package-index.json",
+          "packageDigest": "sha256:1e6ce718db549add99e76624c6ff3fd9551babe23015c519f39443adaa902271"
+        }
+      ],
+      "interfaces": [
+        {
+          "path": "generic-host/external-family/constraint-node-interface.json",
+          "schemaDigest": "sha256:ddff5d96f3eb9eaebcee5bdd5c7a186776148fad532398250c6eac04266f9c55"
+        }
+      ],
+      "bindings": [
+        {
+          "path": "generic-host/external-family/constraint-link-binding.json",
+          "schemaDigest": "sha256:b485cfc8fe6c4be2413e721aadfab3cc4fb8b1e7da93c2028957a93cf9bea6db"
+        }
+      ],
+      "defaultCreates": [
+        {
+          "group": "constraints.publisher.example",
+          "kind": "ClaimLease",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "ClaimLease",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:78225cb7b4405cb6909ecc1c75a3ec657e033b7f5ec11cdcf7d7bdf6dadf3ef7"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "ClaimTicket",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "ClaimTicket",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:ea15035878acce9dbf17af0902cae032d914553f97697e4f45f0e33a4628d618"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "ConstraintMember",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "ConstraintMember",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c46248ded414976b58c97418a9a012d0aeb9706893f7a2ba5d5e94b07f631ee8"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "ConstraintNode",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "ConstraintNode",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3ab32d0980dd7e4e7b1d7b6b4c05d3d9f98b712c85d3715f3b76869727897fc2"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "DistinctPairHolder",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "DistinctPairHolder",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:3597bd75f72003bfb442318334b533bdaa11c616500870477ab279c0fb091e91"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "SameTargetHolder",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "SameTargetHolder",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:72e735ab97de82f1caba473c008657efbfde7c6dab0a8b901b1addb3e0ff84c5"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "StructuralConstraintHolder",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "StructuralConstraintHolder",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:e5f3097ef1cd9f65e8f7e8ecad07660ca1276fe91c65209c496a811da6847003"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "UniquePairHolder",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "UniquePairHolder",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:706b1106810c511325d6c64f2fe848b43451907f0dc6d75db4caf79750f08942"
+          }
+        },
+        {
+          "group": "constraints.publisher.example",
+          "kind": "WeightedSet",
+          "ref": {
+            "apiVersion": "constraints.publisher.example",
+            "kind": "WeightedSet",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:664d55fd53ed19dea264d2a2723889554091821a322b2cfc05bb9fa54bad3039"
+          }
+        },
+        {
+          "group": "records.publisher.example",
+          "kind": "RangeGauge",
+          "ref": {
+            "apiVersion": "records.publisher.example",
+            "kind": "RangeGauge",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0cfba7f3c1abd8e36da6bb2afd325a564c5ef35e5ad576cf28d8232dafeacda0"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "AssignedCounter",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "AssignedCounter",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:f8815fd33d0cbec4ec0abab1d780708018166d6b5835dfa3135924b6dc5ab3bd"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "CounterLease",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "CounterLease",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:d148951d288d49a9ad3d1d76a525d791ec26c87ecf165beaa93d808dc0e09f0d"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "CounterReservation",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "CounterReservation",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:9981fb7988d13844b8e22ab2428407aa90e7e368df876086e0e456151ff61116"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "RangeCounter",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeCounter",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0c1f2f3fc0bc03d5a528aa286e50df3fa1a2b735da9690e6fe20c999115c9c36"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "RangeGauge",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeGauge",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0c07bf0142f296c65c2e39deef563d92403fce8c7c40bd726b0c6abfac39152c"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "RangeSequence",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeSequence",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c23a0ad83fc1c32667ec9780bca3be4323990de9a2bb5bc00da9b61f1ec7e390"
+          }
+        },
+        {
+          "group": "resources.publisher.example",
+          "kind": "RevisionNote",
+          "ref": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RevisionNote",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:343ccb5dab88f712a134349ff36cbfc1243b39912f28111a0b3188978d233e13"
+          }
+        }
+      ],
+      "expectedFormRefs": [
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ClaimLease",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:78225cb7b4405cb6909ecc1c75a3ec657e033b7f5ec11cdcf7d7bdf6dadf3ef7"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ClaimTicket",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:ea15035878acce9dbf17af0902cae032d914553f97697e4f45f0e33a4628d618"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ConstraintMember",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:c46248ded414976b58c97418a9a012d0aeb9706893f7a2ba5d5e94b07f631ee8"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ConstraintNode",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:3ab32d0980dd7e4e7b1d7b6b4c05d3d9f98b712c85d3715f3b76869727897fc2"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "DistinctPairHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:3597bd75f72003bfb442318334b533bdaa11c616500870477ab279c0fb091e91"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "SameTargetHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:72e735ab97de82f1caba473c008657efbfde7c6dab0a8b901b1addb3e0ff84c5"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "StructuralConstraintHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:e5f3097ef1cd9f65e8f7e8ecad07660ca1276fe91c65209c496a811da6847003"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "UniquePairHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:706b1106810c511325d6c64f2fe848b43451907f0dc6d75db4caf79750f08942"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "UniquePairHolder",
+          "definitionVersion": "0.2.0",
+          "schemaDigest": "sha256:d08ccfde23c789cee3bd15f7a5f64f530f51798e0c5803eef7649c71d8d85f77"
+        },
+        {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "WeightedSet",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:664d55fd53ed19dea264d2a2723889554091821a322b2cfc05bb9fa54bad3039"
+        },
+        {
+          "apiVersion": "records.publisher.example",
+          "kind": "RangeGauge",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0cfba7f3c1abd8e36da6bb2afd325a564c5ef35e5ad576cf28d8232dafeacda0"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "AssignedCounter",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:f8815fd33d0cbec4ec0abab1d780708018166d6b5835dfa3135924b6dc5ab3bd"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "CounterLease",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:d148951d288d49a9ad3d1d76a525d791ec26c87ecf165beaa93d808dc0e09f0d"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "CounterLease",
+          "definitionVersion": "0.2.0",
+          "schemaDigest": "sha256:28a72256b6fa50041818eaf857b3212cea694fd01d640b1b2609e68c5d12a703"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "CounterReservation",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:9981fb7988d13844b8e22ab2428407aa90e7e368df876086e0e456151ff61116"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RangeCounter",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0c1f2f3fc0bc03d5a528aa286e50df3fa1a2b735da9690e6fe20c999115c9c36"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RangeCounter",
+          "definitionVersion": "0.2.0",
+          "schemaDigest": "sha256:dec4a285793a7db3a881d66fd4d4cfd6245b7a47d121f3187a0398e4510e0000"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RangeGauge",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0c07bf0142f296c65c2e39deef563d92403fce8c7c40bd726b0c6abfac39152c"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RangeSequence",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:c23a0ad83fc1c32667ec9780bca3be4323990de9a2bb5bc00da9b61f1ec7e390"
+        },
+        {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RevisionNote",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:343ccb5dab88f712a134349ff36cbfc1243b39912f28111a0b3188978d233e13"
+        }
+      ]
     },
     {
-      "check": "exact-form-ref-resolution",
-      "input": {
-        "operation": "portable-host-self-test",
-        "portableHostCheck": "exact-form-ref-resolution"
-      },
-      "expected": {
-        "status": "passed",
-        "mutationBoundary": "preserved"
-      }
-    },
-    {
-      "check": "generic-lifecycle-semantics",
-      "input": {
-        "operation": "portable-host-self-test",
-        "portableHostCheck": "generic-lifecycle-semantics"
-      },
-      "expected": {
-        "status": "passed",
-        "mutationBoundary": "preserved"
-      }
-    },
-    {
-      "check": "optional-unsupported-standard-service-omitted",
-      "input": {
-        "operation": "portable-host-self-test",
-        "portableHostCheck": "optional-unsupported-standard-service-omitted"
-      },
-      "expected": {
-        "status": "passed",
-        "mutationBoundary": "preserved"
-      }
-    },
-    {
-      "check": "required-unsupported-standard-service-refused-before-mutation",
-      "input": {
-        "operation": "portable-host-self-test",
-        "portableHostCheck": "required-unsupported-standard-service-refused-before-mutation"
-      },
-      "expected": {
-        "status": "passed",
-        "mutationBoundary": "before"
-      }
-    },
-    {
-      "check": "supported-standard-service-resolved",
-      "input": {
-        "operation": "portable-host-self-test",
-        "portableHostCheck": "supported-standard-service-resolved"
-      },
-      "expected": {
-        "status": "passed",
-        "mutationBoundary": "preserved"
-      }
+      "name": "zero-family",
+      "packages": [],
+      "interfaces": [],
+      "bindings": [],
+      "defaultCreates": [],
+      "expectedFormRefs": []
     }
   ],
-  "portableHostContract": {
-    "path": "generic-host/portable-host/contract.json",
-    "sha256": "sha256:1c4281e54ea986ec9cfacc74ef5d384142b620a63fb19331b514eb1f2f31def7"
+  "externalHostProbe": {
+    "snapshot": "external-family",
+    "formRef": {
+      "apiVersion": "resources.publisher.example",
+      "kind": "RangeCounter",
+      "definitionVersion": "0.1.0",
+      "schemaDigest": "sha256:0c1f2f3fc0bc03d5a528aa286e50df3fa1a2b735da9690e6fe20c999115c9c36"
+    },
+    "packageDigest": "sha256:99b3bb00ce461b2c6d25cc4405a921d7cc35f864695c8256fc4eaa5d2f078641",
+    "name": "range-counter-probe",
+    "space": "conformance",
+    "desired": {
+      "lower": 1,
+      "upper": 2
+    },
+    "updatedDesired": {
+      "lower": 1,
+      "upper": 3,
+      "mode": "fast"
+    },
+    "invalidSchemaDesired": {
+      "lower": 1,
+      "upper": 2,
+      "unexpected": true
+    },
+    "invalidConstraintDesired": {
+      "lower": 3,
+      "upper": 2
+    },
+    "externalServices": {
+      "property": "externalServices",
+      "serviceApiVersion": "standards.takoform.com/v1",
+      "supportedProtocol": "com.amazonaws.s3",
+      "unsupportedProtocol": "com.example.future-store",
+      "supportedDesired": {
+        "lower": 1,
+        "upper": 2,
+        "externalServices": [
+          {
+            "name": "OBJECTS",
+            "service": {
+              "apiVersion": "standards.takoform.com/v1",
+              "protocol": "com.amazonaws.s3"
+            }
+          }
+        ]
+      },
+      "requiredUnsupportedDesired": {
+        "lower": 1,
+        "upper": 2,
+        "externalServices": [
+          {
+            "name": "FUTURE",
+            "service": {
+              "apiVersion": "standards.takoform.com/v1",
+              "protocol": "com.example.future-store"
+            }
+          }
+        ]
+      },
+      "optionalUnsupportedDesired": {
+        "lower": 1,
+        "upper": 2,
+        "externalServices": [
+          {
+            "name": "FUTURE",
+            "required": false,
+            "service": {
+              "apiVersion": "standards.takoform.com/v1",
+              "protocol": "com.example.future-store"
+            }
+          }
+        ]
+      }
+    },
+    "resources": {
+      "keyed": {
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RangeGauge",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:0c07bf0142f296c65c2e39deef563d92403fce8c7c40bd726b0c6abfac39152c"
+        },
+        "name": "range-gauge-probe",
+        "desired": {
+          "lower": 2,
+          "upper": 4
+        },
+        "updatedDesired": {
+          "lower": 2,
+          "upper": 5,
+          "mode": "fast"
+        },
+        "secondUpdatedDesired": {
+          "lower": 2,
+          "upper": 6,
+          "mode": "fast"
+        }
+      },
+      "sequenced": {
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RangeSequence",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:c23a0ad83fc1c32667ec9780bca3be4323990de9a2bb5bc00da9b61f1ec7e390"
+        },
+        "name": "range-sequence-probe",
+        "desired": {
+          "lower": 3,
+          "upper": 6
+        },
+        "updatedDesired": {
+          "lower": 3,
+          "upper": 7,
+          "mode": "fast"
+        },
+        "secondUpdatedDesired": {
+          "lower": 3,
+          "upper": 8,
+          "mode": "fast"
+        }
+      },
+      "revision": {
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "RevisionNote",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:343ccb5dab88f712a134349ff36cbfc1243b39912f28111a0b3188978d233e13"
+        },
+        "name": "revision-note-probe",
+        "desired": {
+          "note": "sealed"
+        },
+        "updatedDesired": {
+          "note": "changed"
+        }
+      },
+      "output": {
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "AssignedCounter",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:f8815fd33d0cbec4ec0abab1d780708018166d6b5835dfa3135924b6dc5ab3bd"
+        },
+        "name": "assigned-counter-probe",
+        "desired": {
+          "label": "primary"
+        },
+        "hostAssignedOutputs": {
+          "assignedName": "counter-001.publisher.example",
+          "ordinal": 7
+        }
+      },
+      "lease": {
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "CounterLease",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:d148951d288d49a9ad3d1d76a525d791ec26c87ecf165beaa93d808dc0e09f0d"
+        },
+        "name": "counter-lease-probe",
+        "desired": {
+          "target": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeCounter",
+            "name": "range-counter-probe"
+          }
+        }
+      },
+      "reservation": {
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "CounterReservation",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:9981fb7988d13844b8e22ab2428407aa90e7e368df876086e0e456151ff61116"
+        },
+        "name": "counter-reservation-probe",
+        "desired": {
+          "target": {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeSequence",
+            "name": "range-sequence-probe"
+          }
+        }
+      }
+    },
+    "syntheticSecondGroup": {
+      "apiVersion": "records.publisher.example",
+      "kind": "RangeGauge",
+      "definitionVersion": "0.1.0",
+      "schemaDigest": "sha256:0cfba7f3c1abd8e36da6bb2afd325a564c5ef35e5ad576cf28d8232dafeacda0"
+    },
+    "syntheticSecondDefinitionVersion": {
+      "apiVersion": "resources.publisher.example",
+      "kind": "RangeCounter",
+      "definitionVersion": "0.2.0",
+      "schemaDigest": "sha256:dec4a285793a7db3a881d66fd4d4cfd6245b7a47d121f3187a0398e4510e0000"
+    },
+    "constraintSemantics": {
+      "node": {
+        "name": "constraint-node-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ConstraintNode",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:3ab32d0980dd7e4e7b1d7b6b4c05d3d9f98b712c85d3715f3b76869727897fc2"
+        }
+      },
+      "distinctPair": {
+        "name": "constraint-distinct-pair-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "DistinctPairHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:3597bd75f72003bfb442318334b533bdaa11c616500870477ab279c0fb091e91"
+        }
+      },
+      "uniquePair": {
+        "name": "constraint-unique-pair-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "UniquePairHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:706b1106810c511325d6c64f2fe848b43451907f0dc6d75db4caf79750f08942"
+        }
+      },
+      "uniquePairSecond": {
+        "name": "constraint-unique-pair-second-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "UniquePairHolder",
+          "definitionVersion": "0.2.0",
+          "schemaDigest": "sha256:d08ccfde23c789cee3bd15f7a5f64f530f51798e0c5803eef7649c71d8d85f77"
+        }
+      },
+      "member": {
+        "name": "constraint-member-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ConstraintMember",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:c46248ded414976b58c97418a9a012d0aeb9706893f7a2ba5d5e94b07f631ee8"
+        }
+      },
+      "sameTarget": {
+        "name": "constraint-same-target-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "SameTargetHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:72e735ab97de82f1caba473c008657efbfde7c6dab0a8b901b1addb3e0ff84c5"
+        }
+      },
+      "structural": {
+        "name": "constraint-structural-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "StructuralConstraintHolder",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:e5f3097ef1cd9f65e8f7e8ecad07660ca1276fe91c65209c496a811da6847003"
+        }
+      },
+      "sum": {
+        "name": "constraint-sum-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "WeightedSet",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:664d55fd53ed19dea264d2a2723889554091821a322b2cfc05bb9fa54bad3039"
+        }
+      },
+      "claimPrimary": {
+        "name": "constraint-claim-primary-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ClaimTicket",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:ea15035878acce9dbf17af0902cae032d914553f97697e4f45f0e33a4628d618"
+        }
+      },
+      "claimAlternate": {
+        "name": "constraint-claim-alternate-probe",
+        "formRef": {
+          "apiVersion": "constraints.publisher.example",
+          "kind": "ClaimLease",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:78225cb7b4405cb6909ecc1c75a3ec657e033b7f5ec11cdcf7d7bdf6dadf3ef7"
+        }
+      },
+      "exclusiveSecond": {
+        "name": "constraint-exclusive-second-probe",
+        "formRef": {
+          "apiVersion": "resources.publisher.example",
+          "kind": "CounterLease",
+          "definitionVersion": "0.2.0",
+          "schemaDigest": "sha256:28a72256b6fa50041818eaf857b3212cea694fd01d640b1b2609e68c5d12a703"
+        }
+      }
+    },
+    "artifactTransport": {
+      "blobSource": "-- family-neutral conformance payload\n",
+      "declaredSize": 38,
+      "contentType": "application/octet-stream"
+    },
+    "support": {
+      "interface": {
+        "name": "publisher.constraintnode",
+        "version": "0.1.0"
+      },
+      "binding": {
+        "name": "publisher.constraintlink",
+        "version": "0.1.0"
+      }
+    }
   }
 }

@@ -1,0 +1,112 @@
+{
+  "apiVersion": "resources.publisher.example",
+  "kind": "RangeCounter",
+  "definitionVersion": "0.1.0",
+  "title": "Independent range counter",
+  "description": "Synthetic external publisher fixture for family-neutral generic conformance.",
+  "role": "identity",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "lower": {
+        "type": "integer"
+      },
+      "upper": {
+        "type": "integer"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "safe",
+          "fast"
+        ],
+        "default": "safe"
+      },
+      "externalServices": {
+        "default": [],
+        "type": "array",
+        "maxItems": 4,
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "maxLength": 64
+            },
+            "required": {
+              "type": "boolean",
+              "default": true
+            },
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "apiVersion": {
+                  "const": "standards.takoform.com/v1"
+                },
+                "protocol": {
+                  "type": "string",
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){2,}$"
+                }
+              },
+              "required": [
+                "apiVersion",
+                "protocol"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "service"
+          ]
+        },
+        "x-takoform-standard-services": "standards.takoform.com/v1"
+      }
+    },
+    "required": [
+      "lower",
+      "upper"
+    ]
+  },
+  "immutableFields": [
+    "/externalServices"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "orderedPair",
+      "references": [
+        "/lower",
+        "/upper"
+      ]
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

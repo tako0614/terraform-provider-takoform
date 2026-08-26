@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "constraints.publisher.example",
+    "kind": "ClaimTicket",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:ea15035878acce9dbf17af0902cae032d914553f97697e4f45f0e33a4628d618"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 849,
+      "digest": "sha256:63a1fcded4362421e1af21d571b01fe29445ce3b73caeb9aa16849060fc06f48"
+    }
+  ]
+}

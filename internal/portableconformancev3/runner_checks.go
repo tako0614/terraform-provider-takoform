@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -342,7 +343,7 @@ func (r *v3Runner) checkDiscovery() error {
 // yet to deny. The permissive control is the identical request under a real
 // credential, so a host cannot pass by refusing the route.
 func (r *v3Runner) checkUnauthenticatedRequestRefused() error {
-	probe := r.target(r.contract.RunnerInput.EdgeKvNamespace)
+	probe := r.target(r.semanticKeyed())
 	probe.Name = "unauthenticated-probe"
 	formsURL := r.apiBase + "/forms?" + r.formsAvailabilityQuery(probe.Space, probe.Ref).Encode()
 	prepared, err := r.prepare(probe)
@@ -559,14 +560,13 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 // the whole catalog would mean pinning every installed Definition's desired
 // schema, and nothing in this lane needs those bytes for anything else.
 func (r *v3Runner) checkFormDefinitions() error {
-	input := r.contract.RunnerInput
 	type pinnedDefinition struct {
 		ref           FormRef
 		packageDigest string
 		schema        map[string]any
 		constraints   []formpackage.FormConstraint
 	}
-	inventory := declaredProbes(&input)
+	inventory := r.semanticProbeEntries()
 	pinned := make([]pinnedDefinition, 0, len(inventory)+1)
 	for _, entry := range inventory {
 		pinned = append(pinned, pinnedDefinition{
@@ -576,14 +576,14 @@ func (r *v3Runner) checkFormDefinitions() error {
 			constraints:   entry.Probe.Constraints,
 		})
 	}
-	if second := input.SyntheticSecondDefinitionVersion; second.Definition != nil {
+	if second := r.semanticSecondDefinition(); second.Definition != nil {
 		pinned = append(pinned, pinnedDefinition{
 			ref:         second.FormRef,
 			schema:      second.Definition.DesiredSchema,
 			constraints: second.Definition.Constraints,
 		})
 	}
-	for _, entry := range constraintDefinitionInventory(&input) {
+	for _, entry := range r.semanticConstraintEntries() {
 		if entry.probe.Definition == nil {
 			continue
 		}
@@ -713,14 +713,11 @@ func (r *v3Runner) checkValidate(targets ...probeTarget) error {
 }
 
 func (r *v3Runner) checkNegativeFixtures() error {
-	byKind := map[string]probeTarget{
-		r.contract.RunnerInput.ModuleWorker.Identity.FormRef.Kind:     r.target(r.contract.RunnerInput.ModuleWorker),
-		r.contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.Kind:  r.target(r.contract.RunnerInput.EdgeKvNamespace),
-		r.contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef.Kind: r.target(r.contract.RunnerInput.AtLeastOnceQueue),
-		r.contract.RunnerInput.WorkerVersion.Identity.FormRef.Kind:    r.target(r.contract.RunnerInput.WorkerVersion),
-		r.contract.RunnerInput.WorkerBundle.Identity.FormRef.Kind:     r.target(r.contract.RunnerInput.WorkerBundle.ResourceProbe),
+	byKind := map[string]probeTarget{}
+	for _, entry := range r.semanticProbeEntries() {
+		byKind[entry.Probe.Identity.FormRef.Kind] = r.target(*entry.Probe)
 	}
-	for _, fixture := range r.contract.RunnerInput.NegativeFixtures {
+	for _, fixture := range r.semanticNegativeFixtures() {
 		target, known := byKind[fixture.Kind]
 		if !known {
 			return fmt.Errorf("negative fixture %q names an unknown probe kind", fixture.Name)
@@ -762,7 +759,7 @@ func (r *v3Runner) checkPrepareSubstitution(queue probeTarget) error {
 		return err
 	}
 	substituted := queue
-	substituted.Spec = map[string]any{"messageRetentionSeconds": 600}
+	substituted.Spec = r.desiredMutation(queue, 0, map[string]any{"messageRetentionSeconds": 600})
 	response, err := r.apply(substituted, applyOptions{
 		Create:         true,
 		IdempotencyKey: "key-prepare-substitution",
@@ -952,10 +949,10 @@ func (r *v3Runner) checkCreateLifecycle(kv, mw, queue probeTarget) error {
 
 func (r *v3Runner) checkGenerationFences(queue probeTarget) error {
 	updated := queue
-	updated.Spec = map[string]any{
+	updated.Spec = r.desiredMutation(queue, 0, map[string]any{
 		"deliveryDelaySeconds":    60,
 		"messageRetentionSeconds": 600000,
-	}
+	})
 	resource, _, err := r.applyResource(updated, applyOptions{
 		ExpectedGeneration: "1",
 		IdempotencyKey:     "key-update-queue",
@@ -1033,10 +1030,10 @@ func (r *v3Runner) checkPrepareFences(queue probeTarget) error {
 	}
 	// ...perform a real update to N+1...
 	updated := probe
-	updated.Spec = map[string]any{
+	updated.Spec = r.desiredMutation(queue, 1, map[string]any{
 		"deliveryDelaySeconds":    30,
 		"messageRetentionSeconds": 700000,
-	}
+	})
 	afterUpdate, _, err := r.applyResource(updated, applyOptions{
 		ExpectedGeneration: created.Metadata.Generation,
 		IdempotencyKey:     "key-update-prepare-fence",
@@ -1391,17 +1388,16 @@ func (r *v3Runner) checkPackageDigestNotIdentity(queue probeTarget) error {
 }
 
 func (r *v3Runner) checkSameKindTwoGroups() error {
-	input := r.contract.RunnerInput
-	edge := r.target(input.EdgeKvNamespace)
-	edge.Name = "two-group-probe"
+	first := r.target(r.semanticKeyed())
+	first.Name = "two-group-probe"
 	other := probeTarget{
-		Ref:   input.SyntheticSecondGroup,
+		Ref:   r.semanticSecondGroup(),
 		Name:  "two-group-probe",
-		Space: input.Space,
+		Space: r.contract.RunnerInput.Space,
 		Spec:  map[string]any{},
 	}
-	edgeCreated, _, err := r.applyResource(edge, applyOptions{
-		Create: true, IdempotencyKey: "key-two-group-edge",
+	firstCreated, _, err := r.applyResource(first, applyOptions{
+		Create: true, IdempotencyKey: "key-two-group-first",
 	}, http.StatusCreated)
 	if err != nil {
 		return err
@@ -1412,10 +1408,10 @@ func (r *v3Runner) checkSameKindTwoGroups() error {
 	if err != nil {
 		return err
 	}
-	if edgeCreated.Metadata.UID == otherCreated.Metadata.UID {
+	if firstCreated.Metadata.UID == otherCreated.Metadata.UID {
 		return errors.New("one kind name in two groups shared a uid")
 	}
-	edgeRead, _, err := r.read(edge)
+	firstRead, _, err := r.read(first)
 	if err != nil {
 		return err
 	}
@@ -1423,7 +1419,7 @@ func (r *v3Runner) checkSameKindTwoGroups() error {
 	if err != nil {
 		return err
 	}
-	if edgeRead.APIVersion != edge.Ref.APIVersion || otherRead.APIVersion != other.Ref.APIVersion {
+	if firstRead.APIVersion != first.Ref.APIVersion || otherRead.APIVersion != other.Ref.APIVersion {
 		return errors.New("group-scoped reads substituted the namespaced group")
 	}
 	deleteResponse, err := r.deleteResource(other, otherRead.Metadata.Generation, "key-two-group-other-delete", nil)
@@ -1433,7 +1429,7 @@ func (r *v3Runner) checkSameKindTwoGroups() error {
 	if deleteResponse.Status != http.StatusNoContent {
 		return fmt.Errorf("second-group delete HTTP %d", deleteResponse.Status)
 	}
-	if _, _, err := r.read(edge); err != nil {
+	if _, _, err := r.read(first); err != nil {
 		return fmt.Errorf("deleting the second-group resource affected the first group: %w", err)
 	}
 	if err := r.expectResourceAbsent(other); err != nil {
@@ -1448,7 +1444,7 @@ func (r *v3Runner) checkSameKindTwoGroups() error {
 // desired manifestDigest, so the runner uploads the manifest and then drives
 // the resource with the digest the host returned for it.
 func (r *v3Runner) bundleManifest() (map[string]any, string, error) {
-	manifest := r.contract.RunnerInput.WorkerBundle.Manifest
+	manifest := r.hostArtifactTransport().Manifest
 	raw, err := encodeRunnerJSON(manifest)
 	if err != nil {
 		return nil, "", err
@@ -2462,11 +2458,13 @@ func (r *v3Runner) checkNoUpdateSpecChangeRejected(target probeTarget) error {
 		return err
 	}
 	changed := target
-	changed.Spec = cloneJSONMap(target.Spec)
+	changed.Spec = r.desiredMutation(target, 0, cloneJSONMap(target.Spec))
 	// Any portable spec change will do; `vars` is chosen because it is optional,
 	// defaulted, and touches no relation, so the refusal is unambiguously about
 	// the missing update capability and not about a dangling reference.
-	changed.Spec["vars"] = map[string]any{"LOG_LEVEL": "debug"}
+	if reflect.DeepEqual(changed.Spec, target.Spec) {
+		changed.Spec["vars"] = map[string]any{"LOG_LEVEL": "debug"}
+	}
 	response, err := r.apply(changed, applyOptions{
 		ExpectedGeneration: before.Metadata.Generation,
 		IdempotencyKey:     "key-no-update-spec-change",
@@ -2524,9 +2522,7 @@ func (r *v3Runner) checkDeploymentWeightSum() error {
 	short := deployment
 	short.Spec = cloneJSONMap(deployment.Spec)
 	short.Spec["versions"] = []any{underweight}
-	response, err := r.apply(short, applyOptions{
-		Create: true, IdempotencyKey: "key-deployment-underweight",
-	})
+	response, err := r.prepareRequest(short, nil)
 	if err != nil {
 		return err
 	}
@@ -2558,9 +2554,7 @@ func (r *v3Runner) checkDeploymentWeightSum() error {
 		"workerVersion": exactReference(secondVersion, secondVersion.Name),
 		"weight":        5001,
 	}}
-	over, err := r.apply(long, applyOptions{
-		Create: true, IdempotencyKey: "key-deployment-overweight",
-	})
+	over, err := r.prepareRequest(long, nil)
 	if err != nil {
 		return err
 	}
@@ -2879,7 +2873,8 @@ func (r *v3Runner) checkRecordedNativeIdentity(kv, queue probeTarget) error {
 	// resource from the request document loses the claim on the next apply, and
 	// nothing about its import path looks wrong.
 	changed := created
-	changed.Spec = r.materialize(changed.Ref, map[string]any{"messageRetentionSeconds": 600000})
+	changed.Spec = r.desiredMutation(created, 0,
+		r.materialize(changed.Ref, map[string]any{"messageRetentionSeconds": 600000}))
 	updated, _, err := r.applyResource(changed, applyOptions{
 		ExpectedGeneration: adopted.Metadata.Generation,
 		IdempotencyKey:     "key-native-recorded-created-update",
@@ -3535,7 +3530,7 @@ func (r *v3Runner) checkAsyncCommitBindsAcceptedIdentity() error {
 	// The replacement returns under the OTHER definition version, so it differs
 	// from the accepted resource in both halves of its identity — its uid and its
 	// exact FormRef — while occupying exactly the same name.
-	contractMoved := r.target(r.contract.RunnerInput.ModuleWorker)
+	contractMoved := r.target(r.semanticPrimary())
 	contractMoved.Name = "accepted-identity-contract"
 	otherContract := r.syntheticDefinitionTarget(contractMoved.Name)
 	run, err := r.acceptDeleteAndReplace(contractMoved, &otherContract, "key-accepted-identity-contract")
@@ -3565,7 +3560,7 @@ func (r *v3Runner) checkAsyncCommitBindsAcceptedIdentity() error {
 	// The uid alone is enough to make it a different resource: the replacement
 	// comes back under the SAME exact contract, so a host that compared only the
 	// recorded FormRef still has to refuse.
-	incarnationMoved := r.target(r.contract.RunnerInput.ModuleWorker)
+	incarnationMoved := r.target(r.semanticPrimary())
 	incarnationMoved.Name = "accepted-identity-incarnation"
 	sameContract := incarnationMoved
 	sameRun, err := r.acceptDeleteAndReplace(
@@ -3593,7 +3588,7 @@ func (r *v3Runner) checkAsyncCommitBindsAcceptedIdentity() error {
 
 	// Nothing holds the name at all, which is the other closed answer: the
 	// resource the operation was accepted for is simply gone.
-	vanished := r.target(r.contract.RunnerInput.ModuleWorker)
+	vanished := r.target(r.semanticPrimary())
 	vanished.Name = "accepted-identity-vanished"
 	goneRun, err := r.acceptDeleteAndReplace(vanished, nil, "key-accepted-identity-vanished")
 	if err != nil {

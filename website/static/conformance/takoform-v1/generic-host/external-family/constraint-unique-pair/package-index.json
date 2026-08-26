@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "constraints.publisher.example",
+    "kind": "UniquePairHolder",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:706b1106810c511325d6c64f2fe848b43451907f0dc6d75db4caf79750f08942"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 2630,
+      "digest": "sha256:a28fbf251b8ae55acef3f3c5f4c1a16518c1caeab56509b8ba9ea2c46a739f8d"
+    }
+  ]
+}

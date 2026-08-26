@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "resources.publisher.example",
+    "kind": "AssignedCounter",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:f8815fd33d0cbec4ec0abab1d780708018166d6b5835dfa3135924b6dc5ab3bd"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 1486,
+      "digest": "sha256:0b3a0f5f6e6356b0df1fa68fad46f64d9292603db249a0b39be9527092fd6c75"
+    }
+  ]
+}

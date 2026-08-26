@@ -87,7 +87,7 @@ func acceptedConstraintOperation(response wireResponse, subject string) (wireOpe
 // declarations affect validate, prepare, synchronous apply/import, and async
 // commit rather than being parsed and discarded.
 func (r *v3Runner) checkDeclaredConstraintSemanticsEnforced() error {
-	input := r.contract.RunnerInput.ConstraintSemantics
+	input := r.semanticConstraints()
 	nodeA := r.constraintProbeTarget(input.Node, "constraint-node-a", map[string]any{})
 	nodeB := r.constraintProbeTarget(input.Node, "constraint-node-b", map[string]any{})
 	nodeACreated, err := r.createConstraintProbe(nodeA, "key-constraint-node-a")

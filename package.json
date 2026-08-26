@@ -44,6 +44,7 @@
     "check:specification-releases": "bun scripts/specification-release.mjs --check",
     "check:specification-v1-release": "bun scripts/publication-evidence.mjs --assert-specification-v1",
     "check:provider-v3-release": "bun scripts/publication-evidence.mjs --assert-provider-3",
+    "check:provider-v3-baseline": "bun scripts/provider3-baseline-check.mjs",
     "check:takoform-milestones": "bun scripts/publication-evidence.mjs --assert-all",
     "assert:publishable": "bun scripts/publication-blockers.mjs --assert-publishable",
     "check:release-owner-gate": "bun run check:tools && bun run format:check && bun run check:public-surfaces && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable"

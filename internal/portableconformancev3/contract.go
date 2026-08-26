@@ -846,6 +846,12 @@ type Contract struct {
 	// lane it is and the runner reads the lane's rules, so the two can never
 	// be given separately and disagree.
 	lane lane
+	// genericRoles is the family-neutral semantic inventory used by the stable
+	// generic Host suite. It is derived from independently supplied Snapshot
+	// artifacts and is deliberately not part of the published concrete-family
+	// contract JSON. The retained family corpus continues to use RunnerInput;
+	// generic execution must never populate or select those concrete slots.
+	genericRoles *genericSemanticRoles
 }
 
 // Root returns the corpus directory this contract was verified from.

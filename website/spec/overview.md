@@ -26,6 +26,8 @@ Takoform has five public contract interfaces:
    desired/observed/output shape. [`form-package/`](form-package/) binds one
    exact definition and its data-only fixtures into immutable package bytes
    under the current `packages.forms.takoform.com/v1alpha5` envelope.
+   [`core/`](core/) defines the family-neutral compilation of admitted package
+   semantic closures into one immutable exact-identity Snapshot.
 2. **Desired Resource lifecycle.**
    [`host-api/`](host-api/) defines discovery, exact Form availability,
    preview/apply, read/import/observe/refresh/delete, fencing, and portable
@@ -69,6 +71,11 @@ The FormRef, Form Definition, package-index, revocation, and cumulative
 revocation-checkpoint schemas, the RFC 8785/I-JSON library, the closed local
 verifier, the positive/negative corpus, the protected keyless Sigstore release
 lane, and the signed append-only checkpoint delivery lane are implemented.
+
+The neutral Core tracer compiles zero families, synthetic external groups, and
+the generated current package set through artifact bytes without importing an
+official family. It remains an internal pre-extraction implementation; it is
+not a public SDK or independent module release.
 
 Current Form design work uses eight versionless namespaced Form Family groups
 ([`form-families.md`](form-families.md)) and 31 exact Experimental `0.x`

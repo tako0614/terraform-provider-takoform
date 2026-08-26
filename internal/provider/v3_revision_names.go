@@ -125,8 +125,8 @@ func v3DerivedRevisionName(prefix, owner, digest string) (string, bool) {
 // address — the manifest digest — so the name is derived straight from it: the
 // same manifest always produces the same revision name for one owner. Every
 // other revision Form is named by the canonical digest of its desired spec.
-func v3ContentDigest(kind string, spec map[string]any) (string, bool) {
-	if v3ArtifactBackedRevision(kind) {
+func v3ContentDigest(artifactBacked bool, spec map[string]any) (string, bool) {
+	if artifactBacked {
 		digest, ok := spec["manifestDigest"].(string)
 		return digest, ok && digest != ""
 	}
@@ -141,7 +141,10 @@ func v3ContentDigest(kind string, spec map[string]any) (string, bool) {
 // v3RevisionNameFromSpec derives the host name of one revision from its
 // resolved desired spec and its declared owner.
 func (r *v3FormResource) v3RevisionNameFromSpec(spec map[string]any, owner string) (string, bool) {
-	digest, ok := v3ContentDigest(r.form.Kind, spec)
+	if v3FormRequiresArtifactRule(r.form) && r.artifact == nil {
+		return "", false
+	}
+	digest, ok := v3ContentDigest(r.v3ArtifactBackedRevision(), spec)
 	if !ok {
 		return "", false
 	}
@@ -305,7 +308,7 @@ func (r *v3FormResource) v3PlannedSpec(
 		resp.Diagnostics.Append(diags...)
 		return nil, false
 	}
-	if v3ArtifactBackedRevision(r.form.Kind) {
+	if r.v3ArtifactBackedRevision() {
 		digest, known := v3PlanKnownString(values.Fields["manifest_digest"])
 		if !known {
 			return nil, false

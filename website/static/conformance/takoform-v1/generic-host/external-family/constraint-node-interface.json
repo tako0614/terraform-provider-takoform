@@ -1,0 +1,23 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "publisher.constraintnode",
+  "version": "0.1.0",
+  "operations": [
+    {
+      "name": "resolve",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object"
+      },
+      "errors": []
+    }
+  ],
+  "semantics": {
+    "consistency": "serializable"
+  }
+}

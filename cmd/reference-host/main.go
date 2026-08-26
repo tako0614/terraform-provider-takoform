@@ -51,7 +51,7 @@ func run(args []string, stdout io.Writer) error {
 	repoRoot := flags.String("repo-root", ".", "repository root holding the Form candidate catalog")
 	contractPath := flags.String(
 		"contract",
-		filepath.Join("conformance", "takoform-v1", "generic-host", "portable-host"),
+		filepath.Join("conformance", "takoform-v1", "family-host", "edge", "portable-host"),
 		"portable host contract directory, relative to --repo-root",
 	)
 	if err := flags.Parse(args); err != nil {

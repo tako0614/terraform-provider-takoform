@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "resources.publisher.example",
+    "kind": "RevisionNote",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:343ccb5dab88f712a134349ff36cbfc1243b39912f28111a0b3188978d233e13"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 720,
+      "digest": "sha256:40cce0c83bbedaa96f0679fc78104f4206a73e4fdcf621dd8b1f48cf8cbe0fe7"
+    }
+  ]
+}

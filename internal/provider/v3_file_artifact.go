@@ -40,36 +40,13 @@ const (
 	artifactBundleMaxFiles      = 16384
 )
 
-// v3FileBundleManifestKind maps a Form identity to the artifact-manifest kind
-// it admits. SQLiteMigrationSet intentionally commits a MigrationBundle: the
-// Form names an immutable desired-state revision, while the manifest kind
-// names the portable artifact representation shared with the host.
-func v3FileBundleManifestKind(formKind string) (string, bool) {
-	switch formKind {
-	case staticAssetBundleKind:
-		return staticAssetBundleKind, true
-	case sqliteMigrationSetKind:
-		return migrationBundleManifestKind, true
-	default:
-		return "", false
-	}
-}
-
-func v3ArtifactBackedRevision(formKind string) bool {
-	if formKind == workerBundleKind {
-		return true
-	}
-	_, ok := v3FileBundleManifestKind(formKind)
-	return ok
-}
-
-func fileBundleAttributes(formKind string) map[string]schema.Attribute {
+func fileBundleAttributesForProjection(artifact v3ArtifactProjection) map[string]schema.Attribute {
 	mediaValidators := []validator.String{StringMatches(
 		`^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`,
 		"media_type must be a normalized v1alpha1 type/subtype token without parameters",
 	)}
-	if formKind == sqliteMigrationSetKind {
-		mediaValidators = []validator.String{StringOneOf("application/sql")}
+	if len(artifact.MediaTypes) != 0 {
+		mediaValidators = []validator.String{StringOneOf(artifact.MediaTypes...)}
 	}
 	return map[string]schema.Attribute{
 		"manifest_digest": schema.StringAttribute{
@@ -116,7 +93,7 @@ func fileBundleAttributes(formKind string) map[string]schema.Attribute {
 					Description: "Canonical lowercase sha256 digest of the file bytes, computed from content_file.",
 				},
 			}},
-			Validators: []validator.List{v3ListSizeValidator{minItems: 1, maxItems: artifactBundleMaxFiles}},
+			Validators: []validator.List{v3ListSizeValidator{minItems: 1, maxItems: artifact.MaximumFiles}},
 			PlanModifiers: []planmodifier.List{
 				listplanmodifier.RequiresReplace(),
 			},
@@ -156,9 +133,9 @@ func (authoring v3FileBundleAuthoring) Spec() map[string]any {
 
 func (r *v3FormResource) fileBundleAuthoring(values *v3Values) (v3FileBundleAuthoring, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	manifestKind, supported := v3FileBundleManifestKind(r.form.Kind)
+	artifact, supported := r.v3FileBundleArtifact()
 	if !supported {
-		diags.AddError("Unsupported file artifact Form", "The provider has no file-manifest mapping for "+r.form.Kind+".")
+		diags.AddError("Unsupported file artifact Form", "The exact Provider projection has no file-bundle authoring rule for "+r.form.Family.APIVersion()+"/"+r.form.Kind+".")
 		return v3FileBundleAuthoring{}, diags
 	}
 	written, writtenSet := v3PlanKnownString(values.Fields["manifest_digest"])
@@ -174,7 +151,7 @@ func (r *v3FormResource) fileBundleAuthoring(values *v3Values) (v3FileBundleAuth
 		return v3FileBundleAuthoring{Digest: written}, diags
 	}
 
-	files, fileDiags := v3AuthoredArtifactFiles(filesValue, r.form.Kind)
+	files, fileDiags := v3AuthoredArtifactFilesForProjection(filesValue, *artifact)
 	diags.Append(fileDiags...)
 	if diags.HasError() {
 		return v3FileBundleAuthoring{}, diags
@@ -187,13 +164,13 @@ func (r *v3FormResource) fileBundleAuthoring(values *v3Values) (v3FileBundleAuth
 				fmt.Sprintf("file %q declares no content_file; local authoring reads every entry from a local file.", file.Path))
 			return v3FileBundleAuthoring{}, diags
 		}
-		if err := readArtifactFile(file); err != nil {
+		if err := readArtifactFile(file, artifact.MaximumFileSize); err != nil {
 			diags.AddAttributeError(path.Root("files"), "Unreadable artifact file", err.Error())
 			return v3FileBundleAuthoring{}, diags
 		}
 		blobs[file.Digest] = file.bytes
 	}
-	manifest := fileBundleManifest(manifestKind, files)
+	manifest := fileBundleManifest(artifact.ManifestKind, files)
 	digest, err := digestArtifactManifest(manifest)
 	if err != nil {
 		diags.AddAttributeError(path.Root("files"), "Unencodable artifact manifest", err.Error())
@@ -209,10 +186,15 @@ func (r *v3FormResource) fileBundleAuthoring(values *v3Values) (v3FileBundleAuth
 	return v3FileBundleAuthoring{Local: true, Digest: digest, Manifest: manifest, Blobs: blobs}, diags
 }
 
-func v3AuthoredArtifactFiles(list types.List, formKind string) ([]v3ArtifactFile, diag.Diagnostics) {
+func v3AuthoredArtifactFilesForProjection(list types.List, artifact v3ArtifactProjection) ([]v3ArtifactFile, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if len(list.Elements()) == 0 {
 		diags.AddAttributeError(path.Root("files"), "Empty artifact", "Local authoring requires at least one file.")
+		return nil, diags
+	}
+	if len(list.Elements()) > artifact.MaximumFiles {
+		diags.AddAttributeError(path.Root("files"), "Too many artifact files",
+			fmt.Sprintf("Local authoring declares %d files; the exact Provider projection ceiling is %d.", len(list.Elements()), artifact.MaximumFiles))
 		return nil, diags
 	}
 	files := make([]v3ArtifactFile, 0, len(list.Elements()))
@@ -244,8 +226,8 @@ func v3AuthoredArtifactFiles(list types.List, formKind string) ([]v3ArtifactFile
 			diags.AddAttributeError(path.Root("files"), "Invalid artifact media type", fmt.Sprintf("file %q has invalid media type %q.", filePath, mediaType))
 			return nil, diags
 		}
-		if formKind == sqliteMigrationSetKind && mediaType != "application/sql" {
-			diags.AddAttributeError(path.Root("files"), "Migration file is not SQL", fmt.Sprintf("file %q uses %q; every SQLiteMigrationSet entry must use application/sql.", filePath, mediaType))
+		if len(artifact.MediaTypes) != 0 && !v3ProjectionContains(artifact.MediaTypes, mediaType) {
+			diags.AddAttributeError(path.Root("files"), "Artifact media type is not allowed", fmt.Sprintf("file %q uses %q, which is outside the exact Provider projection allowlist.", filePath, mediaType))
 			return nil, diags
 		}
 		contentFile, _ := v3PlanKnownString(attributes["content_file"])
@@ -256,13 +238,13 @@ func v3AuthoredArtifactFiles(list types.List, formKind string) ([]v3ArtifactFile
 
 var artifactPathPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`)
 
-func readArtifactFile(file *v3ArtifactFile) error {
+func readArtifactFile(file *v3ArtifactFile, maximum int64) error {
 	raw, err := os.ReadFile(file.ContentFile)
 	if err != nil {
 		return fmt.Errorf("file %q content_file: %v", file.Path, err)
 	}
-	if len(raw) > artifactFileMaxBytes {
-		return fmt.Errorf("file %q is %d bytes; the portable ceiling is %d", file.Path, len(raw), artifactFileMaxBytes)
+	if int64(len(raw)) > maximum {
+		return fmt.Errorf("file %q is %d bytes; the portable ceiling is %d", file.Path, len(raw), maximum)
 	}
 	sum := sha256.Sum256(raw)
 	file.Size = int64(len(raw))
@@ -307,6 +289,11 @@ func v3ArtifactFilesValue(files []v3ArtifactFile, diags *diag.Diagnostics) types
 }
 
 func (r *v3FormResource) modifyFileBundlePlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	artifact, supported := r.v3FileBundleArtifact()
+	if !supported {
+		resp.Diagnostics.AddError("Unsupported file artifact Form", "The exact Provider projection has no file-bundle authoring rule for "+r.form.Family.APIVersion()+"/"+r.form.Kind+".")
+		return
+	}
 	if req.Plan.Raw.IsNull() {
 		return
 	}
@@ -329,13 +316,13 @@ func (r *v3FormResource) modifyFileBundlePlan(ctx context.Context, req resource.
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	files, fileDiags := v3AuthoredArtifactFiles(planned, r.form.Kind)
+	files, fileDiags := v3AuthoredArtifactFilesForProjection(planned, *artifact)
 	if fileDiags.HasError() {
 		return
 	}
 	resolved := true
 	for index := range files {
-		if files[index].ContentFile == "" || readArtifactFile(&files[index]) != nil {
+		if files[index].ContentFile == "" || readArtifactFile(&files[index], artifact.MaximumFileSize) != nil {
 			resolved = false
 		}
 	}
@@ -345,8 +332,7 @@ func (r *v3FormResource) modifyFileBundlePlan(ctx context.Context, req resource.
 	}
 	computed := types.StringUnknown()
 	if resolved {
-		manifestKind, _ := v3FileBundleManifestKind(r.form.Kind)
-		digest, err := digestArtifactManifest(fileBundleManifest(manifestKind, files))
+		digest, err := digestArtifactManifest(fileBundleManifest(artifact.ManifestKind, files))
 		if err != nil {
 			return
 		}

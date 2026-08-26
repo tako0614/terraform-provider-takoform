@@ -113,50 +113,55 @@ if (edge === undefined || edge.forms.length !== 16 || edge.forms.some(({ candida
   throw new Error("stable Edge roster must be the exact 16-Form set without ObjectBucket");
 }
 
-// ---- full generic Host lifecycle corpus ----
+// ---- Edge family/concrete-Host adapter (the retained 125-check matrix) ----
 
-const contract = structuredClone(readJSON("conformance/portable-host-v1beta4/contract.json"));
-contract.format = "takoform.portable-host-conformance@v1";
-contract.apiVersion = HOST_LANE;
-contract.discoveryPath = "/.well-known/takoform/v1";
-contract.apiPath = "/apis/forms.takoform.com/v1";
-contract.familyCandidateSet = path.posix.dirname(edge.entry.candidateSet);
-contract.bindingCandidateSet = path.posix.dirname(currentIndex.bindingCandidateSet.path);
-contract.runnerInput.syntheticSecondGroup.apiVersion = "other.forms.takoform.com";
+const edgeHostRoot = "conformance/takoform-v1/family-host/edge/portable-host";
+const edgeHostContract = structuredClone(readJSON("conformance/portable-host-v1beta4/contract.json"));
+edgeHostContract.format = "takoform.portable-host-conformance@v1";
+edgeHostContract.apiVersion = HOST_LANE;
+edgeHostContract.discoveryPath = "/.well-known/takoform/v1";
+edgeHostContract.apiPath = "/apis/forms.takoform.com/v1";
+edgeHostContract.familyCandidateSet = path.posix.dirname(edge.entry.candidateSet);
+edgeHostContract.bindingCandidateSet = path.posix.dirname(currentIndex.bindingCandidateSet.path);
+edgeHostContract.runnerInput.syntheticSecondGroup.apiVersion = "other.forms.takoform.com";
 
-const familyDerivedChecks = new Set(["class-holder-rules-enforced"]);
-const laneChecks = contract.requiredRunnerChecks.filter((check) => !familyDerivedChecks.has(check));
-const derivedChecks = contract.requiredRunnerChecks.filter((check) => familyDerivedChecks.has(check));
-contract.requiredRunnerChecks = [
-  ...laneChecks.map((check) => check === "external-service-slots-sealed"
+const edgeHostFamilyDerivedChecks = new Set(["class-holder-rules-enforced"]);
+const edgeHostLaneChecks = edgeHostContract.requiredRunnerChecks
+  .filter((check) => !edgeHostFamilyDerivedChecks.has(check));
+const edgeHostDerivedChecks = edgeHostContract.requiredRunnerChecks
+  .filter((check) => edgeHostFamilyDerivedChecks.has(check));
+edgeHostContract.requiredRunnerChecks = [
+  ...edgeHostLaneChecks.map((check) => check === "external-service-slots-sealed"
     ? "stable-standard-service-support-enforced"
     : check),
   "declared-constraint-semantics-enforced",
-  ...derivedChecks,
+  ...edgeHostDerivedChecks,
 ];
 
-const probeByKind = new Map();
-for (const [key, value] of Object.entries(contract.runnerInput)) {
+const edgeHostProbeByKind = new Map();
+for (const value of Object.values(edgeHostContract.runnerInput)) {
   const probe = value?.resourceProbe?.identity?.formRef !== undefined ? value.resourceProbe : value;
-  if (probe?.identity?.formRef?.kind !== undefined) probeByKind.set(probe.identity.formRef.kind, probe);
+  if (probe?.identity?.formRef?.kind !== undefined) edgeHostProbeByKind.set(probe.identity.formRef.kind, probe);
 }
 for (const { candidate, definition } of edge.forms) {
-  const probe = probeByKind.get(candidate.kind);
-  if (probe === undefined) throw new Error(`stable generic corpus has no ${candidate.kind} lifecycle probe`);
+  const probe = edgeHostProbeByKind.get(candidate.kind);
+  if (probe === undefined) throw new Error(`stable Edge Host adapter has no ${candidate.kind} lifecycle probe`);
   probe.identity.formRef = structuredClone(candidate.formRef);
   probe.identity.packageDigest = candidate.packageDigest;
   probe.lifecycleCapabilities = structuredClone(definition.lifecycleCapabilities);
   const fixturePath = `fixtures/desired-schema-${slug(candidate.kind)}.json`;
-  const bytes = emit(`conformance/takoform-v1/generic-host/portable-host/${fixturePath}`, definition.desiredSchema);
+  const bytes = emit(`${edgeHostRoot}/${fixturePath}`, definition.desiredSchema);
   probe.desiredSchema = { path: fixturePath, sha256: `sha256:${sha256(bytes)}` };
 }
 
 const interfaceSet = readJSON(currentIndex.interfaceCandidateSet.path);
 const interfaces = new Map(interfaceSet.interfaces.map((entry) => [`${entry.name}@${entry.version}`, entry]));
-const runtime = interfaces.get(`${contract.runnerInput.supportProbes.runtimeContract.name}@${contract.runnerInput.supportProbes.runtimeContract.version}`);
+const runtime = interfaces.get(
+  `${edgeHostContract.runnerInput.supportProbes.runtimeContract.name}@${edgeHostContract.runnerInput.supportProbes.runtimeContract.version}`,
+);
 if (runtime === undefined) throw new Error("current interface set has no worker.runtime@1.1.0");
-contract.runnerInput.supportProbes.runtimeContract.schemaDigest = runtime.schemaDigest;
-contract.runnerInput.supportProbes.dataInterfaces = contract.runnerInput.supportProbes.dataInterfaces
+edgeHostContract.runnerInput.supportProbes.runtimeContract.schemaDigest = runtime.schemaDigest;
+edgeHostContract.runnerInput.supportProbes.dataInterfaces = edgeHostContract.runnerInput.supportProbes.dataInterfaces
   .filter((entry) => entry.name !== "edge.objects")
   .map((entry) => {
     const current = interfaces.get(`${entry.name}@${entry.version}`);
@@ -164,10 +169,10 @@ contract.runnerInput.supportProbes.dataInterfaces = contract.runnerInput.support
     return { ...entry, schemaDigest: current.schemaDigest };
   });
 
-const baseVersionDesired = structuredClone(contract.runnerInput.workerVersion.desired);
-function serviceSpec(protocol, required = true) {
+const edgeHostBaseVersionDesired = structuredClone(edgeHostContract.runnerInput.workerVersion.desired);
+function edgeHostServiceSpec(protocol, required = true) {
   return {
-    ...structuredClone(baseVersionDesired),
+    ...structuredClone(edgeHostBaseVersionDesired),
     externalServices: [{
       name: protocol === S3 ? "ASSETS" : "FUTURE_STORE",
       ...(required ? {} : { required: false }),
@@ -175,33 +180,34 @@ function serviceSpec(protocol, required = true) {
     }],
   };
 }
-contract.runnerInput.externalServices = {
+edgeHostContract.runnerInput.externalServices = {
   property: "externalServices",
   serviceApiVersion: SERVICE_API,
   protocols: [S3],
-  desiredSpec: serviceSpec(S3),
-  unknownProtocolSpec: serviceSpec(UNKNOWN_SERVICE),
-  optionalUnsupportedSpec: serviceSpec(UNKNOWN_SERVICE, false),
+  desiredSpec: edgeHostServiceSpec(S3),
+  unknownProtocolSpec: edgeHostServiceSpec(UNKNOWN_SERVICE),
+  optionalUnsupportedSpec: edgeHostServiceSpec(UNKNOWN_SERVICE, false),
 };
 
-const synthetic = structuredClone(readJSON(
+const edgeHostSynthetic = structuredClone(readJSON(
   "conformance/portable-host-v1beta4/fixtures/synthetic-module-worker-second-definition-edge-family.json",
 ));
-synthetic.requiresHostApi = HOST_LANE;
-synthetic.description = synthetic.description.replace("this lane", "the stable v1 lane");
-const syntheticBytes = emit(
-  "conformance/takoform-v1/generic-host/portable-host/fixtures/synthetic-module-worker-second-definition.json",
-  synthetic,
+edgeHostSynthetic.requiresHostApi = HOST_LANE;
+edgeHostSynthetic.description = edgeHostSynthetic.description.replace("this lane", "the stable v1 lane");
+const edgeHostSyntheticBytes = emit(
+  `${edgeHostRoot}/fixtures/synthetic-module-worker-second-definition.json`,
+  edgeHostSynthetic,
 );
-contract.runnerInput.syntheticSecondDefinitionVersion.formRef = {
-  apiVersion: synthetic.apiVersion,
-  kind: synthetic.kind,
-  definitionVersion: synthetic.definitionVersion,
-  schemaDigest: canonicalDigest(synthetic),
+edgeHostContract.runnerInput.syntheticSecondDefinitionVersion.formRef = {
+  apiVersion: edgeHostSynthetic.apiVersion,
+  kind: edgeHostSynthetic.kind,
+  definitionVersion: edgeHostSynthetic.definitionVersion,
+  schemaDigest: canonicalDigest(edgeHostSynthetic),
 };
-contract.runnerInput.syntheticSecondDefinitionVersion.path =
+edgeHostContract.runnerInput.syntheticSecondDefinitionVersion.path =
   "fixtures/synthetic-module-worker-second-definition.json";
-contract.runnerInput.syntheticSecondDefinitionVersion.sha256 = `sha256:${sha256(syntheticBytes)}`;
+edgeHostContract.runnerInput.syntheticSecondDefinitionVersion.sha256 =
+  `sha256:${sha256(edgeHostSyntheticBytes)}`;
 
 const workerService = interfaces.get("worker.service@1.0.0");
 if (workerService === undefined) throw new Error("current interface set has no worker.service@1.0.0");
@@ -212,7 +218,7 @@ const workerServiceRef = {
   schemaDigest: workerService.schemaDigest,
 };
 const constraintGroup = "constraints.forms.takoform.com";
-const lifecycle = ["create", "read", "update", "delete", "import", "observe"];
+const edgeHostLifecycle = ["create", "read", "update", "delete", "import", "observe"];
 function referenceSchema(kind, requiredInterface = workerServiceRef) {
   return {
     type: "object",
@@ -242,7 +248,7 @@ function constraintDefinition(
   desiredSchema,
   constraints = undefined,
   providedInterfaces = undefined,
-  capabilities = lifecycle,
+  capabilities = edgeHostLifecycle,
 ) {
   return {
     apiVersion: constraintGroup,
@@ -323,11 +329,12 @@ constraintDefinitions.structural = constraintDefinition(
     { kind: "uniqueBy", list: "/rows", member: "key" },
   ],
 );
-contract.runnerInput.constraintSemantics = {};
+
+edgeHostContract.runnerInput.constraintSemantics = {};
 for (const [label, definition] of Object.entries(constraintDefinitions)) {
   const fixture = `fixtures/constraint-${slug(label)}.json`;
-  const bytes = emit(`conformance/takoform-v1/generic-host/portable-host/${fixture}`, definition);
-  contract.runnerInput.constraintSemantics[label] = {
+  const bytes = emit(`${edgeHostRoot}/${fixture}`, definition);
+  edgeHostContract.runnerInput.constraintSemantics[label] = {
     name: `constraint-${slug(label)}-probe`,
     formRef: {
       apiVersion: definition.apiVersion,
@@ -340,42 +347,778 @@ for (const [label, definition] of Object.entries(constraintDefinitions)) {
   };
 }
 
-for (const fixture of contract.runnerInput.negativeFixtures) {
+for (const fixture of edgeHostContract.runnerInput.negativeFixtures) {
   const bytes = readFileSync(path.join(betaRoot, fixture.path));
-  emit(`conformance/takoform-v1/generic-host/portable-host/${fixture.path}`, bytes);
+  emit(`${edgeHostRoot}/${fixture.path}`, bytes);
   fixture.sha256 = `sha256:${sha256(bytes)}`;
 }
 
-const contractBytes = emit(
-  "conformance/takoform-v1/generic-host/portable-host/contract.json",
-  contract,
-);
-emit("conformance/takoform-v1/generic-host/portable-host/manifest.json", {
+const edgeHostContractBytes = emit(`${edgeHostRoot}/contract.json`, edgeHostContract);
+emit(`${edgeHostRoot}/manifest.json`, {
   format: "takoform.portable-host-conformance-manifest@v1",
   contract: "contract.json",
-  sha256: sha256(contractBytes),
+  sha256: sha256(edgeHostContractBytes),
 });
+const previousEdgeHostRoot = "conformance/takoform-v1/generic-host/portable-host";
+const edgeHostRehome = [...outputs.entries()]
+  .filter(([relativePath]) => relativePath.startsWith(`${edgeHostRoot}/`))
+  .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+  .map(([newPath, bytes]) => ({
+    oldPath: `${previousEdgeHostRoot}/${newPath.slice(edgeHostRoot.length + 1)}`,
+    newPath,
+    sha256: sha256(bytes),
+  }));
+if (edgeHostRehome.length !== 28) {
+  throw new Error(`stable Edge Host rehome ledger has ${edgeHostRehome.length} files, want 28`);
+}
+emit("conformance/takoform-v1/family-host/edge/rehome-ledger.json", {
+  format: "takoform.edge-host-rehome@v1",
+  fileCount: edgeHostRehome.length,
+  files: edgeHostRehome,
+});
+// These are stable published bytes, not an active generic input. Keep their
+// historical addresses byte-identical while every executable consumer points
+// at the Edge family/concrete-Host owner above.
+for (const entry of edgeHostRehome) {
+  emit(entry.oldPath, outputs.get(entry.newPath));
+}
 
-const genericChecks = [
+// ---- family-neutral generic Snapshot and Host lifecycle corpus ----
+
+const externalGroup = "resources.publisher.example";
+const externalKind = "RangeCounter";
+const externalPackageRoot = "conformance/takoform-v1/generic-host/external-family/range-counter";
+const supportedService = S3;
+const unsupportedService = UNKNOWN_SERVICE;
+const lifecycle = ["create", "read", "update", "delete", "import", "observe"];
+const standardServiceProperty = {
+  default: [],
+  type: "array",
+  maxItems: 4,
+  uniqueItems: true,
+  items: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      name: { type: "string", pattern: "^[A-Z][A-Z0-9_]*$", maxLength: 64 },
+      required: { type: "boolean", default: true },
+      service: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          apiVersion: { const: SERVICE_API },
+          protocol: {
+            type: "string",
+            maxLength: 253,
+            pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){2,}$",
+          },
+        },
+        required: ["apiVersion", "protocol"],
+      },
+    },
+    required: ["name", "service"],
+  },
+  "x-takoform-standard-services": SERVICE_API,
+};
+const externalDefinition = {
+  apiVersion: externalGroup,
+  kind: externalKind,
+  definitionVersion: "0.1.0",
+  title: "Independent range counter",
+  description: "Synthetic external publisher fixture for family-neutral generic conformance.",
+  role: "identity",
+  requiresHostApi: HOST_LANE,
+  desiredSchema: {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      lower: { type: "integer" },
+      upper: { type: "integer" },
+      mode: { type: "string", enum: ["safe", "fast"], default: "safe" },
+      externalServices: standardServiceProperty,
+    },
+    required: ["lower", "upper"],
+  },
+  immutableFields: ["/externalServices"],
+  lifecycleCapabilities: lifecycle,
+  constraints: [{ kind: "orderedPair", references: ["/lower", "/upper"] }],
+  conformanceFixtures: [{ name: "canonical", desiredPath: "fixtures/desired.json" }],
+  negativeConformanceFixtures: [{
+    name: "reject-unexpected-property",
+    stage: "desired",
+    inputPath: "fixtures/negative-unexpected-property.json",
+    expectedFailure: "schema_validation_failed",
+  }],
+};
+const externalRef = {
+  apiVersion: externalGroup,
+  kind: externalKind,
+  definitionVersion: externalDefinition.definitionVersion,
+  schemaDigest: canonicalDigest(externalDefinition),
+};
+const externalDesired = { lower: 1, upper: 2 };
+const externalNegative = { lower: 1, upper: 2, unexpected: true };
+const externalDefinitionBytes = emit(`${externalPackageRoot}/definition.json`, externalDefinition);
+const externalDesiredBytes = emit(`${externalPackageRoot}/fixtures/desired.json`, externalDesired);
+const externalNegativeBytes = emit(
+  `${externalPackageRoot}/fixtures/negative-unexpected-property.json`,
+  externalNegative,
+);
+const externalPackageIndex = {
+  apiVersion: "packages.forms.takoform.com/v1alpha5",
+  kind: "FormPackage",
+  formRef: externalRef,
+  definitionPath: "definition.json",
+  files: [
+    {
+      path: "definition.json",
+      mediaType: "application/vnd.takoform.form-definition.v1+json",
+      size: externalDefinitionBytes.length,
+      digest: `sha256:${sha256(externalDefinitionBytes)}`,
+    },
+    {
+      path: "fixtures/desired.json",
+      mediaType: "application/json",
+      size: externalDesiredBytes.length,
+      digest: `sha256:${sha256(externalDesiredBytes)}`,
+    },
+    {
+      path: "fixtures/negative-unexpected-property.json",
+      mediaType: "application/json",
+      size: externalNegativeBytes.length,
+      digest: `sha256:${sha256(externalNegativeBytes)}`,
+    },
+  ],
+};
+emit(`${externalPackageRoot}/package-index.json`, externalPackageIndex);
+const externalPackageDigest = canonicalDigest(externalPackageIndex);
+
+function serviceSpec(protocol, required = true) {
+  return {
+    lower: 1,
+    upper: 2,
+    externalServices: [{
+      name: protocol === supportedService ? "OBJECTS" : "FUTURE",
+      ...(required ? {} : { required: false }),
+      service: { apiVersion: SERVICE_API, protocol },
+    }],
+  };
+}
+
+function emitNeutralPackage(directory, definition) {
+  const definitionBytes = emit(`${directory}/definition.json`, definition);
+  const formRef = {
+    apiVersion: definition.apiVersion,
+    kind: definition.kind,
+    definitionVersion: definition.definitionVersion,
+    schemaDigest: canonicalDigest(definition),
+  };
+  const packageIndex = {
+    apiVersion: "packages.forms.takoform.com/v1alpha5",
+    kind: "FormPackage",
+    formRef,
+    definitionPath: "definition.json",
+    files: [{
+      path: "definition.json",
+      mediaType: "application/vnd.takoform.form-definition.v1+json",
+      size: definitionBytes.length,
+      digest: `sha256:${sha256(definitionBytes)}`,
+    }],
+  };
+  emit(`${directory}/package-index.json`, packageIndex);
+  return {
+    formRef,
+    packageDigest: canonicalDigest(packageIndex),
+    path: `${directory.slice("conformance/takoform-v1/".length)}/package-index.json`,
+    definition,
+  };
+}
+
+function neutralDefinition(kind, version, role, desiredSchema, capabilities = lifecycle, extra = {}) {
+  return {
+    apiVersion: externalGroup,
+    kind,
+    definitionVersion: version,
+    title: `${kind} independent conformance fixture`,
+    description: `External publisher ${kind} Definition for family-neutral Host conformance.`,
+    role,
+    requiresHostApi: HOST_LANE,
+    desiredSchema,
+    lifecycleCapabilities: capabilities,
+    ...extra,
+  };
+}
+
+const neutralScalarSchema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    lower: { type: "integer" },
+    upper: { type: "integer" },
+    mode: { type: "string", enum: ["safe", "fast"], default: "safe" },
+  },
+  required: ["lower", "upper"],
+};
+const neutralGauge = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/range-gauge",
+  neutralDefinition("RangeGauge", "0.1.0", "identity", neutralScalarSchema),
+);
+const neutralSequence = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/range-sequence",
+  neutralDefinition("RangeSequence", "0.1.0", "identity", neutralScalarSchema),
+);
+const neutralSecondDefinition = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/range-counter-v0-2",
+  neutralDefinition("RangeCounter", "0.2.0", "identity", {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    properties: {},
+  }),
+);
+const neutralOtherGroup = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/other-range-gauge",
+  {
+    ...neutralDefinition("RangeGauge", "0.1.0", "identity", {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      additionalProperties: false,
+      properties: {},
+    }),
+    apiVersion: "records.publisher.example",
+    title: "Independent second-group range gauge",
+    description: "A second external publisher owns the same Kind without sharing identity or state.",
+  },
+);
+const neutralRevision = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/revision-note",
+  neutralDefinition("RevisionNote", "0.1.0", "revision", {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      note: { type: "string", minLength: 1 },
+    },
+    required: ["note"],
+  }, ["create", "read", "delete", "import", "observe"]),
+);
+const neutralOutputs = {
+  assignedName: "counter-001.publisher.example",
+  ordinal: 7,
+};
+const neutralOutput = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/assigned-counter",
+  neutralDefinition("AssignedCounter", "0.1.0", "identity", {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      label: { type: "string", minLength: 1 },
+      assignedName: { type: "string", pattern: "^[a-z0-9.-]+$" },
+      ordinal: { type: "integer", minimum: 1 },
+    },
+    required: ["label"],
+  }, lifecycle, {
+    outputSchema: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        assignedName: { type: "string", pattern: "^[a-z0-9.-]+$" },
+        ordinal: { type: "integer", minimum: 1 },
+      },
+      required: ["assignedName", "ordinal"],
+    },
+    constraints: [
+      { kind: "hostAssigned", output: "/assignedName" },
+      { kind: "hostAssigned", output: "/ordinal" },
+    ],
+  }),
+);
+
+function neutralExactReferenceSchema(ref) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      apiVersion: { type: "string", const: ref.apiVersion },
+      kind: { type: "string", const: ref.kind },
+      name: { type: "string", minLength: 1, maxLength: 63, pattern: "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$" },
+    },
+    required: ["apiVersion", "kind", "name"],
+    "x-takoform-target-formrefs": [ref],
+  };
+}
+
+function neutralHolder(kind, targetRef) {
+  return emitNeutralPackage(
+    `conformance/takoform-v1/generic-host/external-family/${slug(kind)}`,
+    neutralDefinition(kind, "0.1.0", "attachment", {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      additionalProperties: false,
+      properties: { target: neutralExactReferenceSchema(targetRef) },
+      required: ["target"],
+    }, ["create", "read", "delete", "import", "observe"], {
+      constraints: [{ kind: "exclusive", reference: "/target" }],
+    }),
+  );
+}
+const neutralLease = neutralHolder("CounterLease", externalRef);
+const neutralReservation = neutralHolder("CounterReservation", neutralSequence.formRef);
+const neutralLeaseSecond = emitNeutralPackage(
+  "conformance/takoform-v1/generic-host/external-family/counter-lease-v0-2",
+  neutralDefinition("CounterLease", "0.2.0", "attachment", {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    properties: { target: neutralExactReferenceSchema(externalRef) },
+    required: ["target"],
+  }, ["create", "read", "delete", "import", "observe"], {
+    constraints: [{ kind: "exclusive", reference: "/target" }],
+  }),
+);
+
+const neutralConstraintGroup = "constraints.publisher.example";
+const neutralRelationInterfaceDefinition = {
+  apiVersion: "interfaces.takoform.com/v1alpha1",
+  kind: "InterfaceDefinition",
+  name: "publisher.constraintnode",
+  version: "0.1.0",
+  operations: [{
+    name: "resolve",
+    inputSchema: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+    },
+    outputSchema: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+    },
+    errors: [],
+  }],
+  semantics: { consistency: "serializable" },
+};
+const neutralRelationInterfacePath = "generic-host/external-family/constraint-node-interface.json";
+emit(`conformance/takoform-v1/${neutralRelationInterfacePath}`, neutralRelationInterfaceDefinition);
+const neutralRelationInterface = {
+  apiVersion: neutralRelationInterfaceDefinition.apiVersion,
+  name: neutralRelationInterfaceDefinition.name,
+  version: neutralRelationInterfaceDefinition.version,
+  schemaDigest: canonicalDigest(neutralRelationInterfaceDefinition),
+};
+const neutralRelationBindingDefinition = {
+  apiVersion: "bindings.takoform.com/v1alpha2",
+  kind: "BindingDefinition",
+  name: "publisher.constraintlink",
+  version: "0.1.0",
+  sourceRole: "attachment",
+  targetInterface: neutralRelationInterface,
+  allowedTargetForms: [{
+    apiVersion: neutralConstraintGroup,
+    kind: "ConstraintNode",
+  }],
+  bindingNameGrammar: "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  runtimeProjection: { operations: ["resolve"] },
+  lifecycle: { targetDeletion: "refuse_while_bound" },
+};
+const neutralRelationBindingPath = "generic-host/external-family/constraint-link-binding.json";
+const neutralRelationBinding = {
+  apiVersion: neutralRelationBindingDefinition.apiVersion,
+  name: neutralRelationBindingDefinition.name,
+  version: neutralRelationBindingDefinition.version,
+  schemaDigest: canonicalDigest(neutralRelationBindingDefinition),
+};
+emit(`conformance/takoform-v1/${neutralRelationBindingPath}`, neutralRelationBindingDefinition);
+function neutralConstraintReference(kind, requiredInterface = neutralRelationInterface) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      apiVersion: { type: "string", const: neutralConstraintGroup },
+      kind: { type: "string", const: kind },
+      name: { type: "string", minLength: 1, maxLength: 63, pattern: "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$" },
+    },
+    required: ["apiVersion", "kind", "name"],
+    ...(requiredInterface === null ? {} : { "x-takoform-required-interface": requiredInterface }),
+  };
+}
+function neutralConstraintDefinition(kind, version, role, desiredSchema, constraints, providedInterfaces, capabilities = lifecycle) {
+  return {
+    apiVersion: neutralConstraintGroup,
+    kind,
+    definitionVersion: version,
+    title: `${kind} independent constraint fixture`,
+    description: "External publisher Definition for the family-neutral declared-constraint matrix.",
+    role,
+    requiresHostApi: HOST_LANE,
+    desiredSchema,
+    lifecycleCapabilities: capabilities,
+    ...(constraints === undefined ? {} : { constraints }),
+    ...(providedInterfaces === undefined ? {} : { providedInterfaces }),
+  };
+}
+const neutralConstraintDefinitions = {};
+neutralConstraintDefinitions.node = neutralConstraintDefinition(
+  "ConstraintNode", "0.1.0", "identity",
+  closedSchema({ next: neutralConstraintReference("ConstraintNode") }),
+  [{ kind: "acyclic", reference: "/next" }], [neutralRelationInterface],
+);
+neutralConstraintDefinitions.distinctPair = neutralConstraintDefinition(
+  "DistinctPairHolder", "0.1.0", "attachment",
+  closedSchema({ left: neutralConstraintReference("ConstraintNode"), right: neutralConstraintReference("ConstraintNode") }, ["left"]),
+  [{ kind: "distinctPair", references: ["/left", "/right"] }],
+);
+neutralConstraintDefinitions.uniquePair = neutralConstraintDefinition(
+  "UniquePairHolder", "0.1.0", "attachment",
+  closedSchema({ left: neutralConstraintReference("ConstraintNode"), right: neutralConstraintReference("ConstraintNode") }, ["left", "right"]),
+  [{ kind: "uniquePair", references: ["/left", "/right"] }],
+);
+neutralConstraintDefinitions.uniquePairSecond = neutralConstraintDefinition(
+  "UniquePairHolder", "0.2.0", "attachment",
+  closedSchema({ left: neutralConstraintReference("ConstraintNode"), right: neutralConstraintReference("ConstraintNode") }, ["left", "right"]),
+  [{ kind: "uniquePair", references: ["/left", "/right"] }],
+);
+neutralConstraintDefinitions.member = neutralConstraintDefinition(
+  "ConstraintMember", "0.1.0", "revision",
+  closedSchema({ through: neutralConstraintReference("ConstraintNode") }, ["through"]),
+  undefined, undefined, ["create", "read", "delete", "import", "observe"],
+);
+const neutralMemberRef = {
+  apiVersion: neutralConstraintGroup,
+  kind: neutralConstraintDefinitions.member.kind,
+  definitionVersion: neutralConstraintDefinitions.member.definitionVersion,
+  schemaDigest: canonicalDigest(neutralConstraintDefinitions.member),
+};
+const neutralExactMemberReference = {
+  ...neutralConstraintReference("ConstraintMember", null),
+  "x-takoform-target-formrefs": [neutralMemberRef],
+};
+neutralConstraintDefinitions.sameTarget = neutralConstraintDefinition(
+  "SameTargetHolder", "0.1.0", "deployment",
+  closedSchema({
+    anchor: neutralConstraintReference("ConstraintNode"),
+    members: { type: "array", minItems: 1, maxItems: 8, items: neutralExactMemberReference },
+  }, ["anchor", "members"]),
+  [{ kind: "sameResolvedTarget", anchor: "/anchor", members: "/members/*", through: "/through" }],
+);
+neutralConstraintDefinitions.structural = neutralConstraintDefinition(
+  "StructuralConstraintHolder", "0.1.0", "policy",
+  closedSchema({
+    lower: { type: "integer" },
+    upper: { type: "integer" },
+    rows: {
+      type: "array", minItems: 1, maxItems: 8,
+      items: {
+        type: "object", additionalProperties: false,
+        properties: { key: { type: "string" }, value: { type: "integer" } },
+        required: ["key", "value"],
+      },
+    },
+  }, ["lower", "upper", "rows"]),
+  [
+    { kind: "orderedPair", references: ["/lower", "/upper"] },
+    { kind: "uniqueBy", list: "/rows", member: "key" },
+  ],
+);
+neutralConstraintDefinitions.sum = neutralConstraintDefinition(
+  "WeightedSet", "0.1.0", "policy",
+  closedSchema({
+    weights: {
+      type: "array", minItems: 1, maxItems: 8,
+      items: {
+        type: "object", additionalProperties: false,
+        properties: { weight: { type: "integer" } },
+        required: ["weight"],
+      },
+    },
+  }, ["weights"]),
+  [{ kind: "sum", list: "/weights", member: "weight", total: 100 }],
+);
+neutralConstraintDefinitions.claimPrimary = neutralConstraintDefinition(
+  "ClaimTicket", "0.1.0", "attachment",
+  closedSchema({ claim: { type: "string", minLength: 1, maxLength: 64 } }, ["claim"]),
+  [{ kind: "claim", property: "/claim" }],
+);
+neutralConstraintDefinitions.claimAlternate = neutralConstraintDefinition(
+  "ClaimLease", "0.1.0", "attachment",
+  closedSchema({ alias: { type: "string", minLength: 1, maxLength: 64 } }, ["alias"]),
+  [{ kind: "claim", property: "/alias" }],
+);
+const neutralConstraintPackages = {};
+for (const [label, definition] of Object.entries(neutralConstraintDefinitions)) {
+  neutralConstraintPackages[label] = emitNeutralPackage(
+    `conformance/takoform-v1/generic-host/external-family/constraint-${slug(label)}`,
+    definition,
+  );
+}
+
+const retainedPortableContract = JSON.parse(readFileSync(path.join(betaRoot, "contract.json"), "utf8"));
+const legacyPortableChecks = [
+  ...retainedPortableContract.requiredRunnerChecks
+    .filter((check) => check !== "class-holder-rules-enforced")
+    .map((check) => check === "external-service-slots-sealed"
+      ? "stable-standard-service-support-enforced"
+      : check),
   "declared-constraint-semantics-enforced",
-  "exact-form-ref-resolution",
-  "generic-lifecycle-semantics",
-  "optional-unsupported-standard-service-omitted",
-  "required-unsupported-standard-service-refused-before-mutation",
-  "supported-standard-service-resolved",
+  "class-holder-rules-enforced",
 ];
+if (legacyPortableChecks.length !== 125 || new Set(legacyPortableChecks).size !== 125) {
+  throw new Error("stable legacy portable coverage must account for the exact old 125-check matrix");
+}
+const interfaceRuntimeChecks = new Set([
+  "module-worker-runtime-contract-advertised",
+  "undeclared-runtime-handler-rejected",
+  "declared-handler-not-exported-rejected",
+  "edge-interface-contracts-advertised",
+  "support-profiles-present",
+]);
+const familySemanticChecks = new Set([
+  "static-asset-spa-paths",
+  "sqlite-migration-ledger-readiness",
+  "artifact-manifest-reject-list",
+  "artifact-manifest-kind-exclusive",
+  "manifest-reference-is-not-a-capability",
+  "cron-grammar-enforced",
+  "queue-single-consumer-enforced",
+  "custom-domain-hostname-canonicalized",
+  "custom-domain-hostname-claim-unique",
+  "custom-domain-hostname-claim-stops-at-the-tenant",
+  "dead-letter-cycle-rejected",
+  "attachment-claim-decided-on-import",
+  "attachment-claim-revalidated-at-commit",
+  "custom-domain-u-label-refused",
+  "bundle-main-module-is-loadable",
+  "class-holder-rules-enforced",
+]);
+const compositionOwnedChecks = new Set([
+  "deployment-weight-sum-enforced",
+  "binding-target-missing-404-before-mutation",
+  "dependency-in-use-on-bound-target-delete",
+  "relation-target-missing-rejected",
+  "relation-target-deletion-blocked",
+  "relation-incarnation-change-detected",
+  "relation-reapply-repins",
+  "binding-contract-verified",
+  "artifact-then-bundle-apply",
+  "artifact-retention-while-referenced",
+  "deployment-single-active-per-worker",
+  "deployment-version-ownership",
+  "deployment-version-duplicate-rejected",
+  "attachment-requires-active-deployment",
+  "handler-gated-attachments",
+  "binding-name-collision-rejected",
+  "deployment-change-preserves-dependents",
+  "deployment-delete-blocked-by-dependent",
+  "deployment-delete-blocked-by-inbound-binding",
+  "dependent-revision-advances-with-rendering",
+  "delete-fence-survives-derived-rendering",
+  "worker-endpoint-address-is-host-assigned",
+  "worker-endpoint-single-per-worker",
+  "worker-endpoint-follows-the-active-deployment",
+  "worker-endpoint-address-is-stable-for-its-uid",
+  "relation-target-form-ref-verified",
+  "relation-target-interface-verified",
+  "relation-pin-records-target-form-ref",
+  "relation-resolution-is-tenant-scoped",
+]);
+const genericCheckSet = new Set([
+  "apply-idempotency-replay",
+  "artifact-commit-binds-declared-size",
+  "artifact-digest-mismatch",
+  "artifact-upload-missing-blob",
+  "async-operation-flow",
+  "create-conflict-when-exists",
+  "declared-constraint-semantics-enforced",
+  "declared-exclusive-holds-enforced",
+  "delete-generation-fence",
+  "delete-revision-fence",
+  "delete-then-recreate-uid-changes",
+  "error-envelope-taxonomy",
+  "exact-form-ref-fails-closed-on-unknown-definition",
+  "fence-matrix-observed",
+  "operation-bound-to-its-creating-principal",
+  "operation-cancel",
+  "operation-replay-terminal",
+  "operation-resumable-after-settlement",
+  "portable-defaults-materialized",
+  "prepare-binds-exact-spec",
+  "prepare-is-tenant-scoped",
+  "prepare-requires-update-fence",
+  "replay-record-retires-with-its-incarnation",
+  "spec-change-bumps-generation",
+  "stale-revision-rejected",
+  "status-change-bumps-revision-not-generation",
+  "unauthenticated-request-refused",
+  "upload-session-bound-to-its-creating-principal",
+]);
+function legacyCoverageOwner(check) {
+  if (interfaceRuntimeChecks.has(check)) return "interface-runtime";
+  if (familySemanticChecks.has(check)) return "family-semantic";
+  if (compositionOwnedChecks.has(check)) return "composition";
+  if (genericCheckSet.has(check)) return "generic-host";
+  return "concrete-host";
+}
+const genericChecks = legacyPortableChecks
+	.filter((check) => genericCheckSet.has(check))
+	.sort();
+if (genericChecks.length !== genericCheckSet.size || genericChecks.length === 0) {
+	throw new Error("stable neutral generic corpus does not match its explicit evidence roster");
+}
+const legacyPortableCoverage = legacyPortableChecks.map((check) => {
+  const owner = legacyCoverageOwner(check);
+  return {
+    check,
+    owner,
+    edgeAdapterCheck: check,
+	...(genericCheckSet.has(check) ? { neutralChecks: [check] } : {}),
+  };
+});
+emit("conformance/takoform-v1/family-host/edge/coverage-ledger.json", {
+  format: "takoform.legacy-portable-coverage@v1",
+  owner: "edge-family-concrete-host",
+  contract: {
+    path: "portable-host/contract.json",
+    sha256: sha256(edgeHostContractBytes),
+  },
+  checkCount: legacyPortableChecks.length,
+  coverage: legacyPortableCoverage,
+});
+const neutralArtifactBytes = "-- family-neutral conformance payload\n";
+const neutralSnapshotPackages = [
+  {
+    path: "generic-host/external-family/range-counter/package-index.json",
+    packageDigest: externalPackageDigest,
+    formRef: externalRef,
+  },
+  neutralGauge,
+  neutralSequence,
+  neutralSecondDefinition,
+  neutralOtherGroup,
+  neutralRevision,
+  neutralOutput,
+  neutralLease,
+  neutralLeaseSecond,
+  neutralReservation,
+  ...Object.values(neutralConstraintPackages),
+].sort((left, right) => left.path.localeCompare(right.path));
+const neutralExpectedRefs = neutralSnapshotPackages
+  .map((entry) => structuredClone(entry.formRef))
+  .sort((left, right) => exactRefKey(left).localeCompare(exactRefKey(right)));
+const neutralDefaultCreates = [];
+const neutralDefaultLines = new Set();
+for (const formRef of neutralExpectedRefs) {
+  const line = `${formRef.apiVersion}\u0000${formRef.kind}`;
+  if (neutralDefaultLines.has(line)) continue;
+  neutralDefaultLines.add(line);
+  neutralDefaultCreates.push({ group: formRef.apiVersion, kind: formRef.kind, ref: structuredClone(formRef) });
+}
+neutralDefaultCreates.sort((left, right) =>
+  `${left.group}/${left.kind}`.localeCompare(`${right.group}/${right.kind}`));
 const genericCorpus = {
   format: "takoform.generic-host-corpus@v1",
   hostApiLane: HOST_LANE,
   requiredChecks: genericChecks,
-  scenarios: genericChecks.map((check) => ({
-    check,
-    input: { operation: "portable-host-self-test", portableHostCheck: check },
-    expected: { status: "passed", mutationBoundary: check.includes("required-unsupported") ? "before" : "preserved" },
-  })),
-  portableHostContract: {
-    path: "generic-host/portable-host/contract.json",
-    sha256: `sha256:${sha256(contractBytes)}`,
+  snapshotInputs: [
+    {
+      name: "external-family",
+      packages: neutralSnapshotPackages.map(({ path, packageDigest }) => ({ path, packageDigest })),
+      interfaces: [{
+        path: neutralRelationInterfacePath,
+        schemaDigest: neutralRelationInterface.schemaDigest,
+      }],
+      bindings: [{
+        path: neutralRelationBindingPath,
+        schemaDigest: neutralRelationBinding.schemaDigest,
+      }],
+      defaultCreates: neutralDefaultCreates,
+      expectedFormRefs: neutralExpectedRefs,
+    },
+    {
+      name: "zero-family",
+      packages: [],
+      interfaces: [],
+      bindings: [],
+      defaultCreates: [],
+      expectedFormRefs: [],
+    },
+  ],
+  externalHostProbe: {
+    snapshot: "external-family",
+    formRef: externalRef,
+    packageDigest: externalPackageDigest,
+    name: "range-counter-probe",
+    space: "conformance",
+    desired: externalDesired,
+    updatedDesired: { lower: 1, upper: 3, mode: "fast" },
+    invalidSchemaDesired: externalNegative,
+    invalidConstraintDesired: { lower: 3, upper: 2 },
+    externalServices: {
+      property: "externalServices",
+      serviceApiVersion: SERVICE_API,
+      supportedProtocol: supportedService,
+      unsupportedProtocol: unsupportedService,
+      supportedDesired: serviceSpec(supportedService),
+      requiredUnsupportedDesired: serviceSpec(unsupportedService),
+      optionalUnsupportedDesired: serviceSpec(unsupportedService, false),
+    },
+    resources: {
+      keyed: {
+        formRef: neutralGauge.formRef,
+        name: "range-gauge-probe",
+        desired: { lower: 2, upper: 4 },
+        updatedDesired: { lower: 2, upper: 5, mode: "fast" },
+        secondUpdatedDesired: { lower: 2, upper: 6, mode: "fast" },
+      },
+      sequenced: {
+        formRef: neutralSequence.formRef,
+        name: "range-sequence-probe",
+        desired: { lower: 3, upper: 6 },
+        updatedDesired: { lower: 3, upper: 7, mode: "fast" },
+        secondUpdatedDesired: { lower: 3, upper: 8, mode: "fast" },
+      },
+      revision: {
+        formRef: neutralRevision.formRef,
+        name: "revision-note-probe",
+        desired: { note: "sealed" },
+        updatedDesired: { note: "changed" },
+      },
+      output: {
+        formRef: neutralOutput.formRef,
+        name: "assigned-counter-probe",
+        desired: { label: "primary" },
+        hostAssignedOutputs: neutralOutputs,
+      },
+      lease: {
+        formRef: neutralLease.formRef,
+        name: "counter-lease-probe",
+        desired: { target: { apiVersion: externalRef.apiVersion, kind: externalRef.kind, name: "range-counter-probe" } },
+      },
+      reservation: {
+        formRef: neutralReservation.formRef,
+        name: "counter-reservation-probe",
+        desired: { target: { apiVersion: neutralSequence.formRef.apiVersion, kind: neutralSequence.formRef.kind, name: "range-sequence-probe" } },
+      },
+    },
+    syntheticSecondGroup: neutralOtherGroup.formRef,
+    syntheticSecondDefinitionVersion: neutralSecondDefinition.formRef,
+    constraintSemantics: Object.fromEntries(Object.entries(neutralConstraintPackages).map(
+      ([label, entry]) => [label, { name: `constraint-${slug(label)}-probe`, formRef: entry.formRef }],
+    ).concat([["exclusiveSecond", {
+      name: "constraint-exclusive-second-probe",
+      formRef: neutralLeaseSecond.formRef,
+    }]])),
+    artifactTransport: {
+      blobSource: neutralArtifactBytes,
+      declaredSize: Buffer.byteLength(neutralArtifactBytes),
+      contentType: "application/octet-stream",
+    },
+    support: {
+      interface: { name: neutralRelationInterface.name, version: neutralRelationInterface.version },
+      binding: { name: neutralRelationBinding.name, version: neutralRelationBinding.version },
+    },
   },
 };
 const genericPath = "conformance/takoform-v1/generic.json";
@@ -622,7 +1365,7 @@ if (mode === "--write") {
     mkdirSync(path.dirname(absolute), { recursive: true });
     writeFileSync(absolute, bytes);
   }
-  console.log(`derived stable Takoform v1 suite: ${familyInputs.length} families, ${allRefs.length} exact Forms, ${contract.requiredRunnerChecks.length} generic Host checks`);
+  console.log(`derived stable Takoform v1 suite: ${familyInputs.length} families, ${allRefs.length} exact Forms, ${genericChecks.length} generic checks`);
 } else {
   const drift = [];
   for (const [relativePath, bytes] of outputs) {

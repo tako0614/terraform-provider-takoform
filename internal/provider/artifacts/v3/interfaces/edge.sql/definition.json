@@ -1,0 +1,603 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.sql",
+  "version": "1.0.0",
+  "title": "Embedded SQLite database",
+  "description": "SQL statements executed against one embedded SQLite database with serializable transactions. EdgeSqlValue is exactly null, a finite binary64 number whose absolute value is at most 9007199254740991 (Number.MAX_SAFE_INTEGER), a UTF-8 string, or the common canonical encoded-bytes object {\"encoding\":\"base64\",\"data\":\"...\"}. The BLOB data is RFC 4648 section 4 base64, padded and unwrapped. Boolean, bigint, and SQL-only tagged objects are not values. SQLite INTEGER and REAL may store a number differently, but that storage-class distinction is not portable or observable through this value model. A host MUST NOT round, stringify, tag, or silently coerce a number: a non-finite or out-of-range input or output fails numeric_out_of_range. Malformed values and base64 fail sql_error. Parameters bind POSITIONALLY, so ?1 is params[0]. Every runtime entry accepts exactly one SQLite statement. After that statement, only whitespace and comments may remain; a second statement fails sql_error. BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, and RELEASE are transaction-control SQL and fail sql_error on every runtime operation. A statement that would change sqlite_schema, the database attachment set, or the migration ledger also fails sql_error: durable schema migration exists only through the SQLiteMigrationApplication administrative path. Each statement result is exactly rows, in statement and row order, and rowsWritten, the number of rows inserted, updated, or deleted; lastInsertRowId is not portable and does not exist. SQL, column-name, and TEXT byte limits measure UTF-8; BLOB limits measure decoded bytes. maxRowBytes and maxResultBytesPerCall measure UTF-8 bytes of RFC 8785 canonical JSON for one row and the complete operation output. Every result is fully materialized and checked against the numeric, row, column, value, and result limits before a write commits. Concurrent writers may fail busy, the only retryable outcome; retrying re-runs the whole call.",
+  "operations": [
+    {
+      "name": "execute",
+      "description": "Run exactly one runtime statement with positionally bound EdgeSqlValue parameters and return its fully materialized rows and rowsWritten. The statement may have effects, so execute is deliberately NOT idempotent: re-running an INSERT inserts again. Output and limits are validated before the statement's implicit transaction commits; numeric_out_of_range or an exceeded result limit applies nothing. A caller retrying after an unknown transport outcome must decide whether the first call applied.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "items": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "number"
+                },
+                {
+                  "maxLength": 1000000,
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 1333336,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "sql": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "number"
+                  },
+                  {
+                    "maxLength": 1000000,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "data": {
+                        "maxLength": 1333336,
+                        "type": "string"
+                      },
+                      "encoding": {
+                        "enum": [
+                          "base64"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "data",
+                      "encoding"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "maxProperties": 100,
+              "propertyNames": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "type": "array"
+          },
+          "rowsWritten": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "rowsWritten"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "sql_error",
+        "numeric_out_of_range",
+        "busy",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "query",
+      "description": "Run exactly one runtime statement inside a rollback-only transaction, fully materialize and validate its result. The host always rolls back before returning and obtains zero persistent side effects without pre-classifying the statement as read-only; even a statement that transiently changes rows returns rowsWritten 0. A materialization, numeric, or limit failure also rolls back. This executed rollback, rather than SQL text classification, is why query is idempotent.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "items": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "number"
+                },
+                {
+                  "maxLength": 1000000,
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 1333336,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "sql": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "number"
+                  },
+                  {
+                    "maxLength": 1000000,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "data": {
+                        "maxLength": 1333336,
+                        "type": "string"
+                      },
+                      "encoding": {
+                        "enum": [
+                          "base64"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "data",
+                      "encoding"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "maxProperties": 100,
+              "propertyNames": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "type": "array"
+          },
+          "rowsWritten": {
+            "const": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "rowsWritten"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "sql_error",
+        "numeric_out_of_range",
+        "busy",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "transaction",
+      "description": "Run 1 to 100 ordered runtime statements under serializable isolation and return exactly one result per statement in order. All rows and results are materialized and validated before commit. Only then do all effects commit together; SQL failure, numeric_out_of_range, busy, materialization failure, or any value, row, column, or combined-result limit rolls the whole transaction back and returns no partial results. A successful SELECT inside the transaction therefore returns what that same snapshot observed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "statements": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "params": {
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "number"
+                      },
+                      {
+                        "maxLength": 1000000,
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "data": {
+                            "maxLength": 1333336,
+                            "type": "string"
+                          },
+                          "encoding": {
+                            "enum": [
+                              "base64"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "encoding"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "sql": {
+                  "maxLength": 100000,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sql"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "statements"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "rows": {
+                  "items": {
+                    "additionalProperties": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "number"
+                        },
+                        {
+                          "maxLength": 1000000,
+                          "type": "string"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "data": {
+                              "maxLength": 1333336,
+                              "type": "string"
+                            },
+                            "encoding": {
+                              "enum": [
+                                "base64"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "data",
+                            "encoding"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "maxProperties": 100,
+                    "propertyNames": {
+                      "maxLength": 128,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 10000,
+                  "type": "array"
+                },
+                "rowsWritten": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rows",
+                "rowsWritten"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "sql_error",
+        "numeric_out_of_range",
+        "busy",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "serializable"
+  },
+  "limits": {
+    "maxBlobBytesPerValue": 1000000,
+    "maxBoundParameters": 100,
+    "maxColumnNameBytes": 128,
+    "maxColumnsPerRow": 100,
+    "maxResultBytesPerCall": 8388608,
+    "maxRowBytes": 2000000,
+    "maxRowsPerStatement": 10000,
+    "maxStatementBytes": 100000,
+    "maxStatementsPerTransaction": 100,
+    "maxTextBytesPerValue": 1000000
+  },
+  "fixtures": [
+    {
+      "name": "wire-values-round-trip",
+      "steps": [
+        {
+          "operation": "execute",
+          "input": {
+            "params": [
+              1.5,
+              "first note",
+              {
+                "data": "AAECg/8=",
+                "encoding": "base64"
+              },
+              null
+            ],
+            "sql": "SELECT ?1 AS n, ?2 AS t, ?3 AS b, ?4 AS z"
+          },
+          "expected": {
+            "rows": [
+              {
+                "b": {
+                  "data": "AAECg/8=",
+                  "encoding": "base64"
+                },
+                "n": 1.5,
+                "t": "first note",
+                "z": null
+              }
+            ],
+            "rowsWritten": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "safe-number-boundary-round-trips",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "params": [
+              9007199254740991
+            ],
+            "sql": "SELECT ?1 AS v"
+          },
+          "expected": {
+            "rows": [
+              {
+                "v": 9007199254740991
+              }
+            ],
+            "rowsWritten": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound-parameter-result-out-of-range-is-refused",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "params": [
+              9007199254740991
+            ],
+            "sql": "SELECT ?1 + 1 AS v"
+          },
+          "expectedError": "numeric_out_of_range"
+        }
+      ]
+    },
+    {
+      "name": "out-of-range-output-is-refused",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "sql": "SELECT 9007199254740992 AS v"
+          },
+          "expectedError": "numeric_out_of_range"
+        }
+      ]
+    },
+    {
+      "name": "a-transaction-reports-one-result-per-statement",
+      "steps": [
+        {
+          "operation": "transaction",
+          "input": {
+            "statements": [
+              {
+                "params": [
+                  7
+                ],
+                "sql": "SELECT ?1 AS n"
+              },
+              {
+                "params": [
+                  "done"
+                ],
+                "sql": "SELECT ?1 AS t"
+              }
+            ]
+          },
+          "expected": {
+            "results": [
+              {
+                "rows": [
+                  {
+                    "n": 7
+                  }
+                ],
+                "rowsWritten": 0
+              },
+              {
+                "rows": [
+                  {
+                    "t": "done"
+                  }
+                ],
+                "rowsWritten": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiple-statements-are-refused",
+      "steps": [
+        {
+          "operation": "execute",
+          "input": {
+            "sql": "SELECT 1; SELECT 2"
+          },
+          "expectedError": "sql_error"
+        }
+      ]
+    },
+    {
+      "name": "transaction-control-is-refused",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "sql": "BEGIN"
+          },
+          "expectedError": "sql_error"
+        }
+      ]
+    },
+    {
+      "name": "schema-change-is-admin-only",
+      "steps": [
+        {
+          "operation": "execute",
+          "input": {
+            "sql": "CREATE TABLE forbidden_runtime_schema (id INTEGER PRIMARY KEY)"
+          },
+          "expectedError": "sql_error"
+        }
+      ]
+    }
+  ]
+}

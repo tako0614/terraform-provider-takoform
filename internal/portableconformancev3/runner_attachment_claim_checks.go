@@ -270,8 +270,8 @@ func (r *v3Runner) checkCustomDomainHostnameCanonicalized() error {
 // written bytes admits it and fails here.
 func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	colliding := r.customDomainClaiming("claim-collision-domain", canonicalClaimHostname)
-	if err := r.refuseCreate(
-		colliding, "invalid_argument", "key-claim-collision",
+	if err := r.refuseClaimAtPrepare(
+		colliding,
 		"a second WorkerCustomDomain claiming a hostname another attachment already serves",
 	); err != nil {
 		return err
@@ -280,15 +280,9 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	// way it was stored is the same collision, and is refused the same way. A
 	// host comparing written bytes admits exactly this one.
 	restated := r.customDomainClaiming("claim-collision-domain", nonCanonicalClaimHostname)
-	restatedDigest, _, err := r.prepareExpectingRewrite(restated, "")
+	response, err := r.prepareRequest(restated, nil)
 	if err != nil {
 		return fmt.Errorf("preparing a colliding claim in another spelling: %w", err)
-	}
-	response, err := r.apply(restated, applyOptions{
-		Create: true, IdempotencyKey: "key-claim-collision-restated", PrepareDigest: restatedDigest,
-	})
-	if err != nil {
-		return err
 	}
 	subject := "a second WorkerCustomDomain claiming the same hostname in another spelling"
 	if err := r.expectStableError(response, "invalid_argument"); err != nil {
@@ -305,8 +299,8 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	if err != nil {
 		return err
 	}
-	if err := r.refuseCreate(
-		far, "invalid_argument", "key-claim-far-collision",
+	if err := r.refuseClaimAtPrepare(
+		far,
 		"a WorkerCustomDomain in a second space claiming a hostname the tenant already serves",
 	); err != nil {
 		return err
@@ -327,8 +321,8 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	}
 	// The same refusal in the other direction: the space that now holds the name
 	// is the second one, and the first space is the one that may not take it.
-	if err := r.refuseCreate(
-		colliding, "invalid_argument", "key-claim-collision-reverse",
+	if err := r.refuseClaimAtPrepare(
+		colliding,
 		"a WorkerCustomDomain claiming a hostname another SPACE of the tenant serves",
 	); err != nil {
 		return err
@@ -351,6 +345,24 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 		return err
 	}
 	r.complete("custom-domain-hostname-claim-unique")
+	return nil
+}
+
+// refuseClaimAtPrepare reflects the stable constraint lifecycle: a claim is
+// knowable during admission, so a live conflict must be refused before a
+// prepare digest can be minted. Apply/import still revalidate the same rule at
+// commit time.
+func (r *v3Runner) refuseClaimAtPrepare(target probeTarget, subject string) error {
+	response, err := r.prepareRequest(target, nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	if err := r.expectResourceAbsent(target); err != nil {
+		return fmt.Errorf("%s mutated state: %w", subject, err)
+	}
 	return nil
 }
 
@@ -469,9 +481,7 @@ func (r *v3Runner) checkCustomDomainHostnameClaimStopsAtTheTenant() error {
 	// Inside either tenant it is still exactly one claim, so a host that simply
 	// stopped comparing hostnames fails here rather than passing the leg above.
 	inside := r.customDomainClaimingIn("", "claim-tenant-domain-again", worker.Name, sharedClaimHostname)
-	refused, err := r.applyAs(r.alternateTenantToken, inside, applyOptions{
-		Create: true, IdempotencyKey: "key-claim-tenant-domain-again",
-	})
+	refused, err := r.prepareRequestAs(r.alternateTenantToken, inside, nil)
 	if err != nil {
 		return err
 	}
@@ -495,9 +505,8 @@ func (r *v3Runner) checkCustomDomainHostnameClaimStopsAtTheTenant() error {
 			held.Name, message,
 		)
 	}
-	if err := r.refuseCreate(
+	if err := r.refuseClaimAtPrepare(
 		r.customDomainClaiming("claim-tenant-holder-again", sharedClaimHostname),
-		"invalid_argument", "key-claim-tenant-holder-again",
 		"a second claim on one hostname inside the FIRST tenant",
 	); err != nil {
 		return err

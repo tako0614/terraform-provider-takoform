@@ -1,0 +1,68 @@
+{
+  "apiVersion": "resources.publisher.example",
+  "kind": "AssignedCounter",
+  "definitionVersion": "0.1.0",
+  "title": "AssignedCounter independent conformance fixture",
+  "description": "External publisher AssignedCounter Definition for family-neutral Host conformance.",
+  "role": "identity",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "label": {
+        "type": "string",
+        "minLength": 1
+      },
+      "assignedName": {
+        "type": "string",
+        "pattern": "^[a-z0-9.-]+$"
+      },
+      "ordinal": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "required": [
+      "label"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "assignedName": {
+        "type": "string",
+        "pattern": "^[a-z0-9.-]+$"
+      },
+      "ordinal": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "required": [
+      "assignedName",
+      "ordinal"
+    ]
+  },
+  "constraints": [
+    {
+      "kind": "hostAssigned",
+      "output": "/assignedName"
+    },
+    {
+      "kind": "hostAssigned",
+      "output": "/ordinal"
+    }
+  ]
+}

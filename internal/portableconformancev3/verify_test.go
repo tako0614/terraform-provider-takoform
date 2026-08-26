@@ -15,11 +15,12 @@ import (
 
 func corpusRoot(t *testing.T) string {
 	t.Helper()
-	// The literal stable lane's generic Host corpus. Both beta corpora remain
-	// retained artifacts and are checked by their byte/derivation gates; current
-	// behavior tests run only on v1 so new semantics cannot mutate beta history.
+	// The Edge-shaped complete Host matrix is retained as a concrete Host/family
+	// adapter. The stable generic suite is deliberately Snapshot-backed and
+	// family-neutral; tests that need the 125-check Edge topology must not make
+	// that topology a generic-suite input again.
 	root, err := filepath.Abs(filepath.Join(
-		"..", "..", "conformance", "takoform-v1", "generic-host", "portable-host",
+		"..", "..", "conformance", "takoform-v1", "family-host", "edge", "portable-host",
 	))
 	if err != nil {
 		t.Fatalf("resolve corpus root: %v", err)

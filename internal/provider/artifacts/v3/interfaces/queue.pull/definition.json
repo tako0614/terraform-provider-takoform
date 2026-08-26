@@ -1,0 +1,308 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "queue.pull",
+  "version": "1.0.0",
+  "title": "Pull queue",
+  "description": "Unordered at-least-once pull queue. A message body is a UTF-8 string or the canonical encoded-bytes object {\"encoding\":\"base64\",\"data\":\"…\"}; at most ten string attributes accompany it, and body plus attributes are bounded to 262144 bytes. send accepts one message and returns an opaque stable identity; the acceptance timestamp never moves. receive returns at most ten messages with their identity, body, attributes, acceptance timestamp, receive count (one on first delivery), and a fresh receipt handle. Delivery is at-least-once and unordered, so consumers must be idempotent. A message is invisible for the call's visibility timeout and is redelivered unless deleted. Each receive invalidates earlier handles. A stale or unknown handle is an error, never a silent no-op. An optional dead-letter policy belongs to the PullQueue Form; when exhausted, a message moves as a new message with a new identity and acceptance timestamp. An empty receive result is a normal response.",
+  "operations": [
+    {
+      "name": "send",
+      "description": "Accept one message durably. Body and attributes use the queue message shape; acceptance does not imply delivery and the returned messageId remains stable across redeliveries.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "maxLength": 262144,
+              "type": "string"
+            },
+            "maxProperties": 10,
+            "propertyNames": {
+              "maxLength": 262144,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "body": {
+            "oneOf": [
+              {
+                "maxLength": 262144,
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "data": {
+                    "maxLength": 349528,
+                    "type": "string"
+                  },
+                  "encoding": {
+                    "enum": [
+                      "base64"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "data",
+                  "encoding"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_message",
+        "message_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "receive",
+      "description": "Return up to ten currently deliverable messages. Each message receives a fresh receipt handle and becomes invisible for visibilityTimeoutSeconds, or the queue default when omitted. waitSeconds long-polls up to the queue's declared bound; no messages is an empty successful result.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "visibilityTimeoutSeconds": {
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "waitSeconds": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "acceptedAt": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "attributes": {
+                  "additionalProperties": {
+                    "maxLength": 262144,
+                    "type": "string"
+                  },
+                  "maxProperties": 10,
+                  "propertyNames": {
+                    "maxLength": 262144,
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "body": {
+                  "oneOf": [
+                    {
+                      "maxLength": 262144,
+                      "type": "string"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "data": {
+                          "maxLength": 349528,
+                          "type": "string"
+                        },
+                        "encoding": {
+                          "enum": [
+                            "base64"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "data",
+                        "encoding"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "messageId": {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                "receiptHandle": {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                "receiveCount": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "messageId",
+                "body",
+                "attributes",
+                "acceptedAt",
+                "receiveCount",
+                "receiptHandle"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10,
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_argument",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "delete",
+      "description": "Delete the message represented by the newest valid receipt handle. An invalidated, unknown, or expired handle fails with stale_receipt_handle and has no effect.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "receiptHandle": {
+            "maxLength": 512,
+            "type": "string"
+          }
+        },
+        "required": [
+          "receiptHandle"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "stale_receipt_handle",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "changeVisibility",
+      "description": "Set the remaining invisibility of the newest valid receipt handle to a value from zero through 43200 seconds. Zero makes the message immediately deliverable; stale handles fail.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "receiptHandle": {
+            "maxLength": 512,
+            "type": "string"
+          },
+          "visibilityTimeoutSeconds": {
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "receiptHandle",
+          "visibilityTimeoutSeconds"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "stale_receipt_handle",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "eventual",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxMessageAttributes": 10,
+    "maxMessageBytes": 262144,
+    "maxReceiveMessages": 10,
+    "maxVisibilitySeconds": 43200,
+    "maxWaitSeconds": 20
+  },
+  "fixtures": [
+    {
+      "name": "send-accepted",
+      "steps": [
+        {
+          "operation": "send",
+          "input": {
+            "attributes": {
+              "kind": "greeting"
+            },
+            "body": "hello"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receive-empty-is-success",
+      "steps": [
+        {
+          "operation": "receive",
+          "input": {
+            "waitSeconds": 0
+          },
+          "expected": {
+            "messages": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "stale-handle-is-an-error",
+      "steps": [
+        {
+          "operation": "delete",
+          "input": {
+            "receiptHandle": "stale"
+          },
+          "expectedError": "stale_receipt_handle"
+        }
+      ]
+    }
+  ]
+}

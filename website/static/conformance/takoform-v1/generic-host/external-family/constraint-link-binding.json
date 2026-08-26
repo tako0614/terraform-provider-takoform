@@ -1,0 +1,28 @@
+{
+  "apiVersion": "bindings.takoform.com/v1alpha2",
+  "kind": "BindingDefinition",
+  "name": "publisher.constraintlink",
+  "version": "0.1.0",
+  "sourceRole": "attachment",
+  "targetInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "publisher.constraintnode",
+    "version": "0.1.0",
+    "schemaDigest": "sha256:ddff5d96f3eb9eaebcee5bdd5c7a186776148fad532398250c6eac04266f9c55"
+  },
+  "allowedTargetForms": [
+    {
+      "apiVersion": "constraints.publisher.example",
+      "kind": "ConstraintNode"
+    }
+  ],
+  "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  "runtimeProjection": {
+    "operations": [
+      "resolve"
+    ]
+  },
+  "lifecycle": {
+    "targetDeletion": "refuse_while_bound"
+  }
+}

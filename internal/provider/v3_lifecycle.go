@@ -42,6 +42,7 @@ const (
 type v3FormResource struct {
 	form         model.Form
 	resourceType string
+	artifact     *v3ArtifactProjection
 	data         *providerData
 	// codecs is the exact-FormRef dispatch table: the registry of identities
 	// this resource can serve together with the per-ref codec that decodes
@@ -60,8 +61,9 @@ var (
 
 // NewV3FormResource returns a constructor for one declared family Form.
 func NewV3FormResource(form model.Form) func() resource.Resource {
+	assembly := mustProviderV3SnapshotAssembly()
 	factories, err := compileV3FormResources(
-		[]model.Form{form}, currentformregistry.V3Current(), v3TerraformResourceTypes(), v3Codecs(),
+		[]model.Form{form}, assembly.registry, assembly.resourceTypes, assembly.codecs,
 	)
 	if err != nil {
 		panic(err)
@@ -81,8 +83,9 @@ func NewV3FormResource(form model.Form) func() resource.Resource {
 // Shipping the carrier anyway would have offered reach with no verification
 // behind it (spec/decisions/0021).
 func newV3FormResources() []func() resource.Resource {
+	assembly := mustProviderV3SnapshotAssembly()
 	out, err := compileV3FormResources(
-		providerV3CurrentForms(), currentformregistry.V3Current(), v3TerraformResourceTypes(), v3Codecs(),
+		assembly.currentForms, assembly.registry, assembly.resourceTypes, assembly.codecs,
 	)
 	if err != nil {
 		panic(err)
@@ -98,13 +101,17 @@ func (r *v3FormResource) resourceTypeName() string {
 	if r.resourceType != "" {
 		return r.resourceType
 	}
-	ref, err := currentformregistry.V3Current().DefaultCreate(currentformregistry.GroupKind{
+	assembly, err := providerV3SnapshotAssembly()
+	if err != nil {
+		return ""
+	}
+	ref, err := assembly.registry.DefaultCreate(currentformregistry.GroupKind{
 		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
 	})
 	if err != nil {
 		return ""
 	}
-	resourceType, _ := v3TerraformResourceTypes().Lookup(ref.ExactKey())
+	resourceType, _ := assembly.resourceTypes.Lookup(ref.ExactKey())
 	return resourceType
 }
 
@@ -277,7 +284,7 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 	var spec map[string]any
 	var bundle v3BundleAuthoring
 	var fileBundle v3FileBundleAuthoring
-	if r.form.Kind == workerBundleKind {
+	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		// A worker bundle is authored either by referencing a committed manifest
 		// or from local module files whose bytes travel through the
 		// content-addressed artifact upload, never through state. Both modes
@@ -289,7 +296,7 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 		bundle = resolved
 		spec = bundle.Spec()
-	} else if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	} else if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		resolved, artifactDiags := r.fileBundleAuthoring(&values)
 		resp.Diagnostics.Append(artifactDiags...)
 		if resp.Diagnostics.HasError() {
@@ -560,9 +567,9 @@ func v3ParseRelationHostReason(hostReason string) (pointer, expectedUID, current
 //  5. what the host declares it supports is decided HERE rather than at apply.
 func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	v3PlanRelationRecovery(ctx, req.State, r.form.DeclaresUpdate(), resp)
-	if r.form.Kind == workerBundleKind {
+	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		r.modifyWorkerBundlePlan(ctx, req, resp)
-	} else if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	} else if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		r.modifyFileBundlePlan(ctx, req, resp)
 	}
 	r.v3PlanRevisionName(ctx, req, resp)
@@ -704,7 +711,7 @@ func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req res
 	resp.State.Schema = req.State.Schema
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("create_timeout"), planValues.CreateTimeout)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("delete_timeout"), planValues.DeleteTimeout)...)
-	if r.form.Kind == workerBundleKind {
+	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		// The bundle's desired state is unchanged, but its LOCAL authoring may
 		// have moved — a manifest_digest reference replaced by the files that
 		// commit that exact manifest. Those attributes are provider-side facts,
@@ -716,7 +723,7 @@ func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req res
 			modules = types.ListNull(v3WorkerBundleModuleType())
 		}
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("modules"), modules)...)
-	} else if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	} else if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		files, ok := planValues.Fields["files"].(types.List)
 		if !ok || files.IsUnknown() {
 			files = types.ListNull(v3ArtifactFileType())
@@ -735,7 +742,7 @@ func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, codec v3For
 	if !plan.Name.Equal(state.Name) || !plan.Space.Equal(state.Space) {
 		return false
 	}
-	if r.form.Kind == workerBundleKind {
+	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		planned, plannedDiags := r.workerBundleAuthoring(&plan)
 		diags.Append(plannedDiags...)
 		if diags.HasError() {
@@ -748,7 +755,7 @@ func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, codec v3For
 		recorded, ok := v3PlanKnownString(state.Fields["manifest_digest"])
 		return ok && planned.Digest == recorded
 	}
-	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		planned, plannedDiags := r.fileBundleAuthoring(&plan)
 		diags.Append(plannedDiags...)
 		if diags.HasError() {

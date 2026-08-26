@@ -1,0 +1,23 @@
+{
+  "apiVersion": "resources.publisher.example",
+  "kind": "RangeCounter",
+  "definitionVersion": "0.2.0",
+  "title": "RangeCounter independent conformance fixture",
+  "description": "External publisher RangeCounter Definition for family-neutral Host conformance.",
+  "role": "identity",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ]
+}

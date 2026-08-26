@@ -52,7 +52,7 @@ func TestV3DeclaredOutputsAreTypedComputedAttributes(t *testing.T) {
 		if len(form.Outputs) == 0 {
 			continue
 		}
-		resource := &v3FormResource{form: form, codecs: v3Codecs()}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, v3Codecs())
 		var response frameworkresource.SchemaResponse
 		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		if response.Diagnostics.HasError() {
@@ -358,7 +358,7 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 			declaring++
 			continue
 		}
-		resource := &v3FormResource{form: form, codecs: v3Codecs()}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, v3Codecs())
 		var response frameworkresource.SchemaResponse
 		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		if response.Diagnostics.HasError() {

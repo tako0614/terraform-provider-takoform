@@ -36,6 +36,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
+	"github.com/tako0614/terraform-provider-takoform/internal/providerdiagnostics"
 )
 
 // The closed set of provider-side stable error codes. They are namespaced so
@@ -44,7 +45,7 @@ import (
 const (
 	v3CodeNotConfigured             = "takoform.provider/not-configured"
 	v3CodeLaneUnavailable           = "takoform.provider/lane-unavailable"
-	v3CodeImmutableRevisionSameName = "takoform.provider/immutable-revision-same-name"
+	v3CodeImmutableRevisionSameName = providerdiagnostics.ImmutableRevisionSameName
 	v3CodeNameUnresolved            = "takoform.provider/revision-name-unresolved"
 	v3CodeRevisionOwnerMissing      = "takoform.provider/revision-owner-missing"
 	v3CodeRevisionOwnerIgnored      = "takoform.provider/revision-owner-ignored"
@@ -58,7 +59,7 @@ const (
 	v3CodeFormUnsupported           = "takoform.provider/host-does-not-support-form"
 	v3CodeInterfaceUnsupported      = "takoform.provider/host-does-not-support-interface"
 	v3CodeBindingUnsupported        = "takoform.provider/host-does-not-support-binding"
-	v3CodeCapabilityUnsupported     = "takoform.provider/host-does-not-support-value"
+	v3CodeCapabilityUnsupported     = providerdiagnostics.HostDoesNotSupportValue
 	v3CodeLimitExceeded             = "takoform.provider/host-limit-exceeded"
 	v3CodeProviderBug               = "takoform.provider/internal"
 )

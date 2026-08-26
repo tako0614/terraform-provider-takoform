@@ -1,0 +1,30 @@
+{
+  "apiVersion": "resources.publisher.example",
+  "kind": "RevisionNote",
+  "definitionVersion": "0.1.0",
+  "title": "RevisionNote independent conformance fixture",
+  "description": "External publisher RevisionNote Definition for family-neutral Host conformance.",
+  "role": "revision",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "note": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "note"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ]
+}

@@ -140,15 +140,18 @@ func TestFamilyDefinitionRejectsRevisionUpdateCapability(t *testing.T) {
 	}
 }
 
-func TestFamilyDefinitionRejectsBindingsOutsideRevisionRole(t *testing.T) {
+func TestFamilyDefinitionAcceptsBindingsForDeclaredNonRevisionRole(t *testing.T) {
 	t.Parallel()
 	root := makeFamilyPackage(t, func(definition map[string]any) {
+		definition["apiVersion"] = "forms.example.com/v1alpha1"
+		definition["requiresHostApi"] = stableHostAPIVersion
 		definition["role"] = "identity"
-		definition["lifecycleCapabilities"] = []any{"create", "read", "update", "delete", "import", "observe", "refresh"}
+		definition["lifecycleCapabilities"] = []any{"create", "read", "update", "delete", "import", "observe"}
+		binding := definition["acceptedBindings"].([]any)[0].(map[string]any)
+		binding["apiVersion"] = "bindings.takoform.com/v1alpha2"
 	})
-	_, err := VerifyDirectory(root)
-	if err == nil || !strings.Contains(err.Error(), "revision-role") {
-		t.Fatalf("identity Form holding capability bindings error = %v", err)
+	if _, err := VerifyDirectory(root); err != nil {
+		t.Fatalf("identity Form with a declared capability binding was rejected: %v", err)
 	}
 }
 

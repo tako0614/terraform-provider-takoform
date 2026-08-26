@@ -367,19 +367,20 @@ func (h *ReferenceHost) validateClaimedValues(
 	name string,
 	spec map[string]any,
 ) *hostError {
-	claimed := make([]string, 0, len(form.Constraints))
+	claimed := make([]formpackage.FormConstraint, 0, len(form.Constraints))
 	for _, constraint := range form.Constraints {
 		if constraint.Kind != string(currentformmodel.ConstraintClaim) {
 			continue
 		}
-		claimed = append(claimed, strings.TrimPrefix(constraint.Property, "/"))
+		claimed = append(claimed, constraint)
 	}
-	sort.Strings(claimed)
+	sort.Slice(claimed, func(i, j int) bool { return claimed[i].Property < claimed[j].Property })
 	selfKey := resourceKey(scope, form.Ref.APIVersion, form.Ref.Kind, name)
-	for _, property := range claimed {
-		value, _ := spec[property].(string)
-		if value == "" {
-			return stableError("invalid_argument", "a claimed "+property+" is required")
+	for _, constraint := range claimed {
+		value, present := desiredValueAtPointer(spec, constraint.Property)
+		claim, scalar := canonicalScalarKey(value)
+		if !present || !scalar {
+			return stableError("invalid_argument", "a claimed "+constraint.Property+" must be a concrete scalar")
 		}
 		for _, candidate := range h.sortedResources() {
 			// The scan stops at the TENANT. What one tenant may claim is a
@@ -392,17 +393,38 @@ func (h *ReferenceHost) validateClaimedValues(
 			if candidate.Tenant != scope.Tenant || candidate.key() == selfKey {
 				continue
 			}
-			if candidate.group() != form.Ref.APIVersion || candidate.kind() != form.Ref.Kind {
+			if h.genericPlanFaultDeclaredConstraint == "claim" &&
+				(candidate.group() != form.Ref.APIVersion || candidate.kind() != form.Ref.Kind) {
 				continue
 			}
-			if held, _ := candidate.Spec[property].(string); held == value {
-				return stableError(
-					"invalid_argument",
-					property+" "+quoteText(value)+" is already held by "+form.Ref.Kind+" "+candidate.Name+
-						" in space "+quoteText(candidate.Space)+
-						"; a claimed value has one holder per tenant, and the comparison is on the canonical spelling",
-				)
+			candidateForm := h.catalog.exact(candidate.Ref)
+			if candidateForm == nil {
+				return stableError("invalid_argument", "a stored claimant names an unavailable exact Form")
 			}
+			conflicts := false
+			for _, candidateConstraint := range candidateForm.Constraints {
+				if candidateConstraint.Kind != string(currentformmodel.ConstraintClaim) {
+					continue
+				}
+				candidateValue, candidatePresent := desiredValueAtPointer(candidate.Spec, candidateConstraint.Property)
+				candidateClaim, candidateScalar := canonicalScalarKey(candidateValue)
+				if !candidatePresent || !candidateScalar {
+					return stableError("invalid_argument", "a stored claimant does not carry its declared scalar value")
+				}
+				if candidateClaim == claim {
+					conflicts = true
+					break
+				}
+			}
+			if !conflicts {
+				continue
+			}
+			return stableError(
+				"invalid_argument",
+				constraint.Property+" is already held by "+candidate.Ref.Kind+" "+candidate.Name+
+					" in space "+quoteText(candidate.Space)+
+					"; a canonical claimed value has one holder per tenant",
+			)
 		}
 	}
 	return nil

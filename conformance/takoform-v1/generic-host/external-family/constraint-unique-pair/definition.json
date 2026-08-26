@@ -1,0 +1,99 @@
+{
+  "apiVersion": "constraints.publisher.example",
+  "kind": "UniquePairHolder",
+  "definitionVersion": "0.1.0",
+  "title": "UniquePairHolder independent constraint fixture",
+  "description": "External publisher Definition for the family-neutral declared-constraint matrix.",
+  "role": "attachment",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "left": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "constraints.publisher.example"
+          },
+          "kind": {
+            "type": "string",
+            "const": "ConstraintNode"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "kind",
+          "name"
+        ],
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "publisher.constraintnode",
+          "version": "0.1.0",
+          "schemaDigest": "sha256:ddff5d96f3eb9eaebcee5bdd5c7a186776148fad532398250c6eac04266f9c55"
+        }
+      },
+      "right": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "constraints.publisher.example"
+          },
+          "kind": {
+            "type": "string",
+            "const": "ConstraintNode"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "kind",
+          "name"
+        ],
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "publisher.constraintnode",
+          "version": "0.1.0",
+          "schemaDigest": "sha256:ddff5d96f3eb9eaebcee5bdd5c7a186776148fad532398250c6eac04266f9c55"
+        }
+      }
+    },
+    "required": [
+      "left",
+      "right"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "uniquePair",
+      "references": [
+        "/left",
+        "/right"
+      ]
+    }
+  ]
+}

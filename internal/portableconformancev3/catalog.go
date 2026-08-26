@@ -79,6 +79,16 @@ type InstalledForm struct {
 	// resources this Form declares. A host reads them here rather than out of
 	// the desired schema's extension slots (decision 0049).
 	Constraints []formpackage.FormConstraint
+	// ArtifactManifestKind is present only when this exact Form declares that
+	// its desired state addresses one artifact-manifest kind. Family catalogs
+	// may continue deriving the value from their concrete kind; neutral
+	// external catalogs carry it as data so the generic Host path never needs
+	// to recognise a family kind.
+	ArtifactManifestKind string
+	// HostAssignedOutputs is the deterministic reference-host value for a Form
+	// with an outputSchema. It is conformance fixture data, not a portable wire
+	// member; using it keeps output semantics independent of a concrete kind.
+	HostAssignedOutputs map[string]any
 	// Relations are DERIVED from DesiredSchema at install time, never read
 	// from a wire member. A host has the desired schema by construction, so
 	// deriving costs nothing and removes the second source of truth a declared
@@ -211,7 +221,11 @@ func (form *InstalledForm) declaresUpdate() bool {
 // same generation, and so do two clients that spell one hostname two ways
 // (spec/decisions/0026).
 func (form *InstalledForm) materialize(spec map[string]any) map[string]any {
-	return canonicalizeEdgeSpec(form.EnforcedFamily, form, currentformmodel.MaterializeDefaults(form.DesiredSchema, spec))
+	materialized := currentformmodel.MaterializeDefaults(form.DesiredSchema, spec)
+	if form.EnforcedFamily == "" {
+		return materialized
+	}
+	return canonicalizeEdgeSpec(form.EnforcedFamily, form, materialized)
 }
 
 // supportRef is one interface or binding contract the host declares support

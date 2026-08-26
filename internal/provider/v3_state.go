@@ -121,11 +121,11 @@ func (r *v3FormResource) writeV3StateFrom(
 		diags.Append(state.SetAttribute(ctx, path.Root("update_timeout"), values.UpdateTimeout)...)
 	}
 	diags.Append(state.SetAttribute(ctx, path.Root("delete_timeout"), values.DeleteTimeout)...)
-	if r.form.Kind == workerBundleKind {
+	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		diags.Append(r.writeWorkerBundleState(ctx, state, values, res)...)
 		return diags
 	}
-	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		diags.Append(r.writeFileBundleState(ctx, state, values, res)...)
 		return diags
 	}
@@ -496,11 +496,19 @@ type v3AttributeGetter interface {
 }
 
 func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGetter) (v3Values, diag.Diagnostics) {
+	if v3FormRequiresArtifactRule(r.form) && r.artifact == nil {
+		var diags diag.Diagnostics
+		diags.AddError(
+			"Provider artifact projection is missing",
+			"This artifact-backed Form resource was constructed without its exact Provider projection rule. The provider refuses to infer one from Kind or any global roster.",
+		)
+		return v3Values{}, diags
+	}
 	values, diags := v3CommonValuesFrom(ctx, getter, r.form.DeclaresUpdate())
 	if r.derivesRevisionName() {
 		diags.Append(getter.GetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), &values.RevisionOwner)...)
 	}
-	if r.form.Kind == workerBundleKind {
+	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		var manifestDigest, mainModule types.String
 		var modules types.List
 		diags.Append(getter.GetAttribute(ctx, path.Root("manifest_digest"), &manifestDigest)...)
@@ -511,7 +519,7 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 		values.Fields["modules"] = modules
 		return values, diags
 	}
-	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		var manifestDigest types.String
 		var files types.List
 		diags.Append(getter.GetAttribute(ctx, path.Root("manifest_digest"), &manifestDigest)...)

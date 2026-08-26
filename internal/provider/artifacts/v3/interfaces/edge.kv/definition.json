@@ -1,0 +1,362 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.kv",
+  "version": "1.0.0",
+  "title": "Edge key/value namespace",
+  "description": "Globally replicated key/value storage of OPAQUE BYTES with eventual consistency. A value is a byte string, never text: it travels in the family's encoded-bytes shape {\"encoding\": \"base64\", \"data\": \"…\"}, where data is RFC 4648 section 4 base64 with padding and without line breaks. maxValueBytes bounds the DECODED length; the maxLength on data is the structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key of 467 astral characters is 1868 bytes and fails with invalid_key even though it is 467 code points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 encoding of its canonical JSON and exceeding it fails with metadata_too_large. Consistency is eventual, and that is this contract's identity rather than an option a host chooses. A read is served by whichever replica is nearest, so a read that follows a write MAY return the previous value, or not_found, until replication converges — including a read the same client issues immediately after its own write, on the same connection, from the same location. This contract states NO read-your-writes guarantee, no session in which one would hold, and no bound on convergence time; a host states its own convergence target in its Host Support Profile. Deleting an absent key succeeds, and a delete converges the same way, so a get after a resolved delete may still return the deleted value. The behavior fixtures below are exactly what one client can prove about such a store: each runs against a fresh scope and asserts only facts that no write has to converge for. That a write eventually becomes visible everywhere is a HOST OBLIGATION rather than a proven property; the split is written down in the Host API specification.",
+  "operations": [
+    {
+      "name": "get",
+      "description": "Read one value by key. Absent keys fail with not_found. Eventual consistency applies to this read: a key written moments ago, by this client or another, may still fail with not_found, and a key overwritten moments ago may still return the previous value. The value is the family's encoded-bytes shape; a host never returns a bare string here.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 467,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 34952536,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "not_found",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "getWithMetadata",
+      "description": "Read one value and its non-secret metadata document by key. A host that stored no metadata omits the property rather than returning an empty object. Everything get states about eventual consistency applies unchanged: the value and the metadata are read from one replica, so they agree with each other but are not necessarily current.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 467,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 34952536,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "not_found",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "put",
+      "description": "Write one value, replacing any previous value for the key. The value is the family's encoded-bytes shape and maxValueBytes bounds its DECODED length. An optional expiration TTL removes the entry after AT LEAST that many seconds; it is not gone at exactly that instant, and a get starts failing with not_found once the removal converges. A resolved put means the write is durable at the accepting replica; it is not a promise that the next get anywhere observes it.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "expirationTtlSeconds": {
+            "maximum": 315360000,
+            "minimum": 60,
+            "type": "integer"
+          },
+          "key": {
+            "maxLength": 467,
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 34952536,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "invalid_value",
+        "value_too_large",
+        "metadata_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "delete",
+      "description": "Delete one key. Deleting an absent key succeeds, so delete can never be used to test existence. Like every write the removal converges: a get after a resolved delete may still return the deleted value.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 467,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "list",
+      "description": "List key names in lexicographic order by their UTF-8 bytes, optionally under a prefix, one cursor page at a time. limit bounds one page and a host may return fewer. listComplete is true exactly when this page is the last; when it is false the cursor addresses the next page and MUST be passed back unmodified. A cursor is opaque, and one a host did not issue fails with invalid_cursor. The listing is eventually consistent like every other read: a key written moments ago may be missing from it, and a key deleted moments ago may still appear.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "prefix": {
+            "maxLength": 467,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "maxLength": 467,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          },
+          "listComplete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "keys",
+          "listComplete"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_cursor",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    }
+  ],
+  "semantics": {
+    "consistency": "eventual",
+    "pagination": "cursor"
+  },
+  "limits": {
+    "maxKeyBytes": 467,
+    "maxListPageKeys": 1000,
+    "maxMetadataBytes": 1024,
+    "maxValueBytes": 26214400
+  },
+  "fixtures": [
+    {
+      "name": "put-accepted",
+      "steps": [
+        {
+          "operation": "put",
+          "input": {
+            "key": "greeting",
+            "value": {
+              "data": "aGVsbG8=",
+              "encoding": "base64"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "never-written-key-is-not-found",
+      "steps": [
+        {
+          "operation": "get",
+          "input": {
+            "key": "never-written"
+          },
+          "expectedError": "not_found"
+        }
+      ]
+    },
+    {
+      "name": "delete-absent-key-succeeds",
+      "steps": [
+        {
+          "operation": "delete",
+          "input": {
+            "key": "never-written"
+          }
+        }
+      ]
+    },
+    {
+      "name": "list-of-an-empty-scope-is-complete",
+      "steps": [
+        {
+          "operation": "list",
+          "input": {},
+          "expected": {
+            "keys": [],
+            "listComplete": true
+          }
+        }
+      ]
+    }
+  ]
+}

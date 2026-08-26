@@ -36,7 +36,7 @@ func newIncarnationProbe(t *testing.T) incarnationProbe {
 	// The client speaks the stable v1 lane, so it is driven against the frozen
 	// stable corpus. The retained beta corpus remains an immutable historical
 	// fixture and is not selected by the current client.
-	contract, err := portableconformancev3.Verify("../../conformance/takoform-v1/generic-host/portable-host")
+	contract, err := portableconformancev3.Verify("../../conformance/takoform-v1/family-host/edge/portable-host")
 	if err != nil {
 		t.Fatalf("verify portable host v3 contract: %v", err)
 	}

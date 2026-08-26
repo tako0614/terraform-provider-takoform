@@ -1,0 +1,38 @@
+{
+  "apiVersion": "constraints.publisher.example",
+  "kind": "ClaimLease",
+  "definitionVersion": "0.1.0",
+  "title": "ClaimLease independent constraint fixture",
+  "description": "External publisher Definition for the family-neutral declared-constraint matrix.",
+  "role": "attachment",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "alias": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "required": [
+      "alias"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "claim",
+      "property": "/alias"
+    }
+  ]
+}

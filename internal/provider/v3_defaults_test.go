@@ -111,7 +111,7 @@ func TestV3DefaultedAttributesSurviveApplyWithoutDiff(t *testing.T) {
 			// provider-only local-file authoring surfaces.
 			continue
 		}
-		resource := &v3FormResource{form: form}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, nil)
 		schemaResponse := v3SchemaOf(t, resource)
 		for _, field := range form.Fields {
 			name := v3AttributeName(field)
@@ -275,7 +275,7 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 // because there is no update.
 func TestV3NoUpdateFormsDeclareNoUpdateTimeout(t *testing.T) {
 	for _, form := range edgeformcatalog.Forms {
-		resource := &v3FormResource{form: form}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, nil)
 		schemaResponse := v3SchemaOf(t, resource)
 		_, present := schemaResponse.Schema.Attributes["update_timeout"]
 		if present != form.DeclaresUpdate() {
@@ -332,7 +332,7 @@ func TestV3EmptyCollectionDefaultsAreEmitted(t *testing.T) {
 			continue
 		}
 		name := v3AttributeName(field)
-		resource := &v3FormResource{form: form}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, nil)
 		attribute := v3SchemaOf(t, resource).Schema.Attributes[name]
 		planned, ok := v3AttributeDefaultValue(t, attribute)
 		if !ok {

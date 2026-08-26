@@ -10,7 +10,7 @@ func TestSelfTestCommandEmitsPassedNonPublicationReport(t *testing.T) {
 	var stdout bytes.Buffer
 	err := run([]string{
 		"self-test",
-		"--contract", filepath.Join("..", "..", "conformance", "takoform-v1", "generic-host", "portable-host"),
+		"--contract", filepath.Join("..", "..", "conformance", "takoform-v1", "family-host", "edge", "portable-host"),
 	}, &stdout)
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestSelfTestCommandEmitsPassedNonPublicationReport(t *testing.T) {
 func TestRunCommandRequiresEndpoint(t *testing.T) {
 	err := run([]string{
 		"run",
-		"--contract", filepath.Join("..", "..", "conformance", "takoform-v1", "generic-host", "portable-host"),
+		"--contract", filepath.Join("..", "..", "conformance", "takoform-v1", "family-host", "edge", "portable-host"),
 	}, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("run accepted no endpoint")

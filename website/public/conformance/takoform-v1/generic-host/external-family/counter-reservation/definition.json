@@ -1,0 +1,65 @@
+{
+  "apiVersion": "resources.publisher.example",
+  "kind": "CounterReservation",
+  "definitionVersion": "0.1.0",
+  "title": "CounterReservation independent conformance fixture",
+  "description": "External publisher CounterReservation Definition for family-neutral Host conformance.",
+  "role": "attachment",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "target": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "resources.publisher.example"
+          },
+          "kind": {
+            "type": "string",
+            "const": "RangeSequence"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "kind",
+          "name"
+        ],
+        "x-takoform-target-formrefs": [
+          {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeSequence",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:c23a0ad83fc1c32667ec9780bca3be4323990de9a2bb5bc00da9b61f1ec7e390"
+          }
+        ]
+      }
+    },
+    "required": [
+      "target"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "exclusive",
+      "reference": "/target"
+    }
+  ]
+}

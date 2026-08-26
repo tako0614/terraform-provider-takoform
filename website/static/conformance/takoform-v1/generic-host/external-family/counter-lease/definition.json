@@ -1,0 +1,65 @@
+{
+  "apiVersion": "resources.publisher.example",
+  "kind": "CounterLease",
+  "definitionVersion": "0.1.0",
+  "title": "CounterLease independent conformance fixture",
+  "description": "External publisher CounterLease Definition for family-neutral Host conformance.",
+  "role": "attachment",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "target": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "resources.publisher.example"
+          },
+          "kind": {
+            "type": "string",
+            "const": "RangeCounter"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "kind",
+          "name"
+        ],
+        "x-takoform-target-formrefs": [
+          {
+            "apiVersion": "resources.publisher.example",
+            "kind": "RangeCounter",
+            "definitionVersion": "0.1.0",
+            "schemaDigest": "sha256:0c1f2f3fc0bc03d5a528aa286e50df3fa1a2b735da9690e6fe20c999115c9c36"
+          }
+        ]
+      }
+    },
+    "required": [
+      "target"
+    ]
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "constraints": [
+    {
+      "kind": "exclusive",
+      "reference": "/target"
+    }
+  ]
+}

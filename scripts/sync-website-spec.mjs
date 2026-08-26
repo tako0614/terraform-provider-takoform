@@ -85,6 +85,7 @@ function transformLink(target) {
   }
   if (
     rewritten.includes("cmd/form-package") ||
+    rewritten.includes("docs/source-boundary-inventory.md") ||
     rewritten.includes("internal/currentformcatalog") ||
     rewritten.includes("website/README.md") ||
     rewritten.includes("TEMPLATE.md")
@@ -141,6 +142,7 @@ for (const file of markdownFiles(path.join(repositoryRoot, "spec"))) {
 for (const directory of [
   "artifact-transport",
   "binding-contract",
+  "core",
   "decisions",
   "form-definition",
   "form-package",
