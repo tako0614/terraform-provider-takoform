@@ -123,6 +123,8 @@ function makeCanonicalClone(source, commit, prefix = "takoform-publication-evide
 }
 
 function makeClone() {
+  // General authority fixtures model a child of the canonical current checkout.
+  // Historical source fixtures must opt into their declared baseline explicitly.
   return makeCanonicalClone(ROOT, git(ROOT, "rev-parse", "HEAD"));
 }
 
@@ -777,10 +779,10 @@ describe("canonical repository authority", () => {
 
   test("accepts source evidence closed against the canonical current HEAD", () => {
     const root = makeClone();
-    const currentHead = git(ROOT, "rev-parse", "HEAD");
+    const currentHead = git(root, "rev-parse", "HEAD");
     const changed = clone(DOCUMENT);
     changed.evidence.specification.sourceSnapshot =
-      deriveSpecificationSourceSnapshot(ROOT, currentHead);
+      deriveSpecificationSourceSnapshot(root, currentHead);
     const raw = `${JSON.stringify(changed, null, 2)}\n`;
     writeText(root, "spec/publication-evidence.json", raw);
     for (const relativePath of PUBLICATION_EVIDENCE_PROJECTION_PATHS) {
