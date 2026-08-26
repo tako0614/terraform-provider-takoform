@@ -411,12 +411,17 @@ function localGitConfiguration(repositoryRoot) {
     const allowedRemote =
       name === "remote.origin.fetch" || name === "remote.origin.url";
     const allowedFixtureIdentity = name === "user.name" || name === "user.email";
+    const allowedDisabledAutomaticGc = name === "gc.auto" && value === "0";
     if (
       !allowedCore.has(name) &&
       !allowedBranch &&
       !allowedRemote &&
-      !allowedFixtureIdentity
+      !allowedFixtureIdentity &&
+      !allowedDisabledAutomaticGc
     ) {
+      if (name === "gc.auto") {
+        fail("repository Git configuration gc.auto must be exactly 0");
+      }
       fail(`repository Git configuration can influence evidence: ${name}`);
     }
     if (configuration.has(name)) {
