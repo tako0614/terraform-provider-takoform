@@ -3,19 +3,28 @@ import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  constants as fsConstants,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+  delimiter,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -30,26 +39,37 @@ const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 // subprocess members discards it and prints a blank line instead.
 export function diagnostics(error) {
   const message = error instanceof Error ? error.message : String(error);
-  const captured = [String(error?.stdout ?? ""), String(error?.stderr ?? "")].filter(
-    (stream) => stream.trim().length > 0,
-  );
+  const captured = [
+    String(error?.stdout ?? ""),
+    String(error?.stderr ?? ""),
+  ].filter((stream) => stream.trim().length > 0);
   const parts = [];
   // execFileSync builds its message from the command AND the captured stderr,
   // so the message is usually the superset: printing both would show the same
   // stderr twice, once bare and once quoted inside "Command failed: ...".
   // Whichever text contains the other is the one worth printing.
-  if (message.trim().length > 0 && captured.every((stream) => message.includes(stream.trim()))) {
+  if (
+    message.trim().length > 0 &&
+    captured.every((stream) => message.includes(stream.trim()))
+  ) {
     parts.push(`${message.replace(/\n*$/, "")}\n`);
   } else {
     parts.push(...captured.map((stream) => stream.replace(/\n*$/, "\n")));
-    if (message.trim().length > 0 && !captured.some((stream) => stream.includes(message))) {
+    if (
+      message.trim().length > 0 &&
+      !captured.some((stream) => stream.includes(message))
+    ) {
       parts.push(`${message}\n`);
     }
   }
   if (error instanceof Error && error.cause !== undefined) {
-    parts.push(`caused by: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}\n`);
+    parts.push(
+      `caused by: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}\n`,
+    );
   }
-  return parts.length > 0 ? parts.join("") : "no diagnostic was produced by the failing step\n";
+  return parts.length > 0
+    ? parts.join("")
+    : "no diagnostic was produced by the failing step\n";
 }
 
 function sortPaths(left, right) {
@@ -137,14 +157,361 @@ export function createHardenedGitEnvironment(environment = process.env) {
   };
 }
 
+const COPIED_GATE_TOOLS = Object.freeze(["tofu", "terraform"]);
+const GO_BINARIES = Object.freeze(["go", "gofmt"]);
+
+function currentUserId() {
+  return typeof process.getuid === "function" ? process.getuid() : undefined;
+}
+
+function pathMetadata(path, label) {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    throw new Error(
+      `${label} cannot be inspected: ${path} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+}
+
+function assertTrustedOwner(metadata, path, label) {
+  const uid = currentUserId();
+  if (metadata.uid !== 0 && (uid === undefined || metadata.uid !== uid)) {
+    throw new Error(
+      `${label} must be owned by root or the current user: ${path}`,
+    );
+  }
+}
+
+function assertSafeDirectory(path, label, { exactMode } = {}) {
+  if (!isAbsolute(path)) {
+    throw new Error(`${label} must be absolute: ${path}`);
+  }
+  const metadata = pathMetadata(path, label);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    throw new Error(`${label} must be a real directory: ${path}`);
+  }
+  assertTrustedOwner(metadata, path, label);
+  const mode = metadata.mode & 0o7777;
+  if (exactMode === undefined ? (mode & 0o022) !== 0 : mode !== exactMode) {
+    if (exactMode === undefined) {
+      throw new Error(`${label} must not be group/other-writable: ${path}`);
+    }
+    throw new Error(
+      `${label} must have mode ${exactMode.toString(8).padStart(4, "0")}: ${path}`,
+    );
+  }
+  return metadata;
+}
+
+function assertSafeAncestors(path, label) {
+  const starts = new Set([dirname(path), dirname(realpathSync(path))]);
+  for (const start of starts) {
+    let current = start;
+    while (true) {
+      const metadata = pathMetadata(current, `${label} ancestor`);
+      assertTrustedOwner(metadata, current, `${label} ancestor`);
+      if (metadata.isSymbolicLink()) {
+        assertSafeDirectory(
+          realpathSync(current),
+          `${label} resolved ancestor`,
+        );
+      } else if (!metadata.isDirectory()) {
+        throw new Error(`${label} ancestor is not a directory: ${current}`);
+      } else if ((metadata.mode & 0o022) !== 0) {
+        throw new Error(`${label} has an unsafe writable ancestor: ${current}`);
+      }
+      if (current === sep) break;
+      current = dirname(current);
+    }
+  }
+}
+
+function inspectSafeExecutable(path, label, { checkAncestors = true } = {}) {
+  if (!isAbsolute(path)) {
+    throw new Error(`${label} must be absolute: ${path}`);
+  }
+  const candidate = pathMetadata(path, label);
+  const nominatedBySymlink = candidate.isSymbolicLink();
+  if (!nominatedBySymlink && !candidate.isFile()) {
+    throw new Error(`${label} must be a regular file: ${path}`);
+  }
+  assertTrustedOwner(candidate, path, label);
+  if (!nominatedBySymlink) {
+    if ((candidate.mode & 0o111) === 0) {
+      throw new Error(`${label} is not executable: ${path}`);
+    }
+    if ((candidate.mode & 0o022) !== 0) {
+      throw new Error(`${label} must not be group/other-writable: ${path}`);
+    }
+  }
+  if (checkAncestors) assertSafeAncestors(path, label);
+
+  const resolvedPath = realpathSync(path);
+  if (!isAbsolute(resolvedPath)) {
+    throw new Error(`${label} resolved path must be absolute: ${resolvedPath}`);
+  }
+  const resolved = pathMetadata(resolvedPath, `${label} resolved path`);
+  if (resolved.isSymbolicLink() || !resolved.isFile()) {
+    throw new Error(
+      `${label} resolved path must be a regular file: ${resolvedPath}`,
+    );
+  }
+  assertTrustedOwner(resolved, resolvedPath, `${label} resolved path`);
+  if ((resolved.mode & 0o111) === 0) {
+    throw new Error(
+      `${label} resolved path is not executable: ${resolvedPath}`,
+    );
+  }
+  if ((resolved.mode & 0o022) !== 0) {
+    throw new Error(
+      `${label} resolved path must not be group/other-writable: ${resolvedPath}`,
+    );
+  }
+  if (checkAncestors) {
+    assertSafeAncestors(resolvedPath, `${label} resolved path`);
+  }
+  return {
+    path: resolvedPath,
+    mode: resolved.mode & 0o7777,
+    sha256: digest(readFileSync(resolvedPath)),
+  };
+}
+
+function nominatedExecutable(name, environment) {
+  const rawPath = environment?.PATH;
+  if (typeof rawPath !== "string" || rawPath.length === 0) {
+    throw new Error("owner gate tool nomination requires a non-empty PATH");
+  }
+  const entries = rawPath.split(delimiter);
+  if (entries.some((entry) => entry.length === 0)) {
+    throw new Error("owner gate tool nomination rejects empty PATH entries");
+  }
+  if (entries.some((entry) => !isAbsolute(entry))) {
+    throw new Error("owner gate tool nomination rejects relative PATH entries");
+  }
+  for (const directory of entries) {
+    const candidate = join(directory, name);
+    try {
+      lstatSync(candidate);
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") continue;
+      throw new Error(
+        `owner gate ${name} candidate cannot be inspected: ${candidate} (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+    return inspectSafeExecutable(candidate, `owner gate ${name} candidate`);
+  }
+  throw new Error(`owner gate ${name} was not found in the nominated PATH`);
+}
+
+function copyGateTool(source, destination, label) {
+  const before = digest(readFileSync(source.path));
+  if (before !== source.sha256) {
+    throw new Error(`${label} changed before it could be copied`);
+  }
+  try {
+    copyFileSync(source.path, destination, fsConstants.COPYFILE_EXCL);
+    chmodSync(destination, 0o500);
+  } catch (error) {
+    throw new Error(
+      `${label} could not be copied create-only: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const copy = inspectSafeExecutable(destination, `${label} managed copy`, {
+    checkAncestors: false,
+  });
+  if (copy.mode !== 0o500) {
+    throw new Error(`${label} managed copy must have mode 0500`);
+  }
+  if (copy.sha256 !== before) {
+    throw new Error(`${label} changed while it was copied`);
+  }
+  return copy;
+}
+
+function assertExactExecutableClosure(directory, expected, label) {
+  const executableEntries = readdirSync(directory)
+    .filter((name) => {
+      const metadata = pathMetadata(join(directory, name), `${label} entry`);
+      return (
+        metadata.isSymbolicLink() ||
+        (!metadata.isDirectory() && (metadata.mode & 0o111) !== 0)
+      );
+    })
+    .sort();
+  const exact = [...expected].sort();
+  if (JSON.stringify(executableEntries) !== JSON.stringify(exact)) {
+    throw new Error(
+      `${label} executable closure changed (expected ${exact.join(", ")}, observed ${executableEntries.join(", ")})`,
+    );
+  }
+}
+
+function assertSnapshotExecutable(
+  path,
+  expected,
+  label,
+  { checkAncestors = true } = {},
+) {
+  if (!expected || typeof expected !== "object") {
+    throw new Error(`${label} snapshot is missing`);
+  }
+  const observed = inspectSafeExecutable(path, label, { checkAncestors });
+  if (observed.mode !== expected.mode) {
+    throw new Error(`${label} mode changed after nomination: ${path}`);
+  }
+  if (observed.sha256 !== expected.sha256) {
+    throw new Error(`${label} bytes changed after nomination: ${path}`);
+  }
+}
+
+export function createManagedToolSnapshot({
+  environment = process.env,
+  managedHome,
+} = {}) {
+  assertSafeDirectory(managedHome, "owner gate managed HOME", {
+    exactMode: 0o700,
+  });
+  const toolBin = join(managedHome, "tool-bin");
+  try {
+    mkdirSync(toolBin, { mode: 0o700 });
+  } catch (error) {
+    throw new Error(
+      `owner gate managed tool-bin must be fresh: ${toolBin} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+  assertSafeDirectory(toolBin, "owner gate managed tool-bin", {
+    exactMode: 0o700,
+  });
+
+  const nominated = Object.fromEntries(
+    [...COPIED_GATE_TOOLS, "go"].map((name) => [
+      name,
+      nominatedExecutable(name, environment),
+    ]),
+  );
+  const goBin = dirname(nominated.go.path);
+  const goRoot = dirname(goBin);
+  assertSafeDirectory(goRoot, "owner gate GOROOT");
+  assertSafeAncestors(goRoot, "owner gate GOROOT");
+  assertSafeDirectory(goBin, "owner gate Go bin");
+  assertSafeAncestors(goBin, "owner gate Go bin");
+  const gofmt = inspectSafeExecutable(
+    join(goBin, "gofmt"),
+    "owner gate gofmt candidate",
+  );
+  assertExactExecutableClosure(goBin, GO_BINARIES, "owner gate Go bin");
+
+  const tools = {};
+  for (const name of COPIED_GATE_TOOLS) {
+    tools[name] = copyGateTool(
+      nominated[name],
+      join(toolBin, name),
+      `owner gate ${name}`,
+    );
+  }
+  const snapshot = {
+    managedHome,
+    toolBin,
+    tools,
+    go: {
+      root: goRoot,
+      bin: goBin,
+      go: nominated.go,
+      gofmt,
+    },
+  };
+  assertManagedToolSnapshot(snapshot);
+  return snapshot;
+}
+
+export function assertManagedToolSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    throw new Error("owner gate managed tool snapshot is missing");
+  }
+  assertSafeDirectory(snapshot.managedHome, "owner gate managed HOME", {
+    exactMode: 0o700,
+  });
+  assertSafeDirectory(snapshot.toolBin, "owner gate managed tool-bin", {
+    exactMode: 0o700,
+  });
+  const copiedEntries = readdirSync(snapshot.toolBin).sort();
+  const expectedCopiedEntries = [...COPIED_GATE_TOOLS].sort();
+  if (JSON.stringify(copiedEntries) !== JSON.stringify(expectedCopiedEntries)) {
+    throw new Error(
+      `owner gate managed tool-bin closure changed (expected ${expectedCopiedEntries.join(", ")}, observed ${copiedEntries.join(", ")})`,
+    );
+  }
+  for (const name of COPIED_GATE_TOOLS) {
+    assertSnapshotExecutable(
+      join(snapshot.toolBin, name),
+      snapshot.tools?.[name],
+      `owner gate ${name} managed copy`,
+      { checkAncestors: false },
+    );
+  }
+
+  if (
+    typeof snapshot.go?.root !== "string" ||
+    typeof snapshot.go?.bin !== "string" ||
+    dirname(snapshot.go.bin) !== snapshot.go.root
+  ) {
+    throw new Error("owner gate Go toolchain snapshot is invalid");
+  }
+  assertSafeDirectory(snapshot.go.root, "owner gate GOROOT");
+  assertSafeAncestors(snapshot.go.root, "owner gate GOROOT");
+  assertSafeDirectory(snapshot.go.bin, "owner gate Go bin");
+  assertSafeAncestors(snapshot.go.bin, "owner gate Go bin");
+  assertExactExecutableClosure(
+    snapshot.go.bin,
+    GO_BINARIES,
+    "owner gate Go bin",
+  );
+  for (const name of GO_BINARIES) {
+    const expected = snapshot.go[name];
+    if (dirname(expected?.path ?? "") !== snapshot.go.bin) {
+      throw new Error(
+        `owner gate ${name} is no longer beside the nominated Go`,
+      );
+    }
+    assertSnapshotExecutable(
+      expected.path,
+      expected,
+      `owner gate ${name} executable`,
+    );
+  }
+  return snapshot;
+}
+
 export function createHardenedGateEnvironment(
   environment,
   bunExecutable = process.execPath,
   managedHome = "/nonexistent/takoform-gate-home",
+  managedTools = undefined,
 ) {
   if (!bunExecutable.startsWith("/") || !managedHome.startsWith("/")) {
     throw new Error("gate Bun executable and HOME must be absolute paths");
   }
+  let managedToolBin;
+  let goBin;
+  let goRoot;
+  if (typeof managedTools === "string") {
+    managedToolBin = managedTools;
+  } else if (managedTools && typeof managedTools === "object") {
+    ({ managedToolBin, goBin, goRoot } = managedTools);
+  }
+  for (const [name, path] of [
+    ["managed tool-bin", managedToolBin],
+    ["managed Go bin", goBin],
+    ["managed Go root", goRoot],
+  ]) {
+    if (path !== undefined && (!isAbsolute(path) || path.length === 0)) {
+      throw new Error(`${name} must be an absolute path`);
+    }
+  }
+  if (goRoot === undefined && goBin !== undefined) goRoot = dirname(goBin);
+  if (goBin === undefined && goRoot !== undefined) goBin = join(goRoot, "bin");
   const hardened = createHardenedGitEnvironment(environment);
   for (const name of Object.keys(hardened)) {
     if (
@@ -152,10 +519,17 @@ export function createHardenedGateEnvironment(
       name.startsWith("CF_") ||
       name.startsWith("CGO_") ||
       name.startsWith("CLOUDFLARE_") ||
+      name.startsWith("GH_") ||
+      name.startsWith("GITHUB_") ||
+      name === "GNUPGHOME" ||
+      name === "GPG_AGENT_INFO" ||
+      name === "GPG_TTY" ||
       name.startsWith("GO") ||
       name.startsWith("NODE_") ||
       name.startsWith("NPM_CONFIG_") ||
       name.startsWith("TAKOFORM_CLOUDFLARE_") ||
+      /^TOFU_/u.test(name) ||
+      /^TF_/u.test(name) ||
       name.startsWith("WRANGLER_") ||
       name.startsWith("npm_config_")
     ) {
@@ -181,6 +555,8 @@ export function createHardenedGateEnvironment(
     GOWORK: "off",
     HOME: managedHome,
     PATH: [
+      ...(managedToolBin ? [managedToolBin] : []),
+      ...(goBin ? [goBin] : []),
       dirname(bunExecutable),
       "/usr/local/go/bin",
       "/usr/local/bin",
@@ -190,6 +566,7 @@ export function createHardenedGateEnvironment(
     XDG_CACHE_HOME: join(managedHome, ".cache"),
     XDG_CONFIG_HOME: join(managedHome, ".config"),
     XDG_DATA_HOME: join(managedHome, ".local", "share"),
+    ...(goRoot ? { GOROOT: goRoot } : {}),
   };
 }
 
@@ -220,7 +597,9 @@ export function assertSafeRepositoryGitConfiguration(raw, canonicalOrigin) {
       !allowedDisabledAutomaticGc
     ) {
       if (name === "gc.auto") {
-        throw new Error("repository Git configuration gc.auto must be exactly 0");
+        throw new Error(
+          "repository Git configuration gc.auto must be exactly 0",
+        );
       }
       throw new Error(
         `repository Git configuration can influence publication: ${name}`,
@@ -247,20 +626,13 @@ export function assertSafeRepositoryGitConfiguration(raw, canonicalOrigin) {
     throw new Error("repository origin URL is not the canonical URL");
   }
   if (
-    values.get("remote.origin.fetch") !==
-    "+refs/heads/*:refs/remotes/origin/*"
+    values.get("remote.origin.fetch") !== "+refs/heads/*:refs/remotes/origin/*"
   ) {
     throw new Error("repository origin fetch mapping is not canonical");
   }
 }
 
-function runGit({
-  args,
-  encoding,
-  environment,
-  gitExecutable,
-  repo,
-}) {
+function runGit({ args, encoding, environment, gitExecutable, repo }) {
   return execFileSync(gitExecutable, args, {
     cwd: repo,
     encoding,
@@ -498,7 +870,9 @@ export function assertCommittedGitAuthority({
       "--ignored=matching",
     ]) !== ""
   ) {
-    throw new Error("Git authority clone is not the exact clean detached commit");
+    throw new Error(
+      "Git authority clone is not the exact clean detached commit",
+    );
   }
   raw(["fsck", "--strict", "--connectivity-only"]);
 }
@@ -528,8 +902,14 @@ export function createPinnedWranglerInstallation({
     HOME: temporaryRoot,
   };
   try {
-    copyFileSync(join(snapshotRoot, "package.json"), join(temporaryRoot, "package.json"));
-    copyFileSync(join(snapshotRoot, "bun.lock"), join(temporaryRoot, "bun.lock"));
+    copyFileSync(
+      join(snapshotRoot, "package.json"),
+      join(temporaryRoot, "package.json"),
+    );
+    copyFileSync(
+      join(snapshotRoot, "bun.lock"),
+      join(temporaryRoot, "bun.lock"),
+    );
     execFileSync(
       bunExecutable,
       ["install", "--frozen-lockfile", "--ignore-scripts"],
@@ -622,7 +1002,9 @@ export function createPublicationManifestFromEntries(root, entries) {
     const path = resolve(absoluteRoot, entry.path);
     const name = relative(absoluteRoot, path).split(sep).join("/");
     if (name !== entry.path) {
-      throw new Error(`publication manifest path escaped its root: ${entry.path}`);
+      throw new Error(
+        `publication manifest path escaped its root: ${entry.path}`,
+      );
     }
     const metadata = lstatSync(path);
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
@@ -643,23 +1025,16 @@ export function createCommittedPublicationManifest({
   repo,
 }) {
   const raw = runGit({
-    args: [
-      "ls-tree",
-      "--full-tree",
-      "-r",
-      "-z",
-      commit,
-      "--",
-      ...paths,
-    ],
+    args: ["ls-tree", "--full-tree", "-r", "-z", commit, "--", ...paths],
     encoding: "utf8",
     environment,
     gitExecutable,
     repo,
   });
   const entries = splitNullTerminated(raw).map((entry) => {
-    const match =
-      /^(100644|100755) blob ([0-9a-f]{40})\t([^\0]+)$/u.exec(entry);
+    const match = /^(100644|100755) blob ([0-9a-f]{40})\t([^\0]+)$/u.exec(
+      entry,
+    );
     if (!match) {
       throw new Error(
         `publication path is not a committed regular blob: ${JSON.stringify(entry)}`,
@@ -692,7 +1067,9 @@ export function assertPublicationManifest(expected, observed) {
   const observedByPath = new Map(
     observed.entries.map((entry) => [entry.path, entry]),
   );
-  const changed = [...new Set([...expectedByPath.keys(), ...observedByPath.keys()])]
+  const changed = [
+    ...new Set([...expectedByPath.keys(), ...observedByPath.keys()]),
+  ]
     .sort()
     .filter(
       (path) =>

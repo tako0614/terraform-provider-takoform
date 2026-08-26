@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import {
   RELEASE_SURFACES,
@@ -37,12 +37,14 @@ let previousGH;
 let previousGitHub;
 let previousGHEnterprise;
 let previousGitHubEnterprise;
+let previousPath;
 
 beforeEach(() => {
   previousGH = process.env.GH_TOKEN;
   previousGitHub = process.env.GITHUB_TOKEN;
   previousGHEnterprise = process.env.GH_ENTERPRISE_TOKEN;
   previousGitHubEnterprise = process.env.GITHUB_ENTERPRISE_TOKEN;
+  previousPath = process.env.PATH;
   process.env.GH_TOKEN = "operator-only-test-token";
   process.env.GITHUB_TOKEN = "ambient-token-must-be-scrubbed";
 });
@@ -62,6 +64,8 @@ afterEach(() => {
   } else {
     process.env.GITHUB_ENTERPRISE_TOKEN = previousGitHubEnterprise;
   }
+  if (previousPath === undefined) delete process.env.PATH;
+  else process.env.PATH = previousPath;
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -71,6 +75,90 @@ function temporaryDirectory(prefix) {
   const directory = mkdtempSync(join(tmpdir(), `${prefix}-`));
   temporaryDirectories.push(directory);
   return directory;
+}
+
+function trustedTemporaryDirectory(prefix) {
+  const directory = mkdtempSync(
+    join(dirname(repositoryRoot), `.takoform-${prefix}-`),
+  );
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+function writeExecutable(path) {
+  writeFileSync(path, "#!/bin/sh\nexit 0\n");
+  chmodSync(path, 0o500);
+}
+
+function nominateOwnerGateTools() {
+  const root = trustedTemporaryDirectory("owner-gate-tools");
+  const tofuBin = join(root, "tofu-bin");
+  const terraformBin = join(root, "terraform-user-bin");
+  const goRoot = join(root, "go-root");
+  const goBin = join(goRoot, "bin");
+  for (const directory of [tofuBin, terraformBin, goBin]) {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+  }
+  for (const path of [
+    join(tofuBin, "tofu"),
+    join(terraformBin, "terraform"),
+    join(goBin, "go"),
+    join(goBin, "gofmt"),
+  ]) {
+    writeExecutable(path);
+  }
+  writeExecutable(join(terraformBin, "bun"));
+  process.env.PATH = [
+    tofuBin,
+    terraformBin,
+    goBin,
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+  ].join(":");
+  return { goBin, goRoot, terraformBin, tofuBin };
+}
+
+function ownerGateToolOutput(tools, executable, args, overrides = {}) {
+  const name = basename(executable);
+  if (name === "go" && args.join(" ") === "env GOROOT") {
+    return `${overrides.goroot ?? tools.goRoot}\n`;
+  }
+  if (name === "go" && args.join(" ") === "version") {
+    return `${overrides.goVersion ?? "go version go1.26.5 linux/amd64"}\n`;
+  }
+  if (name === "go" && args[0] === "version" && args[1] === "-m") {
+    return (
+      (typeof overrides.gofmtBuild === "function"
+        ? overrides.gofmtBuild(args[2])
+        : overrides.gofmtBuild) ??
+      `${args[2]}: go1.26.5\n\tpath\tcmd/gofmt\n\tbuild\tGOOS=linux\n`
+    );
+  }
+  if (
+    name === "go" &&
+    [
+      "mod download",
+      "-C cmd/provider-release mod download",
+      "test -run ^$ ./...",
+      "-C cmd/provider-release test -run ^$ ./...",
+    ].includes(args.join(" "))
+  ) {
+    return "";
+  }
+  if (name === "tofu" && args.join(" ") === "version -json") {
+    return overrides.tofuJSON ?? '{"terraform_version":"1.12.3"}\n';
+  }
+  if (name === "tofu" && args.join(" ") === "version") {
+    return `${overrides.tofuPlain ?? "OpenTofu v1.12.3"}\n`;
+  }
+  if (name === "terraform" && args.join(" ") === "version -json") {
+    return overrides.terraformJSON ?? '{"terraform_version":"1.15.8"}\n';
+  }
+  if (name === "terraform" && args.join(" ") === "version") {
+    return `${overrides.terraformPlain ?? "Terraform v1.15.8"}\n`;
+  }
+  return null;
 }
 
 function memoryIO() {
@@ -643,10 +731,17 @@ describe("release surface contract and strict parsing", () => {
   });
 
   test("Specification prepare is create-only, fail-closed, and does not mutate", () => {
+    const ownerGateTools = nominateOwnerGateTools();
     const specificationCalls = [];
     const specificationIO = memoryIO();
     const specificationFake = (executable, args) => {
       specificationCalls.push({ executable, args });
+      const ownerGateOutput = ownerGateToolOutput(
+        ownerGateTools,
+        executable,
+        args,
+      );
+      if (ownerGateOutput !== null) return ownerGateOutput;
       if (
         executable === "git" &&
         args.join(" ") === "config --local -z --list"
@@ -681,7 +776,9 @@ describe("release surface contract and strict parsing", () => {
       if (executable === "git" && args[0] === "ls-remote") return "";
       if (executable === "gh" && isReleaseList(args)) return "[[]]";
       if (executable === "bun") return "";
-      throw new Error(`unexpected Specification preflight command: ${executable} ${args.join(" ")}`);
+      throw new Error(
+        `unexpected Specification preflight command: ${executable} ${args.join(" ")}`,
+      );
     };
     const prepared = runReleaseSurface({
       surface: "takoform-specification-release",
@@ -732,9 +829,7 @@ describe("release surface contract and strict parsing", () => {
       ),
     ).toBe(false);
     expect(
-      specificationCalls.some(
-        ({ executable }) => executable === "cosign",
-      ),
+      specificationCalls.some(({ executable }) => executable === "cosign"),
     ).toBe(false);
   });
 
@@ -907,6 +1002,10 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     runGit("config", "user.email", "release-test@example.invalid");
     mkdirSync(join(root, "spec"), { recursive: true });
     mkdirSync(join(root, "release"), { recursive: true });
+    copyFileSync(
+      join(repositoryRoot, "release", "version.json"),
+      join(root, "release", "version.json"),
+    );
     mkdirSync(join(root, "website", "static", "spec"), { recursive: true });
     mkdirSync(join(root, "website", "public", "spec"), { recursive: true });
     mkdirSync(join(root, "website", "static", "release"), { recursive: true });
@@ -1044,10 +1143,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       releaseDeployTestHooks.materializeSpecificationTag(execution, first),
     ).toBe(first.tagObject);
     expect(
-      fixture.runGit(
-        "rev-parse",
-        "refs/tags/specification/1.1^{commit}",
-      ),
+      fixture.runGit("rev-parse", "refs/tags/specification/1.1^{commit}"),
     ).toBe(fixture.releaseCommit);
     expect(() =>
       releaseDeployTestHooks.materializeSpecificationTag(execution, first),
@@ -1109,6 +1205,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
   });
 
   test("publishes the exact C2 source asset through create-only tag and immutable readback", () => {
+    const ownerGateTools = nominateOwnerGateTools();
     const fixture = createC2();
     const bare = temporaryDirectory("specification-origin");
     execFileSync("git", ["init", "--bare", "--initial-branch=main"], {
@@ -1125,10 +1222,8 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     let ownerChecks = 0;
     const ownerGateEnvironments = [];
     const releaseId = 41;
-    const assetsURL =
-      `https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets`;
-    const uploadURL =
-      `https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets{?name,label}`;
+    const assetsURL = `https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets`;
+    const uploadURL = `https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/${releaseId}/assets{?name,label}`;
     const list = () =>
       JSON.stringify([
         draft === null
@@ -1143,6 +1238,12 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       ]);
     const fake = (executable, args, options = {}) => {
       calls.push({ executable, args: [...args] });
+      const ownerGateOutput = ownerGateToolOutput(
+        ownerGateTools,
+        executable,
+        args,
+      );
+      if (ownerGateOutput !== null) return ownerGateOutput;
       if (executable === "bun") {
         if (args.join(" ") === "run check:release-owner-gate") {
           ownerChecks += 1;
@@ -1244,8 +1345,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       }
       if (
         args[0] === "api" &&
-        args[1] ===
-          "repos/tako0614/terraform-provider-takoform/releases/41"
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/41"
       ) {
         return JSON.stringify(draft);
       }
@@ -1502,9 +1602,7 @@ describe("workflow dispatch authority and correlation", () => {
       const environment =
         releaseDeployTestHooks.githubCommandEnvironment(execution);
       expect(environment.GH_HOST).toBe("github.com");
-      expect(environment.GH_CONFIG_DIR).toBe(
-        execution.githubConfigDirectory,
-      );
+      expect(environment.GH_CONFIG_DIR).toBe(execution.githubConfigDirectory);
       expect(environment.GH_TOKEN).toBe("operator-only-test-token");
       expect(environment.GH_PROMPT_DISABLED).toBe("1");
       expect(environment.GH_NO_UPDATE_NOTIFIER).toBe("1");
@@ -1534,9 +1632,7 @@ describe("workflow dispatch authority and correlation", () => {
     expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
     expect(environment.GH_ENTERPRISE_TOKEN).toBe("operator-only-test-token");
     expect(environment.GH_HOST).toBe("github.com");
-    expect(environment.GH_CONFIG_DIR).toBe(
-      execution.githubConfigDirectory,
-    );
+    expect(environment.GH_CONFIG_DIR).toBe(execution.githubConfigDirectory);
   });
 
   test("scrubs authority from non-gh children and binds one UUID run", () => {
@@ -1721,6 +1817,9 @@ describe("owner gate final fence and pinned release tools", () => {
       "BUN_CONFIG_FILE",
       "CGO_CFLAGS",
       "GH_HOST",
+      "GNUPGHOME",
+      "GPG_AGENT_INFO",
+      "GPG_TTY",
       "GOENV",
       "GOFLAGS",
       "GOPROXY",
@@ -1729,13 +1828,22 @@ describe("owner gate final fence and pinned release tools", () => {
       "HOME",
       "NODE_OPTIONS",
       "PATH",
+      "TF_CLI_ARGS",
       "TMPDIR",
+      "TOFU_CLI_ARGS",
     ];
     const previous = Object.fromEntries(
       names.map((name) => [name, process.env[name]]),
     );
     let environment;
+    let ownerGateTools;
     const execution = context((executable, args, options) => {
+      const ownerGateOutput = ownerGateToolOutput(
+        ownerGateTools,
+        executable,
+        args,
+      );
+      if (ownerGateOutput !== null) return ownerGateOutput;
       expect(executable).toBe("bun");
       expect(args).toEqual(["run", "check:release-owner-gate"]);
       environment = options.env;
@@ -1744,6 +1852,9 @@ describe("owner gate final fence and pinned release tools", () => {
     process.env.BUN_CONFIG_FILE = "/tmp/attacker-bun.toml";
     process.env.CGO_CFLAGS = "-include /tmp/attacker.h";
     process.env.GH_HOST = "example.invalid";
+    process.env.GNUPGHOME = "/tmp/attacker-gnupg";
+    process.env.GPG_AGENT_INFO = "/tmp/attacker-agent";
+    process.env.GPG_TTY = "/dev/attacker";
     process.env.GOENV = "/tmp/attacker-goenv";
     process.env.GOFLAGS = "-run=never";
     process.env.GOPROXY = "https://example.invalid";
@@ -1751,8 +1862,10 @@ describe("owner gate final fence and pinned release tools", () => {
     process.env.GOWORK = "/tmp/attacker.work";
     process.env.HOME = "/tmp/attacker-home";
     process.env.NODE_OPTIONS = "--require=/tmp/attacker.cjs";
-    process.env.PATH = "/tmp/attacker-bin:/usr/bin";
+    ownerGateTools = nominateOwnerGateTools();
+    process.env.TF_CLI_ARGS = "-plugin-dir=/tmp/attacker";
     process.env.TMPDIR = "/tmp/attacker-tmp";
+    process.env.TOFU_CLI_ARGS = "-plugin-dir=/tmp/attacker";
     try {
       releaseDeployTestHooks.runOwnerCheck(execution);
       expect(environment.CGO_ENABLED).toBe("0");
@@ -1767,11 +1880,18 @@ describe("owner gate final fence and pinned release tools", () => {
       expect(environment.TMP).toBe(environment.TMPDIR);
       expect(environment.TEMP).toBe(environment.TMPDIR);
       expect(environment.PATH).not.toContain("attacker-bin");
+      expect(environment.PATH).not.toContain(ownerGateTools.terraformBin);
       expect(environment.BUN_CONFIG_FILE).toBeUndefined();
       expect(environment.CGO_CFLAGS).toBeUndefined();
       expect(environment.GH_HOST).toBeUndefined();
       expect(environment.GH_TOKEN).toBeUndefined();
+      expect(environment.GITHUB_TOKEN).toBeUndefined();
+      expect(environment.GNUPGHOME).toBeUndefined();
+      expect(environment.GPG_AGENT_INFO).toBeUndefined();
+      expect(environment.GPG_TTY).toBeUndefined();
       expect(environment.NODE_OPTIONS).toBeUndefined();
+      expect(environment.TF_CLI_ARGS).toBeUndefined();
+      expect(environment.TOFU_CLI_ARGS).toBeUndefined();
       expect(environment.GIT_NO_REPLACE_OBJECTS).toBe("1");
       expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
     } finally {
@@ -1782,13 +1902,115 @@ describe("owner gate final fence and pinned release tools", () => {
     }
   });
 
+  test("rejects descriptor and executable identity drift before Bun", () => {
+    const descriptorRepo = trustedTemporaryDirectory("owner-gate-descriptor");
+    mkdirSync(join(descriptorRepo, "release"), { recursive: true });
+    writeFileSync(
+      join(descriptorRepo, "release", "version.json"),
+      JSON.stringify({
+        cliMatrix: [{ product: "OpenTofu", version: "1.12.3" }],
+        goVersion: "go1.26.5",
+      }),
+    );
+    expect(() =>
+      releaseDeployTestHooks.ownerGateToolchain(descriptorRepo),
+    ).toThrow("exactly OpenTofu and Terraform");
+
+    const cases = [
+      [
+        "missing OpenTofu version",
+        { tofuJSON: "{}\n" },
+        "OpenTofu version drift",
+      ],
+      [
+        "wrong OpenTofu product",
+        { tofuPlain: "Terraform v1.12.3" },
+        "OpenTofu product/version drift",
+      ],
+      [
+        "wrong Terraform version",
+        { terraformJSON: '{"terraform_version":"1.15.7"}\n' },
+        "Terraform version drift",
+      ],
+      [
+        "wrong Go version",
+        { goVersion: "go version go1.26.4 linux/amd64" },
+        "Go version drift",
+      ],
+      [
+        "wrong GOROOT",
+        { goroot: "/safe-but-wrong/go-root" },
+        "Go toolchain root drift",
+      ],
+      [
+        "mismatched gofmt version",
+        {
+          gofmtBuild: (path) => `${path}: go1.26.4\n\tpath\tcmd/gofmt\n`,
+        },
+        "gofmt build identity drift",
+      ],
+      [
+        "mismatched gofmt package",
+        {
+          gofmtBuild: (path) => `${path}: go1.26.5\n\tpath\tcmd/go\n`,
+        },
+        "gofmt build identity drift",
+      ],
+    ];
+    for (const [, overrides, message] of cases) {
+      const ownerGateTools = nominateOwnerGateTools();
+      let bunCalls = 0;
+      const execution = context((executable, args) => {
+        const output = ownerGateToolOutput(
+          ownerGateTools,
+          executable,
+          args,
+          overrides,
+        );
+        if (output !== null) return output;
+        if (executable === "bun") {
+          bunCalls += 1;
+          return "";
+        }
+        throw new Error(`unexpected owner gate command: ${executable}`);
+      });
+      expect(() => releaseDeployTestHooks.runOwnerCheck(execution)).toThrow(
+        message,
+      );
+      expect(bunCalls).toBe(0);
+    }
+  });
+
+  test("rejects managed tool closure mutation performed by the owner gate", () => {
+    const ownerGateTools = nominateOwnerGateTools();
+    const execution = context((executable, args, options) => {
+      const output = ownerGateToolOutput(ownerGateTools, executable, args);
+      if (output !== null) return output;
+      if (executable === "bun") {
+        writeFileSync(join(options.env.PATH.split(":", 1)[0], "extra"), "x");
+        return "";
+      }
+      throw new Error(`unexpected owner gate command: ${executable}`);
+    });
+    expect(() => releaseDeployTestHooks.runOwnerCheck(execution)).toThrow(
+      "managed tool-bin closure changed",
+    );
+  });
+
   test("blocks mutation when origin/main advances after the owner check", () => {
+    const ownerGateTools = nominateOwnerGateTools();
     const calls = [];
     const advanced = "89abcdef0123456789abcdef0123456789abcdef";
     let ownerChecks = 0;
     let remoteMainReads = 0;
     const fake = (executable, args) => {
       calls.push({ executable, args: [...args] });
+      const ownerGateOutput = ownerGateToolOutput(
+        ownerGateTools,
+        executable,
+        args,
+      );
+      if (ownerGateOutput !== null) return ownerGateOutput;
       const version = toolOutput(executable, args);
       if (version !== null) return version;
       if (executable === "bun") {
@@ -1800,8 +2022,7 @@ describe("owner gate final fence and pinned release tools", () => {
           return safeReleaseGitConfiguration();
         }
         if (
-          args.join(" ") ===
-          "rev-parse --path-format=absolute --git-common-dir"
+          args.join(" ") === "rev-parse --path-format=absolute --git-common-dir"
         ) {
           return `${join(repositoryRoot, ".git")}\n`;
         }
@@ -1912,8 +2133,7 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
         return safeReleaseGitConfiguration();
       }
       if (
-        args.join(" ") ===
-        "rev-parse --path-format=absolute --git-common-dir"
+        args.join(" ") === "rev-parse --path-format=absolute --git-common-dir"
       ) {
         return `${join(repo, ".git")}\n`;
       }
@@ -2067,8 +2287,7 @@ test("top-level public verify cannot emit VERIFIED after deep semantic rejection
         return safeReleaseGitConfiguration();
       }
       if (
-        args.join(" ") ===
-        "rev-parse --path-format=absolute --git-common-dir"
+        args.join(" ") === "rev-parse --path-format=absolute --git-common-dir"
       ) {
         return `${join(repo, ".git")}\n`;
       }

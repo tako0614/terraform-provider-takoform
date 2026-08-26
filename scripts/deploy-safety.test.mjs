@@ -1,25 +1,31 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
+  chmodSync,
+  chownSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import {
   assertPublicationManifest,
+  assertManagedToolSnapshot,
   assertSafeRepositoryGitConfiguration,
   collectRegularFiles,
   createCommittedPublicationManifest,
   createCommittedSnapshot,
   createHardenedGateEnvironment,
   createHardenedGitEnvironment,
+  createManagedToolSnapshot,
   createPublicationManifest,
   createPublicationManifestFromEntries,
   diagnostics,
@@ -28,6 +34,7 @@ import {
   pinnedWranglerInvocation,
 } from "./deploy-safety.mjs";
 
+const repositoryRoot = resolve(import.meta.dir, "..");
 const temporaryDirectories = [];
 
 afterEach(() => {
@@ -35,6 +42,56 @@ afterEach(() => {
     rmSync(directory, { force: true, recursive: true });
   }
 });
+
+function safeToolFixture() {
+  const root = mkdtempSync(
+    join(dirname(repositoryRoot), ".takoform-deploy-tool-test-"),
+  );
+  temporaryDirectories.push(root);
+  const tofuBin = join(root, "tofu-bin");
+  const terraformBin = join(root, "terraform-user-bin");
+  const goRoot = join(root, "go-root");
+  const goBin = join(goRoot, "bin");
+  const managedHome = join(root, "managed-home");
+  for (const directory of [tofuBin, terraformBin, goBin, managedHome]) {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+  }
+  const paths = {
+    go: join(goBin, "go"),
+    gofmt: join(goBin, "gofmt"),
+    terraform: join(terraformBin, "terraform"),
+    tofu: join(tofuBin, "tofu"),
+  };
+  for (const [name, path] of Object.entries(paths)) {
+    writeFileSync(path, `#!/bin/sh\n# ${name}\nexit 0\n`);
+    chmodSync(path, 0o500);
+  }
+  const siblingBun = join(terraformBin, "bun");
+  writeFileSync(siblingBun, "#!/bin/sh\nexit 97\n");
+  chmodSync(siblingBun, 0o500);
+  return {
+    environment: {
+      PATH: [tofuBin, terraformBin, goBin, "/usr/bin"].join(":"),
+    },
+    goBin,
+    goRoot,
+    managedHome,
+    paths,
+    siblingBun,
+    terraformBin,
+    tofuBin,
+  };
+}
+
+function toolSnapshot(fixture = safeToolFixture()) {
+  return {
+    fixture,
+    snapshot: createManagedToolSnapshot({
+      environment: fixture.environment,
+      managedHome: fixture.managedHome,
+    }),
+  };
+}
 
 describe("production deployment readback", () => {
   const current = {
@@ -81,7 +138,10 @@ describe("production deployment readback", () => {
 });
 
 test("website snapshot copy includes its complete module closure", () => {
-  const deploySource = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
+  const deploySource = readFileSync(
+    new URL("./deploy.mjs", import.meta.url),
+    "utf8",
+  );
   expect(deploySource).toContain(
     '"scripts/check-website-dist.mjs",\n    "scripts/frozen-public-identities.mjs",\n    "scripts/website-html-normalization.mjs",\n    "scripts/website-snapshot-temp.mjs",\n    "scripts/website-snapshot-temp.test.mjs",',
   );
@@ -136,10 +196,7 @@ function temporaryGitRepository() {
   git("config", "user.email", "test@example.invalid");
   git("config", "user.name", "Takoform test");
   mkdirSync(join(directory, "website", "public"), { recursive: true });
-  writeFileSync(
-    join(directory, ".gitignore"),
-    "website/public/*.tfstate\n",
-  );
+  writeFileSync(join(directory, ".gitignore"), "website/public/*.tfstate\n");
   writeFileSync(
     join(directory, "website", "wrangler.jsonc"),
     '{"name":"test"}\n',
@@ -273,10 +330,7 @@ describe("committed publication snapshot", () => {
         join(snapshot.root, "website", "public", "index.html"),
         "mutated\n",
       );
-      const after = createPublicationManifest(
-        snapshot.root,
-        publicationPaths,
-      );
+      const after = createPublicationManifest(snapshot.root, publicationPaths);
 
       expect(() => assertPublicationManifest(before, after)).toThrow(
         "publication snapshot changed after verification",
@@ -312,11 +366,11 @@ test("hardened Git environment removes inherited Git configuration", () => {
   const environment = createHardenedGitEnvironment({
     GIT_CONFIG_COUNT: "1",
     GIT_CONFIG_KEY_0: "url.file:///attacker/.insteadOf",
-      GIT_CONFIG_VALUE_0: "https://github.com/",
-      GIT_DIR: "/tmp/attacker.git",
-      GIT_OBJECT_DIRECTORY: "/tmp/attacker-objects",
-      GIT_REPLACE_REF_BASE: "refs/evil/",
-      GIT_WORK_TREE: "/tmp/attacker-worktree",
+    GIT_CONFIG_VALUE_0: "https://github.com/",
+    GIT_DIR: "/tmp/attacker.git",
+    GIT_OBJECT_DIRECTORY: "/tmp/attacker-objects",
+    GIT_REPLACE_REF_BASE: "refs/evil/",
+    GIT_WORK_TREE: "/tmp/attacker-worktree",
     PATH: "/usr/bin",
   });
 
@@ -376,9 +430,172 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
   expect(environment.npm_config_userconfig).toBeUndefined();
   expect(environment.TAKOFORM_CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
   expect(environment.WRANGLER_CI_OVERRIDE_NAME).toBeUndefined();
-  expect(environment.XDG_CONFIG_HOME).toBe(
-    "/private/gate-home/.config",
-  );
+  expect(environment.XDG_CONFIG_HOME).toBe("/private/gate-home/.config");
+});
+
+describe("owner gate tool nomination", () => {
+  test("copies user-local CLIs and never inherits their sibling PATH authority", () => {
+    const { fixture, snapshot } = toolSnapshot();
+    const terraformBytes = readFileSync(snapshot.tools.terraform.path);
+    expect(lstatSync(snapshot.toolBin).mode & 0o7777).toBe(0o700);
+    expect(lstatSync(snapshot.tools.terraform.path).mode & 0o7777).toBe(0o500);
+
+    const replacement = join(fixture.terraformBin, "terraform.next");
+    writeFileSync(replacement, "#!/bin/sh\nexit 88\n");
+    chmodSync(replacement, 0o500);
+    renameSync(replacement, fixture.paths.terraform);
+    expect(readFileSync(snapshot.tools.terraform.path)).toEqual(terraformBytes);
+    expect(() => assertManagedToolSnapshot(snapshot)).not.toThrow();
+
+    const environment = createHardenedGateEnvironment(
+      {
+        GH_TOKEN: "scrub-me",
+        GITHUB_TOKEN: "scrub-me-too",
+        PATH: fixture.environment.PATH,
+        TF_CLI_ARGS: "-plugin-dir=/tmp/attacker",
+        TOFU_CLI_ARGS: "-plugin-dir=/tmp/attacker",
+      },
+      "/trusted/bun/bin/bun",
+      fixture.managedHome,
+      {
+        managedToolBin: snapshot.toolBin,
+        goBin: snapshot.go.bin,
+        goRoot: snapshot.go.root,
+      },
+    );
+    expect(
+      environment.PATH.startsWith(`${snapshot.toolBin}:${fixture.goBin}:`),
+    ).toBe(true);
+    expect(environment.PATH).not.toContain(fixture.terraformBin);
+    expect(environment.PATH).not.toContain(fixture.tofuBin);
+    expect(environment.GH_TOKEN).toBeUndefined();
+    expect(environment.GITHUB_TOKEN).toBeUndefined();
+    expect(environment.TF_CLI_ARGS).toBeUndefined();
+    expect(environment.TOFU_CLI_ARGS).toBeUndefined();
+  });
+
+  test("follows a safe nominated symlink but snapshots only its resolved bytes", () => {
+    const fixture = safeToolFixture();
+    const target = join(fixture.terraformBin, "terraform.real");
+    renameSync(fixture.paths.terraform, target);
+    symlinkSync(target, fixture.paths.terraform);
+    const snapshot = createManagedToolSnapshot({
+      environment: fixture.environment,
+      managedHome: fixture.managedHome,
+    });
+    expect(snapshot.tools.terraform.path).toBe(
+      join(snapshot.toolBin, "terraform"),
+    );
+    expect(readFileSync(snapshot.tools.terraform.path)).toEqual(
+      readFileSync(target),
+    );
+  });
+
+  test("rejects empty and relative PATH entries before nomination", () => {
+    for (const path of ["", "relative:/usr/bin", "/usr/bin:"]) {
+      const fixture = safeToolFixture();
+      expect(() =>
+        createManagedToolSnapshot({
+          environment: { PATH: path },
+          managedHome: fixture.managedHome,
+        }),
+      ).toThrow(path === "" ? "non-empty PATH" : "PATH entries");
+    }
+  });
+
+  test("rejects missing, symlink, nonregular, writable, and unsafe-ancestor candidates", () => {
+    const cases = [
+      [
+        "missing",
+        (fixture) => rmSync(fixture.paths.terraform),
+        "terraform was not found",
+      ],
+      [
+        "unsafe symlink target",
+        (fixture) => {
+          const unsafe = join(fixture.terraformBin, "unsafe");
+          mkdirSync(unsafe, { mode: 0o770 });
+          chmodSync(unsafe, 0o770);
+          const target = join(unsafe, "terraform");
+          writeFileSync(target, "#!/bin/sh\nexit 0\n");
+          chmodSync(target, 0o500);
+          rmSync(fixture.paths.terraform);
+          symlinkSync(target, fixture.paths.terraform);
+        },
+        "unsafe writable ancestor",
+      ],
+      [
+        "nonregular",
+        (fixture) => {
+          rmSync(fixture.paths.terraform);
+          mkdirSync(fixture.paths.terraform, { mode: 0o700 });
+        },
+        "must be a regular file",
+      ],
+      [
+        "writable candidate",
+        (fixture) => chmodSync(fixture.paths.terraform, 0o720),
+        "must not be group/other-writable",
+      ],
+      [
+        "non-executable candidate",
+        (fixture) => chmodSync(fixture.paths.terraform, 0o400),
+        "is not executable",
+      ],
+      [
+        "writable ancestor",
+        (fixture) => chmodSync(fixture.terraformBin, 0o770),
+        "unsafe writable ancestor",
+      ],
+    ];
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      cases.push([
+        "foreign owner",
+        (fixture) => chownSync(fixture.paths.terraform, 65534, 65534),
+        "owned by root or the current user",
+      ]);
+    }
+    for (const [, mutate, message] of cases) {
+      const fixture = safeToolFixture();
+      mutate(fixture);
+      expect(() =>
+        createManagedToolSnapshot({
+          environment: fixture.environment,
+          managedHome: fixture.managedHome,
+        }),
+      ).toThrow(message);
+    }
+  });
+
+  test("requires the exact executable Go bin closure", () => {
+    const fixture = safeToolFixture();
+    writeFileSync(join(fixture.goBin, "bun"), "#!/bin/sh\nexit 91\n");
+    chmodSync(join(fixture.goBin, "bun"), 0o500);
+    expect(() =>
+      createManagedToolSnapshot({
+        environment: fixture.environment,
+        managedHome: fixture.managedHome,
+      }),
+    ).toThrow("Go bin executable closure changed");
+  });
+
+  test("detects copied bytes, Go bytes, and tool-bin closure changes after the gate", () => {
+    for (const mutate of [
+      ({ snapshot }) => {
+        writeFileSync(snapshot.tools.tofu.path, "changed\n");
+        chmodSync(snapshot.tools.tofu.path, 0o500);
+      },
+      ({ snapshot }) => {
+        writeFileSync(snapshot.go.gofmt.path, "changed\n");
+        chmodSync(snapshot.go.gofmt.path, 0o500);
+      },
+      ({ snapshot }) => writeFileSync(join(snapshot.toolBin, "extra"), "x"),
+    ]) {
+      const state = toolSnapshot();
+      mutate(state);
+      expect(() => assertManagedToolSnapshot(state.snapshot)).toThrow();
+    }
+  });
 });
 
 test("repository Git configuration accepts only inert settings", () => {
@@ -412,13 +629,19 @@ test("repository Git configuration accepts only inert settings", () => {
   ).toThrow("repository origin URL is not the canonical URL");
   expect(() =>
     assertSafeRepositoryGitConfiguration(
-      ordinary.replace("\0branch.main.remote", "\0gc.auto\n0\0branch.main.remote"),
+      ordinary.replace(
+        "\0branch.main.remote",
+        "\0gc.auto\n0\0branch.main.remote",
+      ),
       canonical,
     ),
   ).not.toThrow();
   expect(() =>
     assertSafeRepositoryGitConfiguration(
-      ordinary.replace("\0branch.main.remote", "\0gc.auto\n1\0branch.main.remote"),
+      ordinary.replace(
+        "\0branch.main.remote",
+        "\0gc.auto\n1\0branch.main.remote",
+      ),
       canonical,
     ),
   ).toThrow("gc.auto must be exactly 0");
@@ -491,7 +714,7 @@ describe("a blocked deploy says what went wrong", () => {
       // The stderr text is assembled at runtime so it is NOT a substring of
       // the command line the message also quotes; otherwise the count below
       // would measure the test's own echo argument.
-      execFileSync("/bin/sh", ["-c", "echo \"zone $((400 + 3))\" >&2; exit 7"], {
+      execFileSync("/bin/sh", ["-c", 'echo "zone $((400 + 3))" >&2; exit 7'], {
         encoding: "utf8",
         stdio: "pipe",
       });
@@ -504,14 +727,17 @@ describe("a blocked deploy says what went wrong", () => {
   });
 
   test("a subprocess that already printed the message does not print it twice", () => {
-    const failure = Object.assign(new Error("boom"), { stdout: "", stderr: "boom\n" });
+    const failure = Object.assign(new Error("boom"), {
+      stdout: "",
+      stderr: "boom\n",
+    });
     expect(diagnostics(failure).match(/boom/g)).toHaveLength(1);
   });
 
   test("a step that produced nothing says so rather than printing a blank line", () => {
-    expect(diagnostics(Object.assign(new Error(""), { stdout: "", stderr: "" }))).toBe(
-      "no diagnostic was produced by the failing step\n",
-    );
+    expect(
+      diagnostics(Object.assign(new Error(""), { stdout: "", stderr: "" })),
+    ).toBe("no diagnostic was produced by the failing step\n");
   });
 
   test("a cause is not swallowed", () => {

@@ -20,8 +20,10 @@ import process from "node:process";
 
 import {
   assertSafeRepositoryGitConfiguration,
+  assertManagedToolSnapshot,
   createHardenedGateEnvironment,
   createHardenedGitEnvironment,
+  createManagedToolSnapshot,
 } from "./deploy-safety.mjs";
 import {
   LEDGER_PATH as SPECIFICATION_LEDGER_PATH,
@@ -492,8 +494,9 @@ function committedBytes(context, commit, relativePath) {
 }
 
 function exactDiffPaths(context, base, head, { recovery = false } = {}) {
-  const runner = recovery ? recoveryGit : (ctx, args, options) =>
-    command(ctx, "git", args, options);
+  const runner = recovery
+    ? recoveryGit
+    : (ctx, args, options) => command(ctx, "git", args, options);
   const raw = runner(
     context,
     [
@@ -702,7 +705,9 @@ function assertExactLocalSpecificationTag(context, input, expectedObject) {
     label: "read exact Specification tag object",
   });
   if (!Buffer.from(raw).equals(input.tagObjectBytes)) {
-    throw new Error("Specification annotated tag bytes differ from C2 evidence");
+    throw new Error(
+      "Specification annotated tag bytes differ from C2 evidence",
+    );
   }
   return { object: local, type: localType, commit: localCommit };
 }
@@ -782,12 +787,7 @@ function specificationMutationFence(
   if (releaseId === null || releaseId === undefined) {
     assertReleaseAbsent(context, SPECIFICATION_TAG);
   } else {
-    assertUniqueReleaseIdentity(
-      context,
-      SPECIFICATION_TAG,
-      releaseId,
-      true,
-    );
+    assertUniqueReleaseIdentity(context, SPECIFICATION_TAG, releaseId, true);
   }
   return current;
 }
@@ -811,12 +811,7 @@ function readExactSpecificationRelease(
     expectedAssetsURL: `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
     expectedUploadURL: `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
   });
-  downloadAndCompareRelease(
-    context,
-    SPECIFICATION_TAG,
-    assets,
-    temporaryRoot,
-  );
+  downloadAndCompareRelease(context, SPECIFICATION_TAG, assets, temporaryRoot);
   assertUniqueReleaseIdentity(context, SPECIFICATION_TAG, releaseId, false);
   const receipt = releaseFromEvidence(input.document, {
     releaseCommit: input.releaseCommit,
@@ -868,12 +863,7 @@ function specificationPublish(context, options) {
     materializedObject = materializeSpecificationTag(context, input);
     specificationOwnerGateAndFence(context, releaseCommit);
     assertReleaseAbsent(context, SPECIFICATION_TAG);
-    pushExactTag(
-      context,
-      SPECIFICATION_TAG,
-      releaseCommit,
-      materializedObject,
-    );
+    pushExactTag(context, SPECIFICATION_TAG, releaseCommit, materializedObject);
     return withTemporaryDirectory(
       "takoform-specification-publish",
       (temporaryRoot) => {
@@ -938,11 +928,7 @@ function specificationRecoveryInput(context, options, label) {
       "expected Specification tag object differs from deterministic C2 object",
     );
   }
-  assertExactSpecificationTag(
-    context,
-    input,
-    options["expected-tag-object"],
-  );
+  assertExactSpecificationTag(context, input, options["expected-tag-object"]);
   return { input, releaseCommit, recoveryCommit };
 }
 
@@ -1063,7 +1049,9 @@ function specificationLiveReceipt(context, options, { exactMain }) {
   }
   const input = specificationPublicationInput(context, releaseCommit);
   if (input.tagObject !== options["expected-tag-object"]) {
-    throw new Error("live verify tag object differs from deterministic C2 object");
+    throw new Error(
+      "live verify tag object differs from deterministic C2 object",
+    );
   }
   return withTemporaryDirectory(
     "takoform-specification-live-verify",
@@ -1103,10 +1091,7 @@ function specificationVerify(context, options) {
 }
 
 function specificationRecordReceipt(context, options) {
-  specificationOwnerGateAndFence(
-    context,
-    options["expected-release-commit"],
-  );
+  specificationOwnerGateAndFence(context, options["expected-release-commit"]);
   const verified = specificationLiveReceipt(context, options, {
     exactMain: true,
   });
@@ -1329,29 +1314,229 @@ function emit(context, result) {
   return result;
 }
 
+function ownerGateToolchain(repo) {
+  const descriptorPath = join(repo, "release/version.json");
+  let descriptor;
+  try {
+    descriptor = JSON.parse(readFileSync(descriptorPath, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `owner gate toolchain descriptor is not valid JSON: ${descriptorPath} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+  if (
+    !Array.isArray(descriptor?.cliMatrix) ||
+    descriptor.cliMatrix.length !== 2
+  ) {
+    throw new Error(
+      "owner gate toolchain descriptor must contain exactly OpenTofu and Terraform entries",
+    );
+  }
+  const byProduct = new Map();
+  for (const entry of descriptor.cliMatrix) {
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      (entry.product !== "OpenTofu" && entry.product !== "Terraform") ||
+      typeof entry.version !== "string" ||
+      entry.version.length === 0 ||
+      byProduct.has(entry.product)
+    ) {
+      throw new Error(
+        "owner gate toolchain descriptor must contain one exact OpenTofu and Terraform version",
+      );
+    }
+    byProduct.set(entry.product, entry.version);
+  }
+  if (
+    !byProduct.has("OpenTofu") ||
+    !byProduct.has("Terraform") ||
+    typeof descriptor.goVersion !== "string" ||
+    !/^go[0-9]+\.[0-9]+\.[0-9]+(?:[._-][0-9A-Za-z.-]+)?$/u.test(
+      descriptor.goVersion,
+    )
+  ) {
+    throw new Error(
+      "owner gate toolchain descriptor is missing an exact Go version",
+    );
+  }
+  return {
+    go: descriptor.goVersion,
+    tofu: { product: "OpenTofu", version: byProduct.get("OpenTofu") },
+    terraform: {
+      product: "Terraform",
+      version: byProduct.get("Terraform"),
+    },
+  };
+}
+
+function ownerGateToolVersion(context, executable, expected, environment) {
+  let json;
+  try {
+    json = JSON.parse(
+      asText(
+        command(context, executable, ["version", "-json"], {
+          env: environment,
+          label: `${expected.product} version -json`,
+        }),
+      ),
+    );
+  } catch (error) {
+    throw new Error(
+      `${expected.product} version -json output is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (json?.terraform_version !== expected.version) {
+    throw new Error(
+      `${expected.product} version drift: require ${expected.version}, observed ${json?.terraform_version ?? "missing"}`,
+    );
+  }
+  const plain = asText(
+    command(context, executable, ["version"], {
+      env: environment,
+      label: `${expected.product} version`,
+    }),
+  )
+    .trim()
+    .split(/\r?\n/u, 1)[0];
+  if (plain !== `${expected.product} v${expected.version}`) {
+    throw new Error(
+      `${expected.product} product/version drift: require ${expected.product} v${expected.version}, observed ${plain || "missing"}`,
+    );
+  }
+}
+
+function verifyOwnerGateToolchain(context, snapshot, expected, environment) {
+  const goroot = command(context, snapshot.go.go.path, ["env", "GOROOT"], {
+    env: environment,
+    label: "Go GOROOT",
+  }).trim();
+  if (goroot !== snapshot.go.root) {
+    throw new Error(
+      `Go toolchain root drift: require ${snapshot.go.root}, observed ${goroot || "missing"}`,
+    );
+  }
+  const goVersion = command(context, snapshot.go.go.path, ["version"], {
+    env: environment,
+    label: "Go version",
+  })
+    .trim()
+    .split(/\r?\n/u, 1)[0];
+  const exactGoVersion = new RegExp(
+    `^go version ${expected.go.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")} [^/\\s]+/[^/\\s]+$`,
+    "u",
+  );
+  if (!exactGoVersion.test(goVersion)) {
+    throw new Error(
+      `Go version drift: require ${expected.go}, observed ${goVersion || "missing"}`,
+    );
+  }
+  const gofmtBuild = asText(
+    command(
+      context,
+      snapshot.go.go.path,
+      ["version", "-m", snapshot.go.gofmt.path],
+      { env: environment, label: "gofmt build identity" },
+    ),
+  )
+    .replace(/\r\n/gu, "\n")
+    .replace(/\n$/u, "")
+    .split("\n");
+  if (
+    gofmtBuild[0] !== `${snapshot.go.gofmt.path}: ${expected.go}` ||
+    gofmtBuild[1] !== "\tpath\tcmd/gofmt"
+  ) {
+    throw new Error(
+      `gofmt build identity drift: require ${expected.go} cmd/gofmt`,
+    );
+  }
+  ownerGateToolVersion(
+    context,
+    snapshot.tools.tofu.path,
+    expected.tofu,
+    environment,
+  );
+  ownerGateToolVersion(
+    context,
+    snapshot.tools.terraform.path,
+    expected.terraform,
+    environment,
+  );
+  assertManagedToolSnapshot(snapshot);
+}
+
+function warmOwnerGateGoCaches(context, snapshot, environment) {
+  const commands = [
+    [["mod", "download"], context.repo, "owner gate root module download"],
+    [
+      ["-C", "cmd/provider-release", "mod", "download"],
+      context.repo,
+      "owner gate release module download",
+    ],
+    [
+      ["test", "-run", "^$", "./..."],
+      context.repo,
+      "owner gate root compile cache",
+    ],
+    [
+      ["-C", "cmd/provider-release", "test", "-run", "^$", "./..."],
+      context.repo,
+      "owner gate release compile cache",
+    ],
+  ];
+  for (const [args, cwd, label] of commands) {
+    command(context, snapshot.go.go.path, args, {
+      cwd,
+      env: environment,
+      label,
+    });
+  }
+  assertManagedToolSnapshot(snapshot);
+}
+
 function runOwnerCheck(context) {
   // Publication proves bytes; admission proves a conforming host signed for
   // them. They are separate phases, and the admission closure can only be
   // green after publication has already happened. Gating publication on it
   // would make the first release of any new Form version unreachable, so the
   // owner gate stops at publication authority and admission keeps its own gate.
-  return withTemporaryDirectory("takoform-owner-gate", (managedHome) => {
+  return withTemporaryDirectory("tfog", (managedHome) => {
+    const nominationEnvironment = environmentWithoutGitHubAuthority();
+    const expected = ownerGateToolchain(context.repo);
+    const snapshot = createManagedToolSnapshot({
+      environment: nominationEnvironment,
+      managedHome,
+    });
     const managedTemporaryDirectory = join(managedHome, "tmp");
     mkdirSync(managedTemporaryDirectory, { recursive: true });
     const environment = createHardenedGateEnvironment(
-      environmentWithoutGitHubAuthority(),
+      nominationEnvironment,
       process.execPath,
       managedHome,
+      {
+        managedToolBin: snapshot.toolBin,
+        goBin: snapshot.go.bin,
+        goRoot: snapshot.go.root,
+      },
     );
     environment.TEMP = managedTemporaryDirectory;
     environment.TMP = managedTemporaryDirectory;
     environment.TMPDIR = managedTemporaryDirectory;
+    verifyOwnerGateToolchain(context, snapshot, expected, environment);
+    warmOwnerGateGoCaches(context, snapshot, environment);
     progress(context, "bun run check:release-owner-gate");
-    return command(context, "bun", ["run", "check:release-owner-gate"], {
-      echo: true,
-      env: environment,
-      label: "owner gate",
-    });
+    const result = command(
+      context,
+      "bun",
+      ["run", "check:release-owner-gate"],
+      {
+        echo: true,
+        env: environment,
+        label: "owner gate",
+      },
+    );
+    assertManagedToolSnapshot(snapshot);
+    return result;
   });
 }
 
@@ -1415,10 +1600,7 @@ function assertCurrentProtectedMain(
     { label: "read release repository Git configuration" },
   );
   try {
-    assertSafeRepositoryGitConfiguration(
-      localConfiguration,
-      SOURCE_REPOSITORY,
-    );
+    assertSafeRepositoryGitConfiguration(localConfiguration, SOURCE_REPOSITORY);
   } catch (error) {
     throw new Error(
       `release blocked: repository Git configuration is not publication-safe: ${error instanceof Error ? error.message : String(error)}`,
@@ -2390,7 +2572,9 @@ function withTemporaryDirectory(prefix, operation) {
   const configuredRoot = process.platform === "win32" ? tmpdir() : "/tmp";
   const trustedRoot = realpathSync(configuredRoot);
   if (!lstatSync(trustedRoot).isDirectory()) {
-    throw new Error("release blocked: trusted temporary root is not a directory");
+    throw new Error(
+      "release blocked: trusted temporary root is not a directory",
+    );
   }
   const root = mkdtempSync(join(trustedRoot, `${prefix}-`));
   try {
@@ -5078,6 +5262,8 @@ export const releaseDeployTestHooks = Object.freeze({
   normalGitEnvironment,
   ownerGateAndFence,
   runOwnerCheck,
+  ownerGateToolchain,
+  verifyOwnerGateToolchain,
   observeTagFailureState,
   parseCandidateMetadata,
   parseCanonicalCandidateMetadata,
