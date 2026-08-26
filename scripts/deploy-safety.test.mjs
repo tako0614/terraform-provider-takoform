@@ -85,15 +85,29 @@ test("website snapshot copy includes its complete module closure", () => {
   expect(deploySource).toContain(
     '"scripts/check-website-dist.mjs",\n    "scripts/frozen-public-identities.mjs",\n    "scripts/website-html-normalization.mjs",\n    "scripts/website-snapshot-temp.mjs",\n    "scripts/website-snapshot-temp.test.mjs",',
   );
-  expect(deploySource).toContain("two concurrent read-only VitePress builds");
-  expect(deploySource).toContain(
-    "every committed page byte-for-byte after the writer's trailing-whitespace-only normalization",
+  const contract = JSON.parse(
+    execFileSync(process.execPath, ["scripts/deploy.mjs", "--contract"], {
+      cwd: new URL("..", import.meta.url),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
   );
-  expect(deploySource).toContain(
+  const website = contract.surfaces.find(
+    (surface) => surface.surface === "takoform-website",
+  );
+  expect(website).toBeDefined();
+  const provenance = website.obligations.provenance;
+  expect(provenance).toContain("two concurrent read-only VitePress builds");
+  expect(provenance).toContain(
+    "page byte-for-byte after the writer's trailing-whitespace-only normalization",
+  );
+  expect(provenance).toContain(
     "content-addressed asset set by exact path and bytes",
   );
-  expect(deploySource).not.toContain("every committed page semantically");
-  expect(deploySource).not.toContain("asset set by role");
+  expect(provenance).toContain("`hashmap.json` is the sole byte exception");
+  expect(provenance).toContain("exact page-key set");
+  expect(provenance).not.toContain("page semantically");
+  expect(provenance).not.toContain("asset set by role");
 });
 
 test("published asset discovery rejects symbolic links", () => {
