@@ -775,6 +775,20 @@ describe("canonical repository authority", () => {
     );
   });
 
+  test("accepts only the CI checkout's disabled automatic Git GC setting", () => {
+    const disabled = makeClone();
+    git(disabled, "config", "gc.auto", "0");
+    expect(() =>
+      validatePublicationEvidence(DOCUMENT, { repositoryRoot: disabled }),
+    ).not.toThrow();
+
+    const enabled = makeClone();
+    git(enabled, "config", "gc.auto", "1");
+    expect(() =>
+      validatePublicationEvidence(DOCUMENT, { repositoryRoot: enabled }),
+    ).toThrow(/gc\.auto must be exactly 0/);
+  });
+
   test("rejects a present commit unreachable from allowed canonical refs", () => {
     const root = makeClone();
     const tree = git(root, "rev-parse", "HEAD^{tree}");
