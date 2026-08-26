@@ -16,6 +16,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
+	"github.com/tako0614/terraform-provider-takoform/internal/providerdiagnostics"
 )
 
 // Report is the evidence one CLI produced. It is never publication-ready: the
@@ -284,7 +285,7 @@ func runPinnedNamePlanRefusal(ctx context.Context, repoRoot, cliPath, providerBi
 	for _, want := range []string{
 		"This immutable revision cannot be safely replaced under the same host name.",
 		"Use a new revision name or the official worker-app module.",
-		"takoform.provider/immutable-revision-same-name",
+		providerdiagnostics.ImmutableRevisionSameName,
 		"dependency_in_use",
 		"invalid_argument",
 	} {
@@ -297,7 +298,7 @@ func runPinnedNamePlanRefusal(ctx context.Context, repoRoot, cliPath, providerBi
 		return RefusalEvidence{}, fmt.Errorf("a refused plan mutated the host: %+v", mutations)
 	}
 	return RefusalEvidence{
-		Code:    "takoform.provider/immutable-revision-same-name",
+		Code:    providerdiagnostics.ImmutableRevisionSameName,
 		Summary: "This immutable revision cannot be safely replaced under the same host name.",
 	}, nil
 }
@@ -943,7 +944,7 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary
 	}
 	for _, want := range []string{
 		"This host cannot satisfy required standard service org.example.unknown",
-		"takoform.provider/host-does-not-support-value",
+		providerdiagnostics.HostDoesNotSupportValue,
 	} {
 		if !strings.Contains(output, want) {
 			return RefusalEvidence{}, fmt.Errorf(
@@ -954,7 +955,7 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary
 		return RefusalEvidence{}, fmt.Errorf("a refused plan mutated the host: %+v", mutations)
 	}
 	return RefusalEvidence{
-		Code:    "takoform.provider/host-does-not-support-value",
+		Code:    providerdiagnostics.HostDoesNotSupportValue,
 		Summary: "This host cannot satisfy required standard service org.example.unknown",
 	}, nil
 }

@@ -61,14 +61,6 @@ type stableScenario struct {
 	Expected map[string]any `json:"expected"`
 }
 
-type stableGenericCorpus struct {
-	Format               string             `json:"format"`
-	HostAPILane          string             `json:"hostApiLane"`
-	RequiredChecks       []string           `json:"requiredChecks"`
-	Scenarios            []stableScenario   `json:"scenarios"`
-	PortableHostContract stableDigestRecord `json:"portableHostContract"`
-}
-
 type stableDesiredSchemaPin struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
@@ -247,43 +239,6 @@ func stableFormRefKey(ref FormRef) string {
 	return ref.APIVersion + "/" + ref.Kind + "@" + ref.DefinitionVersion + "#" + ref.SchemaDigest
 }
 
-func stableVerifyGeneric(ctx context.Context, root, corpusPath string, record stableSuiteCorpusRecord) error {
-	var corpus stableGenericCorpus
-	raw, err := stableReadStrict(corpusPath, &corpus)
-	if err != nil {
-		return err
-	}
-	if stableDigest(raw) != record.SHA256 || corpus.Format != StableGenericFormat ||
-		corpus.HostAPILane != stableLane.APIVersion || !reflect.DeepEqual(corpus.RequiredChecks, record.RequiredChecks) {
-		return errors.New("stable generic corpus identity or digest drifted")
-	}
-	if err := validateStableScenarioCoverage(record.RequiredChecks, corpus.Scenarios, "stable generic corpus"); err != nil {
-		return err
-	}
-	contractPath, err := stableResolve(root, corpusPath, corpus.PortableHostContract.Path)
-	if err != nil {
-		return err
-	}
-	if _, err := stableVerifyDigest(contractPath, corpus.PortableHostContract.SHA256); err != nil {
-		return err
-	}
-	contract, err := Verify(filepath.Dir(contractPath))
-	if err != nil {
-		return fmt.Errorf("verify stable portable Host contract: %w", err)
-	}
-	if contract.Lane() != stableLane.APIVersion {
-		return fmt.Errorf("generic corpus drives %s, want %s", contract.Lane(), stableLane.APIVersion)
-	}
-	report, err := SelfTest(ctx, contract)
-	if err != nil {
-		return fmt.Errorf("stable generic Host lifecycle and constraint matrix: %w", err)
-	}
-	if report.Status != "passed" || !reflect.DeepEqual(report.Checks, contract.RequiredRunnerChecks) {
-		return errors.New("stable generic Host runner returned an incomplete report")
-	}
-	return nil
-}
-
 func stableValidateDesired(definition formpackage.FormDefinition, desired map[string]any) error {
 	installed := &InstalledForm{Ref: FormRef{
 		APIVersion: definition.APIVersion, Kind: definition.Kind,
@@ -329,6 +284,11 @@ func stableVerifyFamily(
 	}
 	if set.Family != record.Group || len(set.Forms) == 0 || len(corpus.RunnerInput) != len(set.Forms) {
 		return StableSuiteFamilyReport{}, nil, fmt.Errorf("stable family %s does not cover its exact candidate roster", record.Group)
+	}
+	if record.Group == stableCurrentNonEdgeFamilyGroup {
+		if err := stableRunCurrentNonEdgeFamilyWitness(root, corpusPath, corpus, set); err != nil {
+			return StableSuiteFamilyReport{}, nil, err
+		}
 	}
 	candidates := make(map[string]struct {
 		ref     FormRef
@@ -544,7 +504,7 @@ func RunStableSuite(ctx context.Context, manifestPath string) (StableSuiteReport
 	if _, err := stableVerifyDigest(genericPath, manifest.Generic.SHA256); err != nil {
 		return StableSuiteReport{}, err
 	}
-	if err := stableVerifyGeneric(ctx, root, genericPath, manifest.Generic); err != nil {
+	if _, err := stableVerifyGeneric(ctx, root, genericPath, manifest.Generic); err != nil {
 		return StableSuiteReport{}, err
 	}
 
@@ -581,6 +541,11 @@ func RunStableSuite(ctx context.Context, manifestPath string) (StableSuiteReport
 		}
 		result.Families = append(result.Families, familyReport)
 		familyGroups = append(familyGroups, record.Group)
+	}
+	// The pre-move 125-check matrix remains Edge family/concrete-Host evidence.
+	// Keep it outside the generic runner even though the suite verifies both.
+	if err := stableVerifyLegacyPortableCoverage(ctx, root); err != nil {
+		return StableSuiteReport{}, err
 	}
 	compositionPath, err := stableResolve(root, absoluteManifest, manifest.Composition.Path)
 	if err != nil {

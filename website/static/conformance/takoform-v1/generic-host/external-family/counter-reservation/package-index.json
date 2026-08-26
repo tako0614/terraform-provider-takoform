@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "resources.publisher.example",
+    "kind": "CounterReservation",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:9981fb7988d13844b8e22ab2428407aa90e7e368df876086e0e456151ff61116"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 1689,
+      "digest": "sha256:9d9aad0e4d3e69deaab05ba58cfc0a259b428c0d9497f24149d0bcf6ccad8473"
+    }
+  ]
+}

@@ -130,9 +130,9 @@ func TestV3RepresentativeLifecycleCoversEveryNewFamily(t *testing.T) {
 			t.Parallel()
 			form := family.forms[0]
 			host := newV3FakeHost(t)
-			resource := &v3FormResource{
-				form: form, data: newV3TestProviderData(t, host), codecs: v3Codecs(),
-			}
+			resource := v3Provider3CurrentResourceHarness(
+				t, form, "", newV3TestProviderData(t, host), v3Codecs(),
+			)
 			schemaResponse := v3SchemaOf(t, resource)
 			values := map[string]attr.Value{
 				"name": types.StringValue(form.Slug), "space": types.StringValue("prod"),

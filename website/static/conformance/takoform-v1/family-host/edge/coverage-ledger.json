@@ -1,0 +1,720 @@
+{
+  "format": "takoform.legacy-portable-coverage@v1",
+  "owner": "edge-family-concrete-host",
+  "contract": {
+    "path": "portable-host/contract.json",
+    "sha256": "1c4281e54ea986ec9cfacc74ef5d384142b620a63fb19331b514eb1f2f31def7"
+  },
+  "checkCount": 125,
+  "coverage": [
+    {
+      "check": "discovery-exact",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "discovery-exact"
+    },
+    {
+      "check": "unauthenticated-request-refused",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "unauthenticated-request-refused",
+      "neutralChecks": [
+        "unauthenticated-request-refused"
+      ]
+    },
+    {
+      "check": "forms-exact-availability",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "forms-exact-availability"
+    },
+    {
+      "check": "form-definition-exact",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "form-definition-exact"
+    },
+    {
+      "check": "validate-accepts-canonical",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "validate-accepts-canonical"
+    },
+    {
+      "check": "validate-rejects-negative-fixtures",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "validate-rejects-negative-fixtures"
+    },
+    {
+      "check": "prepare-binds-exact-spec",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "prepare-binds-exact-spec",
+      "neutralChecks": [
+        "prepare-binds-exact-spec"
+      ]
+    },
+    {
+      "check": "prepare-substitution-rejected",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "prepare-substitution-rejected"
+    },
+    {
+      "check": "apply-create-uid-minted",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "apply-create-uid-minted"
+    },
+    {
+      "check": "apply-headers-required",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "apply-headers-required"
+    },
+    {
+      "check": "apply-idempotency-replay",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "apply-idempotency-replay",
+      "neutralChecks": [
+        "apply-idempotency-replay"
+      ]
+    },
+    {
+      "check": "replay-record-retires-with-its-incarnation",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "replay-record-retires-with-its-incarnation",
+      "neutralChecks": [
+        "replay-record-retires-with-its-incarnation"
+      ]
+    },
+    {
+      "check": "create-conflict-when-exists",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "create-conflict-when-exists",
+      "neutralChecks": [
+        "create-conflict-when-exists"
+      ]
+    },
+    {
+      "check": "update-generation-fence",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "update-generation-fence"
+    },
+    {
+      "check": "stale-generation-rejected",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "stale-generation-rejected"
+    },
+    {
+      "check": "revision-etag-exact",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "revision-etag-exact"
+    },
+    {
+      "check": "observe-fence-exact",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "observe-fence-exact"
+    },
+    {
+      "check": "status-change-bumps-revision-not-generation",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "status-change-bumps-revision-not-generation",
+      "neutralChecks": [
+        "status-change-bumps-revision-not-generation"
+      ]
+    },
+    {
+      "check": "spec-change-bumps-generation",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "spec-change-bumps-generation",
+      "neutralChecks": [
+        "spec-change-bumps-generation"
+      ]
+    },
+    {
+      "check": "delete-generation-fence",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "delete-generation-fence",
+      "neutralChecks": [
+        "delete-generation-fence"
+      ]
+    },
+    {
+      "check": "delete-revision-fence",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "delete-revision-fence",
+      "neutralChecks": [
+        "delete-revision-fence"
+      ]
+    },
+    {
+      "check": "stale-revision-rejected",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "stale-revision-rejected",
+      "neutralChecks": [
+        "stale-revision-rejected"
+      ]
+    },
+    {
+      "check": "delete-then-recreate-uid-changes",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "delete-then-recreate-uid-changes",
+      "neutralChecks": [
+        "delete-then-recreate-uid-changes"
+      ]
+    },
+    {
+      "check": "expected-uid-mismatch-rejected",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "expected-uid-mismatch-rejected"
+    },
+    {
+      "check": "package-digest-not-identity",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "package-digest-not-identity"
+    },
+    {
+      "check": "same-kind-two-groups",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "same-kind-two-groups"
+    },
+    {
+      "check": "revision-role-update-rejected",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "revision-role-update-rejected"
+    },
+    {
+      "check": "no-update-spec-change-rejected",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "no-update-spec-change-rejected"
+    },
+    {
+      "check": "binding-target-missing-404-before-mutation",
+      "owner": "composition",
+      "edgeAdapterCheck": "binding-target-missing-404-before-mutation"
+    },
+    {
+      "check": "dependency-in-use-on-bound-target-delete",
+      "owner": "composition",
+      "edgeAdapterCheck": "dependency-in-use-on-bound-target-delete"
+    },
+    {
+      "check": "relation-target-missing-rejected",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-target-missing-rejected"
+    },
+    {
+      "check": "relation-target-deletion-blocked",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-target-deletion-blocked"
+    },
+    {
+      "check": "relation-incarnation-change-detected",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-incarnation-change-detected"
+    },
+    {
+      "check": "relation-reapply-repins",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-reapply-repins"
+    },
+    {
+      "check": "binding-contract-verified",
+      "owner": "composition",
+      "edgeAdapterCheck": "binding-contract-verified"
+    },
+    {
+      "check": "async-operation-flow",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "async-operation-flow",
+      "neutralChecks": [
+        "async-operation-flow"
+      ]
+    },
+    {
+      "check": "operation-replay-terminal",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "operation-replay-terminal",
+      "neutralChecks": [
+        "operation-replay-terminal"
+      ]
+    },
+    {
+      "check": "operation-resumable-after-settlement",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "operation-resumable-after-settlement",
+      "neutralChecks": [
+        "operation-resumable-after-settlement"
+      ]
+    },
+    {
+      "check": "operation-cancel",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "operation-cancel",
+      "neutralChecks": [
+        "operation-cancel"
+      ]
+    },
+    {
+      "check": "exact-form-ref-fails-closed-on-unknown-definition",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "exact-form-ref-fails-closed-on-unknown-definition",
+      "neutralChecks": [
+        "exact-form-ref-fails-closed-on-unknown-definition"
+      ]
+    },
+    {
+      "check": "artifact-upload-missing-blob",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "artifact-upload-missing-blob",
+      "neutralChecks": [
+        "artifact-upload-missing-blob"
+      ]
+    },
+    {
+      "check": "artifact-digest-mismatch",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "artifact-digest-mismatch",
+      "neutralChecks": [
+        "artifact-digest-mismatch"
+      ]
+    },
+    {
+      "check": "artifact-commit-idempotent",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "artifact-commit-idempotent"
+    },
+    {
+      "check": "artifact-then-bundle-apply",
+      "owner": "composition",
+      "edgeAdapterCheck": "artifact-then-bundle-apply"
+    },
+    {
+      "check": "support-profiles-present",
+      "owner": "interface-runtime",
+      "edgeAdapterCheck": "support-profiles-present"
+    },
+    {
+      "check": "error-envelope-taxonomy",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "error-envelope-taxonomy",
+      "neutralChecks": [
+        "error-envelope-taxonomy"
+      ]
+    },
+    {
+      "check": "cross-space-isolation",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "cross-space-isolation"
+    },
+    {
+      "check": "cross-principal-idempotency-isolation",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "cross-principal-idempotency-isolation"
+    },
+    {
+      "check": "prepare-requires-update-fence",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "prepare-requires-update-fence",
+      "neutralChecks": [
+        "prepare-requires-update-fence"
+      ]
+    },
+    {
+      "check": "stale-prepare-rejected",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "stale-prepare-rejected"
+    },
+    {
+      "check": "condition-reason-closed",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "condition-reason-closed"
+    },
+    {
+      "check": "space-id-grammar-enforced",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "space-id-grammar-enforced"
+    },
+    {
+      "check": "concurrent-unrelated-mutation",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "concurrent-unrelated-mutation"
+    },
+    {
+      "check": "async-commit-revalidates",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "async-commit-revalidates"
+    },
+    {
+      "check": "async-commit-binds-the-accepted-identity",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "async-commit-binds-the-accepted-identity"
+    },
+    {
+      "check": "import-adopts-native-resource",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "import-adopts-native-resource"
+    },
+    {
+      "check": "import-validates-like-apply",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "import-validates-like-apply"
+    },
+    {
+      "check": "import-claims-its-native-identity",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "import-claims-its-native-identity"
+    },
+    {
+      "check": "import-records-its-native-identity",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "import-records-its-native-identity"
+    },
+    {
+      "check": "deployment-weight-sum-enforced",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-weight-sum-enforced"
+    },
+    {
+      "check": "deployment-single-active-per-worker",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-single-active-per-worker"
+    },
+    {
+      "check": "deployment-version-ownership",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-version-ownership"
+    },
+    {
+      "check": "deployment-version-duplicate-rejected",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-version-duplicate-rejected"
+    },
+    {
+      "check": "attachment-requires-active-deployment",
+      "owner": "composition",
+      "edgeAdapterCheck": "attachment-requires-active-deployment"
+    },
+    {
+      "check": "handler-gated-attachments",
+      "owner": "composition",
+      "edgeAdapterCheck": "handler-gated-attachments"
+    },
+    {
+      "check": "binding-name-collision-rejected",
+      "owner": "composition",
+      "edgeAdapterCheck": "binding-name-collision-rejected"
+    },
+    {
+      "check": "deployment-change-preserves-dependents",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-change-preserves-dependents"
+    },
+    {
+      "check": "deployment-delete-blocked-by-dependent",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-delete-blocked-by-dependent"
+    },
+    {
+      "check": "deployment-delete-blocked-by-inbound-binding",
+      "owner": "composition",
+      "edgeAdapterCheck": "deployment-delete-blocked-by-inbound-binding"
+    },
+    {
+      "check": "dependent-revision-advances-with-rendering",
+      "owner": "composition",
+      "edgeAdapterCheck": "dependent-revision-advances-with-rendering"
+    },
+    {
+      "check": "delete-fence-survives-derived-rendering",
+      "owner": "composition",
+      "edgeAdapterCheck": "delete-fence-survives-derived-rendering"
+    },
+    {
+      "check": "artifact-manifest-reject-list",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "artifact-manifest-reject-list"
+    },
+    {
+      "check": "artifact-commit-binds-declared-size",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "artifact-commit-binds-declared-size",
+      "neutralChecks": [
+        "artifact-commit-binds-declared-size"
+      ]
+    },
+    {
+      "check": "artifact-manifest-kind-exclusive",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "artifact-manifest-kind-exclusive"
+    },
+    {
+      "check": "bundle-main-module-is-loadable",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "bundle-main-module-is-loadable"
+    },
+    {
+      "check": "artifact-retention-while-referenced",
+      "owner": "composition",
+      "edgeAdapterCheck": "artifact-retention-while-referenced"
+    },
+    {
+      "check": "namespaced-group-travels-as-path-segments",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "namespaced-group-travels-as-path-segments"
+    },
+    {
+      "check": "operation-bound-to-its-creating-principal",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "operation-bound-to-its-creating-principal",
+      "neutralChecks": [
+        "operation-bound-to-its-creating-principal"
+      ]
+    },
+    {
+      "check": "upload-session-bound-to-its-creating-principal",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "upload-session-bound-to-its-creating-principal",
+      "neutralChecks": [
+        "upload-session-bound-to-its-creating-principal"
+      ]
+    },
+    {
+      "check": "artifact-digest-is-not-a-capability",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "artifact-digest-is-not-a-capability"
+    },
+    {
+      "check": "manifest-reference-is-not-a-capability",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "manifest-reference-is-not-a-capability"
+    },
+    {
+      "check": "static-asset-spa-paths",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "static-asset-spa-paths"
+    },
+    {
+      "check": "sqlite-migration-ledger-readiness",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "sqlite-migration-ledger-readiness"
+    },
+    {
+      "check": "module-worker-runtime-contract-advertised",
+      "owner": "interface-runtime",
+      "edgeAdapterCheck": "module-worker-runtime-contract-advertised"
+    },
+    {
+      "check": "undeclared-runtime-handler-rejected",
+      "owner": "interface-runtime",
+      "edgeAdapterCheck": "undeclared-runtime-handler-rejected"
+    },
+    {
+      "check": "declared-handler-not-exported-rejected",
+      "owner": "interface-runtime",
+      "edgeAdapterCheck": "declared-handler-not-exported-rejected"
+    },
+    {
+      "check": "edge-interface-contracts-advertised",
+      "owner": "interface-runtime",
+      "edgeAdapterCheck": "edge-interface-contracts-advertised"
+    },
+    {
+      "check": "cron-grammar-enforced",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "cron-grammar-enforced"
+    },
+    {
+      "check": "queue-single-consumer-enforced",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "queue-single-consumer-enforced"
+    },
+    {
+      "check": "custom-domain-hostname-canonicalized",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "custom-domain-hostname-canonicalized"
+    },
+    {
+      "check": "custom-domain-hostname-claim-unique",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "custom-domain-hostname-claim-unique"
+    },
+    {
+      "check": "custom-domain-hostname-claim-stops-at-the-tenant",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "custom-domain-hostname-claim-stops-at-the-tenant"
+    },
+    {
+      "check": "dead-letter-cycle-rejected",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "dead-letter-cycle-rejected"
+    },
+    {
+      "check": "attachment-claim-decided-on-import",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "attachment-claim-decided-on-import"
+    },
+    {
+      "check": "attachment-claim-revalidated-at-commit",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "attachment-claim-revalidated-at-commit"
+    },
+    {
+      "check": "custom-domain-u-label-refused",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "custom-domain-u-label-refused"
+    },
+    {
+      "check": "two-definition-versions-answer-independently",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "two-definition-versions-answer-independently"
+    },
+    {
+      "check": "resource-answers-only-under-its-recorded-form-ref",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-answers-only-under-its-recorded-form-ref"
+    },
+    {
+      "check": "relation-target-form-ref-verified",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-target-form-ref-verified"
+    },
+    {
+      "check": "relation-target-interface-verified",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-target-interface-verified"
+    },
+    {
+      "check": "relation-pin-records-target-form-ref",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-pin-records-target-form-ref"
+    },
+    {
+      "check": "worker-endpoint-address-is-host-assigned",
+      "owner": "composition",
+      "edgeAdapterCheck": "worker-endpoint-address-is-host-assigned"
+    },
+    {
+      "check": "worker-endpoint-single-per-worker",
+      "owner": "composition",
+      "edgeAdapterCheck": "worker-endpoint-single-per-worker"
+    },
+    {
+      "check": "worker-endpoint-follows-the-active-deployment",
+      "owner": "composition",
+      "edgeAdapterCheck": "worker-endpoint-follows-the-active-deployment"
+    },
+    {
+      "check": "worker-endpoint-address-is-stable-for-its-uid",
+      "owner": "composition",
+      "edgeAdapterCheck": "worker-endpoint-address-is-stable-for-its-uid"
+    },
+    {
+      "check": "form-declared-outputs-are-exact",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "form-declared-outputs-are-exact"
+    },
+    {
+      "check": "resource-address-is-tenant-scoped",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-address-is-tenant-scoped"
+    },
+    {
+      "check": "resource-read-is-tenant-isolated",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-read-is-tenant-isolated"
+    },
+    {
+      "check": "resource-observe-is-tenant-isolated",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-observe-is-tenant-isolated"
+    },
+    {
+      "check": "resource-update-is-tenant-isolated",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-update-is-tenant-isolated"
+    },
+    {
+      "check": "resource-import-is-tenant-isolated",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-import-is-tenant-isolated"
+    },
+    {
+      "check": "resource-delete-is-tenant-isolated",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "resource-delete-is-tenant-isolated"
+    },
+    {
+      "check": "relation-resolution-is-tenant-scoped",
+      "owner": "composition",
+      "edgeAdapterCheck": "relation-resolution-is-tenant-scoped"
+    },
+    {
+      "check": "prepare-is-tenant-scoped",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "prepare-is-tenant-scoped",
+      "neutralChecks": [
+        "prepare-is-tenant-scoped"
+      ]
+    },
+    {
+      "check": "idempotency-is-tenant-scoped",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "idempotency-is-tenant-scoped"
+    },
+    {
+      "check": "each-tenant-mutates-its-own-plane",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "each-tenant-mutates-its-own-plane"
+    },
+    {
+      "check": "fence-matrix-observed",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "fence-matrix-observed",
+      "neutralChecks": [
+        "fence-matrix-observed"
+      ]
+    },
+    {
+      "check": "forms-route-enumerates",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "forms-route-enumerates"
+    },
+    {
+      "check": "availability-truth-conditions",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "availability-truth-conditions"
+    },
+    {
+      "check": "cancel-outcomes-closed",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "cancel-outcomes-closed"
+    },
+    {
+      "check": "stable-standard-service-support-enforced",
+      "owner": "concrete-host",
+      "edgeAdapterCheck": "stable-standard-service-support-enforced"
+    },
+    {
+      "check": "portable-defaults-materialized",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "portable-defaults-materialized",
+      "neutralChecks": [
+        "portable-defaults-materialized"
+      ]
+    },
+    {
+      "check": "declared-exclusive-holds-enforced",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "declared-exclusive-holds-enforced",
+      "neutralChecks": [
+        "declared-exclusive-holds-enforced"
+      ]
+    },
+    {
+      "check": "declared-constraint-semantics-enforced",
+      "owner": "generic-host",
+      "edgeAdapterCheck": "declared-constraint-semantics-enforced",
+      "neutralChecks": [
+        "declared-constraint-semantics-enforced"
+      ]
+    },
+    {
+      "check": "class-holder-rules-enforced",
+      "owner": "family-semantic",
+      "edgeAdapterCheck": "class-holder-rules-enforced"
+    }
+  ]
+}

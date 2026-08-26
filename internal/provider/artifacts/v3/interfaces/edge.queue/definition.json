@@ -1,0 +1,361 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.queue",
+  "version": "1.0.0",
+  "title": "At-least-once queue",
+  "description": "Asynchronous message submission and batch consumption with at-least-once delivery and no ordering guarantee. A message body is OPAQUE BYTES in the family's encoded-bytes shape {\"encoding\": \"base64\", \"data\": \"…\"}; maxMessageBytes bounds the DECODED length and a larger message fails with message_too_large. A messageId is host-issued, opaque, unique within the queue for the lifetime of the message, and STABLE across redeliveries, so a consumer can deduplicate by it. timestampMillis is milliseconds since the Unix epoch, in UTC, of the instant the host ACCEPTED the message, and it does not change across redeliveries. attempts is 1 on a message's first delivery and increments by one on each redelivery. A resolved send means ACCEPTED and durable, never delivered: delivery follows later, at least once, possibly more than once, and possibly out of send order, so consumers must be idempotent. Consumption is not a binding; it is the Queue Consumer attachment, whose maxBatchSize, maxBatchTimeoutSeconds, maxRetries, retryDelaySeconds, maxConcurrency, and optional dead-letter queue are the operational parameters of every rule here. Settlement is per message or per batch: acknowledge settles one message as delivered and it is never redelivered; retry returns one message to the queue, delayed by delaySeconds when given and by the consumer's retryDelaySeconds otherwise; acknowledgeAll and retryAll settle every message of the batch still unsettled. A handler that returns normally without settling anything acknowledges the WHOLE batch. A handler that throws, or whose returned promise rejects, retries every message of the batch that was not already explicitly acknowledged — acknowledgements taken before the throw stand. maxRetries counts REDELIVERIES only: the first delivery does not count toward it, so a message is delivered at most 1 + maxRetries times and maxRetries 0 means one delivery and no retry. A message that exhausts its retries moves to the consumer's dead-letter queue when it declares one, and is dropped otherwise. The dead-letter copy is a NEW message on that queue: new messageId, new timestampMillis of the moment it was accepted there, and attempts starting again at 1. This contract carries no portable link back to the original. One queue has AT MOST ONE consumer. Two would split the stream between two retry policies and two dead-letter destinations, leaving the queue's own behavior unstatable, so a host refuses the second attachment. The fixtures below cover only what one client can prove without a consumer and without waiting; delivery, retry, dead-lettering, and attempt counts are HOST OBLIGATIONS stated in the Host API specification.",
+  "operations": [
+    {
+      "name": "send",
+      "description": "Submit one message, optionally delayed before it becomes deliverable. The body is the family's encoded-bytes shape and maxMessageBytes bounds its decoded length. A resolved send means the host accepted and durably stored the message; it is not a statement that any consumer has seen it, or will see it within any bound this contract states.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 169336,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
+          },
+          "delaySeconds": {
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_body",
+        "message_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "sendBatch",
+      "description": "Submit an ordered batch of messages; acceptance is all-or-nothing, so a rejected sendBatch stored none of them. messageIds is returned in exactly the order the messages were given. Acceptance order is not delivery order: the queue guarantees no ordering at all.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 169336,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
+                },
+                "delaySeconds": {
+                  "maximum": 43200,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "body"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messageIds": {
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "messageIds"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_body",
+        "message_too_large",
+        "batch_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "acknowledge",
+      "description": "Settle one message of the batch this invocation is handling as delivered: it is never redelivered and never dead-lettered. batchId is the identity the delivered batch carried and messageId one of that batch's messages; anything else fails with unknown_batch or unknown_message. Settling a message twice fails with already_settled, so a double acknowledgement is an error rather than a silent no-op that hides a bug in the handler.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "batchId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "messageId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "batchId",
+          "messageId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "unknown_batch",
+        "unknown_message",
+        "already_settled",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "retry",
+      "description": "Return one message of this batch to the queue for redelivery, incrementing its attempts. delaySeconds overrides the consumer's retryDelaySeconds for this message only. A message whose attempts has already reached 1 + maxRetries is dead-lettered or dropped instead of redelivered, exactly as an unhandled failure would leave it.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "batchId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "delaySeconds": {
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "messageId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "batchId",
+          "messageId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "unknown_batch",
+        "unknown_message",
+        "already_settled",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "acknowledgeAll",
+      "description": "Settle every still-unsettled message of this batch as delivered. Messages already settled by acknowledge or retry keep the outcome they were given; this operation never reverses one.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "batchId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "batchId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "unknown_batch",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "retryAll",
+      "description": "Return every still-unsettled message of this batch to the queue, incrementing each attempts. It is exactly what an uncaught handler exception does, stated as an operation so a handler that caught its own error can choose the same outcome deliberately.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "batchId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "delaySeconds": {
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "batchId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "unknown_batch",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "eventual",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxBatchMessages": 100,
+    "maxDelaySeconds": 43200,
+    "maxMessageBytes": 127000
+  },
+  "fixtures": [
+    {
+      "name": "send-accepted",
+      "steps": [
+        {
+          "operation": "send",
+          "input": {
+            "body": {
+              "data": "eyJldmVudCI6InVzZXIuY3JlYXRlZCJ9",
+              "encoding": "base64"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "send-batch-accepted",
+      "steps": [
+        {
+          "operation": "sendBatch",
+          "input": {
+            "messages": [
+              {
+                "body": {
+                  "data": "Zmlyc3Q=",
+                  "encoding": "base64"
+                }
+              },
+              {
+                "body": {
+                  "data": "c2Vjb25k",
+                  "encoding": "base64"
+                },
+                "delaySeconds": 30
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "settling-an-undelivered-batch-is-refused",
+      "steps": [
+        {
+          "operation": "acknowledge",
+          "input": {
+            "batchId": "batch-that-was-never-delivered",
+            "messageId": "message-1"
+          },
+          "expectedError": "unknown_batch"
+        },
+        {
+          "operation": "retryAll",
+          "input": {
+            "batchId": "batch-that-was-never-delivered"
+          },
+          "expectedError": "unknown_batch"
+        }
+      ]
+    }
+  ]
+}

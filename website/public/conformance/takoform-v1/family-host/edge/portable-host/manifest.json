@@ -1,0 +1,5 @@
+{
+  "format": "takoform.portable-host-conformance-manifest@v1",
+  "contract": "contract.json",
+  "sha256": "1c4281e54ea986ec9cfacc74ef5d384142b620a63fb19331b514eb1f2f31def7"
+}

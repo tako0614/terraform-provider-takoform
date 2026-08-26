@@ -53,3 +53,4 @@ record does not replace them.
 - [0053 — Specification and Provider evidence are separate release authorities](0053-specification-and-provider-release-evidence.md)
 - [0054 — Standard-service identifiers are open and integrations are Host-owned](0054-standard-service-identifiers-are-open-and-host-integrated.md)
 - [0055 — Specification release needs only the normative source](0055-specification-release-needs-only-normative-source.md)
+- [0056 — Core compiles artifacts into an immutable Snapshot](0056-core-compiles-artifacts-into-an-immutable-snapshot.md)

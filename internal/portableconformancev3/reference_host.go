@@ -359,6 +359,26 @@ type ReferenceHost struct {
 	opCounter      int
 	uploadCounter  int
 	requestCounter int
+	// familyBranchSelections counts entry into a concrete-family
+	// canonicalization path. Generic conformance reads it only after the HTTP
+	// server is closed, while all writes occur under mu in ServeHTTP.
+	familyBranchSelections int
+	// legacySemanticSelections counts selections of the retained concrete Form
+	// adapter. A generic run supplies semantic roles and must leave this zero.
+	legacySemanticSelections int
+	// concreteKindSelections counts concrete Form-kind fallbacks that sit
+	// outside EnforcedFamily canonicalization (artifact kind, outputs, and
+	// support-profile special cases). Generic Forms must use installed data and
+	// leave this zero.
+	concreteKindSelections int
+	// genericPlanFaultKeepGenerationOnUpdate is an in-process divergence
+	// control used only by the shared generic-plan red test. Zero is the sole
+	// production behavior.
+	genericPlanFaultKeepGenerationOnUpdate bool
+	// genericPlanFaultDeclaredConstraint selects one deliberately broken
+	// transition for shared-plan red tests. The empty value is the only
+	// production behavior.
+	genericPlanFaultDeclaredConstraint string
 }
 
 // NewReferenceHost constructs the deterministic reference host over the
@@ -381,12 +401,55 @@ func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 		moduleExports:    map[string][]string{},
 		moduleClasses:    map[string][]string{},
 	}
-	input := contract.RunnerInput
-	host.declareModuleExports(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedHandlers)
-	host.declareModuleExports(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedHandlers)
-	host.declareModuleClasses(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedClasses)
-	host.declareModuleClasses(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedClasses)
+	if contract.genericRoles != nil {
+		// Generic artifact transport is file-backed and installs no executable
+		// module vocabulary.
+	} else {
+		host.legacySemanticSelections++
+		input := contract.RunnerInput
+		host.declareModuleExports(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedHandlers)
+		host.declareModuleExports(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedHandlers)
+		host.declareModuleClasses(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedClasses)
+		host.declareModuleClasses(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedClasses)
+	}
 	return host
+}
+
+func (h *ReferenceHost) materialize(form *InstalledForm, spec map[string]any) map[string]any {
+	if form.EnforcedFamily != "" {
+		h.familyBranchSelections++
+	}
+	return form.materialize(spec)
+}
+
+// FamilyBranchSelections exposes conformance instrumentation for the
+// disposable reference host. A neutral generic run must leave it at zero.
+func (h *ReferenceHost) FamilyBranchSelections() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.familyBranchSelections
+}
+
+// LegacySemanticSelections exposes conformance instrumentation for selection
+// of the retained concrete-family adapter.
+func (h *ReferenceHost) LegacySemanticSelections() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.legacySemanticSelections
+}
+
+// ConcreteKindSelections exposes concrete Form-kind hook instrumentation.
+func (h *ReferenceHost) ConcreteKindSelections() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.concreteKindSelections
+}
+
+func (h *ReferenceHost) semanticExternalServices() ExternalServiceProbe {
+	if h.contract.genericRoles == nil {
+		h.legacySemanticSelections++
+	}
+	return h.contract.semanticExternalServices()
 }
 
 // declareModuleExports records what one module's default export exposes, keyed
@@ -1105,6 +1168,33 @@ func (h *ReferenceHost) specDiagnostics(form *InstalledForm, spec map[string]any
 	return []map[string]any{}, nil
 }
 
+// validateAdmissionConstraints runs the family-neutral declared constraints
+// whose truth is knowable before a mutation commits. Exclusive holds are the
+// sole commit-only member: validate/prepare may race with another holder, so
+// apply/import (and asynchronous commit) re-check them in
+// validateDesiredSemantics instead.
+func (h *ReferenceHost) validateAdmissionConstraints(
+	form *InstalledForm,
+	scope resourceScope,
+	name string,
+	spec map[string]any,
+) *hostError {
+	if h.genericPlanFaultDeclaredConstraint != "sum" {
+		if hostErr := validateSummedMembers(form, spec); hostErr != nil {
+			return hostErr
+		}
+	}
+	if h.genericPlanFaultDeclaredConstraint != "hostAssigned" {
+		if hostErr := validateHostAssignedDesired(form, spec); hostErr != nil {
+			return hostErr
+		}
+	}
+	if hostErr := h.validateClaimedValues(form, scope, name, spec); hostErr != nil {
+		return hostErr
+	}
+	return h.validateResolvedUIDConstraintRequest(form, scope, name, spec)
+}
+
 func (h *ReferenceHost) handleValidate(w http.ResponseWriter, request *http.Request) {
 	raw, hostErr := h.readBody(request)
 	if hostErr != nil {
@@ -1121,7 +1211,7 @@ func (h *ReferenceHost) handleValidate(w http.ResponseWriter, request *http.Requ
 		h.writeHostError(w, hostErr)
 		return
 	}
-	body.Spec = form.materialize(body.Spec)
+	body.Spec = h.materialize(form, body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -1129,7 +1219,7 @@ func (h *ReferenceHost) handleValidate(w http.ResponseWriter, request *http.Requ
 	}
 	if len(diagnostics) == 0 {
 		caller, _ := hostRequestAuth(request)
-		if constraintErr := h.validateResolvedUIDConstraintRequest(
+		if constraintErr := h.validateAdmissionConstraints(
 			form, caller.scope(body.Metadata.Space), body.Metadata.Name, body.Spec,
 		); constraintErr != nil {
 			diagnostics = append(diagnostics, map[string]any{
@@ -1218,7 +1308,7 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 		h.writeHostError(w, hostErr)
 		return
 	}
-	body.Spec = form.materialize(body.Spec)
+	body.Spec = h.materialize(form, body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -1229,14 +1319,14 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 		return
 	}
 	if h.contract.lane.APIVersion == stableLane.APIVersion {
-		if hostErr := validateStableStandardServiceSlots(h.contract.RunnerInput.ExternalServices, body.Spec); hostErr != nil {
+		if hostErr := validateStableStandardServiceSlots(h.semanticExternalServices(), body.Spec); hostErr != nil {
 			h.writeHostError(w, hostErr)
 			return
 		}
 	}
 	caller, _ := hostRequestAuth(request)
 	scope := caller.scope(body.Metadata.Space)
-	if hostErr := h.validateResolvedUIDConstraintRequest(form, scope, body.Metadata.Name, body.Spec); hostErr != nil {
+	if hostErr := h.validateAdmissionConstraints(form, scope, body.Metadata.Name, body.Spec); hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
 	}
@@ -1339,17 +1429,30 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	name string,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
+	if form.EnforcedFamily != "" {
+		h.familyBranchSelections++
+	}
 	// Two pure spec-shape rules first: neither needs another resource, so
 	// neither should depend on one resolving.
 	if h.contract.lane.APIVersion == stableLane.APIVersion {
-		if hostErr := validateStableStandardServiceSlots(h.contract.RunnerInput.ExternalServices, spec); hostErr != nil {
+		if hostErr := validateStableStandardServiceSlots(h.semanticExternalServices(), spec); hostErr != nil {
 			return nil, hostErr
 		}
 	}
 	if hostErr := validateStructuralConstraints(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
-	if hostErr := validateSummedMembers(form, spec); hostErr != nil {
+	if h.genericPlanFaultDeclaredConstraint != "sum" {
+		if hostErr := validateSummedMembers(form, spec); hostErr != nil {
+			return nil, hostErr
+		}
+	}
+	if h.genericPlanFaultDeclaredConstraint != "hostAssigned" {
+		if hostErr := validateHostAssignedDesired(form, spec); hostErr != nil {
+			return nil, hostErr
+		}
+	}
+	if hostErr := h.validateClaimedValues(form, scope, name, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	if hostErr := validateEnvironmentNamespace(form.EnforcedFamily, form, spec); hostErr != nil {
@@ -1368,7 +1471,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	if hostErr := h.validateResolvedUIDConstraints(form, scope, name, relations); hostErr != nil {
 		return nil, hostErr
 	}
-	if expectedKind, artifactBacked := artifactManifestKindForForm(form.Ref.Kind); artifactBacked {
+	if expectedKind, artifactBacked := h.installedArtifactManifestKind(form); artifactBacked {
 		if _, hostErr := h.requireReferencedArtifactManifest(caller, spec, expectedKind); hostErr != nil {
 			return nil, hostErr
 		}
@@ -1436,6 +1539,28 @@ func validateSummedMembers(form *InstalledForm, spec map[string]any) *hostError 
 				name+" "+strconv.Quote(constraint.Member)+" values total "+strconv.FormatInt(total, 10)+
 					", and the Definition declares they must total exactly "+
 					strconv.FormatInt(constraint.Total, 10),
+			)
+		}
+	}
+	return nil
+}
+
+// validateHostAssignedDesired keeps an output declaration from becoming an
+// input escape hatch. The output pointer is interpreted against desired state
+// only to detect a caller-supplied substitute; the actual value is minted and
+// rendered by the Host after the resource has an identity.
+func validateHostAssignedDesired(form *InstalledForm, spec map[string]any) *hostError {
+	for _, constraint := range form.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintHostAssigned) {
+			continue
+		}
+		if constraint.Output == "" {
+			return stableError("invalid_argument", "the installed Definition declares an unreadable host-assigned output")
+		}
+		if _, present := desiredValueAtPointer(spec, constraint.Output); present {
+			return stableError(
+				"invalid_argument",
+				"desired state must not supply host-assigned output "+constraint.Output,
 			)
 		}
 	}
@@ -1672,7 +1797,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	// before the applyOnce closure captures body.Spec, and before anything is
 	// stored or echoed. Anywhere later and the prepare digest a client already
 	// holds would not match what this apply computes.
-	body.Spec = form.materialize(body.Spec)
+	body.Spec = h.materialize(form, body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -1901,7 +2026,9 @@ func (h *ReferenceHost) nextResource(
 	next.Spec = specOrEmpty(spec)
 	next.SpecDigest = specDigest
 	if specDigest != existing.SpecDigest {
-		next.Generation++
+		if !h.genericPlanFaultKeepGenerationOnUpdate {
+			next.Generation++
+		}
 		next.Revision++
 	}
 	return &next
@@ -1999,13 +2126,28 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 // is how every Form in the family behaves except the one that declares an
 // output contract.
 func (h *ReferenceHost) resourceOutputs(resource *storedResource) map[string]any {
+	if form := h.catalog.exact(resource.Ref); form != nil && len(form.HostAssignedOutputs) > 0 {
+		return cloneJSONMap(form.HostAssignedOutputs)
+	}
 	if resource.group() != h.edgeGroup() {
 		return nil
 	}
 	if resource.kind() == workerEndpointKind {
+		h.concreteKindSelections++
 		return workerEndpointOutputs(resource)
 	}
 	return nil
+}
+
+func (h *ReferenceHost) installedArtifactManifestKind(form *InstalledForm) (string, bool) {
+	if form.ArtifactManifestKind != "" {
+		return form.ArtifactManifestKind, true
+	}
+	kind, known := artifactManifestKindForForm(form.Ref.Kind)
+	if known {
+		h.concreteKindSelections++
+	}
+	return kind, known
 }
 
 func quotedRevision(revision int64) string {
@@ -2143,7 +2285,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		h.writeHostError(w, hostErr)
 		return
 	}
-	body.Spec = form.materialize(body.Spec)
+	body.Spec = h.materialize(form, body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -2994,11 +3136,11 @@ func (h *ReferenceHost) handleStandardServiceSupport(w http.ResponseWriter, prot
 				"apiVersion": ref.APIVersion,
 				"protocol":   ref.Protocol,
 			},
-			"satisfiable": containsString(h.contract.RunnerInput.ExternalServices.Protocols, protocol),
+			"satisfiable": containsString(h.semanticExternalServices().Protocols, protocol),
 		})
 		return
 	}
-	if !containsString(h.contract.RunnerInput.ExternalServices.Protocols, protocol) {
+	if !containsString(h.semanticExternalServices().Protocols, protocol) {
 		h.writeError(w, "resource_not_found", "standard-service protocol is unknown")
 		return
 	}
@@ -3011,7 +3153,7 @@ func (h *ReferenceHost) handleStandardServiceSupport(w http.ResponseWriter, prot
 		"apiVersion": h.supportAPIVersion(),
 		"kind":       "StandardServiceSupport",
 		"serviceRef": map[string]any{
-			"apiVersion": h.contract.RunnerInput.ExternalServices.ServiceAPIVersion,
+			"apiVersion": h.semanticExternalServices().ServiceAPIVersion,
 			"protocol":   protocol,
 		},
 		"satisfiable": satisfiable,
@@ -3159,6 +3301,7 @@ func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 		"operations": form.operations(),
 	}
 	if form.Ref.Kind == workerVersionKind {
+		h.concreteKindSelections++
 		// The handler enum is the runtime ABI's vocabulary, read from the
 		// installed contract. There is no compatibilityDate range and no
 		// compatibilityFlags enum: a date is only meaningful against a registry
@@ -3177,7 +3320,7 @@ func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 			profile["supportedEnums"] = map[string]any{"handlers": handlers}
 			profile["limits"] = map[string]any{"maximumBundleBytes": maximumBundleBytes}
 		}
-	} else if artifactKind, artifactBacked := artifactManifestKindForForm(form.Ref.Kind); artifactBacked {
+	} else if artifactKind, artifactBacked := h.installedArtifactManifestKind(form); artifactBacked {
 		entryLimit := maximumBundleFiles
 		if artifactKind == workerBundleKind {
 			entryLimit = maximumWorkerBundleModules

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"regexp/syntax"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ const (
 	stableFamilyFormDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1/form-definition.schema.json"
 	stableHostAPIVersion                = "forms.takoform.com/v1"
 	interfaceDefinitionSchemaID         = "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-definition.schema.json"
+	bindingDefinitionSchemaID           = "https://forms.takoform.com/schemas/bindings/v1alpha2/binding-definition.schema.json"
 	revocationSchemaID                  = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
 	revocationCheckpointSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
 	portableMapKeyPattern               = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
@@ -79,6 +81,7 @@ type compiledSchemas struct {
 	revocation               *jsonschema.Schema
 	revocationCheckpoint     *jsonschema.Schema
 	interfaceDefinition      *jsonschema.Schema
+	bindingDefinition        *jsonschema.Schema
 }
 
 // namespacedFormGroupPattern mirrors the apiVersion grammar of the family
@@ -185,7 +188,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-ref-v1beta2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "form-definition-v1.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "package-index-v1alpha5.schema.json", "interface-ref-v1alpha1.schema.json", "interface-definition-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "binding-ref-v1alpha2.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
+		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-ref-v1beta2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "form-definition-v1.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "package-index-v1alpha5.schema.json", "interface-ref-v1alpha1.schema.json", "interface-definition-v1alpha1.schema.json", "binding-definition-v1alpha2.schema.json", "binding-ref-v1alpha1.schema.json", "binding-ref-v1alpha2.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -333,6 +336,11 @@ func loadSchemas() (compiledSchemas, error) {
 		schemasValue.interfaceDefinition, schemasErr = compiler.Compile(interfaceDefinitionSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile Interface Definition schema: %w", schemasErr)
+			return
+		}
+		schemasValue.bindingDefinition, schemasErr = compiler.Compile(bindingDefinitionSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile Binding Definition schema: %w", schemasErr)
 		}
 	})
 	return schemasValue, schemasErr
@@ -681,7 +689,223 @@ func ValidateInterfaceDefinition(raw []byte) error {
 	if err := validateDocument(raw, schemas.interfaceDefinition, &document); err != nil {
 		return fmt.Errorf("Interface Definition: %w", err)
 	}
+	if err := validateInterfaceDefinitionSemantics(document); err != nil {
+		return fmt.Errorf("Interface Definition semantics: %w", err)
+	}
 	return nil
+}
+
+// ValidateBindingDefinition validates one exact Binding Definition against
+// the normative v1alpha2 schema embedded with the production parser.
+func ValidateBindingDefinition(raw []byte) error {
+	schemas, err := loadSchemas()
+	if err != nil {
+		return err
+	}
+	var document any
+	if err := validateDocument(raw, schemas.bindingDefinition, &document); err != nil {
+		return fmt.Errorf("Binding Definition: %w", err)
+	}
+	if err := validateBindingDefinitionSemantics(document); err != nil {
+		return fmt.Errorf("Binding Definition semantics: %w", err)
+	}
+	return nil
+}
+
+// validateInterfaceDefinitionSemantics proves the relationships the published
+// Interface Definition schema cannot express. uniqueItems only rejects an
+// exact duplicate operation object; operation names are the runtime ABI and
+// therefore must be unique even when two otherwise different objects share
+// one. Fixtures are closed over that same ABI: every step names a declared
+// operation, and an expected error belongs to that operation's closed error
+// vocabulary.
+func validateInterfaceDefinitionSemantics(document any) error {
+	definition, ok := document.(map[string]any)
+	if !ok {
+		return fmt.Errorf("document must be an object")
+	}
+
+	operations, ok := definition["operations"].([]any)
+	if !ok {
+		return fmt.Errorf("operations must be an array")
+	}
+	declared := make(map[string]map[string]struct{}, len(operations))
+	for index, rawOperation := range operations {
+		operation, ok := rawOperation.(map[string]any)
+		if !ok {
+			return fmt.Errorf("operations[%d] must be an object", index)
+		}
+		name, ok := operation["name"].(string)
+		if !ok {
+			return fmt.Errorf("operations[%d].name must be a string", index)
+		}
+		if _, duplicate := declared[name]; duplicate {
+			return fmt.Errorf("operation %q is declared more than once", name)
+		}
+		errors, ok := operation["errors"].([]any)
+		if !ok {
+			return fmt.Errorf("operation %q errors must be an array", name)
+		}
+		codes := make(map[string]struct{}, len(errors))
+		for errorIndex, rawCode := range errors {
+			code, ok := rawCode.(string)
+			if !ok {
+				return fmt.Errorf("operation %q errors[%d] must be a string", name, errorIndex)
+			}
+			codes[code] = struct{}{}
+		}
+		declared[name] = codes
+	}
+
+	fixtures, ok := definition["fixtures"]
+	if !ok {
+		return nil
+	}
+	fixtureList, ok := fixtures.([]any)
+	if !ok {
+		return fmt.Errorf("fixtures must be an array")
+	}
+	for fixtureIndex, rawFixture := range fixtureList {
+		fixture, ok := rawFixture.(map[string]any)
+		if !ok {
+			return fmt.Errorf("fixtures[%d] must be an object", fixtureIndex)
+		}
+		fixtureName, _ := fixture["name"].(string)
+		steps, ok := fixture["steps"].([]any)
+		if !ok {
+			return fmt.Errorf("fixture %q steps must be an array", fixtureName)
+		}
+		for stepIndex, rawStep := range steps {
+			step, ok := rawStep.(map[string]any)
+			if !ok {
+				return fmt.Errorf("fixture %q steps[%d] must be an object", fixtureName, stepIndex)
+			}
+			operationName, ok := step["operation"].(string)
+			if !ok {
+				return fmt.Errorf("fixture %q steps[%d].operation must be a string", fixtureName, stepIndex)
+			}
+			operationErrors, declared := declared[operationName]
+			if !declared {
+				return fmt.Errorf("fixture %q references undeclared operation %q", fixtureName, operationName)
+			}
+			if rawExpectedError, present := step["expectedError"]; present {
+				expectedError, ok := rawExpectedError.(string)
+				if !ok {
+					return fmt.Errorf("fixture %q operation %q expectedError must be a string", fixtureName, operationName)
+				}
+				if _, declared := operationErrors[expectedError]; !declared {
+					return fmt.Errorf("fixture %q expects error %q, which operation %q does not declare", fixtureName, expectedError, operationName)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// validateBindingDefinitionSemantics proves the one binding invariant the
+// structural schema cannot express: bindingNameGrammar must be a compilable
+// RE2 expression that explicitly anchors the complete instance name. The
+// source Form role remains the Binding Definition's authority and is compared
+// for exact equality by the downstream Core verifier; this neutral package
+// verifier does not narrow that choice.
+func validateBindingDefinitionSemantics(document any) error {
+	definition, ok := document.(map[string]any)
+	if !ok {
+		return fmt.Errorf("document must be an object")
+	}
+	grammar, ok := definition["bindingNameGrammar"].(string)
+	if !ok {
+		return fmt.Errorf("bindingNameGrammar must be a string")
+	}
+	if !strings.HasPrefix(grammar, "^") || !hasUnescapedRegexSuffix(grammar, '$') {
+		return fmt.Errorf("bindingNameGrammar must be explicitly anchored with ^ and $")
+	}
+	if _, err := regexp.Compile(grammar); err != nil {
+		return fmt.Errorf("bindingNameGrammar is not a compilable RE2 expression: %w", err)
+	}
+	parsed, err := syntax.Parse(grammar, syntax.Perl)
+	if err != nil {
+		return fmt.Errorf("bindingNameGrammar is not a parsable RE2 expression: %w", err)
+	}
+	if !regexRequiresBeginText(parsed) || !regexRequiresEndText(parsed) {
+		return fmt.Errorf("bindingNameGrammar must anchor every alternative to the beginning and end of the complete text")
+	}
+	return nil
+}
+
+// regexRequiresBeginText and regexRequiresEndText inspect the parsed RE2
+// program instead of trusting the first and last source bytes. Source checks
+// alone accept patterns such as ^$|foo$ and multiline anchors, both of which
+// match a substring/line rather than one complete binding name. Alternation
+// must preserve the assertion in every branch; captures are transparent.
+func regexRequiresBeginText(expression *syntax.Regexp) bool {
+	expression = unwrapRegexCapture(expression)
+	switch expression.Op {
+	case syntax.OpBeginText:
+		return true
+	case syntax.OpAlternate:
+		if len(expression.Sub) == 0 {
+			return false
+		}
+		for _, alternative := range expression.Sub {
+			if !regexRequiresBeginText(alternative) {
+				return false
+			}
+		}
+		return true
+	case syntax.OpConcat:
+		return len(expression.Sub) != 0 && regexRequiresBeginText(expression.Sub[0])
+	case syntax.OpPlus:
+		return len(expression.Sub) == 1 && regexRequiresBeginText(expression.Sub[0])
+	case syntax.OpRepeat:
+		return expression.Min > 0 && len(expression.Sub) == 1 && regexRequiresBeginText(expression.Sub[0])
+	default:
+		return false
+	}
+}
+
+func regexRequiresEndText(expression *syntax.Regexp) bool {
+	expression = unwrapRegexCapture(expression)
+	switch expression.Op {
+	case syntax.OpEndText:
+		return true
+	case syntax.OpAlternate:
+		if len(expression.Sub) == 0 {
+			return false
+		}
+		for _, alternative := range expression.Sub {
+			if !regexRequiresEndText(alternative) {
+				return false
+			}
+		}
+		return true
+	case syntax.OpConcat:
+		return len(expression.Sub) != 0 && regexRequiresEndText(expression.Sub[len(expression.Sub)-1])
+	case syntax.OpPlus:
+		return len(expression.Sub) == 1 && regexRequiresEndText(expression.Sub[0])
+	case syntax.OpRepeat:
+		return expression.Min > 0 && len(expression.Sub) == 1 && regexRequiresEndText(expression.Sub[0])
+	default:
+		return false
+	}
+}
+
+func unwrapRegexCapture(expression *syntax.Regexp) *syntax.Regexp {
+	for expression.Op == syntax.OpCapture && len(expression.Sub) == 1 {
+		expression = expression.Sub[0]
+	}
+	return expression
+}
+
+func hasUnescapedRegexSuffix(pattern string, suffix byte) bool {
+	if len(pattern) == 0 || pattern[len(pattern)-1] != suffix {
+		return false
+	}
+	backslashes := 0
+	for index := len(pattern) - 2; index >= 0 && pattern[index] == '\\'; index-- {
+		backslashes++
+	}
+	return backslashes%2 == 0
 }
 
 // ValidateDesiredInstance validates one already-decoded desired value against
@@ -1881,9 +2105,6 @@ func validateInterfaceInputs(interfaceKey, resourceURIInput string, inputs []Int
 }
 
 func validateDefinitionSemantics(definition FormDefinition) error {
-	if definition.Role != "" && definition.Role != "revision" && len(definition.AcceptedBindings) > 0 {
-		return fmt.Errorf("Form Definition role %q must not accept capability bindings; only revision-role Forms hold them", definition.Role)
-	}
 	if len(definition.ConformanceFixtures) > maxConformanceFixtures {
 		return fmt.Errorf("Form Definition has %d conformance fixtures; maximum is %d", len(definition.ConformanceFixtures), maxConformanceFixtures)
 	}

@@ -1,0 +1,154 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "container.runtime",
+  "version": "1.0.0",
+  "title": "Container request runtime",
+  "description": "The exact host-provided request ABI for one Container Service. The host starts the digest-pinned process, projects declared environment names, and delivers bounded HTTP-shaped requests to it. Image execution, networking, certificate handling, and credentials remain host duties outside this data-only Interface Definition. A runtime behavior change requires a new exact Interface version and a Form revision.",
+  "operations": [
+    {
+      "name": "http",
+      "description": "Deliver one HTTP-shaped request to the ready container process with its sealed environment projection. The host awaits the response; an unavailable or failed process is reported as a runtime error rather than hanging the request.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "environment": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 256,
+            "propertyNames": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "maxLength": 1048576,
+                "type": "string"
+              },
+              "headers": {
+                "additionalProperties": {
+                  "maxLength": 8192,
+                  "type": "string"
+                },
+                "maxProperties": 128,
+                "propertyNames": {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "method": {
+                "enum": [
+                  "DELETE",
+                  "GET",
+                  "HEAD",
+                  "OPTIONS",
+                  "PATCH",
+                  "POST",
+                  "PUT"
+                ],
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 2048,
+                "pattern": "^/[^\\x00\\r\\n]{0,2047}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "method",
+              "path"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request",
+          "environment"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 1048576,
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 128,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": {
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "headers",
+          "body"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "process_unavailable",
+        "request_too_large",
+        "response_too_large",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "read_after_write",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxEnvironmentItems": 256,
+    "maxRequestBytes": 1048576,
+    "maxResponseBytes": 1048576
+  },
+  "fixtures": [
+    {
+      "name": "request-returns-response",
+      "steps": [
+        {
+          "operation": "http",
+          "input": {
+            "environment": {
+              "LOG_LEVEL": "info"
+            },
+            "request": {
+              "method": "GET",
+              "path": "/health"
+            }
+          },
+          "expected": {
+            "body": "ok",
+            "headers": {},
+            "status": 200
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -240,6 +240,10 @@ type v3Runner struct {
 	alternateTenantToken string
 	httpClient           *http.Client
 	apiBase              string
+	// adapterArtifact is the concrete wire representation selected by a Host
+	// adapter from the generic plan's opaque blob evidence. Generic corpus data
+	// never carries a concrete artifact-manifest kind.
+	adapterArtifact *hostArtifactTransport
 
 	// desiredSchemas is the CORPUS-PINNED desiredSchema of every Form the lane
 	// drives a probe against, keyed by the whole exact FormRef.
@@ -252,6 +256,10 @@ type v3Runner struct {
 	// contract in this lane (decision 0022) and a kind-keyed map would answer
 	// for whichever arrived first.
 	desiredSchemas map[FormRef]map[string]any
+	// desiredMutations carries corpus-authored, schema-valid alternative desired
+	// documents for family-neutral probes. The retained family corpus leaves it
+	// empty and therefore keeps the byte-for-byte legacy mutations below.
+	desiredMutations map[FormRef][]map[string]any
 
 	completed              map[string]bool
 	survey                 bool
@@ -264,9 +272,24 @@ type v3Runner struct {
 	artifactManifestDigest string
 	asyncOperationID       string
 	cancelledOperationID   string
+	// legacySemanticSelections is conformance instrumentation. The neutral
+	// generic suite must keep it at zero; retained concrete-family runs select
+	// their published RunnerInput through the fallback accessors.
+	legacySemanticSelections int
 }
 
 func (r *v3Runner) complete(check string) { r.completed[check] = true }
+
+// LegacySemanticSelections reports how many times this runner selected the
+// retained concrete-family semantic adapter. Generic execution asserts zero.
+func (r *v3Runner) LegacySemanticSelections() int { return r.legacySemanticSelections }
+
+func (r *v3Runner) desiredMutation(target probeTarget, index int, fallback map[string]any) map[string]any {
+	if index >= 0 && index < len(r.desiredMutations[target.Ref]) {
+		return cloneJSONMap(r.desiredMutations[target.Ref][index])
+	}
+	return fallback
+}
 
 type wireResponse struct {
 	Status int
@@ -371,12 +394,11 @@ func (r *v3Runner) materialize(ref FormRef, spec map[string]any) map[string]any 
 // serves separately, by `form-definition-exact`, which compares the two. A
 // runner that took the answer from the subject had no comparison to make.
 func (r *v3Runner) pinDesiredSchemas() {
-	input := r.contract.RunnerInput
 	r.desiredSchemas = map[FormRef]map[string]any{}
-	for _, entry := range declaredProbes(&input) {
+	for _, entry := range r.semanticProbeEntries() {
 		r.desiredSchemas[entry.Probe.Identity.FormRef] = entry.Probe.DesiredSchema.Schema
 	}
-	for _, entry := range constraintDefinitionInventory(&input) {
+	for _, entry := range r.semanticConstraintEntries() {
 		if entry.probe.Definition != nil {
 			r.desiredSchemas[entry.probe.FormRef] = entry.probe.Definition.DesiredSchema
 		}

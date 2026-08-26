@@ -54,7 +54,7 @@ func v3CurrentSurface(t *testing.T) map[string]v3ResourceSurface {
 	ctx := context.Background()
 	surface := map[string]v3ResourceSurface{}
 	for _, form := range edgeformcatalog.Forms {
-		resource := &v3FormResource{form: form, codecs: v3Codecs()}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, v3Codecs())
 		var response frameworkresource.SchemaResponse
 		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		if response.Diagnostics.HasError() {
@@ -219,7 +219,7 @@ func TestV3EverySchemaCarriesTheLaneVersionAndAnUpgrader(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	for _, form := range edgeformcatalog.Forms {
-		resource := &v3FormResource{form: form, codecs: v3Codecs()}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, v3Codecs())
 		var response frameworkresource.SchemaResponse
 		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		if response.Schema.Version != v3SchemaVersion {
@@ -430,14 +430,16 @@ func TestV3FormLineAdvanceKeepsOneTerraformResourceType(t *testing.T) {
 func TestV3DerivedRevisionNamesAreDeterministicAndDistinct(t *testing.T) {
 	t.Parallel()
 	for _, form := range edgeformcatalog.Forms {
-		resource := &v3FormResource{form: form, codecs: v3Codecs()}
+		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, v3Codecs())
 		if (form.Role == model.RoleRevision) != resource.derivesRevisionName() {
 			t.Errorf("%s derives a revision name = %v, want it exactly for the revision role",
 				form.Kind, resource.derivesRevisionName())
 		}
 	}
-	bundle := &v3FormResource{form: mustForm(t, "WorkerBundle"), codecs: v3Codecs()}
-	version := &v3FormResource{form: mustForm(t, "WorkerVersion"), codecs: v3Codecs()}
+	bundleForm := mustForm(t, "WorkerBundle")
+	versionForm := mustForm(t, "WorkerVersion")
+	bundle := v3Provider3CurrentResourceHarness(t, bundleForm, "", nil, v3Codecs())
+	version := v3Provider3CurrentResourceHarness(t, versionForm, "", nil, v3Codecs())
 	digest := "sha256:" + strings.Repeat("ab", 32)
 	first, ok := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest}, v3TestRevisionOwner)
 	if !ok || !strings.HasPrefix(first, "bundle-") {

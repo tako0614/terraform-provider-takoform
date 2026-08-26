@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"reflect"
 	"sort"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/providerdiagnostics"
 )
 
 // MatrixReport is the evidence both supported CLIs produced.
@@ -209,10 +211,10 @@ func Validate(report Report) error {
 		return fmt.Errorf("create-first refusal was %s (%d), want invalid_argument (400)",
 			report.SameNameDeadlock.CreateFirstCode, report.SameNameDeadlock.CreateFirstHTTP)
 	}
-	if report.PlanRefusal.Code != "takoform.provider/immutable-revision-same-name" {
+	if report.PlanRefusal.Code != providerdiagnostics.ImmutableRevisionSameName {
 		return errors.New("the same-name replacement was not refused at plan")
 	}
-	if report.HostSupport.Code != "takoform.provider/host-does-not-support-value" {
+	if report.HostSupport.Code != providerdiagnostics.HostDoesNotSupportValue {
 		return errors.New("an unsupported Form was not refused at plan")
 	}
 	for name, sequence := range map[string]SequenceEvidence{

@@ -86,7 +86,7 @@ type exclusiveSubject struct {
 // case this whole lane exists to make cheap.
 func (r *v3Runner) declaredExclusiveSubjects() ([]exclusiveSubject, error) {
 	var out []exclusiveSubject
-	for _, entry := range declaredProbes(&r.contract.RunnerInput) {
+	for _, entry := range r.semanticProbeEntries() {
 		schema := entry.Probe.DesiredSchema.Schema
 		if len(schema) == 0 {
 			return nil, fmt.Errorf("%s: the corpus pins no desired schema to derive holds from", entry.Label)

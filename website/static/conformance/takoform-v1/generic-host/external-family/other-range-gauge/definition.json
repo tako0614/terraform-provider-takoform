@@ -1,0 +1,23 @@
+{
+  "apiVersion": "records.publisher.example",
+  "kind": "RangeGauge",
+  "definitionVersion": "0.1.0",
+  "title": "Independent second-group range gauge",
+  "description": "A second external publisher owns the same Kind without sharing identity or state.",
+  "role": "identity",
+  "requiresHostApi": "forms.takoform.com/v1",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe"
+  ]
+}

@@ -175,10 +175,11 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	if err != nil {
 		return VerificationReport{}, err
 	}
-	definitionDigest, err := DigestCanonicalJSON(definitionRaw)
+	canonicalDefinition, err := Canonicalize(definitionRaw)
 	if err != nil {
 		return VerificationReport{}, err
 	}
+	definitionDigest := DigestBytes(canonicalDefinition)
 	if definitionDigest != index.FormRef.SchemaDigest {
 		return VerificationReport{}, fmt.Errorf("FormRef schemaDigest is %s, canonical definition digest is %s", index.FormRef.SchemaDigest, definitionDigest)
 	}
@@ -291,7 +292,40 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	if err := assertPackageRootStable(root, rootHandle, rootInfo); err != nil {
 		return VerificationReport{}, err
 	}
-	return VerificationReport{PackageDigest: packageDigest, FormRef: index.FormRef, FileCount: len(index.Files), PayloadBytes: payloadBytes}, nil
+	return VerificationReport{
+		PackageDigest: packageDigest,
+		FormRef:       index.FormRef,
+		FileCount:     len(index.Files),
+		PayloadBytes:  payloadBytes,
+		verified:      newVerifiedPackage(packageDigest, index, canonicalDefinition, payloads),
+	}, nil
+}
+
+func newVerifiedPackage(packageDigest string, index PackageIndex, canonicalDefinition []byte, payloads map[string][]byte) *verifiedPackageData {
+	ownedPayloads := make(map[string][]byte, len(payloads))
+	for relativePath, raw := range payloads {
+		ownedPayloads[relativePath] = cloneBytes(raw)
+	}
+	return &verifiedPackageData{
+		issuer:              verifiedPackageIssuerToken,
+		packageDigest:       packageDigest,
+		formRef:             index.FormRef,
+		index:               clonePackageIndex(index),
+		canonicalDefinition: cloneBytes(canonicalDefinition),
+		payloads:            ownedPayloads,
+	}
+}
+
+func clonePackageIndex(index PackageIndex) PackageIndex {
+	index.Files = append([]PackageFile(nil), index.Files...)
+	return index
+}
+
+func cloneBytes(raw []byte) []byte {
+	if raw == nil {
+		return nil
+	}
+	return append([]byte(nil), raw...)
 }
 
 func isJSONMediaType(mediaType string) bool {

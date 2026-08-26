@@ -1,0 +1,146 @@
+{
+  "format": "takoform.edge-host-rehome@v1",
+  "fileCount": 28,
+  "files": [
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/contract.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/contract.json",
+      "sha256": "1c4281e54ea986ec9cfacc74ef5d384142b620a63fb19331b514eb1f2f31def7"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-distinct-pair.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-distinct-pair.json",
+      "sha256": "7dc46160efa63d54761bb353370b5adac7c2868fbc12d3b73d2c9c21d01d0338"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-member.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-member.json",
+      "sha256": "23a70ed2a6cf1c5a100b5757b42f9543218af927d3bae1a5fa757f61b89a5cb0"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-node.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-node.json",
+      "sha256": "d40e26e47f239acfd262ea8853fb7c1d60d3bcd187b7d1fb201181c48eb1cb0c"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-same-target.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-same-target.json",
+      "sha256": "b6f526e3b5ffad857e80682ef7791e21237ea614025fd2588bc36aa7d1b927f4"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-structural.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-structural.json",
+      "sha256": "c68e69df2440a5139f7eee923774ca51e3bc2e97e73c0cac167ed72ae3a2d641"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-unique-pair-second.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-unique-pair-second.json",
+      "sha256": "79b6b06a364de456ff8f34363a4560a965fecd82e52acb5e59e28ad8b5ee7b25"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/constraint-unique-pair.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/constraint-unique-pair.json",
+      "sha256": "01d32914e21086876722803614beea4b2b503835ada0dc698aaf095049d1a24b"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-actor-namespace.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-actor-namespace.json",
+      "sha256": "7c6d8c0b11a1b8b447ad75db891cc254d37fc507fe842b41ad5d6ebd1f4e3e66"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-at-least-once-queue.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-at-least-once-queue.json",
+      "sha256": "cde8e7bc22646ca301162cafd9908983a1105c1ae4ac4f8308a847cfddf53a74"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-durable-workflow.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-durable-workflow.json",
+      "sha256": "ad461df3c85d920ded44ecbddb318bf1717c7fcf96729300c2612bf79a4586ef"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-edge-kvnamespace.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-edge-kvnamespace.json",
+      "sha256": "6ae4b4cc712dbd445a131e0d3a8c464ef48070375ec3432dea599944c4c1bb5e"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-module-worker.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-module-worker.json",
+      "sha256": "18192dd39a68d01a3e8d673d6fb33692bea4a2a1b4bcd3db61c7a1cd78c6094f"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-queue-consumer.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-queue-consumer.json",
+      "sha256": "cc97142acf0c23186022a3be15cb3d801a8ec2900b81ad77039f3692eeddffa2"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-sqlite-database.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-sqlite-database.json",
+      "sha256": "20e378ed44dc3b0bb2512400f30d1567a319b54bd01800883c992cef81d55dda"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-sqlite-migration-application.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-sqlite-migration-application.json",
+      "sha256": "0fd08736e9ef1999b8e38639cde58d28fc90feef6c5bc3f3cd0ae6978183d121"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-sqlite-migration-set.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-sqlite-migration-set.json",
+      "sha256": "bea51df95c4f031cba02c0f56c4f21d06f7b56b757f3fecfafc9467f622b29aa"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-static-asset-bundle.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-static-asset-bundle.json",
+      "sha256": "1a34bb52ccc21fdb7d1155b93b63be6284ac5947fdf8c3b2a6bac281830f4de0"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-worker-bundle.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-worker-bundle.json",
+      "sha256": "4e2c13cee7c98401de522e6caf5b1a3f8f8d4fefffaaaf593e32b73da892d2c5"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-worker-cron-trigger.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-worker-cron-trigger.json",
+      "sha256": "52baf84e6fb548d19b3074ea4acd69bcf48aaa3444396d435801ed8c081bfc6c"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-worker-custom-domain.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-worker-custom-domain.json",
+      "sha256": "fadc0188cb9925206dbc778d3fc78d9272928237a76f06ca83346298e743a4a3"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-worker-deployment.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-worker-deployment.json",
+      "sha256": "7ed8e640cf7ba175ae217bec2b530b118ade59ba5ec9fcfd864dbe0be8dfe731"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-worker-endpoint.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-worker-endpoint.json",
+      "sha256": "a17e0928faf37f6eb25fc86c43b535895985c32fc51ae7a887388d708dce7bc3"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/desired-schema-worker-version.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/desired-schema-worker-version.json",
+      "sha256": "c35c2398f45dc0b73c2e7de8cb44d065ace7de05a5100eccf22ebf3ae1e9e4a8"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/negative-module-worker-unexpected-property.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/negative-module-worker-unexpected-property.json",
+      "sha256": "d10f45f42473405c10b441faafa3d23e863d4160f2ca3a7d0c32874b386f1ae9"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/negative-queue-retention.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/negative-queue-retention.json",
+      "sha256": "1dee6d1574d4c8a06aaac8ed51b1192ad30f2fd643cd203ea532ec08b4f7bbb1"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/fixtures/synthetic-module-worker-second-definition.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/fixtures/synthetic-module-worker-second-definition.json",
+      "sha256": "ad9495aa766051f814e7abe70d06ea33b1a48cd48c08691ae425b42d7e63635d"
+    },
+    {
+      "oldPath": "conformance/takoform-v1/generic-host/portable-host/manifest.json",
+      "newPath": "conformance/takoform-v1/family-host/edge/portable-host/manifest.json",
+      "sha256": "5178c3aa03621694aaa6d4f51087efc2e693695e4e9b9a0dd3c788fcc0ef9944"
+    }
+  ]
+}

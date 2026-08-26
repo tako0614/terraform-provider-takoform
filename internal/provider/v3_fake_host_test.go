@@ -707,5 +707,5 @@ func v3TestFormResource(t *testing.T, kind string, data *providerData) *v3FormRe
 	if !ok {
 		t.Fatalf("%s is not a declared family Form", kind)
 	}
-	return &v3FormResource{form: form, data: data, codecs: v3Codecs()}
+	return v3Provider3CurrentResourceHarness(t, form, "", data, v3Codecs())
 }

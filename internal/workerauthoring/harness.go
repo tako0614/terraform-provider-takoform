@@ -31,7 +31,7 @@ import (
 
 // stablePortableHostCorpus is the frozen stable Host API corpus served by this
 // authoring harness. The retained beta corpus is never selected here.
-const stablePortableHostCorpus = "conformance/takoform-v1/generic-host/portable-host"
+const stablePortableHostCorpus = "conformance/takoform-v1/family-host/edge/portable-host"
 
 // ProviderAddress is the one canonical FQN both supported CLIs install the
 // provider under.

@@ -125,7 +125,7 @@ func (r *v3Runner) checkTenantIsolatedResourcePlane() error {
 func (r *v3Runner) checkEachTenantMutatesItsOwnPlane() error {
 	// The queue is the probe that declares `update`, so "the same operation the
 	// holder was refused" is a real spec change here rather than a re-apply.
-	subject := r.target(r.contract.RunnerInput.AtLeastOnceQueue)
+	subject := r.target(r.semanticSequenced())
 	subject.Name = tenantOwnMutationName
 
 	firstResponse, err := r.applyAs(r.token, subject, applyOptions{
@@ -150,7 +150,8 @@ func (r *v3Runner) checkEachTenantMutatesItsOwnPlane() error {
 	}
 
 	changed := subject
-	changed.Spec = map[string]any{"deliveryDelaySeconds": 30, "messageRetentionSeconds": 600000}
+	changed.Spec = r.desiredMutation(subject, 0,
+		map[string]any{"deliveryDelaySeconds": 30, "messageRetentionSeconds": 600000})
 	changed.Spec = r.materialize(changed.Ref, changed.Spec)
 	updated, err := r.applyAs(r.alternateTenantToken, changed, applyOptions{
 		ExpectedGeneration: second.Metadata.Generation,

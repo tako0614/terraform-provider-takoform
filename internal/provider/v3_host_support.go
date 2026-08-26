@@ -415,7 +415,7 @@ func (r *v3FormResource) checkPlannedValues(
 	if diags.HasError() {
 		return
 	}
-	if v3ArtifactBackedRevision(r.form.Kind) {
+	if r.v3ArtifactBackedRevision() {
 		r.checkArtifactCeiling(profile, codec, values, resp)
 		return
 	}
@@ -555,7 +555,7 @@ func (r *v3FormResource) checkArtifactCeiling(
 ) {
 	attributeName := "modules"
 	entryLabel := "modules"
-	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+	if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		attributeName = "files"
 		entryLabel = "files"
 	}

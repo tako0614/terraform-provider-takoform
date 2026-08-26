@@ -21,7 +21,7 @@ import (
 // object, exactly as the first version's is, so any difference the lane
 // observes is a difference of identity rather than of content.
 func (r *v3Runner) syntheticDefinitionTarget(name string) probeTarget {
-	probe := r.contract.RunnerInput.SyntheticSecondDefinitionVersion
+	probe := r.semanticSecondDefinition()
 	return probeTarget{
 		Ref:   probe.FormRef,
 		Name:  name,
@@ -64,8 +64,8 @@ func (r *v3Runner) formSupportURL(ref FormRef) string {
 // holds, and a host that resolved the group and kind first would answer it
 // about whichever contract it found.
 func (r *v3Runner) checkTwoDefinitionVersionsAnswerIndependently() error {
-	first := r.contract.RunnerInput.ModuleWorker.Identity.FormRef
-	second := r.contract.RunnerInput.SyntheticSecondDefinitionVersion.FormRef
+	first := r.semanticPrimary().Identity.FormRef
+	second := r.semanticSecondDefinition().FormRef
 	if first.APIVersion != second.APIVersion || first.Kind != second.Kind ||
 		first.DefinitionVersion == second.DefinitionVersion {
 		return errors.New("the corpus does not pin two definition versions of one group and kind")
@@ -209,7 +209,7 @@ func (r *v3Runner) checkTwoDefinitionVersionsAnswerIndependently() error {
 // never applied under, and the client's own state — which records the exact ref
 // — would have no way to notice.
 func (r *v3Runner) checkResourceAnswersOnlyUnderItsRecordedFormRef() error {
-	first := r.target(r.contract.RunnerInput.ModuleWorker)
+	first := r.target(r.semanticPrimary())
 	first.Name = "recorded-ref-probe"
 	created, _, err := r.applyResource(first, applyOptions{
 		Create: true, IdempotencyKey: "key-recorded-ref-create",

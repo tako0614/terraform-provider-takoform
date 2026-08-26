@@ -26,14 +26,11 @@ package provider
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
-	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/retainededgeformcatalog"
 )
 
 // v3FormCodec is one exact FormRef together with the Form declaration that
@@ -53,131 +50,15 @@ type v3CodecDeclaration struct {
 // registry plus one codec per supported identity. It is immutable; withCodec
 // returns a copy, so a build's own table can never be reshaped at a distance.
 type v3CodecTable struct {
-	registry *currentformregistry.V3Registry
+	registry v3FormRegistry
 	codecs   map[currentformregistry.ExactFormKey]v3CodecDeclaration
-}
-
-// v3Codecs is the table this provider build carries. Every supported exact ref
-// resolves to the catalog Form with the same complete identity. It must not
-// use ByKind: that helper intentionally returns the current default and would
-// reinterpret a retained Beta ref as a future stable catalog entry when a
-// Form line advances.
-var v3Codecs = sync.OnceValue(func() *v3CodecTable {
-	return newV3CodecTable(currentformregistry.V3Current())
-})
-
-func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
-	table := &v3CodecTable{
-		registry: registry,
-		codecs:   map[currentformregistry.ExactFormKey]v3CodecDeclaration{},
-	}
-	// The supported set spans the eight current families plus the frozen
-	// retained v1beta1 generation (decision 0046). Every current family is
-	// selected explicitly from the generated current-family projection; the
-	// retained catalog is appended separately so the historical lane remains
-	// byte/identity independent of current Forms.
-	generations := make([]catalogGeneration, 0, len(providerV3CurrentFamilies())+1)
-	for _, family := range providerV3CurrentFamilies() {
-		generation := catalogGeneration{family: family.family, forms: family.forms}
-		generation.rendered, generation.renderErr = family.render()
-		generations = append(generations, generation)
-	}
-	generations = append(generations, catalogGeneration{
-		family: retainededgeformcatalog.Family,
-		forms:  retainededgeformcatalog.Forms,
-	})
-	retainedRendered, retainedErr := retainededgeformcatalog.RenderForms()
-	retainedGeneration := &generations[len(generations)-1]
-	retainedGeneration.rendered = make([]catalogRenderedForm, 0, len(retainedRendered))
-	for _, form := range retainedRendered {
-		retainedGeneration.rendered = append(retainedGeneration.rendered, catalogRenderedForm{DefinitionJSON: form.DefinitionJSON})
-	}
-	retainedGeneration.renderErr = retainedErr
-	for _, ref := range registry.SupportedRefs() {
-		// ObjectBucket is retained only as immutable Provider 2.1.1 source
-		// history. Provider 3 deliberately carries no Terraform mapping or
-		// state codec for it; legacy state must be disposed with Provider 2.1.1
-		// before upgrading to this major line.
-		if ref.APIVersion == retainededgeformcatalog.Family.APIVersion() && ref.Kind == "ObjectBucket" {
-			continue
-		}
-		declaration, declared := formForExactRef(ref, generations)
-		if !declared {
-			// A supported identity whose field set is not compiled into this
-			// build has no codec. It stays out of the table, so state bound to
-			// it fails closed instead of being decoded by another kind's
-			// declarations.
-			continue
-		}
-		table.codecs[ref.ExactKey()] = declaration
-	}
-	return table
-}
-
-// catalogGeneration is one compiled declaration set the codec table may
-// dispatch into: the family it declares, its Forms, and their rendered bytes.
-type catalogGeneration struct {
-	family    model.Family
-	forms     []model.Form
-	rendered  []catalogRenderedForm
-	renderErr error
-}
-
-type catalogRenderedForm struct {
-	DefinitionJSON string
-}
-
-// formForExactRef keeps the Form declaration selected by the same exact
-// identity as provider state. Two compiled generations may each declare the
-// same kind; matching the family, definition version, and rendered schema
-// digest binds each exact ref to the one declaration whose published bytes it
-// names, so a retained v1beta1 ref can never be decoded by the v1beta2
-// declaration of the same kind, nor the reverse.
-func formForExactRef(
-	ref currentformregistry.V3Ref,
-	generations []catalogGeneration,
-) (v3CodecDeclaration, bool) {
-	for _, generation := range generations {
-		if generation.family.APIVersion() != ref.APIVersion {
-			continue
-		}
-		if generation.renderErr != nil || len(generation.rendered) != len(generation.forms) {
-			return v3CodecDeclaration{}, false
-		}
-		for index, candidate := range generation.forms {
-			if candidate.Kind == ref.Kind &&
-				candidate.DefinitionVersion == ref.DefinitionVersion {
-				definitionJSON := []byte(generation.rendered[index].DefinitionJSON)
-				// WorkerVersion and WorkerDeployment are the two retained
-				// identities whose v1beta1 bytes must remain exactly those
-				// shipped by provider 2.1.1. Decode them from the embedded
-				// historical artifacts instead of letting current-only model
-				// changes alter the old schema digest.
-				if generation.family.APIVersion() == retainededgeformcatalog.Family.APIVersion() {
-					if frozen, ok := retainedFrozenDefinition(candidate.Kind); ok {
-						definitionJSON = frozen
-					}
-				}
-				digest, err := formpackage.DigestCanonicalJSON(definitionJSON)
-				if err != nil || digest != ref.SchemaDigest {
-					continue
-				}
-				definition, err := formpackage.ValidateDefinition(definitionJSON)
-				if err != nil {
-					return v3CodecDeclaration{}, false
-				}
-				return v3CodecDeclaration{Form: candidate, DesiredSchema: definition.DesiredSchema}, true
-			}
-		}
-	}
-	return v3CodecDeclaration{}, false
 }
 
 // withCodec returns a copy of the table that also supports ref, decoded and
 // encoded by form. asDefaultCreate makes it the create target of its
 // group+kind.
 func (t *v3CodecTable) withCodec(ref currentformregistry.V3Ref, form model.Form, asDefaultCreate bool) (*v3CodecTable, error) {
-	registry, err := t.registry.Register(ref, asDefaultCreate)
+	registry, err := v3RegistryWithRef(t.registry, ref, asDefaultCreate)
 	if err != nil {
 		return nil, err
 	}

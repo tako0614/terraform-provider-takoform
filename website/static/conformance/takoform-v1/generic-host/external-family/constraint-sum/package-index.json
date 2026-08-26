@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "constraints.publisher.example",
+    "kind": "WeightedSet",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:664d55fd53ed19dea264d2a2723889554091821a322b2cfc05bb9fa54bad3039"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 1152,
+      "digest": "sha256:9c61b73943a4a09a8c7e986cbb1eb9473d3e26be3bb97da87a0b585b180b6525"
+    }
+  ]
+}

@@ -85,11 +85,14 @@ func (h *ReferenceHost) exclusiveHolder(
 		if candidate.key() == selfKey {
 			continue
 		}
-		// The same exact kind, in the same family. A different kind pointing
-		// at one target is not a conflict: the rule is one holder OF THIS
-		// KIND, which is what lets a worker carry a deployment and an
-		// endpoint at once.
-		if candidate.group() != form.Ref.APIVersion || candidate.kind() != form.Ref.Kind {
+		// Exclusive is scoped to the exact immutable source Form. A sibling
+		// definition version may define a different holder contract even when
+		// group and kind remain the same.
+		if h.genericPlanFaultDeclaredConstraint == "exclusive" {
+			if candidate.group() != form.Ref.APIVersion || candidate.kind() != form.Ref.Kind {
+				continue
+			}
+		} else if candidate.Ref != form.Ref {
 			continue
 		}
 		if relationTargetUID(candidate.Relations, declared.Pointer) != targetUID {

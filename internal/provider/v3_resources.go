@@ -76,14 +76,33 @@ func v3AttributeName(field model.Field) string { return field.AttributeName() }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attrs := v3CommonAttributes(r.form)
-	if r.form.Kind == workerBundleKind {
-		for name, attribute := range workerBundleAttributes() {
+	artifact, artifactInjected := r.v3ArtifactRule()
+	requiresArtifact := v3FormRequiresArtifactRule(r.form)
+	if requiresArtifact && !artifactInjected {
+		resp.Diagnostics.AddError(
+			"Provider artifact projection is missing",
+			fmt.Sprintf("The exact %s/%s Form requires Provider-only artifact metadata, but its constructor did not inject an exact projection rule. This is a provider bug.", r.form.Family.APIVersion(), r.form.Kind),
+		)
+		return
+	}
+	if artifactInjected && !requiresArtifact {
+		resp.Diagnostics.AddError(
+			"Provider artifact projection is attached to the wrong Form",
+			fmt.Sprintf("The exact %s/%s Form does not declare the required manifestDigest revision shape. This is a provider bug.", r.form.Family.APIVersion(), r.form.Kind),
+		)
+		return
+	}
+	if artifactInjected && artifact.Mode == v3ArtifactModeWorkerBundle {
+		for name, attribute := range workerBundleAttributesForProjection(*artifact) {
 			attrs[name] = attribute
 		}
-	} else if _, fileBundle := v3FileBundleManifestKind(r.form.Kind); fileBundle {
-		for name, attribute := range fileBundleAttributes(r.form.Kind) {
+	} else if artifactInjected && artifact.Mode == v3ArtifactModeFileBundle {
+		for name, attribute := range fileBundleAttributesForProjection(*artifact) {
 			attrs[name] = attribute
 		}
+	} else if artifactInjected {
+		resp.Diagnostics.AddError("Unknown Provider artifact projection mode", fmt.Sprintf("The exact %s/%s Form carries unsupported artifact mode %q. This is a provider bug.", r.form.Family.APIVersion(), r.form.Kind, artifact.Mode))
+		return
 	} else {
 		for _, field := range r.form.Fields {
 			attribute, err := v3FieldAttribute(r.form, field)

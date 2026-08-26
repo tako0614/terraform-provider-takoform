@@ -240,6 +240,102 @@ type VerificationReport struct {
 	FormRef       FormRef `json:"formRef"`
 	FileCount     int     `json:"fileCount"`
 	PayloadBytes  int64   `json:"payloadBytes"`
+	verified      *verifiedPackageData
+}
+
+// VerifiedPackage is the immutable capability issued by VerifyDirectory after
+// it has verified a complete Form Package closure. Its zero value is invalid;
+// callers cannot construct a valid value because the issuance state is
+// package-private and is never serialized through VerificationReport.
+//
+// The value is intentionally small and copyable. The data it points at is
+// immutable after issuance, and every method returns a defensive copy at the
+// public seam.
+type VerifiedPackage struct {
+	data *verifiedPackageData
+}
+
+type verifiedPackageIssuer struct{}
+
+var verifiedPackageIssuerToken = &verifiedPackageIssuer{}
+
+type verifiedPackageData struct {
+	issuer              *verifiedPackageIssuer
+	packageDigest       string
+	formRef             FormRef
+	index               PackageIndex
+	canonicalDefinition []byte
+	payloads            map[string][]byte
+}
+
+// VerifiedPackage returns the package capability attached to a successful
+// VerifyDirectory report. Reports built by callers or decoded from JSON never
+// carry issuance state and therefore return false.
+func (report VerificationReport) VerifiedPackage() (VerifiedPackage, bool) {
+	packageValue := VerifiedPackage{data: report.verified}
+	if !packageValue.Valid() {
+		return VerifiedPackage{}, false
+	}
+	return packageValue, true
+}
+
+// Valid reports whether this value was issued by VerifyDirectory.
+func (packageValue VerifiedPackage) Valid() bool {
+	return packageValue.data != nil && packageValue.data.issuer == verifiedPackageIssuerToken
+}
+
+// PackageDigest returns the verified canonical package-index digest.
+func (packageValue VerifiedPackage) PackageDigest() string {
+	if !packageValue.Valid() {
+		return ""
+	}
+	return packageValue.data.packageDigest
+}
+
+// FormRef returns the verified exact Form identity.
+func (packageValue VerifiedPackage) FormRef() FormRef {
+	if !packageValue.Valid() {
+		return FormRef{}
+	}
+	return packageValue.data.formRef
+}
+
+// PackageIndex returns a defensive copy of the validated package index.
+func (packageValue VerifiedPackage) PackageIndex() PackageIndex {
+	if !packageValue.Valid() {
+		return PackageIndex{}
+	}
+	return clonePackageIndex(packageValue.data.index)
+}
+
+// Definition returns a defensive copy of the canonical Form Definition bytes.
+func (packageValue VerifiedPackage) Definition() []byte {
+	if !packageValue.Valid() {
+		return nil
+	}
+	return cloneBytes(packageValue.data.canonicalDefinition)
+}
+
+// Files returns a defensive copy of the validated payload file inventory.
+func (packageValue VerifiedPackage) Files() []PackageFile {
+	if !packageValue.Valid() {
+		return nil
+	}
+	return append([]PackageFile(nil), packageValue.data.index.Files...)
+}
+
+// Payload returns a defensive copy of one verified payload by its canonical
+// package-relative path. The package index remains the source of file metadata;
+// this method returns only bytes and whether the path is listed.
+func (packageValue VerifiedPackage) Payload(relativePath string) ([]byte, bool) {
+	if !packageValue.Valid() {
+		return nil, false
+	}
+	raw, ok := packageValue.data.payloads[relativePath]
+	if !ok {
+		return nil, false
+	}
+	return cloneBytes(raw), true
 }
 
 // RevocationStatement is one immutable, append-only security decision for an

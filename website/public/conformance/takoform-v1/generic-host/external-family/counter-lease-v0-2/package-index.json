@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "resources.publisher.example",
+    "kind": "CounterLease",
+    "definitionVersion": "0.2.0",
+    "schemaDigest": "sha256:28a72256b6fa50041818eaf857b3212cea694fd01d640b1b2609e68c5d12a703"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 1669,
+      "digest": "sha256:a13956c8b0f3e0c8fc15f4ef7a9f22c05b0da3f62293429455d4a03cf8532799"
+    }
+  ]
+}

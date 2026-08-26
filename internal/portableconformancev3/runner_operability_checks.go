@@ -76,7 +76,7 @@ func (r *v3Runner) checkNamespacedGroupPathSegments(kv probeTarget) error {
 	if !strings.Contains(ref.APIVersion, ".") {
 		return fmt.Errorf("probe apiVersion %q is not a namespaced group", ref.APIVersion)
 	}
-	second := r.contract.RunnerInput.SyntheticSecondGroup
+	second := r.semanticSecondGroup()
 	// The stable FormRef grammar admits only versionless reverse-DNS family
 	// groups, so every group is exactly one ordinary path segment. Retained
 	// beta4 still admits both historical shapes and must drive one of each.
@@ -457,8 +457,9 @@ func (r *v3Runner) checkArtifactDigestIsNotACapability() error {
 	if manifestDigest == "" {
 		return errors.New("no committed manifest digest was recorded by the artifact checks")
 	}
-	moduleSource := r.contract.RunnerInput.WorkerBundle.ModuleSource
-	blobDigest := formpackage.DigestBytes([]byte(moduleSource))
+	transport := r.hostArtifactTransport()
+	blobSource := transport.BlobSource
+	blobDigest := formpackage.DigestBytes([]byte(blobSource))
 	manifestURL := r.apiBase + "/artifacts/" + url.PathEscape(manifestDigest)
 	blobURL := r.apiBase + "/artifacts/blobs/" + url.PathEscape(blobDigest)
 
@@ -503,7 +504,7 @@ func (r *v3Runner) checkArtifactDigestIsNotACapability() error {
 	}
 
 	// The same bytes, uploaded by the other tenant, are readable by it.
-	manifest := r.contract.RunnerInput.WorkerBundle.Manifest
+	manifest := transport.Manifest
 	startResponse, err := r.startUploadAs(r.alternateTenantToken, manifest, "key-artifact-other-tenant-start")
 	if err != nil {
 		return err
@@ -528,7 +529,7 @@ func (r *v3Runner) checkArtifactDigestIsNotACapability() error {
 	staged, err := r.requestWithToken(
 		r.alternateTenantToken, http.MethodPut,
 		r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/blobs/"+url.PathEscape(blobDigest),
-		map[string]string{"Content-Type": "application/octet-stream"}, []byte(moduleSource),
+		map[string]string{"Content-Type": transport.ContentType}, []byte(blobSource),
 	)
 	if err != nil {
 		return err
@@ -631,7 +632,27 @@ func foreignUseBundleManifest() (map[string]any, string, string) {
 // and the foreign tenant that uploads the same bytes itself then references the
 // same immutable identity successfully too.
 func (r *v3Runner) checkManifestReferenceIsNotACapability(bundle probeTarget) error {
-	manifest, source, blobDigest := foreignUseBundleManifest()
+	var manifest map[string]any
+	var source, blobDigest string
+	if r.contract.genericRoles != nil {
+		artifact := r.hostArtifactTransport()
+		source = artifact.BlobSource + "-- independent reference holding\n"
+		blobDigest = formpackage.DigestBytes([]byte(source))
+		files, _ := artifact.Manifest["files"].([]any)
+		template, _ := files[0].(map[string]any)
+		file := cloneJSONMap(template)
+		file["path"] = "independent.bin"
+		file["size"] = len(source)
+		file["digest"] = blobDigest
+		manifest = map[string]any{
+			"apiVersion": artifactAPIVersion,
+			"kind":       artifact.Manifest["kind"],
+			"files":      []any{file},
+		}
+	} else {
+		r.selectedLegacySemanticInput()
+		manifest, source, blobDigest = foreignUseBundleManifest()
+	}
 	blobs := map[string][]byte{blobDigest: []byte(source)}
 	manifestDigest, err := r.uploadAndCommitManifestAs(r.token, manifest, blobs, "key-reference-holder")
 	if err != nil {

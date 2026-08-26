@@ -70,7 +70,7 @@ const (
 // workerBundleAttributes is the authoring surface of takoform_worker_bundle.
 // Every attribute requires replacement: a bundle is an immutable revision, and
 // different bytes are a different manifest and therefore a different bundle.
-func workerBundleAttributes() map[string]schema.Attribute {
+func workerBundleAttributesForProjection(artifact v3ArtifactProjection) map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"manifest_digest": schema.StringAttribute{
 			Optional: true,
@@ -115,7 +115,7 @@ func workerBundleAttributes() map[string]schema.Attribute {
 					"content_type": schema.StringAttribute{
 						Required:    true,
 						Description: "Closed media type deciding how the runtime links the module.",
-						Validators:  []validator.String{StringOneOf(workerBundleMediaTypes...)},
+						Validators:  []validator.String{StringOneOf(artifact.MediaTypes...)},
 					},
 					// content_file is deliberately NOT Required: an imported bundle
 					// carries no local path, and requiring one would make imported
@@ -134,7 +134,7 @@ func workerBundleAttributes() map[string]schema.Attribute {
 					},
 				},
 			},
-			Validators:    []validator.List{v3ListSizeValidator{minItems: 1, maxItems: workerBundleMaxModules}},
+			Validators:    []validator.List{v3ListSizeValidator{minItems: 1, maxItems: artifact.MaximumFiles}},
 			PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
 		},
 	}
@@ -211,7 +211,12 @@ func (r *v3FormResource) workerBundleAuthoring(values *v3Values) (v3BundleAuthor
 		return v3BundleAuthoring{}, diags
 	}
 
-	modules, moduleDiags := v3AuthoredBundleModules(modulesValue, mainModule)
+	artifact, supported := r.v3WorkerBundleArtifact()
+	if !supported {
+		diags.AddError("Unsupported worker artifact Form", "The exact Provider projection has no worker-bundle authoring rule for "+r.form.Family.APIVersion()+"/"+r.form.Kind+".")
+		return v3BundleAuthoring{}, diags
+	}
+	modules, moduleDiags := v3AuthoredBundleModulesForProjection(modulesValue, mainModule, *artifact)
 	diags.Append(moduleDiags...)
 	if diags.HasError() {
 		return v3BundleAuthoring{}, diags
@@ -224,13 +229,13 @@ func (r *v3FormResource) workerBundleAuthoring(values *v3Values) (v3BundleAuthor
 				fmt.Sprintf("module %q declares no content_file; local authoring reads each module from a local file.", module.Name))
 			return v3BundleAuthoring{}, diags
 		}
-		if err := readWorkerBundleModule(module); err != nil {
+		if err := readWorkerBundleModule(module, artifact.MaximumFileSize); err != nil {
 			diags.AddAttributeError(path.Root("modules"), "Unreadable module file", err.Error())
 			return v3BundleAuthoring{}, diags
 		}
 		blobs[module.Digest] = module.bytes
 	}
-	manifest := workerBundleManifest(mainModule, modules)
+	manifest := workerBundleManifestForProjection(*artifact, mainModule, modules)
 	digest, err := digestWorkerBundleManifest(manifest)
 	if err != nil {
 		diags.AddAttributeError(path.Root("modules"), "Unencodable artifact manifest", err.Error())
@@ -256,7 +261,7 @@ func (r *v3FormResource) workerBundleAuthoring(values *v3Values) (v3BundleAuthor
 // v3AuthoredBundleModules reads the declared modules and proves the two rules
 // a manifest must satisfy before it is built: module names are unique and
 // main_module names one of them.
-func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModule, diag.Diagnostics) {
+func v3AuthoredBundleModulesForProjection(list types.List, mainModule string, artifact v3ArtifactProjection) ([]v3BundleModule, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	elements := list.Elements()
 	if len(elements) == 0 {
@@ -264,9 +269,9 @@ func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModu
 			"Local authoring requires at least one module.")
 		return nil, diags
 	}
-	if len(elements) > workerBundleMaxModules {
+	if len(elements) > artifact.MaximumFiles {
 		diags.AddAttributeError(path.Root("modules"), "Too many bundle modules",
-			fmt.Sprintf("Local authoring declares %d modules; the portable ceiling is %d.", len(elements), workerBundleMaxModules))
+			fmt.Sprintf("Local authoring declares %d modules; the portable ceiling is %d.", len(elements), artifact.MaximumFiles))
 		return nil, diags
 	}
 	modules := make([]v3BundleModule, 0, len(elements))
@@ -283,6 +288,11 @@ func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModu
 		diags.Append(nameDiags...)
 		diags.Append(typeDiags...)
 		if diags.HasError() {
+			return nil, diags
+		}
+		if !v3ProjectionContains(artifact.MediaTypes, contentType) {
+			diags.AddAttributeError(path.Root("modules"), "Unsupported module media type",
+				fmt.Sprintf("module %q uses %q, which is outside the exact Provider projection allowlist.", name, contentType))
 			return nil, diags
 		}
 		if _, duplicate := names[name]; duplicate {
@@ -322,7 +332,7 @@ func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModu
 // workerBundleManifest renders the artifact manifest document of one locally
 // authored bundle. It is the exact document the upload commits, so its
 // canonical digest is the bundle's identity.
-func workerBundleManifest(mainModule string, modules []v3BundleModule) map[string]any {
+func workerBundleManifestForProjection(artifact v3ArtifactProjection, mainModule string, modules []v3BundleModule) map[string]any {
 	entries := make([]any, 0, len(modules))
 	for _, module := range modules {
 		entries = append(entries, map[string]any{
@@ -334,7 +344,7 @@ func workerBundleManifest(mainModule string, modules []v3BundleModule) map[strin
 	}
 	return map[string]any{
 		"apiVersion": artifactManifestAPIVersion,
-		"kind":       workerBundleKind,
+		"kind":       artifact.ManifestKind,
 		"mainModule": mainModule,
 		"modules":    entries,
 	}
@@ -354,15 +364,15 @@ func digestWorkerBundleManifest(manifest map[string]any) (string, error) {
 // readWorkerBundleModule is the single read+hash authority for one module's
 // content_file: plan-time byte identity (ModifyPlan) and the apply path both
 // resolve Size, Digest, and bytes through it, so the two can never drift.
-func readWorkerBundleModule(module *v3BundleModule) error {
+func readWorkerBundleModule(module *v3BundleModule, maximum int64) error {
 	raw, err := os.ReadFile(module.ContentFile)
 	if err != nil {
 		return fmt.Errorf("module %q content_file: %v", module.Name, err)
 	}
-	if len(raw) > workerBundleMaxModuleBytes {
+	if int64(len(raw)) > maximum {
 		return fmt.Errorf(
 			"module %q is %d bytes; the portable ceiling is %d",
-			module.Name, len(raw), workerBundleMaxModuleBytes,
+			module.Name, len(raw), maximum,
 		)
 	}
 	sum := sha256.Sum256(raw)
@@ -386,6 +396,11 @@ func readWorkerBundleModule(module *v3BundleModule) error {
 // An unreadable content_file leaves the computed values unknown instead of
 // erroring the plan.
 func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	artifact, supported := r.v3WorkerBundleArtifact()
+	if !supported {
+		resp.Diagnostics.AddError("Unsupported worker artifact Form", "The exact Provider projection has no worker-bundle authoring rule for "+r.form.Family.APIVersion()+"/"+r.form.Kind+".")
+		return
+	}
 	// A destroy has no planned modules. A CREATE does, and it is resolved here
 	// as well: the bundle's derived revision name follows its manifest digest,
 	// so the digest has to be known in the plan for the name to be, and an
@@ -427,7 +442,7 @@ func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resourc
 	if !mainKnown {
 		return
 	}
-	modules, moduleDiags := v3AuthoredBundleModules(planned, mainModule)
+	modules, moduleDiags := v3AuthoredBundleModulesForProjection(planned, mainModule, *artifact)
 	if moduleDiags.HasError() {
 		// A malformed authoring block is reported by the apply-time resolver
 		// against the same attribute paths; the plan stays silent rather than
@@ -437,7 +452,7 @@ func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resourc
 	resolved := true
 	for index := range modules {
 		module := &modules[index]
-		if module.ContentFile == "" || readWorkerBundleModule(module) != nil {
+		if module.ContentFile == "" || readWorkerBundleModule(module, artifact.MaximumFileSize) != nil {
 			resolved = false
 		}
 	}
@@ -465,7 +480,7 @@ func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resourc
 	}
 	computed := types.StringUnknown()
 	if resolved {
-		digest, err := digestWorkerBundleManifest(workerBundleManifest(mainModule, modules))
+		digest, err := digestWorkerBundleManifest(workerBundleManifestForProjection(*artifact, mainModule, modules))
 		if err != nil {
 			return
 		}

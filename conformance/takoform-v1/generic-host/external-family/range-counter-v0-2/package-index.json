@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "resources.publisher.example",
+    "kind": "RangeCounter",
+    "definitionVersion": "0.2.0",
+    "schemaDigest": "sha256:dec4a285793a7db3a881d66fd4d4cfd6245b7a47d121f3187a0398e4510e0000"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 618,
+      "digest": "sha256:3edb6eb336cf14be4feba50055dd9f2934110dfba45464e3476809cf037b4dd2"
+    }
+  ]
+}

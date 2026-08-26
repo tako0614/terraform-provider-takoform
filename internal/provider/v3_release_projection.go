@@ -42,54 +42,43 @@ type ProviderV3ReleaseFormRef struct {
 // codecs are intentionally excluded: they are readable compatibility state,
 // not Provider 3 create/resource surface.
 func CurrentProviderV3ReleaseIdentityProjection() (ProviderV3ReleaseIdentityProjection, error) {
-	registry := currentformregistry.V3Current()
-	resourceTypes, err := newV3ResourceTypeRegistry(registry, providerV3ResourceTypeLines())
+	assembly, err := providerV3SnapshotAssembly()
 	if err != nil {
 		return ProviderV3ReleaseIdentityProjection{}, err
 	}
 
-	families := providerV3CurrentFamilies()
 	projection := ProviderV3ReleaseIdentityProjection{
 		ProviderVersion:    "3.0.0",
 		PortableAPIVersion: "forms.takoform.com/v1",
-		Families:           make([]string, 0, len(families)),
+		Families:           make([]string, 0, 8),
 		FormMaturity:       "experimental",
-		Forms:              make([]ProviderV3ReleaseFormIdentity, 0, len(providerV3CurrentForms())),
+		Forms:              make([]ProviderV3ReleaseFormIdentity, 0, len(assembly.projection.currentOrder)),
 	}
 	seenFamilies := map[string]struct{}{}
 	seenResourceTypes := map[string]currentformregistry.GroupKind{}
-	for _, family := range families {
-		group := family.family.APIVersion()
-		if _, duplicate := seenFamilies[group]; duplicate {
-			return ProviderV3ReleaseIdentityProjection{}, fmt.Errorf("takoform provider: duplicate current release family %q", group)
+	for _, key := range assembly.projection.currentOrder {
+		entry := assembly.projection.forms[key]
+		mapping, ok := assembly.projection.resources[key]
+		if !ok || !mapping.Register || mapping.Ref != entry.Ref {
+			return ProviderV3ReleaseIdentityProjection{}, fmt.Errorf("takoform provider: current release Form %s has no exact registered Terraform mapping", key)
 		}
-		seenFamilies[group] = struct{}{}
-		projection.Families = append(projection.Families, group)
-		for _, form := range family.forms {
-			line := currentformregistry.GroupKind{APIVersion: group, Kind: form.Kind}
-			ref, err := registry.DefaultCreate(line)
-			if err != nil {
-				return ProviderV3ReleaseIdentityProjection{}, err
-			}
-			resourceType, ok := resourceTypes.Lookup(ref.ExactKey())
-			if !ok {
-				return ProviderV3ReleaseIdentityProjection{}, fmt.Errorf("takoform provider: current release Form %s has no exact Terraform mapping", ref.ExactKey())
-			}
-			if prior, duplicate := seenResourceTypes[resourceType]; duplicate {
-				return ProviderV3ReleaseIdentityProjection{}, fmt.Errorf("takoform provider: release resource type %q maps both %s/%s and %s/%s", resourceType, prior.APIVersion, prior.Kind, line.APIVersion, line.Kind)
-			}
-			seenResourceTypes[resourceType] = line
-			projection.Forms = append(projection.Forms, ProviderV3ReleaseFormIdentity{
-				ResourceType: resourceType,
-				FormRef: ProviderV3ReleaseFormRef{
-					APIVersion:        ref.APIVersion,
-					Kind:              ref.Kind,
-					DefinitionVersion: ref.DefinitionVersion,
-					SchemaDigest:      ref.SchemaDigest,
-				},
-				PackageDigest: ref.PackageDigest,
-			})
+		line := key.GroupKind()
+		if _, seen := seenFamilies[line.APIVersion]; !seen {
+			seenFamilies[line.APIVersion] = struct{}{}
+			projection.Families = append(projection.Families, line.APIVersion)
 		}
+		if prior, duplicate := seenResourceTypes[mapping.ResourceType]; duplicate {
+			return ProviderV3ReleaseIdentityProjection{}, fmt.Errorf("takoform provider: release resource type %q maps both %s/%s and %s/%s", mapping.ResourceType, prior.APIVersion, prior.Kind, line.APIVersion, line.Kind)
+		}
+		seenResourceTypes[mapping.ResourceType] = line
+		projection.Forms = append(projection.Forms, ProviderV3ReleaseFormIdentity{
+			ResourceType: mapping.ResourceType,
+			FormRef: ProviderV3ReleaseFormRef{
+				APIVersion: entry.Ref.APIVersion, Kind: entry.Ref.Kind,
+				DefinitionVersion: entry.Ref.DefinitionVersion, SchemaDigest: entry.Ref.SchemaDigest,
+			},
+			PackageDigest: entry.Ref.PackageDigest,
+		})
 	}
 	sort.Strings(projection.Families)
 	sort.Slice(projection.Forms, func(i, j int) bool {

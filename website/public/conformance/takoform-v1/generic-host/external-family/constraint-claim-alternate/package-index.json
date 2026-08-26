@@ -1,0 +1,19 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha5",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "constraints.publisher.example",
+    "kind": "ClaimLease",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:78225cb7b4405cb6909ecc1c75a3ec657e033b7f5ec11cdcf7d7bdf6dadf3ef7"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 847,
+      "digest": "sha256:12f5870750c30890a373e8044027fc4398186cb328ffc993e3e2193cd94c45f5"
+    }
+  ]
+}

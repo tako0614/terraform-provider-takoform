@@ -143,7 +143,7 @@ func TestReferenceHostDefaultsToTheMeasuredCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const corpus = `"conformance", "takoform-v1", "generic-host", "portable-host"`
+	const corpus = `"conformance", "takoform-v1", "family-host", "edge", "portable-host"`
 	if !strings.Contains(string(source), corpus) {
 		t.Fatalf("cmd/reference-host does not default to %s", corpus)
 	}

@@ -1,0 +1,755 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "worker.runtime",
+  "version": "1.1.0",
+  "title": "ES Module Worker runtime ABI",
+  "description": "The exact runtime ABI a conforming host provides to the code of one Module Worker, and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT is a plain object; each portable handler is an OPTIONAL own property of that object named exactly fetch, scheduled, or queue, and every handler the Worker Version declares MUST exist there as a callable property — a declared handler that is absent fails the version, not the request. Every handler takes three arguments in this order: the event value, the binding environment env, and the invocation context ctx. A handler may be async; a returned promise is awaited. Request and response bodies are STREAMS, never buffered strings: a host never requires a handler to read a request body before responding, and streams a response body out as the handler produces it. env is a plain object whose own enumerable properties are exactly the names the Worker Version declares — every vars key, every requiredSensitiveVars name, every typed binding name, and every externalServices slot name — and nothing else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, and that value never enters portable state. An externalServices slot names an opaque standard protocol the host resolves for this version, and appears as one sealed runtime-native binding under its declared NAME. The Host integration and protocol own that binding's internal entries and delivery shape; Takoform defines no protocol-to-environment member table. Host-resolved endpoints and credentials never enter portable state, exactly like a sensitive variable; a required slot without an exact satisfiable support profile keeps the version from becoming Ready, and an optional unsatisfied slot projects no binding at all. ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; a rejection is reported to host diagnostics only, never changes an already-sent response, and never turns a successful invocation into a failed one. An uncaught throw or unhandled rejection in fetch is a HOST-GENERATED 500 response, never a hung request; in scheduled and queue it is a failed invocation with the retry semantics the relevant contract already states. The ABI is fixed by identity, not by a date: a runtime whose behavior differs is a different exact contract version, and a Form that wants that runtime is a different Form version. Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export exposes all three handlers, answers GET /health with 200, throws on GET /throw, and throws from its queue handler when a message body decodes to exactly the ASCII bytes fail; and fetch-only.js, whose default export exposes fetch alone.",
+  "operations": [
+    {
+      "name": "loadModule",
+      "description": "Loads one Worker Bundle into a fresh isolate. mainModule names the ES module whose default export carries the handlers, and MUST name one entry of modules. modules is the IMPORTABLE module graph; exactly these load: application/javascript+module as an ES module; text/plain as decoded UTF-8 text; application/octet-stream as an ArrayBuffer; and application/wasm as a COMPILED WebAssembly.Module, never an instance, so imports stay the application's choice. auxiliaryModules is what the bundle CARRIES without linking: source-map evidence. Its presence is not an error, it is never mainModule, and resolving an import to one fails unsupported_media_type. This ABI version loads no application/json. exportedHandlers is the subset of the vocabulary the default export exposes as callable own properties; a declared handler the module does not export fails handler_not_exported before traffic arrives. The declaredHandlers enum IS this ABI's handler vocabulary: anything outside it is refused.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "auxiliaryModules": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "mediaType": {
+                  "enum": [
+                    "application/source-map+json"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mediaType",
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 512,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "declaredHandlers": {
+            "items": {
+              "enum": [
+                "fetch",
+                "scheduled",
+                "queue"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "mainModule": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "mediaType": {
+                  "enum": [
+                    "application/javascript+module",
+                    "application/octet-stream",
+                    "application/wasm",
+                    "text/plain"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mediaType",
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 512,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "declaredHandlers",
+          "mainModule",
+          "modules"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "exportedHandlers": {
+            "items": {
+              "enum": [
+                "fetch",
+                "scheduled",
+                "queue"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "exportedHandlers"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "module_not_found",
+        "unsupported_media_type",
+        "module_syntax_error",
+        "handler_not_exported"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "environment",
+      "description": "Resolves the env object one invocation receives. Given everything a Worker Version declares, propertyNames is the COMPLETE set of own enumerable properties of env in lexicographic order: every vars key, every requiredSensitiveVars name carrying its host-supplied value, and every binding name carrying the runtime API its Binding contract projects. Nothing else portable appears, so code that reads a property a host added on its own is not portable. The three sources share ONE namespace: a name declared twice is refused before the version is stored, never silently merged.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "declaredBindingNames": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 256,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "declaredSensitiveVars": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 256,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "declaredVars": {
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 256,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "declaredBindingNames",
+          "declaredSensitiveVars",
+          "declaredVars"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "propertyNames": {
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 768,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "propertyNames"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "environment_name_collision"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "globals",
+      "description": "Reports the minimum Web platform surface every conforming runtime provides to module code. present is the exact portable floor, named by dotted path: a runtime missing any member does not implement this contract, and a runtime that adds members does not make those additions portable. Timers are setTimeout, clearTimeout, setInterval, and clearInterval. fetch is the outbound HTTP client and is the only member here whose calls leave the isolate.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "present": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "present"
+        ],
+        "type": "object"
+      },
+      "errors": [],
+      "idempotent": true
+    },
+    {
+      "name": "fetch",
+      "description": "Invokes fetch(request, env, ctx) with one HTTP request and returns its response. The handler receives a Request and returns a Response or a promise of one; returning anything else, or nothing, is an uncaught error. bodyStream states that the request body arrives as a ReadableStream the handler may consume incrementally — a conforming host never buffers it into a string before invoking the handler, and streams the response body back as it is produced. An uncaught throw or unhandled rejection is a host-generated 500 response, never a hung request and never a truncated connection with no status; handlerOutcome reports which of the two happened.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "bodyStream": {
+            "type": "boolean"
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 128,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "method": {
+            "enum": [
+              "DELETE",
+              "GET",
+              "HEAD",
+              "OPTIONS",
+              "PATCH",
+              "POST",
+              "PUT"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "url"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "bodyStream": {
+            "type": "boolean"
+          },
+          "handlerOutcome": {
+            "enum": [
+              "returned",
+              "uncaught"
+            ],
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 128,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": {
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "handlerOutcome",
+          "status"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "handler_not_declared",
+        "request_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "scheduled",
+      "description": "Invokes scheduled(event, env, ctx) at each match of a Worker Cron Trigger. The event carries scheduledTime, the UTC instant the schedule matched as milliseconds since the Unix epoch, and cron, the exact five-field UTC expression that matched. The handler returns nothing; a returned promise is awaited before the invocation completes, and ctx.waitUntil extends it further. An uncaught throw or unhandled rejection is a FAILED invocation reported to host diagnostics: it never becomes an HTTP response, and it is not retried within the same matched minute.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cron": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "scheduledTime": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cron",
+          "scheduledTime"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "handler_not_declared",
+        "handler_failed",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "queue",
+      "description": "Invokes queue(batch, env, ctx) with one message batch from a Queue Consumer attachment. The batch carries batchId, the identity every settlement operation of edge.queue is scoped to; queue, the portable name of the At-Least-Once Queue it drained; and messages, an ordered array whose entries carry id (the host's stable message identity), timestampMillis (the UTC instant the host accepted the message, in milliseconds since the Unix epoch), body (the producer's exact bytes in the family's encoded-bytes shape), and attempts (1 on first delivery, incremented on each redelivery). All of it is defined by edge.queue. Batch size and timing are the consumer's maxBatchSize and maxBatchTimeoutSeconds. Returning normally without settling anything acknowledges the whole batch. An uncaught throw or unhandled rejection RETRIES every message not already explicitly acknowledged, under the maxRetries and retryDelaySeconds of the invoking consumer, so duplicates are visible and handlers must be idempotent.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "batchId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "attempts": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "body": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 169336,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
+                },
+                "id": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timestampMillis": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "attempts",
+                "body",
+                "id",
+                "timestampMillis"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "queue": {
+            "maxLength": 63,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "batchId",
+          "messages",
+          "queue"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "handler_not_declared",
+        "handler_failed",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "waitUntil",
+      "description": "Registers one promise through ctx.waitUntil(promise). The host keeps the isolate alive until that promise settles, even after the handler returned and its response was sent, and never cancels the work to reclaim the isolate earlier. taskOutcome is what the registered promise does. Settlement never rewrites an already-sent response, and a rejected task never turns a successful invocation into a failed one: it is reported to host diagnostics only. Calling waitUntil after the isolate has been reclaimed fails with context_expired.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "taskOutcome": {
+            "enum": [
+              "rejected",
+              "resolved"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "taskOutcome"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "invocationFailed": {
+            "type": "boolean"
+          },
+          "isolateHeldUntilSettled": {
+            "type": "boolean"
+          },
+          "responseChanged": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "invocationFailed",
+          "isolateHeldUntilSettled",
+          "responseChanged"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "context_expired"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "read_after_write",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxEnvironmentEntries": 256,
+    "maxModulesPerBundleSet": 512,
+    "maxQueueBatchMessages": 100,
+    "maxQueueMessageBytes": 127000,
+    "maxRequestBytes": 104857600,
+    "maxWaitUntilTasks": 32
+  },
+  "fixtures": [
+    {
+      "name": "declared-handler-must-be-exported",
+      "steps": [
+        {
+          "operation": "loadModule",
+          "input": {
+            "declaredHandlers": [
+              "fetch",
+              "scheduled",
+              "queue"
+            ],
+            "mainModule": "index.js",
+            "modules": [
+              {
+                "mediaType": "application/javascript+module",
+                "name": "index.js"
+              }
+            ]
+          },
+          "expected": {
+            "exportedHandlers": [
+              "fetch",
+              "scheduled",
+              "queue"
+            ]
+          }
+        },
+        {
+          "operation": "loadModule",
+          "input": {
+            "declaredHandlers": [
+              "fetch",
+              "scheduled"
+            ],
+            "mainModule": "fetch-only.js",
+            "modules": [
+              {
+                "mediaType": "application/javascript+module",
+                "name": "fetch-only.js"
+              }
+            ]
+          },
+          "expectedError": "handler_not_exported"
+        }
+      ]
+    },
+    {
+      "name": "auxiliary-module-is-carried-never-loaded",
+      "steps": [
+        {
+          "operation": "loadModule",
+          "input": {
+            "auxiliaryModules": [
+              {
+                "mediaType": "application/source-map+json",
+                "name": "index.js.map"
+              }
+            ],
+            "declaredHandlers": [
+              "fetch"
+            ],
+            "mainModule": "index.js",
+            "modules": [
+              {
+                "mediaType": "application/javascript+module",
+                "name": "index.js"
+              }
+            ]
+          },
+          "expected": {
+            "exportedHandlers": [
+              "fetch",
+              "scheduled",
+              "queue"
+            ]
+          }
+        },
+        {
+          "operation": "loadModule",
+          "input": {
+            "auxiliaryModules": [
+              {
+                "mediaType": "application/source-map+json",
+                "name": "index.js.map"
+              }
+            ],
+            "declaredHandlers": [
+              "fetch"
+            ],
+            "mainModule": "index.js.map",
+            "modules": [
+              {
+                "mediaType": "application/javascript+module",
+                "name": "index.js"
+              }
+            ]
+          },
+          "expectedError": "unsupported_media_type"
+        }
+      ]
+    },
+    {
+      "name": "globals-minimum-surface",
+      "steps": [
+        {
+          "operation": "globals",
+          "input": {},
+          "expected": {
+            "present": [
+              "AbortController",
+              "AbortSignal",
+              "Headers",
+              "ReadableStream",
+              "Request",
+              "Response",
+              "TextDecoder",
+              "TextEncoder",
+              "URL",
+              "URLSearchParams",
+              "WritableStream",
+              "clearInterval",
+              "clearTimeout",
+              "crypto.getRandomValues",
+              "crypto.subtle.digest",
+              "fetch",
+              "setInterval",
+              "setTimeout",
+              "structuredClone"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "environment-projects-exactly-the-declared-names",
+      "steps": [
+        {
+          "operation": "environment",
+          "input": {
+            "declaredBindingNames": [
+              "CACHE"
+            ],
+            "declaredSensitiveVars": [
+              "API_SIGNING_TOKEN_NAME"
+            ],
+            "declaredVars": [
+              "LOG_LEVEL"
+            ]
+          },
+          "expected": {
+            "propertyNames": [
+              "API_SIGNING_TOKEN_NAME",
+              "CACHE",
+              "LOG_LEVEL"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "environment-name-collision-refused",
+      "steps": [
+        {
+          "operation": "environment",
+          "input": {
+            "declaredBindingNames": [
+              "CACHE"
+            ],
+            "declaredSensitiveVars": [],
+            "declaredVars": [
+              "CACHE"
+            ]
+          },
+          "expectedError": "environment_name_collision"
+        }
+      ]
+    },
+    {
+      "name": "fetch-returns-a-response",
+      "steps": [
+        {
+          "operation": "fetch",
+          "input": {
+            "bodyStream": true,
+            "method": "GET",
+            "url": "https://conformance.invalid/health"
+          },
+          "expected": {
+            "handlerOutcome": "returned",
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "name": "fetch-uncaught-throw-is-a-host-error-response",
+      "steps": [
+        {
+          "operation": "fetch",
+          "input": {
+            "method": "GET",
+            "url": "https://conformance.invalid/throw"
+          },
+          "expected": {
+            "handlerOutcome": "uncaught",
+            "status": 500
+          }
+        }
+      ]
+    },
+    {
+      "name": "queue-failure-fails-the-whole-batch",
+      "steps": [
+        {
+          "operation": "queue",
+          "input": {
+            "batchId": "conformance-batch-1",
+            "messages": [
+              {
+                "attempts": 1,
+                "body": {
+                  "data": "ZmFpbA==",
+                  "encoding": "base64"
+                },
+                "id": "message-1",
+                "timestampMillis": 0
+              }
+            ],
+            "queue": "at-least-once-queue"
+          },
+          "expectedError": "handler_failed"
+        }
+      ]
+    },
+    {
+      "name": "wait-until-rejection-does-not-change-the-response",
+      "steps": [
+        {
+          "operation": "waitUntil",
+          "input": {
+            "taskOutcome": "rejected"
+          },
+          "expected": {
+            "invocationFailed": false,
+            "isolateHeldUntilSettled": true,
+            "responseChanged": false
+          }
+        }
+      ]
+    }
+  ]
+}
