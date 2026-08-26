@@ -85,6 +85,15 @@ test("website snapshot copy includes its complete module closure", () => {
   expect(deploySource).toContain(
     '"scripts/check-website-dist.mjs",\n    "scripts/frozen-public-identities.mjs",\n    "scripts/website-html-normalization.mjs",\n    "scripts/website-snapshot-temp.mjs",\n    "scripts/website-snapshot-temp.test.mjs",',
   );
+  expect(deploySource).toContain("two concurrent read-only VitePress builds");
+  expect(deploySource).toContain(
+    "every committed page byte-for-byte after the writer's trailing-whitespace-only normalization",
+  );
+  expect(deploySource).toContain(
+    "content-addressed asset set by exact path and bytes",
+  );
+  expect(deploySource).not.toContain("every committed page semantically");
+  expect(deploySource).not.toContain("asset set by role");
 });
 
 test("published asset discovery rejects symbolic links", () => {
