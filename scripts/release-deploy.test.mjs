@@ -1698,6 +1698,24 @@ describe("owner gate final fence and pinned release tools", () => {
     return null;
   }
 
+  test("accepts only the canonical HTTPS origin spellings", () => {
+    for (const origin of [
+      "https://github.com/tako0614/terraform-provider-takoform.git",
+      "https://github.com/tako0614/terraform-provider-takoform",
+    ]) {
+      expect(releaseDeployTestHooks.isCanonicalOrigin(origin)).toBe(true);
+    }
+    for (const origin of [
+      "http://github.com/tako0614/terraform-provider-takoform.git",
+      "git@github.com:tako0614/terraform-provider-takoform.git",
+      "ssh://git@github.com/tako0614/terraform-provider-takoform.git",
+      "https://github.com/tako0614/terraform-provider-takoform/",
+      "https://github.com/attacker/terraform-provider-takoform.git",
+    ]) {
+      expect(releaseDeployTestHooks.isCanonicalOrigin(origin)).toBe(false);
+    }
+  });
+
   test("runs the complete owner gate with pinned Go and managed-home authority", () => {
     const names = [
       "BUN_CONFIG_FILE",
