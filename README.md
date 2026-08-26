@@ -33,9 +33,11 @@ assertion remains fail-closed while its committed evidence tuple is open.
 
 <!-- current-generation:end -->
 
-## Specification 1.1 candidate, compatibility, and retained Provider history
+## Specification 1.1, compatibility, and retained Provider history
 
-Takoform Specification 1.1 is a local **open candidate** whose normative
+Takoform Specification 1.1 is the current Specification. Its release status is
+derived from the append-only `release/specification-releases.json` ledger and
+reflected in the generated `takoform-site.json` status document. Its normative
 source references the literal Host API v1 contract. Host API v1 is a separate,
 unpublished protocol candidate; publishing Specification 1.1 does not publish
 or promote it. The Specification's sole release prerequisite is an exact

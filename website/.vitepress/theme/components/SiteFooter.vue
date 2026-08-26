@@ -40,9 +40,10 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>Specification candidate</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
-        Host API {{ hostApiVersion }} ({{ hostApiMaturity }},
+        <strong>Specification</strong>:
+        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
+        derived from the append-only Specification release ledger/status document);
+        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
         {{ status.hostApiPublicationStatus }});
         {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
         exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
@@ -50,9 +51,10 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
         {{ status.formPackagePublicationStatus }}.
       </p>
       <p v-else>
-        <strong>Specification candidate</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
-        Host API {{ hostApiVersion }} ({{ hostApiMaturity }},
+        <strong>Specification</strong>:
+        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
+        derived from the append-only Specification release ledger/status document);
+        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
         {{ status.hostApiPublicationStatus }});
         {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
         exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).

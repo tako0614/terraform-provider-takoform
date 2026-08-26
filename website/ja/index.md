@@ -14,7 +14,7 @@ hero:
       link: /ja/spec/
 ---
 
-## Specification 1.1 candidate / separate unpublished Host API v1 candidate
+## Specification 1.1 / separate unpublished Host API v1 candidate
 
 Takoform は Experimental specification project です。provider の人間向け
 SemVer、ホスト protocol、Form の identity を別々の軸として示し、一つの version
@@ -22,7 +22,7 @@ SemVer、ホスト protocol、Form の identity を別々の軸として示し�
 
 | 軸                    | 現在の identity                        | 意味と利用可能性                                                                                                       |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.1 candidate**             | first numbered release。normative `spec/` tree の exact committed snapshot が1つ記録されるまで open。1.0 は公開前に撤回され再利用しない。 |
+| Specification         | **Takoform Specification 1.1**         | release status は append-only の `release/specification-releases.json` ledger と生成された `takoform-site.json` status document から導出されます。normative `spec/` tree の exact committed snapshot が release authority です。1.0 は公開前に撤回され再利用しない。 |
 | Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の separate unpublished protocol candidate。                |
 | Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRefs。すべて Experimental のまま。                                                              |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |

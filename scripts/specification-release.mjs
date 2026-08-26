@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   HOST_API_LANE,
+  PUBLICATION_EVIDENCE_PROJECTION_PATHS,
   SPECIFICATION_PREREQUISITES,
   SPECIFICATION_TRACK,
   SPECIFICATION_VERSION,
@@ -52,8 +53,7 @@ export const LEDGER_PROJECTION_PATHS = Object.freeze([
 ]);
 export const C2_ALLOWED_PATHS = Object.freeze([
   SOURCE_EVIDENCE_PATH,
-  "website/static/spec/publication-evidence.json",
-  "website/public/spec/publication-evidence.json",
+  ...PUBLICATION_EVIDENCE_PROJECTION_PATHS,
 ]);
 export const C3_ALLOWED_PATHS = Object.freeze([
   LEDGER_PATH,
@@ -384,8 +384,10 @@ function validatePathList(paths, label) {
 export function validateC2DiffPaths(paths) {
   const problems = validatePathList(paths, "C1/C2 diff");
   if (!Array.isArray(paths)) return problems;
-  if (!paths.includes(SOURCE_EVIDENCE_PATH)) {
-    problems.push(`C2 evidence-only diff must include ${SOURCE_EVIDENCE_PATH}`);
+  for (const required of C2_ALLOWED_PATHS) {
+    if (!paths.includes(required)) {
+      problems.push(`C2 evidence-only diff must include ${required}`);
+    }
   }
   const unexpected = paths.filter((entry) => !C2_ALLOWED_PATHS.includes(entry));
   if (unexpected.length !== 0) {
@@ -399,13 +401,12 @@ export function validateC2DiffPaths(paths) {
 export function validateC3DiffPaths(paths) {
   const problems = validatePathList(paths, "C2/C3 diff");
   if (!Array.isArray(paths)) return problems;
-  if (!paths.includes(LEDGER_PATH)) {
-    problems.push(`C3 receipt/ledger projection-only diff must include ${LEDGER_PATH}`);
-  }
-  if (!paths.includes(LEDGER_PROJECTION_PATHS[0])) {
-    problems.push(
-      `C3 receipt/ledger projection-only diff must include the static projection ${LEDGER_PROJECTION_PATHS[0]}`,
-    );
+  for (const required of C3_ALLOWED_PATHS) {
+    if (!paths.includes(required)) {
+      problems.push(
+        `C3 receipt/ledger projection-only diff must include ${required}`,
+      );
+    }
   }
   const unexpected = paths.filter((entry) => !C3_ALLOWED_PATHS.includes(entry));
   if (unexpected.length !== 0) {
@@ -610,17 +611,12 @@ function validateReceiptIntroduction(history, root) {
   return problems;
 }
 
-function validateLedgerProjections(ledger, root, { includePublic = false } = {}) {
+function validateLedgerProjections(ledger, root) {
   const problems = [];
-  const projections = includePublic
-    ? LEDGER_PROJECTION_PATHS
-    : [LEDGER_PROJECTION_PATHS[0]];
-  for (const projection of projections) {
+  for (const projection of LEDGER_PROJECTION_PATHS) {
     const absolute = path.join(root, projection);
     if (!existsSync(absolute)) {
-      if (projection === LEDGER_PROJECTION_PATHS[0]) {
-        problems.push(`required ledger projection ${projection} is missing`);
-      }
+      problems.push(`required ledger projection ${projection} is missing`);
       continue;
     }
     const projected = parseJson(readFileSync(absolute, "utf8"), projection);
@@ -681,10 +677,7 @@ export function appendReleaseReceipt(receipt, root = repositoryRoot) {
   const raw = `${JSON.stringify(next, null, 2)}\n`;
   writeFileSync(path.join(root, LEDGER_PATH), raw);
   for (const projection of LEDGER_PROJECTION_PATHS) {
-    const absolute = path.join(root, projection);
-    if (existsSync(absolute) || projection === LEDGER_PROJECTION_PATHS[0]) {
-      writeFileSync(absolute, raw);
-    }
+    writeFileSync(path.join(root, projection), raw);
   }
   return next;
 }
@@ -726,8 +719,13 @@ export function run(mode, root = repositoryRoot) {
     fail(`${problems.length} ledger problem(s)`);
   }
   if (mode === "--assert-ready") expectedReadyDocument(root);
+  const releaseStatus = ledger.releases.some(
+    (release) => release?.version === RELEASE_VERSION,
+  )
+    ? "released"
+    : "candidate-open";
   process.stdout.write(
-    `specification release ledger OK: Specification 1.1 candidate; ${ledger.releases.length} authoritative receipt(s) recorded\n`,
+    `specification release ledger OK: Specification 1.1 ${releaseStatus}; ${ledger.releases.length} authoritative receipt(s) recorded\n`,
   );
   return ledger;
 }

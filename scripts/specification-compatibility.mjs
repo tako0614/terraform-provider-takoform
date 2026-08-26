@@ -539,6 +539,14 @@ function addProviderVersions(catalog, providerReleaseLedger) {
 
 function addSpecificationIdentities(catalog, specificationReleaseLedger) {
   if (!isRecord(specificationReleaseLedger)) fail(`${SPECIFICATION_RELEASE_LEDGER} must be an object`);
+  const releases = Array.isArray(specificationReleaseLedger.releases)
+    ? specificationReleaseLedger.releases
+    : [];
+  const releasedVersions = new Set(
+    releases
+      .filter((release) => isRecord(release) && typeof release.version === "string")
+      .map((release) => release.version),
+  );
   for (const reserved of specificationReleaseLedger.reserved ?? []) {
     if (!isRecord(reserved) || typeof reserved.version !== "string" || typeof reserved.status !== "string") {
       fail(`${SPECIFICATION_RELEASE_LEDGER}.reserved contains an invalid identity`);
@@ -558,7 +566,11 @@ function addSpecificationIdentities(catalog, specificationReleaseLedger) {
     });
   }
   const candidate = specificationReleaseLedger.candidate;
-  if (isRecord(candidate) && typeof candidate.version === "string") {
+  if (
+    isRecord(candidate) &&
+    typeof candidate.version === "string" &&
+    !releasedVersions.has(candidate.version)
+  ) {
     const identity = `takoform.specification@${candidate.version}`;
     addExpected(catalog, "trust-revocation-lifecycle-version-release", {
       identity,
@@ -572,7 +584,7 @@ function addSpecificationIdentities(catalog, specificationReleaseLedger) {
       publication: "unpublished-candidate",
     });
   }
-  for (const release of specificationReleaseLedger.releases ?? []) {
+  for (const release of releases) {
     if (!isRecord(release) || typeof release.version !== "string") {
       fail(`${SPECIFICATION_RELEASE_LEDGER}.releases contains an invalid identity`);
     }

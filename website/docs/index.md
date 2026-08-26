@@ -1,15 +1,15 @@
 # Documentation
 
-This page starts with two independent unpublished candidates—Specification
-1.1 and Host API v1—and the exact 8-family, 31-Form current corpus. Provider
-and historical lanes are kept separate so an implementation release cannot
-become Specification authority by implication.
+This page starts with Specification 1.1 and a separate unpublished Host API v1
+candidate, plus the exact 8-family, 31-Form current corpus. Provider and
+historical lanes are kept separate so an implementation release cannot become
+Specification authority by implication.
 
-## Specification 1.1 candidate; separate Host API v1 candidate
+## Specification 1.1 / separate Host API v1 candidate
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                 |
 | --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform 1.1 candidate**             | First numbered release; open until one exact committed snapshot of the normative `spec/` tree is recorded. Identity 1.0 was withdrawn before publication and may not be reused. |
+| Specification         | **Takoform Specification 1.1**         | Release status is derived from the append-only `release/specification-releases.json` ledger and reflected in the generated `takoform-site.json` status document; one exact committed snapshot of the normative `spec/` tree is release authority. Identity 1.0 was withdrawn before publication and may not be reused. |
 | Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.          |
 | Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental.                                                             |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
