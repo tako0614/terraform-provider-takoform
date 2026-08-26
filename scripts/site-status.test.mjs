@@ -98,7 +98,18 @@ describe("the committed status document", () => {
     expect(document.hostApiMaturity).not.toBe(document.formMaturity);
     expect(document.hostApiPublicationStatus).toBe("unpublished-candidate");
     expect(document.specificationVersion).toBe("1.1");
-    expect(document.specificationReleaseStatus).toBe("candidate-open");
+    const specificationLedger = read(
+      repositoryRoot,
+      "release/specification-releases.json",
+    );
+    const expectedSpecificationStatus = specificationLedger.releases.some(
+      (release) => release?.version === document.specificationVersion,
+    )
+      ? "released"
+      : "candidate-open";
+    expect(document.specificationReleaseStatus).toBe(
+      expectedSpecificationStatus,
+    );
     expect(document.currentFamilyIndex).toBe(CURRENT_FAMILY_INDEX);
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
@@ -128,12 +139,13 @@ describe("the committed status document", () => {
       "utf8",
     );
     expect(config).toContain(
-      "Specification 1.1 candidate / separate Host API v1 candidate",
+      "Specification 1.1 / separate Host API v1 candidate",
     );
     expect(config).toContain(
       "Provider 3 typed reference (31 current Experimental Forms)",
     );
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
+    expect(config).not.toContain("Specification 1.1 candidate");
     expect(config).not.toContain("Provider 3 candidate reference");
   });
 
@@ -191,6 +203,33 @@ describe("the committed status document", () => {
         readFileSync(path.join(repositoryRoot, SITE_STATUS_PUBLISHED_PATH)),
       ),
     ).toBe(true);
+  });
+});
+
+describe("Specification release status derivation", () => {
+  test("an empty receipt ledger is candidate-open", () => {
+    const status = fixture((root) => {
+      const ledger = read(root, "release/specification-releases.json");
+      ledger.releases = [];
+      write(root, "release/specification-releases.json", ledger);
+      return deriveSiteStatusFacts(root);
+    });
+    expect(status.specificationReleaseStatus).toBe("candidate-open");
+    expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
+  });
+
+  test("an exact 1.1 receipt changes only the Specification status to released", () => {
+    const status = fixture((root) => {
+      const ledger = read(root, "release/specification-releases.json");
+      ledger.releases = [{ version: "1.1" }];
+      write(root, "release/specification-releases.json", ledger);
+      return deriveSiteStatusFacts(root);
+    });
+    expect(status.specificationReleaseStatus).toBe("released");
+    expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
+    expect(status.formMaturity).toBe("experimental");
+    expect(status.formPackagePublicationStatus).toBe("unpublished");
+    expect(status.providerTargetStatus).toBe("registry-published");
   });
 });
 

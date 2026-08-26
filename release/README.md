@@ -3,9 +3,10 @@
 ## Specification release
 
 [`specification-releases.json`](specification-releases.json) is the append-only
-numbered Takoform Specification ledger. Its current 1.1 object is a candidate,
-not a completed release; 1.0 was never published, is withdrawn, and is never
-reused. A numbered entry may be recorded only after
+numbered Takoform Specification ledger. Its 1.1 candidate descriptor remains
+the immutable release input; the append-only `releases` array is the authority
+for whether that identity has been published. Identity 1.0 was never published,
+is withdrawn, and is never reused. A numbered entry may be recorded only after
 [`../spec/publication-evidence.json`](../spec/publication-evidence.json) closes
 one exact committed snapshot of the normative `spec/` tree. Candidate Forms,
 packages, reference conformance, and Provider behavior are independent evidence
@@ -29,11 +30,15 @@ unpublished candidates, and withdrawn-retained lanes. It is compatibility
 evidence only, not a publication receipt or release asset; no `/v1.1` Host
 lane, v2 schema, tag, or receipt is minted.
 
-The W09 workflow keeps three commits distinct: C1 is the normative freeze and
-executable tooling with an evidence-empty record; C2 is the evidence-only
-source-snapshot change; and C3 is the authoritative append-only publication
-receipt. The compatibility report is checked separately and never enters C2 or
-C3.
+The W09 workflow keeps four commits distinct. C1 is the normative freeze and
+executable tooling with an evidence-empty record. C2 changes exactly the source
+snapshot evidence and its two byte-identical website projections. C3 changes
+exactly the authoritative append-only publication receipt and its two
+byte-identical website projections. C4 is a direct child of C3 and refreshes
+only derived public truth: the README generation table, the informational
+compatibility report, the machine-readable site status, and reproducible
+website output. The compatibility report is checked separately and never
+enters C2, C3, the release asset set, or release authority.
 
 W09's current owner is the existing
 `https://github.com/tako0614/terraform-provider-takoform.git` repository. A
@@ -56,7 +61,23 @@ bun run deploy -- takoform-specification-release publish --tag specification/1.1
 # Read-only authoritative verification, then C3 receipt projection writer
 bun run deploy -- takoform-specification-release verify --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --release-id <release-id>
 bun run deploy -- takoform-specification-release record-receipt --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --release-id <release-id>
+
+# After committing the exact three-path C3, derive the non-authoritative C4
+bun run sync:current-generation
+bun run sync:specification-compatibility
+bun run sync:website-spec
+bun run website:build
+bun run check
 ```
+
+C3 is intentionally an auditable receipt-only commit and is not a green final
+tree: its ledger already says `released` while the derived public projections
+still describe the pre-receipt state. C4 MUST be the direct child that closes
+that deterministic projection gap. C3 and C4 are reviewed and pushed together,
+without squashing, so the remote branch ends on green C4 while the exact C3
+authority transition remains visible in history. C4 MUST NOT change `spec/**`,
+`spec/publication-evidence.json`, `release/specification-releases.json`, or
+either C3 ledger projection.
 
 If publication stops after the exact annotated tag, use `recover-tag-only` with
 the original C2, exact tag object and reviewed current commit. If it stops with
@@ -67,7 +88,7 @@ deletes, overwrites or retags the identity.
 The exact current candidate is the versionless family set rooted at
 `edge.forms.takoform.com` and the other seven groups in the current-family
 index, using package envelope `packages.forms.takoform.com/v1alpha5`. Neither
-identity is published by recording the Specification candidate.
+identity is published by recording the numbered Specification release.
 
 ## Provider release boundary
 

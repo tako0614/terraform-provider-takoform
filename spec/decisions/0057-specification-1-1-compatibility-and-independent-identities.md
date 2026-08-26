@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the W09 Specification 1.1 candidate. This decision supersedes the
+Accepted for the W09 Specification 1.1 release. This decision supersedes the
 numbered-release wording in decisions 0052, 0053, and 0055 where those records
 refer to Specification 1.0 or require implementation evidence. Those records
 remain historical decisions; the current machine authority is
@@ -19,7 +19,7 @@ published; it is withdrawn and retained as history and MUST never be reused. A
 future W10 Core owner may become the writer for future
 releases, but MUST NOT reissue, rewrite, or retag Specification 1.1.
 
-The current repository remains the authority for this candidate:
+The current repository remains the authority for publishing this identity:
 `https://github.com/tako0614/terraform-provider-takoform.git`. The transfer of
 future writer authority is a later operation. C1 does not create an SDK tag or
 publish the future module, whose eventual Go coordinate is
@@ -113,14 +113,24 @@ later decision records owner, evidence, and migration rules.
 
 ## Consequences
 
-The W09 release ledger has one 1.1 candidate and an empty `releases` array.
-The sole prerequisite is `specification-source-snapshot`; publication evidence
-for Forms, the reference Host, and Provider 3 remains independently visible
-and unprepared. C1 freezes the normative source and executable tooling while
-the evidence record is empty; C2 records only the exact source-snapshot
-evidence; C3 appends the authoritative publication receipt and its projections.
-The compatibility report is checked separately and never enters those records.
-A create-only release surface may prepare and publish 1.1 only from one exact
-reviewed W09 owner commit and must fail closed on a pre-existing 1.1 identity.
-C1 does not execute that surface. W10 may own future releases but must never
-reissue, rewrite, or retag 1.1.
+The W09 release ledger begins with one 1.1 candidate and an empty `releases`
+array. The sole prerequisite is `specification-source-snapshot`; publication
+evidence for Forms, the reference Host, and Provider 3 remains independently
+visible and unprepared. C1 freezes the normative source and executable tooling
+while the evidence record is empty. C2 records only the exact source-snapshot
+evidence and its two byte-identical website projections. C3 appends only the
+authoritative publication receipt and its two byte-identical projections. C4,
+as the direct child of C3, refreshes only deterministic non-authoritative public
+truth such as current-generation text, the compatibility report, site status,
+and website output. The compatibility report never enters C2, C3, the release
+asset set, or release authority.
+
+C3 is intentionally not a green final tree because the receipt changes the
+derived Specification status before those non-authoritative projections are
+regenerated. C3 and C4 must be reviewed and pushed together without squashing,
+leaving exact C3 visible in history and the branch head green at C4. C4 must not
+change normative `spec/**`, the source evidence, the release ledger, or either
+C3 ledger projection. A create-only release surface may prepare and publish
+1.1 only from one exact reviewed W09 owner commit and must fail closed on a
+pre-existing 1.1 identity. C1 does not execute that surface. W10 may own future
+releases but must never reissue, rewrite, or retag 1.1.

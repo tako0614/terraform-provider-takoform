@@ -41,11 +41,12 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
   <div class="status-note">
     <template v-if="lang === 'ja'">
       <p>
-        <strong>Specification candidate</strong>:
+        <strong>Specification</strong>:
         Takoform Specification <code>{{ status.specificationVersion }}</code> は
-        <code>{{ status.specificationReleaseStatus }}</code> です。Host API
-        <code>{{ hostApiVersion }}</code> は {{ hostApiMaturity }} contract の
-        <code>{{ status.hostApiPublicationStatus }}</code> で、
+        <code>{{ status.specificationReleaseStatus }}</code> です。この release status は
+        append-only の Specification release ledger/status document から導出されます。Host API
+        <code>{{ hostApiVersion }}</code> は Specification とは別の {{ hostApiMaturity }} contract で、
+        <code>{{ status.hostApiPublicationStatus }}</code> です。
         current corpus の {{ status.currentFamilyCount }} 個の versionless family /
         {{ status.currentFormCount }} 個の exact <code>0.x</code> Form は
         {{ formMaturity }} のままです。Specification release は Form を
@@ -64,10 +65,11 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
     </template>
     <template v-else>
       <p>
-        <strong>Specification candidate</strong>: Takoform Specification
+        <strong>Specification</strong>: Takoform Specification
         <code>{{ status.specificationVersion }}</code> is
-        <code>{{ status.specificationReleaseStatus }}</code>. Host API
-        <code>{{ hostApiVersion }}</code> is a {{ hostApiMaturity }} contract and
+        <code>{{ status.specificationReleaseStatus }}</code>. Its release status is
+        derived from the append-only Specification release ledger/status document.
+        Host API <code>{{ hostApiVersion }}</code> is a separate {{ hostApiMaturity }} contract and
         remains <code>{{ status.hostApiPublicationStatus }}</code>,
         while the current corpus's {{ status.currentFamilyCount }} versionless
         families and {{ status.currentFormCount }} exact <code>0.x</code> Forms

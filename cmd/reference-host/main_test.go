@@ -55,9 +55,11 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 	// discovery URL are written on separate lines, so a loop that stopped at
 	// "listening on" could snapshot the buffer between the two and read an
 	// empty discovery URL — a flake that would look like the defect this test
-	// exists to catch.
+	// exists to catch. Give a concurrently executing complete gate up to 30
+	// seconds to schedule and start the host; each poll still checks an early
+	// process exit immediately.
 	var origin, announcedDiscovery string
-	for attempt := 0; attempt < 200 && (origin == "" || announcedDiscovery == ""); attempt++ {
+	for attempt := 0; attempt < 1200 && (origin == "" || announcedDiscovery == ""); attempt++ {
 		select {
 		case err := <-done:
 			t.Fatalf("reference host exited before serving: %v", err)

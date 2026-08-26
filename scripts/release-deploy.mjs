@@ -195,7 +195,7 @@ export const RELEASE_SURFACES = Object.freeze([
       provenance:
         "uses the canonical old repository as the sole Specification 1.1 authority, requires a clean non-shallow attached main equal to freshly fetched origin/main, runs the complete owner gate, requires C2 to be the direct evidence-only child of the normative C1 commit, and binds the exact committed source-snapshot evidence bytes; the five-class compatibility report remains a separately checked W09 report and is not release authority",
       "post-conditions":
-        "publishes at most one create-only Specification 1.1 identity bound to annotated specification/1.1 and the exact C1 source/C2 release commits, rereads the immutable release and exact downloaded source evidence bytes, and appends one C3 receipt only after authoritative tag/release readback matches; no Form, package, Provider, Host API lane, v2 schema, v2 tag, or v2 receipt is created",
+        "publishes at most one create-only Specification 1.1 identity bound to annotated specification/1.1 and the exact C1 source/C2 release commits, rereads the immutable release and exact downloaded source evidence bytes, appends one C3 receipt only after authoritative tag/release readback matches, and requires a separate non-authoritative C4 derived-public-truth commit before the branch is green; no Form, package, Provider, Host API lane, v2 schema, v2 tag, or v2 receipt is created",
       reversal:
         "an unpublished C1/C2 candidate may be withdrawn; an exact tag-only state or exact retained draft may be completed only by the explicit bound recovery phases, while any mismatched publication is halted for forward repair and a published numbered Specification identity is never deleted, overwritten, or reissued",
       "failure-handling":
@@ -204,7 +204,7 @@ export const RELEASE_SURFACES = Object.freeze([
         "the operator reviews the exact C1 source/C2 release commits, separately checked five-class compatibility report, reserved 1.0/no-reuse rule, and zero Host/Form/Provider effects before invoking publish; no compatibility report, Provider, Host, product, signer, or adoption result can substitute for the normative source prerequisite",
       "no-overwrite":
         "requires specification/1.1 and its GitHub Release identity to be absent, creates one deterministic annotated object with a zero-object-id local compare-and-swap, uses a create-only remote lease, and rejects any existing or mismatched tag/release without transferring or reusing withdrawn 1.0",
-      halt: "prepare returns AWAITING_REVIEW after mutation-free C1 preflight; publish consumes only the exact pushed C2 commit, explicit recovery consumes only an exact tag-only or retained-draft state, verify is read-only, and record-receipt writes only the C3 ledger projections after live exact readback",
+      halt: "prepare returns AWAITING_REVIEW after mutation-free C1 preflight; publish consumes only the exact pushed C2 commit, explicit recovery consumes only an exact tag-only or retained-draft state, verify is read-only, record-receipt writes only the C3 ledger projections after live exact readback, and deterministic public-truth regeneration remains a separate C4 commit",
     },
   },
 ]);
@@ -1099,7 +1099,7 @@ function specificationRecordReceipt(context, options) {
     releaseUrl: verified.release.html_url,
     receiptCount: ledger.releases.length,
     mutation: "C3_LEDGER_PROJECTIONS_ONLY",
-    status: "RECEIPT_WRITTEN_AWAITING_C3_COMMIT",
+    status: "RECEIPT_WRITTEN_AWAITING_C3_AND_C4_COMMITS",
   });
 }
 

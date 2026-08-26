@@ -187,7 +187,15 @@ describe("Specification 1.1 owner ledger", () => {
 describe("C1/C2/C3 commit fences", () => {
   test("C2 permits only the evidence record and exact static/public projections", () => {
     expect(validateC2DiffPaths(C2_ALLOWED_PATHS)).toEqual([]);
-    expect(validateC2DiffPaths(["spec/publication-evidence.json"])).toEqual([]);
+    expect(
+      validateC2DiffPaths(["spec/publication-evidence.json"]).join("\n"),
+    ).toContain("website/static/spec/publication-evidence.json");
+    expect(
+      validateC2DiffPaths([
+        "spec/publication-evidence.json",
+        "website/static/spec/publication-evidence.json",
+      ]).join("\n"),
+    ).toContain("website/public/spec/publication-evidence.json");
     for (const pathName of [
       "spec/core/README.md",
       "scripts/release-deploy.mjs",
@@ -211,7 +219,15 @@ describe("C1/C2/C3 commit fences", () => {
       ),
     ).toContain("receipt/ledger projection-only");
     expect(validateC3DiffPaths([LEDGER_PATH]).join("\n")).toContain(
-      "static projection",
+      "website/static/release/specification-releases.json",
+    );
+    expect(
+      validateC3DiffPaths([
+        LEDGER_PATH,
+        "website/static/release/specification-releases.json",
+      ]).join("\n"),
+    ).toContain(
+      "website/public/release/specification-releases.json",
     );
   });
 });

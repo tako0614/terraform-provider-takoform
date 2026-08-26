@@ -232,7 +232,7 @@ const edgeProposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Specification 1.1 candidate / separate Host API v1 candidate",
+      text: "Specification 1.1 / separate Host API v1 candidate",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -296,7 +296,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Specification 1.1 candidate / separate Host API v1 candidate",
+      text: "Specification 1.1 / separate Host API v1 candidate",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {

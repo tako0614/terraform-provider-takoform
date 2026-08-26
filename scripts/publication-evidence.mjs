@@ -74,9 +74,12 @@ const SPECIFICATION_EXCLUDED_PATHS = Object.freeze([
   PUBLICATION_EVIDENCE,
   RETAINED_HISTORY_PATH,
 ]);
-const EVIDENCE_PROJECTION_PATHS = Object.freeze([
+export const PUBLICATION_EVIDENCE_PROJECTION_PATHS = Object.freeze([
   "website/static/spec/publication-evidence.json",
   "website/public/spec/publication-evidence.json",
+]);
+const EVIDENCE_PROJECTION_PATHS = Object.freeze([
+  ...PUBLICATION_EVIDENCE_PROJECTION_PATHS,
   "website/static/release/specification-releases.json",
   "website/public/release/specification-releases.json",
 ]);
@@ -1895,17 +1898,20 @@ export function prepareSpecificationEvidence(
   }
   assertWorktreePathsClean(
     repositoryRoot,
-    [PUBLICATION_EVIDENCE],
+    [PUBLICATION_EVIDENCE, ...PUBLICATION_EVIDENCE_PROJECTION_PATHS],
     "Specification evidence preparation input",
   );
   const sourceCommit = git(repositoryRoot, ["rev-parse", "HEAD"]).trim();
   assertReachableCommit(repositoryRoot, sourceCommit, "Specification source commit");
   document.evidence.specification.sourceSnapshot =
     deriveSpecificationSourceSnapshot(repositoryRoot, sourceCommit);
-  writeFileSync(
-    path.join(repositoryRoot, PUBLICATION_EVIDENCE),
-    `${JSON.stringify(document, null, 2)}\n`,
-  );
+  const raw = `${JSON.stringify(document, null, 2)}\n`;
+  for (const relativePath of [
+    PUBLICATION_EVIDENCE,
+    ...PUBLICATION_EVIDENCE_PROJECTION_PATHS,
+  ]) {
+    writeFileSync(path.join(repositoryRoot, relativePath), raw);
+  }
   return document;
 }
 
@@ -1938,7 +1944,7 @@ function main() {
   if (mode === "--prepare-specification-1-1" || mode === "--prepare-specification-v1") {
     const document = prepareSpecificationEvidence(repositoryRoot);
     process.stdout.write(
-      `prepared exact Specification 1.1 source evidence for ${document.evidence.specification.sourceSnapshot.sourceCommit}; commit the record before assertion\n`,
+      `prepared exact Specification 1.1 source evidence and two byte-identical website projections for ${document.evidence.specification.sourceSnapshot.sourceCommit}; commit the exact three-path record before assertion\n`,
     );
     return;
   }

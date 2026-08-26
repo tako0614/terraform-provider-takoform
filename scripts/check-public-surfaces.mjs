@@ -12,7 +12,10 @@ import {
   PUBLIC_SCHEMA_ROUTE,
 } from "./public-schema-manifest.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
-import { FAMILY_CANDIDATE_SET } from "../website/.vitepress/site-status.mjs";
+import {
+  FAMILY_CANDIDATE_SET,
+  deriveSiteStatusFacts,
+} from "../website/.vitepress/site-status.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -1855,8 +1858,9 @@ if (failures.length > 0) {
   }
   process.exitCode = 1;
 } else {
+  const siteStatus = deriveSiteStatusFacts(repositoryRoot);
   console.log(
-    `Public surfaces OK: Specification 1.1 is an open candidate, ` +
+    `Public surfaces OK: Specification 1.1 is ${siteStatus.specificationReleaseStatus}, ` +
       `the 8-family/31-Form corpus remains Experimental, Provider v${releaseVersion.version} ` +
       "is Registry-published, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );

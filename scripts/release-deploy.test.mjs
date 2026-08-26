@@ -887,6 +887,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     mkdirSync(join(root, "spec"), { recursive: true });
     mkdirSync(join(root, "release"), { recursive: true });
     mkdirSync(join(root, "website", "static", "spec"), { recursive: true });
+    mkdirSync(join(root, "website", "public", "spec"), { recursive: true });
     mkdirSync(join(root, "website", "static", "release"), { recursive: true });
     mkdirSync(join(root, "website", "public", "release"), { recursive: true });
     mkdirSync(join(root, "scripts"), { recursive: true });
@@ -946,6 +947,10 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       join(root, "website", "static", "spec", "publication-evidence.json"),
       c2Raw,
     );
+    writeFileSync(
+      join(root, "website", "public", "spec", "publication-evidence.json"),
+      c2Raw,
+    );
     runGit("add", ".");
     runGit("commit", "-m", "Specification C2 evidence only");
     return {
@@ -1001,6 +1006,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       ),
     ).toEqual([
       "spec/publication-evidence.json",
+      "website/public/spec/publication-evidence.json",
       "website/static/spec/publication-evidence.json",
     ]);
 
@@ -1346,7 +1352,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       phase: "record-receipt",
       receiptCount: 1,
       mutation: "C3_LEDGER_PROJECTIONS_ONLY",
-      status: "RECEIPT_WRITTEN_AWAITING_C3_COMMIT",
+      status: "RECEIPT_WRITTEN_AWAITING_C3_AND_C4_COMMITS",
     });
     const receiptLedger = JSON.parse(
       readFileSync(

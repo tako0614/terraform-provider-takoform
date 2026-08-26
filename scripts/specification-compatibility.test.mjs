@@ -16,6 +16,9 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const MANIFEST = JSON.parse(readFileSync(path.join(ROOT, MANIFEST_PATH), "utf8"));
+const SPECIFICATION_LEDGER = JSON.parse(
+  readFileSync(path.join(ROOT, "release/specification-releases.json"), "utf8"),
+);
 
 function clone(value) {
   return structuredClone(value);
@@ -74,6 +77,20 @@ describe("Specification 1.1 compatibility manifest", () => {
     ]) expect(all.has(identity)).toBe(true);
     expect([...all].some((identity) => identity.includes("github.com/tako0614/takoform"))).toBe(false);
     expect([...all].some((identity) => identity.includes("artifact-transport/v1"))).toBe(false);
+  });
+
+  test("reports Specification 1.1 from its append-only receipt state", () => {
+    const entry = MANIFEST.classes
+      .flatMap((classValue) => classValue.entries)
+      .find((value) => value.identity === "takoform.specification@1.1");
+    const released = SPECIFICATION_LEDGER.releases.some(
+      (release) => release?.version === "1.1",
+    );
+    expect(entry).toMatchObject(
+      released
+        ? { status: "retained", publication: "retained" }
+        : { status: "new-independent", publication: "unpublished-candidate" },
+    );
   });
 
   test("explicitly byte-pins literal Host API v1 without minting a new lane", () => {

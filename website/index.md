@@ -14,7 +14,7 @@ hero:
       link: /spec/
 ---
 
-## Specification 1.1 candidate; separate Host API v1 candidate
+## Specification 1.1 / separate Host API v1 candidate
 
 Takoform is an Experimental specification project. The current stack is
 described on five independent axes so a client version, a host protocol, a
@@ -22,7 +22,7 @@ Form identity, and package publication cannot be mistaken for one another.
 
 | Axis                  | Current identity                       | Meaning and availability                                                                                                     |
 | --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.1 candidate**             | First numbered release; open until one exact committed snapshot of the normative `spec/` tree is recorded. Identity 1.0 was withdrawn before publication and may not be reused. |
+| Specification         | **Takoform Specification 1.1**         | Release status is derived from the append-only `release/specification-releases.json` ledger and reflected in the generated `takoform-site.json` status document; one exact committed snapshot of the normative `spec/` tree is release authority. Identity 1.0 was withdrawn before publication and may not be reused. |
 | Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.             |
 | Form corpus           | **8 families / 31 Forms**              | Exact current `0.x` FormRefs; every Form remains Experimental.                                                               |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |

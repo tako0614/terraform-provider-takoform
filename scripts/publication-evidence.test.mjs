@@ -31,6 +31,7 @@ import {
   PACKAGE_ENVELOPE,
   PROVIDER_COMPATIBILITY_TESTS,
   PROVIDER_TRACK,
+  PUBLICATION_EVIDENCE_PROJECTION_PATHS,
   REFERENCE_CONFORMANCE_FORMAT,
   S3_STANDARD_SERVICE_PROTOCOL,
   SPECIFICATION_SOURCE_FORMAT,
@@ -594,7 +595,9 @@ function buildSourceFixture(options = {}) {
     },
   };
   writeJson(root, CONFORMANCE_SUITE_PATH, suite);
-  writeJson(root, "spec/publication-evidence.json", DOCUMENT);
+  const openDocument = clone(DOCUMENT);
+  openDocument.evidence.specification.sourceSnapshot = null;
+  writeJson(root, "spec/publication-evidence.json", openDocument);
   git(
     root,
     "add",
@@ -650,23 +653,42 @@ afterAll(() => {
 }, 30_000);
 
 describe("current fail-closed state", () => {
-  test("keeps the absent canonical multi-family tuple and both tracks open", () => {
+  test("keeps the absent canonical multi-family tuple and reports the exact release stage", () => {
     const report = validatePublicationEvidence(DOCUMENT, { repositoryRoot: ROOT });
     expect(report.candidate.available).toBe(false);
     expect(report.candidate.familyCount).toBe(0);
     expect(report.candidate.edgeRosterExact).toBe(false);
+    const specificationStatus =
+      DOCUMENT.evidence.specification.sourceSnapshot === null
+        ? "open"
+        : "ready";
     expect(report.tracks.map((entry) => [entry.id, entry.status])).toEqual([
-      [SPECIFICATION_TRACK, "open"],
+      [SPECIFICATION_TRACK, specificationStatus],
       [PROVIDER_TRACK, "open"],
     ]);
   });
 
   test("keeps compatibility reporting outside the publication-evidence shape", () => {
-    expect(DOCUMENT.evidence.specification).toEqual({
-      sourceSnapshot: null,
-      candidateCorpus: null,
-      referenceConformance: null,
-    });
+    expect(Object.keys(DOCUMENT.evidence.specification)).toEqual([
+      "sourceSnapshot",
+      "candidateCorpus",
+      "referenceConformance",
+    ]);
+    expect(DOCUMENT.evidence.specification.candidateCorpus).toBeNull();
+    expect(DOCUMENT.evidence.specification.referenceConformance).toBeNull();
+    const sourceSnapshot = DOCUMENT.evidence.specification.sourceSnapshot;
+    if (sourceSnapshot !== null) {
+      expect(sourceSnapshot).toMatchObject({
+        format: SPECIFICATION_SOURCE_FORMAT,
+        releaseVersion: "1.1",
+        repository: "takoform",
+        roots: ["spec"],
+        excludedPaths: [
+          "spec/publication-evidence.json",
+          "spec/publication-blockers.json",
+        ],
+      });
+    }
     expect(JSON.stringify(DOCUMENT)).not.toContain("compatibilityManifest");
   });
 
@@ -681,16 +703,21 @@ describe("current fail-closed state", () => {
     expect(`${result.stdout}${result.stderr}`).toContain("usage:");
   });
 
-  test("the Specification assertion fails only its normative source prerequisite", () => {
+  test("the Specification assertion depends only on its normative source prerequisite", () => {
     const result = spawnSync("bun", ["scripts/publication-evidence.mjs", "--assert-specification-v1"], {
       cwd: ROOT,
       encoding: "utf8",
     });
-    expect(result.status).not.toBe(0);
     const output = `${result.stdout}${result.stderr}`;
-    expect(output).toContain(
-      "specification-v1:specification-source-snapshot",
-    );
+    if (DOCUMENT.evidence.specification.sourceSnapshot === null) {
+      expect(result.status).not.toBe(0);
+      expect(output).toContain(
+        "specification-v1:specification-source-snapshot",
+      );
+    } else {
+      expect(result.status).toBe(0);
+      expect(output).toContain("Specification 1.1 ready");
+    }
     expect(output).not.toContain("candidate-form-corpus");
     expect(output).not.toContain("reference-conformance");
     expect(output).not.toContain("provider-3.0:");
@@ -950,6 +977,33 @@ describe("independent release tracks", () => {
     expect(prepared.evidence.specification.candidateCorpus).toBeNull();
     expect(prepared.evidence.specification.referenceConformance).toBeNull();
     expect(loadPublicationEvidence(fixture.root)).toEqual(prepared);
+    const raw = readFileSync(
+      path.join(fixture.root, "spec/publication-evidence.json"),
+    );
+    for (const relativePath of PUBLICATION_EVIDENCE_PROJECTION_PATHS) {
+      expect(readFileSync(path.join(fixture.root, relativePath))).toEqual(raw);
+    }
+    git(
+      fixture.root,
+      "add",
+      "spec/publication-evidence.json",
+      ...PUBLICATION_EVIDENCE_PROJECTION_PATHS,
+    );
+    git(fixture.root, "commit", "-m", "test: record source-only C2 evidence");
+    git(fixture.root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    const report = validatePublicationEvidence(prepared, {
+      repositoryRoot: fixture.root,
+      releaseTrack: SPECIFICATION_TRACK,
+    });
+    expect(
+      report.tracks.find((entry) => entry.id === SPECIFICATION_TRACK)?.status,
+    ).toBe("ready");
+    expect(
+      report.tracks.find((entry) => entry.id === PROVIDER_TRACK)?.status,
+    ).toBe("open");
+    expect(() =>
+      assertPublicationEvidenceReady(report, SPECIFICATION_TRACK),
+    ).not.toThrow();
     expect(() => prepareSpecificationEvidence(fixture.root)).toThrow(
       "Specification evidence is already closed; preparation is create-only",
     );
