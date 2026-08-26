@@ -9,30 +9,26 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 func TestV3ProviderRegistrationRequiresExactTerraformMapping(t *testing.T) {
 	t.Parallel()
-	form, ok := edgeformcatalog.ByKind("ModuleWorker")
-	if !ok {
-		t.Fatal("ModuleWorker is not declared")
-	}
-	line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
-	ref, err := currentformregistry.V3Current().DefaultCreate(line)
+	form := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+	registry := mustProviderV3SnapshotAssembly().registry
+	ref, err := registry.DefaultCreate(line)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	mapped, err := newV3ResourceTypeRegistry(currentformregistry.V3Current(), []v3ResourceTypeLine{{
+	mapped, err := newV3ResourceTypeRegistry(registry, []v3ResourceTypeLine{{
 		GroupKind: line, ResourceType: "takoform_module_worker",
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	factories, err := compileV3FormResources(
-		[]model.Form{form}, currentformregistry.V3Current(), mapped, v3Codecs(),
+		[]model.Form{form}, registry, mapped, v3Codecs(),
 	)
 	if err != nil {
 		t.Fatalf("mapped provider registration failed: %v", err)
@@ -43,12 +39,12 @@ func TestV3ProviderRegistrationRequiresExactTerraformMapping(t *testing.T) {
 		t.Fatalf("registered Terraform type = %q", metadata.TypeName)
 	}
 
-	empty, err := newV3ResourceTypeRegistry(currentformregistry.V3Current(), nil)
+	empty, err := newV3ResourceTypeRegistry(registry, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := compileV3FormResources(
-		[]model.Form{form}, currentformregistry.V3Current(), empty, v3Codecs(),
+		[]model.Form{form}, registry, empty, v3Codecs(),
 	); err == nil || !strings.Contains(err.Error(), ref.ExactKey().String()) {
 		t.Fatalf("missing exact mapping error = %v", err)
 	}
@@ -56,21 +52,22 @@ func TestV3ProviderRegistrationRequiresExactTerraformMapping(t *testing.T) {
 
 func TestV3ProviderMappingRejectsDuplicatesAndDoesNotFallback(t *testing.T) {
 	t.Parallel()
-	form, _ := edgeformcatalog.ByKind("ModuleWorker")
-	line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+	form := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+	registry := mustProviderV3SnapshotAssembly().registry
 	duplicate := []v3ResourceTypeLine{
 		{GroupKind: line, ResourceType: "takoform_module_worker"},
 		{GroupKind: line, ResourceType: "takoform_module_worker_alternate"},
 	}
-	if _, err := newV3ResourceTypeRegistry(currentformregistry.V3Current(), duplicate); err == nil || !strings.Contains(err.Error(), "duplicate") {
+	if _, err := newV3ResourceTypeRegistry(registry, duplicate); err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("duplicate mapping error = %v", err)
 	}
 
-	mapped, err := newV3ResourceTypeRegistry(currentformregistry.V3Current(), duplicate[:1])
+	mapped, err := newV3ResourceTypeRegistry(registry, duplicate[:1])
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, err := currentformregistry.V3Current().DefaultCreate(line)
+	ref, err := registry.DefaultCreate(line)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,18 +84,8 @@ func TestV3ProviderMappingRejectsDuplicatesAndDoesNotFallback(t *testing.T) {
 
 func TestV3CurrentMappingOmitsWithdrawnObjectBucketAndRetainedMapping(t *testing.T) {
 	t.Parallel()
-	currentGroup := edgeformcatalog.Family.APIVersion()
-	for _, line := range providerV3ResourceTypeLines() {
-		if line.GroupKind.APIVersion == currentGroup && (line.GroupKind.Kind == "ObjectBucket" || strings.Contains(line.ResourceType, "object_bucket")) {
-			t.Fatalf("current provider mapping retains withdrawn ObjectBucket: %#v", line)
-		}
-	}
-	if refs := currentformregistry.V3Current().SupportedRefsFor(currentformregistry.GroupKind{
-		APIVersion: currentGroup, Kind: "ObjectBucket",
-	}); len(refs) != 0 {
-		t.Fatalf("current registry unexpectedly carries ObjectBucket refs: %#v", refs)
-	}
-	for _, ref := range currentformregistry.V3Current().SupportedRefs() {
+	assembly := mustProviderV3SnapshotAssembly()
+	for _, ref := range assembly.registry.SupportedRefs() {
 		if ref.Kind != "ObjectBucket" {
 			continue
 		}
@@ -110,21 +97,22 @@ func TestV3CurrentMappingOmitsWithdrawnObjectBucketAndRetainedMapping(t *testing
 
 func TestTerraformTypeMappingCannotChangeFormDigest(t *testing.T) {
 	t.Parallel()
-	form, _ := edgeformcatalog.ByKind("ModuleWorker")
-	line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
-	first, err := newV3ResourceTypeRegistry(currentformregistry.V3Current(), []v3ResourceTypeLine{{
+	form := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+	registry := mustProviderV3SnapshotAssembly().registry
+	first, err := newV3ResourceTypeRegistry(registry, []v3ResourceTypeLine{{
 		GroupKind: line, ResourceType: "takoform_module_worker",
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := newV3ResourceTypeRegistry(currentformregistry.V3Current(), []v3ResourceTypeLine{{
+	second, err := newV3ResourceTypeRegistry(registry, []v3ResourceTypeLine{{
 		GroupKind: line, ResourceType: "takoform_alternative_module_worker",
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, err := currentformregistry.V3Current().DefaultCreate(line)
+	ref, err := registry.DefaultCreate(line)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,22 +122,15 @@ func TestTerraformTypeMappingCannotChangeFormDigest(t *testing.T) {
 		t.Fatal("test mappings do not differ")
 	}
 
-	rendered, err := edgeformcatalog.RenderForms()
+	definition, ok := mustProviderV3SnapshotAssembly().snapshot.Definition(ref.FormRef())
+	if !ok {
+		t.Fatalf("Snapshot Definition for %s is missing", ref.ExactKey())
+	}
+	digest, err := formpackage.DigestCanonicalJSON(definition)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, candidate := range rendered {
-		if candidate.Kind != form.Kind {
-			continue
-		}
-		digest, err := formpackage.DigestCanonicalJSON([]byte(candidate.DefinitionJSON))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if digest != ref.SchemaDigest {
-			t.Fatalf("Form digest = %q, registry ref = %q", digest, ref.SchemaDigest)
-		}
-		return
+	if digest != ref.SchemaDigest {
+		t.Fatalf("Form digest = %q, registry ref = %q", digest, ref.SchemaDigest)
 	}
-	t.Fatal("rendered ModuleWorker definition is missing")
 }

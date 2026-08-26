@@ -7,8 +7,6 @@ import (
 
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // TestV3Provider3GoldenLocksEveryCurrentImportPath prevents a resource added
@@ -20,16 +18,16 @@ func TestV3Provider3GoldenLocksEveryCurrentImportPath(t *testing.T) {
 	ctx := context.Background()
 	host := newV3FakeHost(t)
 	data := newV3TestProviderData(t, host)
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 	codecs := v3Codecs()
-	forms := providerV3CurrentForms()
+	forms := mustProviderV3SnapshotAssembly().currentForms
 	if len(forms) != 31 {
 		t.Fatalf("current Provider 3 projection = %d, want 31", len(forms))
 	}
 
 	for _, form := range forms {
 		form := form
-		ref, err := registry.DefaultCreate(currentformregistry.GroupKind{
+		ref, err := registry.DefaultCreate(v3GroupKind{
 			APIVersion: form.Family.APIVersion(), Kind: form.Kind,
 		})
 		if err != nil {

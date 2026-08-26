@@ -581,12 +581,14 @@ func (f Form) ImmutableFields() []string {
 // FixtureName is the resource name the Form's fixtures reference targets by.
 func (f Form) FixtureName() string { return f.Slug }
 
-// Validate proves the structural rules a Form must satisfy before any surface
-// is derived from it.
 // hostAPILanePattern is the Host API lane identity grammar a Form states its
 // substrate requirement in (decision 0047).
 var hostAPILanePattern = regexp.MustCompile(`^forms\.takoform\.com/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
+var formKindPattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+var formSlugPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
 
+// Validate proves the structural rules a Form must satisfy before any surface
+// is derived from it.
 func (f Form) Validate() error {
 	// Every Form states the substrate it needs. It is the one dependency a
 	// Form has always had and the only one that used to travel by convention,
@@ -597,6 +599,9 @@ func (f Form) Validate() error {
 	}
 	if f.Kind == "" || f.Slug == "" || f.Title == "" || f.DefinitionVersion == "" {
 		return fmt.Errorf("form %q is missing identity fields", f.Kind)
+	}
+	if !formKindPattern.MatchString(f.Kind) || !formSlugPattern.MatchString(f.Slug) || len(f.Slug) > 127 {
+		return fmt.Errorf("form %q has an unsafe authoring kind or package slug %q", f.Kind, f.Slug)
 	}
 	if !f.Role.Valid() {
 		return fmt.Errorf("form %s declares unknown role %q", f.Kind, f.Role)
@@ -1053,8 +1058,6 @@ var formGroupPattern = regexp.MustCompile(
 )
 
 var taggedVariantPattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]{0,63}$`)
-
-var formKindPattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
 
 // validateResourceTarget proves that a reference has one complete exact
 // address and one target contract. The new spelling names its own group; the

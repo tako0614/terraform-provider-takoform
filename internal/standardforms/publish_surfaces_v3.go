@@ -13,7 +13,11 @@ import (
 	"strings"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
+)
+
+const (
+	edgeFamilyGroup            = "edge.forms.takoform.com"
+	workerRuntimeInterfaceName = "worker.runtime"
 )
 
 // v3DocBasename is provider-reference metadata, not Form identity.
@@ -22,9 +26,9 @@ func v3DocBasename(form model.Form) string {
 }
 
 // v3PublishedSurfaces renders every family-lane doc and example. Every v3-lane
-// surface is derived from a catalog Form; the lane has no hand-authored
-// resource surface, because it exposes no resource that is not a Form
-// (spec/decisions/0021).
+// surface is derived from the exact Provider projection over the selected
+// Snapshot; the lane has no hand-authored resource surface, because it exposes
+// no resource that is not a Form (spec/decisions/0021).
 func v3PublishedSurfaces() []publishedSurface {
 	surfaces := make([]publishedSurface, 0, currentFormCount()*2)
 	for _, family := range currentFamilies() {
@@ -52,7 +56,7 @@ func v3PublishedSurfaces() []publishedSurface {
 // is what "this host runs module workers" is allowed to mean
 // (spec/decisions/0019).
 func v3ProvidedInterfaceProse(name string) string {
-	if name == edgeformcatalog.WorkerRuntimeInterfaceName {
+	if name == workerRuntimeInterfaceName {
 		return "the exact runtime ABI a conforming host provides to this resource's code: " +
 			"handler signatures, the binding environment, `ctx.waitUntil`, exception handling, " +
 			"body streaming, the minimum Web API surface, and module loading. " +
@@ -246,7 +250,7 @@ func v3NameArgumentDoc(form model.Form) string {
 		"owner they would derive one name and two Terraform resources would manage one host address — where a " +
 		"destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the " +
 		"host never sees it, and it enters only the derived name."
-	if form.Family.APIVersion() == edgeformcatalog.Family.APIVersion() {
+	if form.Family.APIVersion() == edgeFamilyGroup {
 		doc += " The official [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you."
 	}
 	return doc + "\n"
@@ -266,9 +270,16 @@ func v3RevisionOwnerExample(form model.Form) string {
 			}
 		}
 	}
-	if form.Family.APIVersion() == edgeformcatalog.Family.APIVersion() {
-		if worker, ok := edgeformcatalog.ByKind("ModuleWorker"); ok {
-			return worker.FixtureName()
+	if form.Family.APIVersion() == edgeFamilyGroup {
+		for _, family := range currentFamilies() {
+			if family.Group != edgeFamilyGroup {
+				continue
+			}
+			for _, worker := range family.Forms {
+				if worker.Kind == "ModuleWorker" {
+					return worker.FixtureName()
+				}
+			}
 		}
 	}
 	return form.Slug
@@ -727,14 +738,18 @@ func v3JSONEncodeHCL(example any) string {
 	return "jsonencode({ " + strings.Join(parts, ", ") + " })"
 }
 
-// v3FormInventorySection is the provider-neutral roster rendered from all
-// eight current catalogs. It intentionally has no Terraform resource column.
+// v3FormInventorySection renders the selected Forms carried by Provider 3's
+// exact projection. It intentionally has no Terraform resource column.
 func v3FormInventorySection() string {
 	var builder strings.Builder
 	families := currentFamilies()
 	total := 0
+	edgeCount := 0
 	for _, family := range families {
 		total += len(family.Forms)
+		if family.Group == edgeFamilyGroup {
+			edgeCount = len(family.Forms)
+		}
 		builder.WriteString("\n## `" + family.Group + "`\n\n")
 		builder.WriteString("| Kind | Role | Version | Portable intent |\n")
 		builder.WriteString("| --- | --- | --- | --- |\n")
@@ -756,6 +771,6 @@ the provider explicitly owns. Their `+"`takoform_*`"+` names are non-normative
 and cannot affect a Form Definition or digest. Missing mappings for other
 families are provider-registration work, not a reason to omit or alter those
 families here.
-`, total, len(families), len(edgeformcatalog.Forms))
+`, total, len(families), edgeCount)
 	return builder.String()
 }

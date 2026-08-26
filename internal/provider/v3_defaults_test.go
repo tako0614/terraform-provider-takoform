@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // v3AttributeDefaultValue resolves the framework default of one attribute back
@@ -105,8 +104,8 @@ func v3AttributeIsOptionalComputed(attribute schema.Attribute) bool {
 func TestV3DefaultedAttributesSurviveApplyWithoutDiff(t *testing.T) {
 	ctx := context.Background()
 	checked := 0
-	for _, form := range edgeformcatalog.Forms {
-		if v3ArtifactBackedRevision(form.Kind) {
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
+		if _, artifactBacked := v3ProviderArtifactForForm(t, form); artifactBacked {
 			// Artifact-backed revisions project manifestDigest through their
 			// provider-only local-file authoring surfaces.
 			continue
@@ -209,7 +208,7 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 	ctx := context.Background()
 	schemaResponse := v3SchemaOf(t, resource)
 
-	form, _ := edgeformcatalog.ByKind("WorkerVersion")
+	form := v3ProviderCurrentFormByKind(t, "WorkerVersion")
 	planValues := map[string]attr.Value{
 		"name":     types.StringValue("worker-version"),
 		"space":    types.StringValue("prod"),
@@ -274,7 +273,7 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 // Form without the update capability: there is no update deadline to set,
 // because there is no update.
 func TestV3NoUpdateFormsDeclareNoUpdateTimeout(t *testing.T) {
-	for _, form := range edgeformcatalog.Forms {
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
 		resource := v3Provider3CurrentResourceHarness(t, form, "", nil, nil)
 		schemaResponse := v3SchemaOf(t, resource)
 		_, present := schemaResponse.Schema.Attributes["update_timeout"]
@@ -326,7 +325,7 @@ func v3AttributeRequiresReplace(attribute schema.Attribute) bool {
 // never dropped, and that decision comes from the declared default alone.
 func TestV3EmptyCollectionDefaultsAreEmitted(t *testing.T) {
 	ctx := context.Background()
-	form, _ := edgeformcatalog.ByKind("WorkerVersion")
+	form := v3ProviderCurrentFormByKind(t, "WorkerVersion")
 	for _, field := range form.Fields {
 		if !model.EmptyCollectionDefault(field) {
 			continue

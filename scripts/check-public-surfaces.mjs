@@ -773,7 +773,8 @@ function checkCurrentLaneSemanticResidue() {
   const currentCodeRoots = [
     "internal/clientv3",
     "internal/currentformmodel",
-    "internal/currentformregistry",
+    "internal/currentformselection",
+    "internal/currentformsnapshot",
     "internal/edgeformcatalog",
     "internal/portableconformancev3",
     "internal/provider",
@@ -810,14 +811,7 @@ function checkCurrentLaneSemanticResidue() {
         "current code could still be carrying; this check would pass vacuously",
     );
   }
-  const retainedCodeFiles = new Set([
-    path.join(
-      repositoryRoot,
-      "internal",
-      "currentformregistry",
-      "frozen_retained_lane_test.go",
-    ),
-  ]);
+  const retainedCodeFiles = new Set();
   const currentCodeFiles = currentCodeRoots.flatMap((root) =>
     walkFiles(root, (filePath) =>
       (filePath.endsWith(".go") || filePath.endsWith(".mjs")) &&
@@ -1035,11 +1029,12 @@ function checkWebsiteDocsProjection(formDocNames) {
 // about a Form for a reader to be able to find it.
 //
 // The generated trees (docs/resources, examples/resources, the site
-// projections) were already compared against the roster above; nothing checked
-// the prose and the navigation, which is exactly why WorkerEndpoint reached
-// production missing from the README, the sidebar and the Japanese docs index
-// while every generated surface carried it. A Form now cannot be added or
-// removed without every one of these learning about it.
+// projections) were already compared against the roster derived from the
+// selected artifact index plus Provider projection; nothing checked the prose
+// and navigation, which is exactly why WorkerEndpoint reached production
+// missing from the README, sidebar and Japanese docs index while every
+// generated surface carried it. A Form now cannot be added or removed without
+// every one of these learning about it.
 function checkHandWrittenInventories(familyRoster) {
   const familyKinds = familyRoster.map(({ kind }) => kind);
   const familyDocNames = familyRoster.map(({ docName }) => docName);
@@ -1708,75 +1703,9 @@ if (releaseVersion.tag !== `v${releaseVersion.version}`) {
   fail("release/version.json: tag must match version");
 }
 
-// The current Edge Family has exactly sixteen Forms and no ObjectBucket. The
-// independent, non-normative Provider 3 sample maps all 31 current Forms, so
-// its generated docs and examples must cover the whole current-family index.
-// None of those local candidate surfaces claims Provider publication or turns
-// the mappings into Specification identity.
-//
-// Each column is bound to repository data below: the kinds and slugs to the
-// family candidate set, the doc names to docs/resources, the slugs to
-// proposals/edge. A Form cannot enter or leave the family without this table
-// moving, and the table is what every hand-written inventory is measured
-// against.
-const edgeFamilyRoster = [
-  { kind: "ModuleWorker", slug: "module-worker", docName: "module_worker" },
-  { kind: "WorkerBundle", slug: "worker-bundle", docName: "worker_bundle" },
-  {
-    kind: "StaticAssetBundle",
-    slug: "static-asset-bundle",
-    docName: "static_asset_bundle",
-  },
-  { kind: "WorkerVersion", slug: "worker-version", docName: "worker_version" },
-  {
-    kind: "WorkerDeployment",
-    slug: "worker-deployment",
-    docName: "worker_deployment",
-  },
-  {
-    kind: "WorkerCustomDomain",
-    slug: "worker-custom-domain",
-    docName: "worker_custom_domain",
-  },
-  { kind: "WorkerEndpoint", slug: "worker-endpoint", docName: "worker_endpoint" },
-  {
-    kind: "WorkerCronTrigger",
-    slug: "worker-cron-trigger",
-    docName: "worker_cron_trigger",
-  },
-  {
-    kind: "EdgeKVNamespace",
-    slug: "edge-kv-namespace",
-    docName: "edge_kv_namespace",
-  },
-  { kind: "SQLiteDatabase", slug: "sqlite-database", docName: "sqlite_database" },
-  {
-    kind: "SQLiteMigrationSet",
-    slug: "sqlite-migration-set",
-    docName: "sqlite_migration_set",
-  },
-  {
-    kind: "SQLiteMigrationApplication",
-    slug: "sqlite-migration-application",
-    docName: "sqlite_migration_application",
-  },
-  {
-    kind: "AtLeastOnceQueue",
-    slug: "at-least-once-queue",
-    docName: "at_least_once_queue",
-  },
-  { kind: "QueueConsumer", slug: "queue-consumer", docName: "queue_consumer" },
-  {
-    kind: "DurableWorkflow",
-    slug: "durable-workflow",
-    docName: "durable_workflow",
-  },
-  {
-    kind: "ActorNamespace",
-    slug: "actor-namespace",
-    docName: "actor_namespace",
-  },
-];
+// The publisher-selected family index is the roster authority. Provider 3's
+// independent projection contributes only Terraform names for those exact
+// FormRefs; the public-surface check must not carry another family list.
 const currentFamilyIndex = readJson(
   path.join(repositoryRoot, "forms", "candidates", "current-family-index.json"),
 );
@@ -1830,18 +1759,15 @@ if (currentProviderResourceTypes.size !== 31) {
 
 const familySet = readJson(path.join(repositoryRoot, FAMILY_CANDIDATE_SET));
 const familyEntries = Array.isArray(familySet.forms) ? familySet.forms : [];
-compareExact(
-  "Edge Platform Family kinds",
-  familyEntries.map((entry) => entry?.kind ?? ""),
-  edgeFamilyRoster.map(({ kind }) => kind),
+const edgeFamilyRoster = currentFormRoster.filter(
+  ({ group }) => group === familySet.family,
 );
-compareExact(
-  "Edge Platform Family Form slugs",
-  familyEntries.map((entry) =>
-    path.posix.basename(typeof entry?.path === "string" ? entry.path : ""),
-  ),
-  edgeFamilyRoster.map(({ slug }) => slug),
-);
+if (edgeFamilyRoster.length !== familyEntries.length) {
+  fail(
+    `${FAMILY_CANDIDATE_SET}: selected Forms and exact Provider projection disagree ` +
+      `(candidate=${familyEntries.length}, projected=${edgeFamilyRoster.length})`,
+  );
+}
 
 const formDocNames = currentFormRoster.map(({ docName }) => docName);
 const expectedResourceDocs = formDocNames.map((name) => `${name}.md`);

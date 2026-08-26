@@ -15,7 +15,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
@@ -131,7 +130,7 @@ func TestV3RelationConditionWarnsAndNamesTheRemedy(t *testing.T) {
 			}
 			v3ReportRelationCondition(
 				"WorkerVersion", "takoform_worker_version", "conformance", "worker-version",
-				currentformregistry.V3Ref{}, res, testCase.declaresUpdate, &diags,
+				v3FormRef{}, res, testCase.declaresUpdate, &diags,
 			)
 			if diags.HasError() {
 				t.Fatalf("a relation report failed the read: %v", diags)

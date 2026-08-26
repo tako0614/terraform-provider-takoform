@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 func TestProviderV3ProductionSeamsUseSnapshotAssembly(t *testing.T) {
@@ -51,72 +51,75 @@ func TestProviderV3ProductionSeamsUseSnapshotAssembly(t *testing.T) {
 	}
 }
 
-func TestProviderV3SnapshotAssemblyMatchesLegacyExactProjection(t *testing.T) {
+// v3ProviderCurrentFormByKind is test lookup over the already verified
+// embedded Provider projection. It exists only for older harnesses whose
+// public helper accepts a kind string; all production dispatch remains exact
+// GroupKind/ FormRef lookup through the assembly registry.
+func v3ProviderCurrentFormByKind(t *testing.T, kind string) model.Form {
+	t.Helper()
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
+		if form.Kind == kind {
+			return form
+		}
+	}
+	t.Fatalf("embedded Provider projection has no current Form kind %q", kind)
+	return model.Form{}
+}
+
+func v3ProviderArtifactForForm(t *testing.T, form model.Form) (*v3ArtifactProjection, bool) {
+	t.Helper()
 	assembly := mustProviderV3SnapshotAssembly()
-	legacyForms := legacyProviderV3CurrentForms()
-	if !canonicalJSONEqual(assembly.currentForms, legacyForms) {
-		t.Fatal("Snapshot current Form models differ from the comparison-only catalog projection")
+	ref, err := assembly.registry.DefaultCreate(v3GroupKind{
+		APIVersion: form.Family.APIVersion(), Kind: form.Kind,
+	})
+	if err != nil {
+		t.Fatalf("embedded Provider projection has no default-create ref for %s/%s: %v", form.Family.APIVersion(), form.Kind, err)
 	}
+	resource, ok := assembly.projection.resources[ref.ExactKey()]
+	if !ok {
+		t.Fatalf("embedded Provider projection has no resource mapping for %s", ref.ExactKey())
+	}
+	return cloneV3ArtifactProjection(resource.Artifact), resource.Artifact != nil
+}
 
-	legacyRegistry := currentformregistry.V3Current()
-	if !canonicalJSONEqual(assembly.registry.SupportedRefs(), legacyRegistry.SupportedRefs()) {
-		t.Fatal("Snapshot supported exact FormRef history differs from the legacy registry")
+func v3ProviderArtifactProjectionForKind(t *testing.T, kind string) (*v3ArtifactProjection, bool) {
+	t.Helper()
+	return v3ProviderArtifactForForm(t, v3ProviderCurrentFormByKind(t, kind))
+}
+
+func TestProviderV3SnapshotAssemblyUsesExactProjectedDefinitions(t *testing.T) {
+	assembly := mustProviderV3SnapshotAssembly()
+	if len(assembly.currentForms) != len(assembly.projection.currentOrder) {
+		t.Fatalf("embedded current Forms = %d, projection registration order = %d", len(assembly.currentForms), len(assembly.projection.currentOrder))
 	}
-	for _, form := range legacyForms {
-		line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
-		legacyRef, legacyErr := legacyRegistry.DefaultCreate(line)
-		projectedRef, projectedErr := assembly.registry.DefaultCreate(line)
-		if legacyErr != nil || projectedErr != nil || legacyRef != projectedRef {
-			t.Fatalf("default-create parity for %s/%s: legacy=%#v/%v projected=%#v/%v", line.APIVersion, line.Kind, legacyRef, legacyErr, projectedRef, projectedErr)
+	for index, form := range assembly.currentForms {
+		key := assembly.projection.currentOrder[index]
+		projected, ok := assembly.projection.forms[key]
+		if !ok {
+			t.Fatalf("projection registration order %d references missing Form %s", index, key)
 		}
-	}
-
-	legacyTypes := legacyV3TerraformResourceTypes()
-	for _, ref := range legacyRegistry.SupportedRefs() {
-		legacyType, legacyMapped := legacyTypes.Lookup(ref.ExactKey())
-		projectedType, projectedMapped := assembly.resourceTypes.Lookup(ref.ExactKey())
-		if legacyMapped != projectedMapped || legacyType != projectedType {
-			t.Fatalf("resource mapping parity for %s: legacy=%q/%t projected=%q/%t", ref.ExactKey(), legacyType, legacyMapped, projectedType, projectedMapped)
+		if projected.Generation != v3ProjectionCurrent || projected.Form.Kind != form.Kind ||
+			projected.Form.Family.APIVersion() != form.Family.APIVersion() ||
+			projected.Form.DefinitionVersion != form.DefinitionVersion {
+			t.Fatalf("current Form %d does not match exact projection %s", index, key)
 		}
-	}
-
-	legacyCodecs := legacyV3Codecs()
-	if len(legacyCodecs.codecs) != len(assembly.codecs.codecs) {
-		t.Fatalf("codec count parity: legacy=%d projected=%d", len(legacyCodecs.codecs), len(assembly.codecs.codecs))
-	}
-	for key, legacyCodec := range legacyCodecs.codecs {
-		projectedCodec, ok := assembly.codecs.codecs[key]
-		if !ok || !canonicalJSONEqual(legacyCodec, projectedCodec) {
-			t.Fatalf("exact codec parity failed for %s", key)
+		definitionRaw, ok := assembly.snapshot.Definition(formpackage.FormRef{
+			APIVersion: key.APIVersion, Kind: key.Kind,
+			DefinitionVersion: key.DefinitionVersion, SchemaDigest: key.SchemaDigest,
+		})
+		if !ok {
+			t.Fatalf("Snapshot Definition missing for %s", key)
 		}
-	}
-
-	for _, family := range providerV3CurrentFamilies() {
-		rendered, err := family.render()
+		canonical, err := formpackage.Canonicalize(definitionRaw)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(rendered) != len(family.forms) {
-			t.Fatalf("legacy rendered/model count = %d/%d for %s", len(rendered), len(family.forms), family.family.APIVersion())
+		if !bytes.Equal(definitionRaw, canonical) {
+			t.Fatalf("Snapshot Definition %s is not canonical", key)
 		}
-		for index, form := range family.forms {
-			ref, err := legacyRegistry.DefaultCreate(currentformregistry.GroupKind{APIVersion: family.family.APIVersion(), Kind: form.Kind})
-			if err != nil {
-				t.Fatal(err)
-			}
-			snapshotRaw, ok := assembly.snapshot.Definition(formpackage.FormRef{
-				APIVersion: ref.APIVersion, Kind: ref.Kind, DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
-			})
-			if !ok {
-				t.Fatalf("Snapshot Definition missing for %s", ref.ExactKey())
-			}
-			legacyCanonical, err := formpackage.Canonicalize([]byte(rendered[index].DefinitionJSON))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(snapshotRaw, legacyCanonical) {
-				t.Fatalf("Snapshot Definition bytes differ from legacy rendered identity %s", ref.ExactKey())
-			}
+		codec, ok := assembly.codecs.codecs[key]
+		if !ok || codec.Form.Kind != form.Kind {
+			t.Fatalf("embedded codec for %s does not carry its projected Form", key)
 		}
 	}
 }
@@ -138,6 +141,8 @@ func TestProviderV3SnapshotPathImportsNoOfficialCatalog(t *testing.T) {
 		"providerV3CurrentFamilies":      {},
 		"providerV3ResourceTypeLines":    {},
 		"V3Current":                      {},
+		"V3ForKind":                      {},
+		"V3Registry":                     {},
 	}
 	declaredProductionSeams := map[string]string{}
 	artifactRuleFound := false

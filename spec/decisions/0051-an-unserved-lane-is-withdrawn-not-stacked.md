@@ -10,11 +10,12 @@
 Family group. Implementing it surfaced a constraint the record did not know
 about, and the constraint decides something the record left open.
 
-There is exactly one current family. `currentformregistry.V3Current()` is
-generated from the candidate tree, and `LoadCatalog` refuses any Form the
-registry does not carry, so **every runnable corpus installs the same family**.
-A lane whose wire schema cannot describe that family therefore cannot be run at
-all — not "runs with fewer checks", but has no corpus it can execute.
+At adoption there was exactly one selected current family.
+`currentformregistry.V3Current()` was generated from the candidate tree, and
+`LoadCatalog` refused any Form the registry did not carry, so **every runnable
+corpus installed the same family**. A lane whose wire schema could not describe
+that family therefore could not run at all — not "runs with fewer checks", but
+had no corpus it could execute.
 
 That was measured rather than reasoned about. With the family versionless, a
 v1beta2 self-test answers HTTP 400 on the first authenticated read, because the
@@ -66,9 +67,13 @@ about which names have been minted.
 
 ## Consequences
 
-One runnable corpus measures the one current lane against the one current
-family, and the coupling that forced this — a corpus can only install the
-family the registry carries — is now stated rather than discovered.
+At adoption one runnable corpus measured the one current lane against the one
+current family, and the registry coupling that forced this was stated rather
+than discovered. TASK-0033 W08 later deleted that mixed registry: the reference
+Host now compiles the digest-pinned selected artifacts through
+`currentformselection` into one immutable Snapshot. That implementation change
+does not un-retire the two unserved lane identities or alter this decision's
+wire-compatibility reasoning.
 
 The cost is that this project's lane numbering has gaps, and that two lanes'
 worth of authoring was retired within days of being written. The alternative

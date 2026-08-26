@@ -35,7 +35,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerdiagnostics"
 )
 
@@ -148,7 +147,7 @@ type v3Diagnostic struct {
 	ResourceType string
 	Space        string
 	Name         string
-	Ref          currentformregistry.V3Ref
+	Ref          v3FormRef
 	// Pointer is the JSON pointer into the portable desired or status document
 	// the fault is about (`/kvBindings/0/resource`, `/metadata/name`).
 	Pointer string
@@ -299,7 +298,7 @@ func v3ResourceAddress(resourceType, space, name string) string {
 // absent: it is distribution provenance, never identity (spec/decisions/0011),
 // and a reader comparing two diagnostics must compare the four members that
 // decide dispatch.
-func v3FormRefText(ref currentformregistry.V3Ref) string {
+func v3FormRefText(ref v3FormRef) string {
 	if ref.APIVersion == "" || ref.Kind == "" {
 		return ""
 	}

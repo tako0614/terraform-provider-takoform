@@ -55,14 +55,18 @@ func TestMainModuleMustBeLoadable(t *testing.T) {
 		{Name: "index.js.map", ContentType: "application/source-map+json", ContentFile: "index.js.map"},
 	}, nil)
 
-	carried, diags := v3AuthoredBundleModules(modules, "index.js")
+	artifact, ok := v3ProviderArtifactProjectionForKind(t, workerBundleKind)
+	if !ok {
+		t.Fatal("embedded Provider projection has no WorkerBundle artifact rule")
+	}
+	carried, diags := v3AuthoredBundleModulesForProjection(modules, "index.js", *artifact)
 	if diags.HasError() {
 		t.Fatalf("a bundle carrying a source map beside its code was refused: %v", diags)
 	}
 	if len(carried) != 2 {
 		t.Fatalf("the source map was dropped from the authored bundle: %v", carried)
 	}
-	_, refused := v3AuthoredBundleModules(modules, "index.js.map")
+	_, refused := v3AuthoredBundleModulesForProjection(modules, "index.js.map", *artifact)
 	if !refused.HasError() {
 		t.Fatal("main_module named a source map, which the module graph never imports")
 	}

@@ -8,6 +8,36 @@ import (
 	"testing"
 )
 
+func TestCurrentProviderV3ReferenceSurfacesReturnDefensiveForms(t *testing.T) {
+	first, err := CurrentProviderV3ReferenceSurfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	position := -1
+	for index := range first {
+		if len(first[index].Form.Fields) != 0 {
+			position = index
+			break
+		}
+	}
+	if position == -1 {
+		t.Fatal("reference projection has no mutable Form witness")
+	}
+	wantKind := first[position].Form.Kind
+	wantField := first[position].Form.Fields[0].HCL
+	first[position].Form.Kind = "Mutated"
+	first[position].Form.Fields[0].HCL = "mutated"
+
+	second, err := CurrentProviderV3ReferenceSurfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second[position].Form.Kind != wantKind || second[position].Form.Fields[0].HCL != wantField {
+		t.Fatalf("reference projection exposed cached Provider model: got %s/%s, want %s/%s",
+			second[position].Form.Kind, second[position].Form.Fields[0].HCL, wantKind, wantField)
+	}
+}
+
 func TestProviderV3ReleaseLedgerMatchesExactProviderProjection(t *testing.T) {
 	t.Parallel()
 

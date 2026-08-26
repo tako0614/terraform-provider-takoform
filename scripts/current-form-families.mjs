@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 
 // Deterministic builder for every current versionless Form Family, the global
-// Interface and Binding candidate sets, the closed current-family index, and
-// the exact registry. The Go source renders families in dependency order;
-// this writer stages, verifies, then installs all outputs atomically. --check
-// regenerates into a temporary tree and compares exact bytes.
+// Interface and Binding candidate sets, and the closed current-family index.
+// The Go source renders the publisher composition; this writer stages,
+// verifies, then installs all outputs atomically. --check regenerates into a
+// temporary tree and compares exact bytes.
 
 import { createHash } from "node:crypto";
 import {
@@ -27,149 +27,21 @@ const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const PACKAGE_API_VERSION = "packages.forms.takoform.com/v1alpha5";
-const FAMILY_INDEX_FORMAT = "takoform.current-family-index@v1";
 const FAMILY_INDEX_PATH = "forms/candidates/current-family-index.json";
 const INTERFACE_CANDIDATE_SET_PATH =
   "interfaces/candidates/v1alpha1/candidate-set.json";
 const BINDING_CANDIDATE_SET_PATH =
   "bindings/candidates/v1alpha2/candidate-set.json";
-// This is the Go source's dependency order. The fixed current-family index is
-// separately sorted by group/path as required by its public evidence parser.
-const familySpecs = Object.freeze([
-  Object.freeze({
-    group: "edge.forms.takoform.com",
-    authoringSource: "internal/edgeformcatalog",
-    forms: Object.freeze([
-      ["ModuleWorker", "module-worker", "identity"],
-      ["WorkerBundle", "worker-bundle", "revision"],
-      ["StaticAssetBundle", "static-asset-bundle", "revision"],
-      ["WorkerVersion", "worker-version", "revision"],
-      ["WorkerDeployment", "worker-deployment", "deployment"],
-      ["WorkerCustomDomain", "worker-custom-domain", "attachment"],
-      ["WorkerEndpoint", "worker-endpoint", "attachment"],
-      ["WorkerCronTrigger", "worker-cron-trigger", "attachment"],
-      ["EdgeKVNamespace", "edge-kv-namespace", "identity"],
-      ["SQLiteDatabase", "sqlite-database", "identity"],
-      ["SQLiteMigrationSet", "sqlite-migration-set", "revision"],
-      ["SQLiteMigrationApplication", "sqlite-migration-application", "attachment"],
-      ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
-      ["QueueConsumer", "queue-consumer", "attachment"],
-      ["DurableWorkflow", "durable-workflow", "identity"],
-      ["ActorNamespace", "actor-namespace", "identity"],
-    ]),
-  }),
-  Object.freeze({
-    group: "function.forms.takoform.com",
-    authoringSource: "internal/functionformcatalog",
-    forms: Object.freeze([
-      ["Function", "function", "identity"],
-      ["FunctionVersion", "function-version", "revision"],
-      ["FunctionDeployment", "function-deployment", "deployment"],
-      ["FunctionEndpoint", "function-endpoint", "attachment"],
-    ]),
-  }),
-  Object.freeze({
-    group: "container.forms.takoform.com",
-    authoringSource: "internal/containerformcatalog",
-    forms: Object.freeze([
-      ["ContainerService", "container-service", "identity"],
-      ["ContainerRevision", "container-revision", "revision"],
-      ["ContainerTraffic", "container-traffic", "deployment"],
-      ["ContainerEndpoint", "container-endpoint", "attachment"],
-      ["ContainerCustomDomain", "container-custom-domain", "attachment"],
-    ]),
-  }),
-  Object.freeze({
-    group: "table.forms.takoform.com",
-    authoringSource: "internal/tableformcatalog",
-    forms: Object.freeze([["Table", "table", "identity"]]),
-  }),
-  Object.freeze({
-    group: "queue.forms.takoform.com",
-    authoringSource: "internal/queueformcatalog",
-    forms: Object.freeze([["PullQueue", "pull-queue", "identity"]]),
-  }),
-  Object.freeze({
-    group: "topic.forms.takoform.com",
-    authoringSource: "internal/topicformcatalog",
-    forms: Object.freeze([
-      ["Topic", "topic", "identity"],
-      ["TopicSubscription", "topic-subscription", "attachment"],
-    ]),
-  }),
-  Object.freeze({
-    group: "schedule.forms.takoform.com",
-    authoringSource: "internal/scheduleformcatalog",
-    forms: Object.freeze([["Schedule", "schedule", "identity"]]),
-  }),
-  Object.freeze({
-    group: "vector.forms.takoform.com",
-    authoringSource: "internal/vectorformcatalog",
-    forms: Object.freeze([["VectorIndex", "vector-index", "identity"]]),
-  }),
-]);
-const trackedTargets = {
-  forms: new Map(
-    familySpecs.map(({ group }) => [
-      group,
-      path.join(repositoryRoot, "forms", "candidates", group),
-    ]),
-  ),
-  familyIndex: path.join(repositoryRoot, FAMILY_INDEX_PATH),
-  interfaces: path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
-  bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha2"),
-};
-const registryPath = path.join(
-  repositoryRoot,
-  "internal",
-  "currentformregistry",
-  "registry_v3_generated.go",
+const DNS_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+const OFFICIAL_FAMILY_GROUP = new RegExp(
+  `^(?:${DNS_LABEL}\\.)+forms\\.takoform\\.com$`,
+  "u",
 );
-const providerIdentityLedgerPath = path.join(
-  repositoryRoot,
-  "release",
-  "provider-form-identities.json",
-);
-const releaseDescriptorPath = path.join(repositoryRoot, "release", "version.json");
-// v2.1.1 is the forward-repaired provider candidate's immutable compatibility
-// commitment. The abandoned v2.1.0 candidate was never published and has no
-// provider identity-ledger entry. Changing this entry together with the
-// generated catalog must fail instead of being accepted as a self-consistent
-// rebuild.
-export const FROZEN_PROVIDER_RELEASES = new Map([
-  [
-    "2.1.1",
-    Object.freeze({
-      tag: "v2.1.1",
-      ledgerDigest:
-        "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
-    }),
-  ],
-]);
-const interfaceContracts = [
-  ["container.runtime", "1.0.0"],
-  ["edge.kv", "1.0.0"],
-  ["edge.queue", "1.0.0"],
-  ["edge.sql", "1.0.0"],
-  ["function.runtime", "1.0.0"],
-  ["queue.pull", "1.0.0"],
-  ["table.document", "1.0.0"],
-  ["topic.publish", "1.0.0"],
-  ["vector.index", "1.0.0"],
-  ["worker.actor", "1.0.0"],
-  ["worker.runtime", "1.1.0"],
-  ["worker.service", "1.0.0"],
-  ["worker.workflow", "1.0.0"],
-];
-const bindingContracts = [
-  ["module-worker.actor", "1.0.0"],
-  ["module-worker.edge-kv", "1.0.0"],
-  ["module-worker.queue-producer", "1.0.0"],
-  ["module-worker.service", "1.0.0"],
-  ["module-worker.sqlite", "1.0.0"],
-  ["module-worker.workflow", "1.0.0"],
-];
+const FORM_KIND = /^[A-Z][A-Za-z0-9]{0,63}$/u;
+const FORM_SLUG = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+const CONTRACT_NAME = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u;
+const CONTRACT_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+const FIXTURE_NAME = /^(?:desired|negative-[a-z0-9]+(?:-[a-z0-9]+)*)\.json$/u;
 
 if (import.meta.main) {
   main();
@@ -181,6 +53,9 @@ function main() {
     throw new Error("usage: bun scripts/current-form-families.mjs --write|--check");
   }
 
+  const source = renderFamilySources();
+  const trackedTargets = createTrackedTargets(source);
+
   if (mode === "--write") {
     for (const target of [
       ...trackedTargets.forms.values(),
@@ -188,50 +63,27 @@ function main() {
       trackedTargets.interfaces,
       trackedTargets.bindings,
     ]) {
-      assertSafeGeneratedTarget(target);
+      assertSafeGeneratedTarget(target, trackedTargets);
     }
     const stagingParent = mkdtempSync(
       path.join(repositoryRoot, ".form-families-build-"),
     );
     try {
-      const stagedRoots = {
-        forms: new Map(
-          familySpecs.map(({ group }) => [
-            group,
-            path.join(stagingParent, "forms", group),
-          ]),
-        ),
-        familyIndex: path.join(stagingParent, "current-family-index.json"),
-        interfaces: path.join(stagingParent, "interfaces-v1alpha1"),
-        bindings: path.join(stagingParent, "bindings-v1alpha2"),
-      };
-      const stagedRegistryPath = path.join(stagingParent, "registry_v3_generated.go");
-      const generation = generate(stagedRoots);
-      verifyPackages(stagedRoots.forms);
-      const embeddedIdentities = loadProviderIdentityLedger(generation);
-      writeFileSync(
-        stagedRegistryPath,
-        renderRegistry(
-          generation,
-          unionSupportedIdentities(generation, embeddedIdentities),
-        ),
-      );
+      const stagedRoots = createOutputRoots(stagingParent, source);
+      const generation = generate(stagedRoots, source);
+      verifyPackages(stagedRoots.forms, source);
       installGeneratedOutputs(stagingParent, [
-        ...familySpecs.map(({ group }) => [
+        ...source.families.map(({ group }) => [
           stagedRoots.forms.get(group),
           trackedTargets.forms.get(group),
         ]),
         [stagedRoots.familyIndex, trackedTargets.familyIndex],
         [stagedRoots.interfaces, trackedTargets.interfaces],
         [stagedRoots.bindings, trackedTargets.bindings],
-        [stagedRegistryPath, registryPath],
       ]);
-      const formCount = familySpecs.reduce(
-        (total, family) => total + family.forms.length,
-        0,
-      );
+      const formCount = generation.forms.length;
       process.stdout.write(
-        `wrote ${formCount} Forms in ${familySpecs.length} versionless families, ${interfaceContracts.length} interface candidates, ${bindingContracts.length} binding candidates, the current-family index, and the exact registry\n`,
+        `wrote ${formCount} Forms in ${source.families.length} versionless families, ${source.interfaces.length} interface candidates, ${source.bindings.length} binding candidates, and the current-family index\n`,
       );
     } finally {
       rmSync(stagingParent, { recursive: true, force: true });
@@ -241,20 +93,9 @@ function main() {
 
   const temporary = mkdtempSync(path.join(tmpdir(), "takoform-form-families-"));
   try {
-    const generatedRoots = {
-      forms: new Map(
-        familySpecs.map(({ group }) => [
-          group,
-          path.join(temporary, "forms", group),
-        ]),
-      ),
-      familyIndex: path.join(temporary, "current-family-index.json"),
-      interfaces: path.join(temporary, "interfaces-v1alpha1"),
-      bindings: path.join(temporary, "bindings-v1alpha2"),
-    };
-    const generation = generate(generatedRoots);
-    const embeddedIdentities = loadProviderIdentityLedger(generation);
-    for (const { group } of familySpecs) {
+    const generatedRoots = createOutputRoots(temporary, source);
+    generate(generatedRoots, source);
+    for (const { group } of source.families) {
       compareTrees(
         generatedRoots.forms.get(group),
         trackedTargets.forms.get(group),
@@ -268,22 +109,44 @@ function main() {
     );
     compareTrees(generatedRoots.interfaces, trackedTargets.interfaces, "interfaces");
     compareTrees(generatedRoots.bindings, trackedTargets.bindings, "bindings");
-    verifyPackages(trackedTargets.forms);
-    compareFile(
-      renderRegistry(
-        generation,
-        unionSupportedIdentities(generation, embeddedIdentities),
-      ),
-      registryPath,
-      "exact Form registry",
-    );
+    verifyPackages(trackedTargets.forms, source);
     process.stdout.write("Current Form Family candidates are reproducible and valid\n");
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
 }
 
-function generate(outputRoots) {
+function createTrackedTargets(source) {
+  const familyRoot = path.join(repositoryRoot, "forms", "candidates");
+  return {
+    forms: new Map(
+      source.families.map(({ group }) => [
+        group,
+        directChildPath(familyRoot, group, "family group"),
+      ]),
+    ),
+    familyIndex: path.join(repositoryRoot, FAMILY_INDEX_PATH),
+    interfaces: path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
+    bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha2"),
+  };
+}
+
+function createOutputRoots(root, source) {
+  const familyRoot = path.join(root, "forms");
+  return {
+    forms: new Map(
+      source.families.map(({ group }) => [
+        group,
+        directChildPath(familyRoot, group, "family group"),
+      ]),
+    ),
+    familyIndex: path.join(root, "current-family-index.json"),
+    interfaces: path.join(root, "interfaces-v1alpha1"),
+    bindings: path.join(root, "bindings-v1alpha2"),
+  };
+}
+
+function generate(outputRoots, source) {
   for (const outputRoot of [
     ...outputRoots.forms.values(),
     path.dirname(outputRoots.familyIndex),
@@ -292,44 +155,31 @@ function generate(outputRoots) {
   ]) {
     mkdirSync(outputRoot, { recursive: true });
   }
-  const source = renderFamilySources();
   const manifests = [];
-  for (const [familyIndex, familySpec] of familySpecs.entries()) {
-    const sourceFamily = source.families[familyIndex];
-    if (sourceFamily?.group !== familySpec.group) {
-      throw new Error(
-        `family source order drifted at ${familySpec.group}: got ${sourceFamily?.group}`,
-      );
-    }
+  for (const sourceFamily of source.families) {
+    const familyGroup = sourceFamily.group;
     const manifest = {
       format: "takoform.form-family-candidates@v1",
-      family: familySpec.group,
-      formMaturity: "experimental",
-      packageApiVersion: PACKAGE_API_VERSION,
-      publicationStatus: "unpublished",
-      authoringSource: familySpec.authoringSource,
-      authoringPolicy: "service-shape-preserving-contract",
+      family: familyGroup,
+      formMaturity: source.formMaturity,
+      packageApiVersion: source.packageApiVersion,
+      publicationStatus: source.publicationStatus,
+      authoringSource: sourceFamily.authoringSource,
+      authoringPolicy: sourceFamily.authoringPolicy,
       forms: [],
     };
-    for (const [formIndex, [kind, slug, role]] of familySpec.forms.entries()) {
-      const rendered = sourceFamily.forms[formIndex];
-      if (
-        rendered?.kind !== kind ||
-        rendered?.slug !== slug ||
-        rendered?.role !== role
-      ) {
-        throw new Error(`${familySpec.group}/${slug}: family catalog order or identity drifted`);
-      }
+    for (const rendered of sourceFamily.forms) {
+      const { kind, slug, role } = rendered;
       const definition = rendered.definition;
       if (
-        definition.kind !== kind ||
-        definition.apiVersion !== familySpec.group ||
+        definition?.kind !== kind ||
+        definition?.apiVersion !== familyGroup ||
         !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
           definition.definitionVersion ?? "",
         ) ||
-        definition.role !== role
+        definition?.role !== role
       ) {
-        throw new Error(`${familySpec.group}/${slug}: family catalog emitted an invalid candidate identity`);
+        throw new Error(`${familyGroup}/${slug}: family catalog emitted an invalid candidate identity`);
       }
       if ((definition.negativeConformanceFixtures ?? []).length === 0) {
         throw new Error(`${slug}: every family candidate must carry a negative fixture`);
@@ -338,12 +188,17 @@ function generate(outputRoots) {
         throw new Error(`${slug}: current desired schemas must not declare a name property`);
       }
 
-      const destinationRoot = path.join(outputRoots.forms.get(familySpec.group), slug);
-      mkdirSync(path.join(destinationRoot, "fixtures"), { recursive: true });
+	  const destinationRoot = directChildPath(
+	    outputRoots.forms.get(familyGroup),
+	    slug,
+	    "Form slug",
+	  );
+	  const fixtureRoot = path.join(destinationRoot, "fixtures");
+	  mkdirSync(fixtureRoot, { recursive: true });
       const fixtureNames = Object.keys(rendered.fixtures).sort();
       for (const fixtureName of fixtureNames) {
         writeJson(
-          path.join(destinationRoot, "fixtures", fixtureName),
+		  directChildPath(fixtureRoot, fixtureName, "fixture name"),
           rendered.fixtures[fixtureName],
         );
       }
@@ -373,7 +228,7 @@ function generate(outputRoots) {
         };
       });
       const formRef = {
-        apiVersion: familySpec.group,
+        apiVersion: familyGroup,
         kind,
         // The version is the Form's own, not a catalog generation.
         definitionVersion: definition.definitionVersion,
@@ -382,7 +237,7 @@ function generate(outputRoots) {
         ),
       };
       const index = {
-        apiVersion: PACKAGE_API_VERSION,
+        apiVersion: source.packageApiVersion,
         kind: "FormPackage",
         formRef,
         definitionPath: "definition.json",
@@ -393,16 +248,16 @@ function generate(outputRoots) {
       manifest.forms.push({
         kind,
         role,
-        path: `forms/candidates/${familySpec.group}/${slug}`,
+        path: `forms/candidates/${familyGroup}/${slug}`,
         formRef,
         packageDigest: digestCanonicalJSON(indexPath),
       });
     }
-    if (sourceFamily.forms.length !== familySpec.forms.length) {
-      throw new Error(`${familySpec.group}: family source contains an undeclared Form`);
+    if (manifest.forms.length === 0) {
+      throw new Error(`${familyGroup}: family source contains no Forms`);
     }
     writeJson(
-      path.join(outputRoots.forms.get(familySpec.group), "candidate-set.json"),
+      path.join(outputRoots.forms.get(familyGroup), "candidate-set.json"),
       manifest,
     );
     manifests.push(manifest);
@@ -411,11 +266,10 @@ function generate(outputRoots) {
   writeContractCandidates({
     outputRoot: outputRoots.interfaces,
     contracts: source.interfaces,
-    expectedContracts: interfaceContracts,
     candidateSet: {
       format: "takoform.interface-candidates@v1",
-      publicationStatus: "unpublished",
-      authoringSource: "cmd/current-form-source",
+      publicationStatus: source.publicationStatus,
+      authoringSource: source.interfaceAuthoringSource,
       interfaces: [],
     },
     listKey: "interfaces",
@@ -423,17 +277,16 @@ function generate(outputRoots) {
   writeContractCandidates({
     outputRoot: outputRoots.bindings,
     contracts: source.bindings,
-    expectedContracts: bindingContracts,
     candidateSet: {
       format: "takoform.binding-candidates@v1",
-      publicationStatus: "unpublished",
-      authoringSource: "cmd/current-form-source",
+      publicationStatus: source.publicationStatus,
+      authoringSource: source.bindingAuthoringSource,
       bindings: [],
     },
     listKey: "bindings",
   });
   const familyIndex = {
-    format: FAMILY_INDEX_FORMAT,
+    format: source.familyIndexFormat,
     families: manifests
       .map((manifest) => {
         const candidateSet = `forms/candidates/${manifest.family}/candidate-set.json`;
@@ -473,24 +326,29 @@ function generate(outputRoots) {
   };
 }
 
-function writeContractCandidates({ outputRoot, contracts, expectedContracts, candidateSet, listKey }) {
-  for (const [index, [name, version]] of expectedContracts.entries()) {
-    const contract = contracts[index];
+function writeContractCandidates({ outputRoot, contracts, candidateSet, listKey }) {
+  const seen = new Set();
+  for (const contract of contracts) {
+    const { name, version } = contract ?? {};
+    if (
+      typeof name !== "string" ||
+      typeof version !== "string" ||
+      seen.has(`${name}@${version}`)
+    ) {
+      throw new Error(`${listKey} source contains a duplicate or invalid contract identity`);
+    }
+    seen.add(`${name}@${version}`);
     // A contract's version is its own: worker.runtime went to 1.1.0 when the
     // env closure gained the external-service projections (decision 0045).
-    // What must not drift is the ORDER and the NAMES, which is what pins the
-    // candidate set to the catalog.
-    if (
-      contract?.name !== name ||
-      contract?.version !== version
-    ) {
-      throw new Error(`${listKey} catalog order or identity drifted at ${name}`);
-    }
+    // The source document's order and exact identities are the catalog.
     const definitionRaw = contract.definitionJson;
     if (typeof definitionRaw !== "string" || definitionRaw.length === 0) {
       throw new Error(`${name}: source renderer emitted no definitionJson text`);
     }
-    const destination = path.join(outputRoot, name, "definition.json");
+	const destination = path.join(
+	  directChildPath(outputRoot, name, `${listKey} contract name`),
+	  "definition.json",
+	);
     mkdirSync(path.dirname(destination), { recursive: true });
     writeFileSync(destination, definitionRaw);
     const schemaDigest = digestCanonicalJSON(destination);
@@ -518,18 +376,110 @@ function renderFamilySources() {
   const rendered = JSON.parse(result.stdout);
   if (
     !Array.isArray(rendered?.families) ||
-    rendered.families.length !== familySpecs.length ||
-    rendered?.interfaces?.length !== interfaceContracts.length ||
-    rendered?.bindings?.length !== bindingContracts.length
+    rendered.families.length === 0 ||
+    !Array.isArray(rendered?.interfaces) ||
+    !Array.isArray(rendered?.bindings) ||
+    typeof rendered.packageApiVersion !== "string" ||
+    typeof rendered.familyIndexFormat !== "string" ||
+    typeof rendered.formMaturity !== "string" ||
+    typeof rendered.publicationStatus !== "string" ||
+    typeof rendered.interfaceAuthoringSource !== "string" ||
+    typeof rendered.bindingAuthoringSource !== "string"
   ) {
     throw new Error("family Form source emitted an unexpected document shape");
+  }
+  validatePublisherPathMetadata(rendered);
+  const groups = new Set();
+  for (const family of rendered.families) {
+    if (
+      family === null ||
+      typeof family !== "object" ||
+      typeof family.group !== "string" ||
+      groups.has(family.group) ||
+      typeof family.authoringSource !== "string" ||
+      typeof family.authoringPolicy !== "string" ||
+      !Array.isArray(family.forms) ||
+      family.forms.length === 0
+    ) {
+      throw new Error("family Form source emitted an invalid family metadata record");
+    }
+    groups.add(family.group);
+    const formIdentities = new Set();
+    for (const form of family.forms) {
+      if (
+        form === null ||
+        typeof form !== "object" ||
+        typeof form.kind !== "string" ||
+        typeof form.slug !== "string" ||
+        typeof form.role !== "string" ||
+        formIdentities.has(`${form.kind}/${form.slug}`)
+      ) {
+        throw new Error(`${family.group}: family Form source contains an invalid or duplicate Form`);
+      }
+      formIdentities.add(`${form.kind}/${form.slug}`);
+    }
   }
   return rendered;
 }
 
-function verifyPackages(roots) {
-  for (const family of familySpecs) {
-    for (const [, slug] of family.forms) {
+// validatePublisherPathMetadata closes every publisher-provided value that is
+// later used as a filesystem component. The official publisher source is an
+// authority for artifact identity, not authority to address arbitrary paths
+// in the repository or staging tree.
+export function validatePublisherPathMetadata(source) {
+  if (!Array.isArray(source?.families) || !Array.isArray(source?.interfaces) || !Array.isArray(source?.bindings)) {
+    throw new Error("publisher path metadata has an invalid source shape");
+  }
+  for (const family of source.families) {
+    if (
+      typeof family?.group !== "string" ||
+      family.group.length > 253 ||
+      !OFFICIAL_FAMILY_GROUP.test(family.group) ||
+      !Array.isArray(family.forms)
+    ) {
+      throw new Error(`unsafe official family group ${JSON.stringify(family?.group)}`);
+    }
+    for (const form of family.forms) {
+      if (
+        typeof form?.kind !== "string" ||
+        !FORM_KIND.test(form.kind) ||
+        typeof form.slug !== "string" ||
+        form.slug.length > 127 ||
+        !FORM_SLUG.test(form.slug) ||
+        form.fixtures === null ||
+        typeof form.fixtures !== "object" ||
+        Array.isArray(form.fixtures)
+      ) {
+        throw new Error(`${family.group}: unsafe Form path metadata`);
+      }
+      for (const name of Object.keys(form.fixtures)) {
+        if (name.length > 127 || !FIXTURE_NAME.test(name)) {
+          throw new Error(`${family.group}/${form.slug}: unsafe fixture name ${JSON.stringify(name)}`);
+        }
+      }
+    }
+  }
+  for (const [kind, contracts] of [
+    ["Interface", source.interfaces],
+    ["Binding", source.bindings],
+  ]) {
+    for (const contract of contracts) {
+      if (
+        typeof contract?.name !== "string" ||
+        contract.name.length > 127 ||
+        !CONTRACT_NAME.test(contract.name) ||
+        typeof contract.version !== "string" ||
+        !CONTRACT_VERSION.test(contract.version)
+      ) {
+        throw new Error(`unsafe ${kind} path metadata`);
+      }
+    }
+  }
+}
+
+function verifyPackages(roots, source) {
+  for (const family of source.families) {
+    for (const { slug } of family.forms) {
       const result = spawnSync(
         "go",
         [
@@ -603,206 +553,6 @@ function compareFile(expected, actualPath, label) {
   }
 }
 
-// renderRegistry emits the two independent facts the provider dispatches on:
-// the exact identities this build supports (keyed by the WHOLE ExactFormKey, so
-// two definition versions of one kind coexist) and the one create default per
-// group+kind. Today each group+kind has exactly one supported identity, so both
-// maps carry the same Form entries; the shape is what lets that stop being
-// true without a state migration
-// (spec/decisions/0017-provider-state-survives-form-evolution-and-interruption.md).
-function renderRegistry(generation, supportedIdentities) {
-  const exactKey = (entry) =>
-    `{APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
-    `Kind: ${JSON.stringify(entry.formRef.kind)}, ` +
-    `DefinitionVersion: ${JSON.stringify(entry.formRef.definitionVersion)}, ` +
-    `SchemaDigest: ${JSON.stringify(entry.formRef.schemaDigest)}}`;
-  const defaults = generation.forms
-    .map(
-      (entry) =>
-        `\t{APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
-        `Kind: ${JSON.stringify(entry.formRef.kind)}}: ${exactKey(entry)},`,
-    )
-    .join("\n");
-  const supported = supportedIdentities
-    .map(
-      (entry) =>
-        `\t${exactKey(entry)}: {` +
-        `APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
-        `Kind: ${JSON.stringify(entry.formRef.kind)}, ` +
-        `DefinitionVersion: ${JSON.stringify(entry.formRef.definitionVersion)}, ` +
-        `SchemaDigest: ${JSON.stringify(entry.formRef.schemaDigest)}, ` +
-        `PackageDigest: ${JSON.stringify(entry.packageDigest)}},`,
-    )
-    .join("\n");
-  const source =
-    `// Code generated by scripts/current-form-families.mjs; DO NOT EDIT.\n\n` +
-    `package currentformregistry\n\n` +
-    `// v3DefaultCreates names the one exact identity a NEW resource of each\n` +
-    `// group+kind is created under.\n` +
-    `var v3DefaultCreates = map[GroupKind]ExactFormKey{\n${defaults}\n}\n\n` +
-    `// v3Supported is every exact identity this build can read, observe, update,\n` +
-    `// and delete, keyed by the whole contract identity.\n` +
-    `var v3Supported = map[ExactFormKey]V3Ref{\n${supported}\n}\n`;
-  const formatted = spawnSync("gofmt", [], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    input: source,
-  });
-  if (formatted.status !== 0) {
-    throw new Error(`generated provider v3 registry formatting failed\n${formatted.stderr}`);
-  }
-  return formatted.stdout;
-}
-
-
-// unionSupportedIdentities is the state-compatibility fence in two-generation
-// form: every exact identity a RELEASED provider embedded stays supported
-// forever, and the current candidate generation's identities are what this
-// build creates and must equally serve. Before the catalog moved past the
-// published release the two sets were equal and the union is a no-op.
-function unionSupportedIdentities(generation, embeddedIdentities) {
-  const currentKeys = new Set(
-    generation.forms.map(({ formRef }) => canonicalJson(formRef)),
-  );
-  const byKey = new Map();
-  for (const form of embeddedIdentities) {
-    const key = canonicalJson(form.formRef);
-    if (!currentKeys.has(key)) byKey.set(key, form);
-  }
-  for (const { formRef, packageDigest } of generation.forms) {
-    const key = canonicalJson(formRef);
-    // A candidate contributes its IDENTITY. The provider's authoring name is
-    // the provider's, and a released ledger entry that carries one keeps it
-    // (decision 0047).
-    byKey.set(key, { formRef, packageDigest });
-  }
-  return [...byKey.values()];
-}
-
-// The provider identity ledger is independent of package publication. Once a
-// provider release embeds an exact Beta FormRef and package digest, the entry
-// remains in v3Supported forever, even after a later family becomes the create
-// default. This is the source-level state-compatibility fence for existing
-// Beta resources; release/provider-form-identities.json is never regenerated.
-function loadProviderIdentityLedger(generation) {
-  const ledger = JSON.parse(readFileSync(providerIdentityLedgerPath, "utf8"));
-  const release = JSON.parse(readFileSync(releaseDescriptorPath, "utf8"));
-  if (
-    ledger?.format !== "takoform.provider-form-identities@v1" ||
-    !Array.isArray(ledger.releases) ||
-    ledger.releases.length === 0
-  ) {
-    throw new Error("provider Form identity ledger has an invalid envelope");
-  }
-  if (
-    release?.version !== "3.0.0" ||
-    release?.tag !== `v${release.version}` ||
-    release?.publicationStatus !== "candidate-only" ||
-    release?.versioning?.portableApiVersion !== "forms.takoform.com/v1"
-  ) {
-    throw new Error("provider release descriptor must name candidate-only v3.0.0 on Host API v1");
-  }
-  assertFrozenProviderReleaseDescriptor(release);
-
-  const supported = [];
-  const exactKeys = new Set();
-  const providerVersions = new Set();
-  let currentRelease;
-  for (const entry of ledger.releases) {
-    const entryKeys = Object.keys(entry ?? {}).sort().join(",");
-    const hasSingleFamily =
-      entryKeys === "family,formMaturity,forms,portableApiVersion,providerVersion" &&
-      typeof entry?.family === "string";
-    const hasFamilySet =
-      entryKeys === "families,formMaturity,forms,portableApiVersion,providerVersion" &&
-      Array.isArray(entry?.families) &&
-      entry.families.length > 0 &&
-      JSON.stringify(entry.families) === JSON.stringify([...entry.families].sort()) &&
-      new Set(entry.families).size === entry.families.length;
-    if (
-      entry === null ||
-      typeof entry !== "object" ||
-      (!hasSingleFamily && !hasFamilySet) ||
-      typeof entry.providerVersion !== "string" ||
-      typeof entry.portableApiVersion !== "string" ||
-      entry.formMaturity !== "experimental" ||
-      !Array.isArray(entry.forms) ||
-      entry.forms.length === 0
-    ) {
-      throw new Error("provider Form identity ledger contains an invalid release");
-    }
-    if (providerVersions.has(entry.providerVersion)) {
-      throw new Error(`provider Form identity ledger duplicates ${entry.providerVersion}`);
-    }
-    providerVersions.add(entry.providerVersion);
-    assertFrozenProviderRelease(entry);
-    if (entry.providerVersion === release.version) currentRelease = entry;
-
-    const allowedFamilies = new Set(
-      hasSingleFamily ? [entry.family] : entry.families,
-    );
-
-    for (const form of entry.forms) {
-      if (
-        form === null ||
-        typeof form !== "object" ||
-        Object.keys(form).sort().join(",") !== "formRef,packageDigest,resourceType" ||
-        !/^takoform_[a-z0-9_]+$/u.test(form.resourceType) ||
-        !/^sha256:[0-9a-f]{64}$/u.test(form.packageDigest) ||
-        form.formRef === null ||
-        typeof form.formRef !== "object" ||
-        Object.keys(form.formRef).sort().join(",") !==
-          "apiVersion,definitionVersion,kind,schemaDigest" ||
-        !allowedFamilies.has(form.formRef.apiVersion) ||
-        !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(form.formRef.kind) ||
-        !/^sha256:[0-9a-f]{64}$/u.test(form.formRef.schemaDigest)
-      ) {
-        throw new Error(`${entry.providerVersion}: invalid provider-embedded Form identity`);
-      }
-      const exactKey = canonicalJson(form.formRef);
-      if (exactKeys.has(exactKey)) {
-        throw new Error(`${entry.providerVersion}: duplicate provider-embedded FormRef ${exactKey}`);
-      }
-      exactKeys.add(exactKey);
-      supported.push(form);
-    }
-  }
-  if (
-    currentRelease === undefined ||
-    currentRelease.portableApiVersion !== release.versioning.portableApiVersion ||
-    JSON.stringify(currentRelease.families) !==
-      JSON.stringify(generation.families.map((manifest) => manifest.family).sort()) ||
-    generation.families.some(
-      (manifest) => manifest.formMaturity !== currentRelease.formMaturity,
-    )
-  ) {
-    throw new Error("provider Form identity ledger has no exact entry for the release descriptor");
-  }
-  return supported;
-}
-
-// Keep the check as a pure exported helper so the direct script test can prove
-// that mutating a retained ledger entry is rejected even when a candidate
-// catalog is regenerated alongside it.
-export function assertFrozenProviderRelease(entry) {
-  const frozen = FROZEN_PROVIDER_RELEASES.get(entry?.providerVersion);
-  if (frozen === undefined) return;
-  const actual = digestCanonicalValue(entry);
-  if (actual !== frozen.ledgerDigest) {
-    throw new Error(
-      `immutable provider ${entry.providerVersion} identity ledger entry changed: ${actual} != ${frozen.ledgerDigest}`,
-    );
-  }
-}
-
-export function assertFrozenProviderReleaseDescriptor(release) {
-  const frozen = FROZEN_PROVIDER_RELEASES.get(release?.version);
-  if (frozen === undefined || release.tag === frozen.tag) return;
-  throw new Error(
-    `immutable provider ${release.version} release tag changed: ${release.tag} != ${frozen.tag}`,
-  );
-}
-
 function inventory(root) {
   const entries = [];
   const visit = (directory, prefix = "") => {
@@ -820,16 +570,37 @@ function inventory(root) {
   return entries;
 }
 
-function assertSafeGeneratedTarget(target) {
+function assertSafeGeneratedTarget(target, trackedTargets) {
   const expected = [
     ...trackedTargets.forms.values(),
     trackedTargets.familyIndex,
     trackedTargets.interfaces,
     trackedTargets.bindings,
   ];
-  if (!expected.includes(target) || path.dirname(target) === repositoryRoot) {
+  const normalizedTarget = path.resolve(target);
+  const familyRoot = path.resolve(repositoryRoot, "forms", "candidates");
+  const isManagedFamily = path.dirname(normalizedTarget) === familyRoot;
+  const isFixedTarget = [
+    path.resolve(repositoryRoot, FAMILY_INDEX_PATH),
+    path.resolve(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
+    path.resolve(repositoryRoot, "bindings", "candidates", "v1alpha2"),
+  ].includes(normalizedTarget);
+  if (
+    !expected.map((entry) => path.resolve(entry)).includes(normalizedTarget) ||
+    (!isManagedFamily && !isFixedTarget) ||
+    path.dirname(normalizedTarget) === repositoryRoot
+  ) {
     throw new Error(`refusing unsafe generated target ${target}`);
   }
+}
+
+function directChildPath(root, component, label) {
+  const normalizedRoot = path.resolve(root);
+  const candidate = path.resolve(normalizedRoot, component);
+  if (path.dirname(candidate) !== normalizedRoot) {
+    throw new Error(`refusing unsafe ${label} ${JSON.stringify(component)}`);
+  }
+  return candidate;
 }
 
 function writeJson(file, value) {
@@ -866,8 +637,4 @@ function canonicalJson(value) {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
     .join(",")}}`;
-}
-
-function digestCanonicalValue(value) {
-  return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
 }

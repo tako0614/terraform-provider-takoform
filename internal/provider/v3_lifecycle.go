@@ -24,7 +24,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // Default per-resource operation timeouts of the v3 lane. Each resource may
@@ -36,9 +35,9 @@ const (
 	v3DefaultDeleteTimeout = 30 * time.Minute
 )
 
-// v3FormResource implements one typed current-family Form over the
-// shared v1beta1 lifecycle core. The Form declaration is data
-// (internal/edgeformcatalog); a new family member is a new catalog entry.
+// v3FormResource implements one typed current-family Form over the shared
+// stable-v1 lifecycle core. Its authoring model and exact identity come from
+// the Provider-owned embedded projection.
 type v3FormResource struct {
 	form         model.Form
 	resourceType string
@@ -105,7 +104,7 @@ func (r *v3FormResource) resourceTypeName() string {
 	if err != nil {
 		return ""
 	}
-	ref, err := assembly.registry.DefaultCreate(currentformregistry.GroupKind{
+	ref, err := assembly.registry.DefaultCreate(v3GroupKind{
 		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
 	})
 	if err != nil {
@@ -194,7 +193,7 @@ func (r *v3FormResource) codecTable() *v3CodecTable {
 // with the codec that encodes a spec for it. Only Create uses it: an existing
 // resource dispatches on the identity recorded in state.
 func (r *v3FormResource) v3DefaultCodec(diags *diag.Diagnostics) (v3FormCodec, bool) {
-	codec, err := r.codecTable().defaultCreate(currentformregistry.GroupKind{
+	codec, err := r.codecTable().defaultCreate(v3GroupKind{
 		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
 	})
 	if err != nil {
@@ -242,7 +241,7 @@ func (r *v3FormResource) v3StateCodec(identity v3StateIdentity, diags *diag.Diag
 	return v3FormCodec{}, false
 }
 
-func clientFormRef(ref currentformregistry.V3Ref) clientv3.FormRef {
+func clientFormRef(ref v3FormRef) clientv3.FormRef {
 	return clientv3.FormRef{
 		APIVersion:        ref.APIVersion,
 		Kind:              ref.Kind,
@@ -254,7 +253,7 @@ func clientFormRef(ref currentformregistry.V3Ref) clientv3.FormRef {
 // v3RequestResource builds the wire envelope for one apply. The request never
 // carries a packageDigest: the digest is audit evidence of the host's own
 // installation, never client-asserted identity.
-func v3RequestResource(ref currentformregistry.V3Ref, name, space string, spec map[string]any) *clientv3.Resource {
+func v3RequestResource(ref v3FormRef, name, space string, spec map[string]any) *clientv3.Resource {
 	return &clientv3.Resource{
 		APIVersion: ref.APIVersion,
 		Kind:       ref.Kind,
@@ -485,7 +484,7 @@ func v3RelationDriftState(res *clientv3.Resource) types.String {
 // re-resolves the reference (v3PlanRelationRecovery).
 func v3ReportRelationCondition(
 	kind, resourceType, space, name string,
-	ref currentformregistry.V3Ref,
+	ref v3FormRef,
 	res *clientv3.Resource,
 	declaresUpdate bool,
 	diags *diag.Diagnostics,

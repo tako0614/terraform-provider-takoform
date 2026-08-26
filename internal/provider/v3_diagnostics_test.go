@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // TestV3DiagnosticRendersEveryRecordedFact pins the rendered shape. The example
@@ -31,7 +30,7 @@ func TestV3DiagnosticRendersEveryRecordedFact(t *testing.T) {
 		ResourceType: "takoform_worker_version",
 		Space:        "prod",
 		Name:         "version-6c37aa755eee",
-		Ref: currentformregistry.V3Ref{
+		Ref: v3FormRef{
 			APIVersion: "edge.forms.takoform.com", Kind: "WorkerVersion",
 			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:abc",
 		},

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 func TestV3CurrentProjectionIsExhaustiveAndUnique(t *testing.T) {
@@ -21,9 +22,9 @@ func TestV3CurrentProjectionIsExhaustiveAndUnique(t *testing.T) {
 		t.Fatalf("current provider Form projection = %d, want 31", len(forms))
 	}
 	codecs := v3Codecs()
-	seenLines := map[currentformregistry.GroupKind]bool{}
-	seenRefs := map[currentformregistry.ExactFormKey]bool{}
-	seenTypes := map[string]currentformregistry.GroupKind{}
+	seenLines := map[v3GroupKind]bool{}
+	seenRefs := map[v3ExactFormKey]bool{}
+	seenTypes := map[string]v3GroupKind{}
 	for _, form := range forms {
 		if strings.Contains(form.Family.APIVersion(), "/") {
 			t.Fatalf("current Form %s/%s carries a versioned family group", form.Family.APIVersion(), form.Kind)
@@ -31,12 +32,12 @@ func TestV3CurrentProjectionIsExhaustiveAndUnique(t *testing.T) {
 		if form.Kind == "ObjectBucket" {
 			t.Fatal("withdrawn ObjectBucket leaked into current provider projection")
 		}
-		line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+		line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
 		if seenLines[line] {
 			t.Fatalf("duplicate current Group+Kind projection %s/%s", line.APIVersion, line.Kind)
 		}
 		seenLines[line] = true
-		ref, err := currentformregistry.V3Current().DefaultCreate(line)
+		ref, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(line)
 		if err != nil {
 			t.Fatalf("current registry has no exact create target for %s/%s: %v", line.APIVersion, line.Kind, err)
 		}
@@ -60,35 +61,35 @@ func TestV3CurrentProjectionIsExhaustiveAndUnique(t *testing.T) {
 		seenTypes[resourceType] = line
 	}
 	currentRefs := 0
-	for _, ref := range currentformregistry.V3Current().SupportedRefs() {
+	for _, ref := range mustProviderV3SnapshotAssembly().registry.SupportedRefs() {
 		if !strings.Contains(ref.APIVersion, "/") {
 			currentRefs++
 			if !seenRefs[ref.ExactKey()] {
-				t.Fatalf("generated current registry ref %s is absent from provider projection", ref.ExactKey())
+				t.Fatalf("embedded current ref %s is absent from provider projection", ref.ExactKey())
 			}
 		}
 	}
 	if currentRefs != len(forms) {
-		t.Fatalf("generated current registry has %d exact refs, provider projection has %d Forms", currentRefs, len(forms))
+		t.Fatalf("embedded current projection has %d exact refs and %d Forms", currentRefs, len(forms))
 	}
 }
 
 func TestV3ExactMappingRejectsWrongGroupWithoutKindFallback(t *testing.T) {
 	t.Parallel()
-	base := currentformregistry.V3Current()
-	a := currentformregistry.V3Ref{
+	base := mustProviderV3SnapshotAssembly().registry.(*v3ProjectedRegistry)
+	a := v3FormRef{
 		APIVersion: "alpha.forms.example", Kind: "SharedThing", DefinitionVersion: "0.1.0",
 		SchemaDigest: "sha256:" + strings.Repeat("a", 64), PackageDigest: "sha256:" + strings.Repeat("b", 64),
 	}
-	b := currentformregistry.V3Ref{
+	b := v3FormRef{
 		APIVersion: "beta.forms.example", Kind: "SharedThing", DefinitionVersion: "0.1.0",
 		SchemaDigest: "sha256:" + strings.Repeat("c", 64), PackageDigest: "sha256:" + strings.Repeat("d", 64),
 	}
-	withA, err := base.Register(a, true)
+	withA, err := base.withRef(a, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	withBoth, err := withA.Register(b, true)
+	withBoth, err := withA.withRef(b, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +125,22 @@ func TestV3RepresentativeLifecycleCoversEveryNewFamily(t *testing.T) {
 	// schema compilation, typed wire encoding, fake-host apply, and readback for
 	// every newly admitted family without inventing provider-specific fixtures.
 	ctx := context.Background()
-	for _, family := range providerV3CurrentFamilies() {
+	formsByFamily := map[string]model.Form{}
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
+		if _, exists := formsByFamily[form.Family.APIVersion()]; !exists {
+			formsByFamily[form.Family.APIVersion()] = form
+		}
+	}
+	families := make([]string, 0, len(formsByFamily))
+	for family := range formsByFamily {
+		families = append(families, family)
+	}
+	sort.Strings(families)
+	for _, family := range families {
 		family := family
-		t.Run(family.family.APIVersion(), func(t *testing.T) {
+		t.Run(family, func(t *testing.T) {
 			t.Parallel()
-			form := family.forms[0]
+			form := formsByFamily[family]
 			host := newV3FakeHost(t)
 			resource := v3Provider3CurrentResourceHarness(
 				t, form, "", newV3TestProviderData(t, host), v3Codecs(),

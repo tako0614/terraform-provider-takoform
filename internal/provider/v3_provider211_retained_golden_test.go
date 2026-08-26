@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 const v3Provider211RetainedGoldenPath = "testdata/v3-provider211-retained-golden.json"
@@ -29,11 +28,11 @@ type v3Provider211RetainedGolden struct {
 }
 
 type v3Provider211RetainedIdentity struct {
-	CanonicalImport   string                    `json:"canonicalImport"`
-	FormRef           currentformregistry.V3Ref `json:"formRef"`
-	Provider3Mapping  string                    `json:"provider3Mapping"`
-	Provider3Readable bool                      `json:"provider3Readable"`
-	ResourceType      string                    `json:"resourceType"`
+	CanonicalImport   string    `json:"canonicalImport"`
+	FormRef           v3FormRef `json:"formRef"`
+	Provider3Mapping  string    `json:"provider3Mapping"`
+	Provider3Readable bool      `json:"provider3Readable"`
+	ResourceType      string    `json:"resourceType"`
 }
 
 // TestV3Provider211RetainedGoldenLocksImmutableHistory proves all fifteen
@@ -58,10 +57,10 @@ func TestV3Provider211RetainedGoldenLocksImmutableHistory(t *testing.T) {
 		t.Fatalf("retained readable count = %d, want 14", want.ReadableCount)
 	}
 
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 	types := v3TerraformResourceTypes()
 	codecs := v3Codecs()
-	seen := make(map[currentformregistry.ExactFormKey]struct{}, len(want.Identities))
+	seen := make(map[v3ExactFormKey]struct{}, len(want.Identities))
 	readable := 0
 	for _, expected := range want.Identities {
 		ref := expected.FormRef

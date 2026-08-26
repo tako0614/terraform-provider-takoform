@@ -14,8 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/retainededgeformcatalog"
 )
 
 func TestRetainedProvider211DefinitionsRemainByteIdentical(t *testing.T) {
@@ -28,8 +26,8 @@ func TestRetainedProvider211DefinitionsRemainByteIdentical(t *testing.T) {
 		kind, definitionJSON := kind, definitionJSON
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
-			refs := currentformregistry.V3Current().SupportedRefsFor(currentformregistry.GroupKind{
-				APIVersion: retainededgeformcatalog.Family.APIVersion(), Kind: kind,
+			refs := mustProviderV3SnapshotAssembly().registry.SupportedRefsFor(v3GroupKind{
+				APIVersion: "edge.forms.takoform.com/v1beta1", Kind: kind,
 			})
 			if len(refs) != 1 {
 				t.Fatalf("retained %s identity count = %d, want 1", kind, len(refs))
@@ -51,33 +49,23 @@ func TestRetainedProvider211DefinitionsRemainByteIdentical(t *testing.T) {
 
 func TestRetainedObjectBucketHistoryIsNotAProvider3Surface(t *testing.T) {
 	t.Parallel()
-	refs := currentformregistry.V3Current().SupportedRefsFor(currentformregistry.GroupKind{
-		APIVersion: retainededgeformcatalog.Family.APIVersion(), Kind: "ObjectBucket",
+	refs := mustProviderV3SnapshotAssembly().registry.SupportedRefsFor(v3GroupKind{
+		APIVersion: "edge.forms.takoform.com/v1beta1", Kind: "ObjectBucket",
 	})
 	if len(refs) != 1 {
 		t.Fatalf("retained ObjectBucket identity count = %d, want 1", len(refs))
 	}
 	ref := refs[0]
-	rendered, err := retainededgeformcatalog.RenderForms()
+	entry, found := mustProviderV3SnapshotAssembly().projection.forms[ref.ExactKey()]
+	if !found || len(entry.Definition) == 0 {
+		t.Fatal("retained ObjectBucket definition disappeared from Provider 2.1.1 history")
+	}
+	digest, err := formpackage.DigestCanonicalJSON(entry.Definition)
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, form := range rendered {
-		if form.Kind != "ObjectBucket" {
-			continue
-		}
-		found = true
-		digest, err := formpackage.DigestCanonicalJSON([]byte(form.DefinitionJSON))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if digest != ref.SchemaDigest {
-			t.Fatalf("retained ObjectBucket digest = %s, ledger = %s", digest, ref.SchemaDigest)
-		}
-	}
-	if !found {
-		t.Fatal("retained ObjectBucket definition disappeared from Provider 2.1.1 history")
+	if digest != ref.SchemaDigest {
+		t.Fatalf("retained ObjectBucket digest = %s, ledger = %s", digest, ref.SchemaDigest)
 	}
 	if _, ok := v3TerraformResourceTypes().Lookup(ref.ExactKey()); ok {
 		t.Fatal("Provider 3 maps retained ObjectBucket")
@@ -108,8 +96,8 @@ func TestRetainedWorkerVersionBucketBindingsRemainReadableStateOnly(t *testing.T
 		)
 	}
 
-	refs := currentformregistry.V3Current().SupportedRefsFor(currentformregistry.GroupKind{
-		APIVersion: retainededgeformcatalog.Family.APIVersion(), Kind: "WorkerVersion",
+	refs := mustProviderV3SnapshotAssembly().registry.SupportedRefsFor(v3GroupKind{
+		APIVersion: "edge.forms.takoform.com/v1beta1", Kind: "WorkerVersion",
 	})
 	if len(refs) != 1 {
 		t.Fatalf("retained WorkerVersion identity count = %d, want 1", len(refs))

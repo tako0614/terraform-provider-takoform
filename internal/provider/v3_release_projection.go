@@ -1,10 +1,12 @@
 package provider
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 // ProviderV3ReleaseIdentityProjection is the provider-owned release view of
@@ -36,6 +38,61 @@ type ProviderV3ReleaseFormRef struct {
 	SchemaDigest      string `json:"schemaDigest"`
 }
 
+// ProviderV3ReferenceSurface is the Provider-owned input for generated
+// Terraform docs and examples. Portable Form authoring data and Terraform
+// naming travel together here so documentation never carries another family
+// roster or Group+Kind-to-resource-type map.
+type ProviderV3ReferenceSurface struct {
+	Form          model.Form
+	ResourceType  string
+	FormRef       ProviderV3ReleaseFormRef
+	PackageDigest string
+}
+
+// CurrentProviderV3ReferenceSurfaces returns the current registered surfaces
+// in Provider registration order from the same embedded projection used by
+// runtime registration.
+func CurrentProviderV3ReferenceSurfaces() ([]ProviderV3ReferenceSurface, error) {
+	assembly, err := providerV3SnapshotAssembly()
+	if err != nil {
+		return nil, err
+	}
+	output := make([]ProviderV3ReferenceSurface, 0, len(assembly.projection.currentOrder))
+	for _, key := range assembly.projection.currentOrder {
+		entry := assembly.projection.forms[key]
+		mapping, ok := assembly.projection.resources[key]
+		if !ok || !mapping.Register || mapping.Ref != entry.Ref {
+			return nil, fmt.Errorf("takoform provider: current reference Form %s has no exact registered Terraform mapping", key)
+		}
+		form, err := cloneProviderV3ReferenceForm(entry.Form)
+		if err != nil {
+			return nil, fmt.Errorf("takoform provider: clone current reference Form %s: %w", key, err)
+		}
+		output = append(output, ProviderV3ReferenceSurface{
+			Form: form, ResourceType: mapping.ResourceType,
+			FormRef: ProviderV3ReleaseFormRef{
+				APIVersion: entry.Ref.APIVersion, Kind: entry.Ref.Kind,
+				DefinitionVersion: entry.Ref.DefinitionVersion, SchemaDigest: entry.Ref.SchemaDigest,
+			},
+			PackageDigest: entry.Ref.PackageDigest,
+		})
+	}
+	return output, nil
+}
+
+func cloneProviderV3ReferenceForm(source model.Form) (model.Form, error) {
+	raw, err := json.Marshal(source)
+	if err != nil {
+		return model.Form{}, err
+	}
+	var cloned model.Form
+	if err := formpackage.DecodeStrictIJSON(raw, &cloned); err != nil {
+		return model.Form{}, err
+	}
+	normalizeProjectedForm(&cloned)
+	return cloned, nil
+}
+
 // CurrentProviderV3ReleaseIdentityProjection returns the deterministic 3.0.0 release
 // projection directly from the same family declarations, exact registry, and
 // Terraform mapping used by provider registration. Retained v1beta1 state
@@ -55,7 +112,7 @@ func CurrentProviderV3ReleaseIdentityProjection() (ProviderV3ReleaseIdentityProj
 		Forms:              make([]ProviderV3ReleaseFormIdentity, 0, len(assembly.projection.currentOrder)),
 	}
 	seenFamilies := map[string]struct{}{}
-	seenResourceTypes := map[string]currentformregistry.GroupKind{}
+	seenResourceTypes := map[string]v3GroupKind{}
 	for _, key := range assembly.projection.currentOrder {
 		entry := assembly.projection.forms[key]
 		mapping, ok := assembly.projection.resources[key]

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformselection"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerdiagnostics"
 )
@@ -214,7 +214,7 @@ func runSameNameDeadlock(ctx context.Context, repoRoot, cliPath, providerBinary 
 	if err != nil {
 		return DeadlockEvidence{}, CLIIdentity{}, err
 	}
-	bundleRef, err := edgeFormRef("WorkerBundle")
+	bundleRef, err := h.edgeFormRef("WorkerBundle")
 	if err != nil {
 		return DeadlockEvidence{}, CLIIdentity{}, err
 	}
@@ -639,7 +639,7 @@ func runHeterogeneousVars(ctx context.Context, repoRoot, cliPath, providerBinary
 	if err != nil {
 		return VarsEvidence{}, err
 	}
-	ref, err := edgeFormRef("WorkerVersion")
+	ref, err := h.edgeFormRef("WorkerVersion")
 	if err != nil {
 		return VarsEvidence{}, err
 	}
@@ -737,7 +737,7 @@ func (h *harness) workerReady(ctx context.Context, name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	ref, err := edgeFormRef("ModuleWorker")
+	ref, err := h.edgeFormRef("ModuleWorker")
 	if err != nil {
 		return false, err
 	}
@@ -848,7 +848,7 @@ func (h *harness) startReadinessSamplerFor(ctx context.Context, name string) (fu
 	if err != nil {
 		return nil, err
 	}
-	ref, err := edgeFormRef("ModuleWorker")
+	ref, err := h.edgeFormRef("ModuleWorker")
 	if err != nil {
 		return nil, err
 	}
@@ -1075,14 +1075,22 @@ func (h *harness) output(ctx context.Context, name string) (string, error) {
 	return strings.TrimSpace(raw), nil
 }
 
-// edgeFormRef is the build's create target for one Edge Family kind.
-func edgeFormRef(kind string) (currentformregistry.V3Ref, error) {
-	return currentformregistry.V3Current().DefaultCreate(currentformregistry.GroupKind{
-		APIVersion: edgeformcatalog.Family.APIVersion(), Kind: kind,
-	})
+// edgeFormRef is the checked-in selection's create target for one worker Form.
+// The worker corpus deliberately names its family; exact identity and default
+// selection still come only from the verified artifact Snapshot.
+func (h *harness) edgeFormRef(kind string) (formpackage.FormRef, error) {
+	selection, err := currentformselection.LoadRepository(h.repoRoot)
+	if err != nil {
+		return formpackage.FormRef{}, err
+	}
+	ref, ok := selection.Snapshot().Default("edge.forms.takoform.com", kind)
+	if !ok {
+		return formpackage.FormRef{}, fmt.Errorf("takoform: worker corpus has no selected default for edge.forms.takoform.com/%s", kind)
+	}
+	return ref, nil
 }
 
-func clientFormRef3(ref currentformregistry.V3Ref) clientv3.FormRef {
+func clientFormRef3(ref formpackage.FormRef) clientv3.FormRef {
 	return clientv3.FormRef{
 		APIVersion:        ref.APIVersion,
 		Kind:              ref.Kind,

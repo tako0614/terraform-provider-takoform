@@ -1,37 +1,60 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
-import {
-  FROZEN_PROVIDER_RELEASES,
-  assertFrozenProviderRelease,
-  assertFrozenProviderReleaseDescriptor,
-} from "./current-form-families.mjs";
+import { validatePublisherPathMetadata } from "./current-form-families.mjs";
 
-describe("provider identity ledger continuity", () => {
-  test("pins the forward-repaired v2.1.1 tag and canonical ledger bytes", () => {
-    const frozen = FROZEN_PROVIDER_RELEASES.get("2.1.1");
-    expect(frozen).toEqual({
-      tag: "v2.1.1",
-      ledgerDigest:
-        "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
+const generatorSource = readFileSync(
+  new URL("./current-form-families.mjs", import.meta.url),
+  "utf8",
+);
+
+describe("publisher composition ownership", () => {
+  test("does not carry an independent family, interface, or binding roster", () => {
+    expect(generatorSource).not.toMatch(/\bconst\s+familySpecs\b/);
+    expect(generatorSource).not.toMatch(/\bconst\s+interfaceContracts\b/);
+    expect(generatorSource).not.toMatch(/\bconst\s+bindingContracts\b/);
+  });
+
+  test("rejects every publisher-derived filesystem traversal component", () => {
+    const valid = () => ({
+      families: [
+        {
+          group: "example.forms.takoform.com",
+          forms: [
+            {
+              kind: "Example",
+              slug: "example",
+              role: "identity",
+              fixtures: { "desired.json": {}, "negative-example.json": {} },
+            },
+          ],
+        },
+      ],
+      interfaces: [{ name: "example.runtime", version: "1.0.0" }],
+      bindings: [{ name: "example.binding", version: "1.0.0" }],
     });
-  });
 
-  test("rejects the forward-repaired entry changed together with its candidate catalog", () => {
-    const entry = {
-      providerVersion: "2.1.1",
-      portableApiVersion: "forms.takoform.com/v1beta1",
-      family: "edge.forms.takoform.com/v1beta1",
-      formMaturity: "experimental",
-      forms: [],
-    };
-    expect(() => assertFrozenProviderRelease(entry)).toThrow(
-      /immutable provider 2\.1\.1 identity ledger entry changed/,
-    );
-  });
-
-  test("rejects the forward-repaired release tag changed with its descriptor", () => {
-    expect(() =>
-      assertFrozenProviderReleaseDescriptor({ version: "2.1.1", tag: "v2.1.0" }),
-    ).toThrow(/immutable provider 2\.1\.1 release tag changed/);
+    for (const mutate of [
+      (source) => {
+        source.families[0].group = "../outside.forms.takoform.com";
+      },
+      (source) => {
+        source.families[0].forms[0].slug = "../../outside";
+      },
+      (source) => {
+        source.families[0].forms[0].fixtures = { "../outside.json": {} };
+      },
+      (source) => {
+        source.interfaces[0].name = "../outside";
+      },
+      (source) => {
+        source.bindings[0].name = "outside/name";
+      },
+    ]) {
+      const source = valid();
+      mutate(source);
+      expect(() => validatePublisherPathMetadata(source)).toThrow();
+    }
+    expect(() => validatePublisherPathMetadata(valid())).not.toThrow();
   });
 });

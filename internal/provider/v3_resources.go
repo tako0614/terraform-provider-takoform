@@ -1,9 +1,8 @@
 package provider
 
-// v3_resources.go derives the typed HCL surface of every Edge Platform
-// Family resource from its single catalog declaration
-// (internal/edgeformcatalog) and maps values between that surface and the
-// portable v1beta1 wire spec.
+// v3_resources.go derives the typed HCL surface of every registered Form from
+// the Provider-owned exact projection and maps values between that surface and
+// the portable stable-v1 wire spec.
 //
 // Surface conventions of the v3 lane:
 //   - resource references (worker, bundle, queue, ...) are the target's

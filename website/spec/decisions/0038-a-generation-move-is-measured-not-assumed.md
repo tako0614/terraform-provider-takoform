@@ -86,9 +86,11 @@ recorded FormRef actually has: is this the same contract under a new name, or
 one I must re-read.
 
 **A graduation must be executable before it is decided.** Two places would have
-failed the moment the family advanced past Beta, on a path this repository has
-already committed to in `internal/currentformregistry/registry_v3_test.go` and
-`internal/provider/v3_continuity_test.go`. The site-status derivation had a
+failed the moment the family advanced past Beta, on a path this repository had
+already committed to in the then-current
+`internal/currentformregistry/registry_v3_test.go` (deleted when W08 removed the
+mixed registry) and `internal/provider/v3_continuity_test.go`. The site-status
+derivation had a
 bare-`/vN` branch for the Host API lane and none for the family, so a stable
 family threw; and `formpackage` selected the family schema by matching
 `/v1beta1$`, letting any other namespaced group fall through to the retained

@@ -22,13 +22,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // v3SeedStateRef rewrites the exact identity recorded in one state value, the
 // way a state file written by an older provider build carries it.
-func v3SeedStateRef(t *testing.T, ctx context.Context, state tfsdk.State, ref currentformregistry.V3Ref) tfsdk.State {
+func v3SeedStateRef(t *testing.T, ctx context.Context, state tfsdk.State, ref v3FormRef) tfsdk.State {
 	t.Helper()
 	for name, value := range map[string]string{
 		"form_api_version":        ref.APIVersion,
@@ -50,28 +48,22 @@ func v3SeedStateRef(t *testing.T, ctx context.Context, state tfsdk.State, ref cu
 // create target is not a state migration.
 func TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState(t *testing.T) {
 	assertGeneratedFamilyBuild(t)
-	beta, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	moduleWorker := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	beta, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: moduleWorker.Family.APIVersion(), Kind: moduleWorker.Kind})
 	if err != nil {
 		t.Fatal(err)
 	}
-	stable := currentformregistry.V3Ref{
+	stable := v3FormRef{
 		APIVersion:        "edge.forms.takoform.com/v1",
 		Kind:              beta.Kind,
 		DefinitionVersion: "1.0.0",
 		SchemaDigest:      "sha256:6666666666666666666666666666666666666666666666666666666666666666",
 		PackageDigest:     "sha256:7777777777777777777777777777777777777777777777777777777777777777",
 	}
-	stableForm, ok := edgeformcatalog.ByKind("ModuleWorker")
-	if !ok {
-		t.Fatal("ModuleWorker is not declared")
-	}
+	stableForm := moduleWorker
 	stableForm.Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1"}
 	stableForm.DefinitionVersion = "1.0.0"
-	futureRegistry, err := currentformregistry.V3Current().Register(stable, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	future, err := newV3CodecTable(futureRegistry).withCodec(stable, stableForm, true)
+	future, err := v3Codecs().withCodec(stable, stableForm, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +83,7 @@ func TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState(t *testing.T) {
 // intentionally outside this table and must be drained before upgrading.
 func TestV3CodecTableCoversEverySupportedRef(t *testing.T) {
 	assertGeneratedFamilyBuild(t)
-	table := newV3CodecTable(currentformregistry.V3Current())
+	table := v3Codecs()
 	var missing []string
 	sawRetained := false
 	for _, ref := range table.registry.SupportedRefs() {
@@ -123,9 +115,9 @@ func TestV3CodecTableCoversEverySupportedRef(t *testing.T) {
 
 // assertGeneratedFamilyBuild runs the same deterministic generator check used
 // by the release gate. A unit test that only hand-registers a stable ref can
-// pass while registry_v3_generated.go has already dropped the retained Beta
-// entry; this check makes the continuity proof exercise the actual rebuild
-// output first.
+// pass while the selected artifact graph or embedded Provider projection has
+// already dropped the retained Beta entry; this check makes the continuity
+// proof exercise the actual rebuild output first.
 func assertGeneratedFamilyBuild(t *testing.T) {
 	t.Helper()
 	_, source, _, ok := runtime.Caller(0)
@@ -149,10 +141,7 @@ func TestV3PerRefCodecEncodesTheStateRefFieldSet(t *testing.T) {
 	host := newV3FakeHost(t)
 	ctx := context.Background()
 
-	current, ok := edgeformcatalog.ByKind("AtLeastOnceQueue")
-	if !ok {
-		t.Fatal("AtLeastOnceQueue is not a declared family Form")
-	}
+	current := v3ProviderCurrentFormByKind(t, "AtLeastOnceQueue")
 	if len(current.Fields) < 2 {
 		t.Fatalf("AtLeastOnceQueue declares %d fields; this test needs at least two", len(current.Fields))
 	}
@@ -160,8 +149,8 @@ func TestV3PerRefCodecEncodesTheStateRefFieldSet(t *testing.T) {
 	// later one is an addition the older contract cannot carry.
 	priorForm := current
 	priorForm.Fields = []model.Field{current.Fields[0]}
-	priorRef := currentformregistry.V3Ref{
-		APIVersion:        edgeformcatalog.Family.APIVersion(),
+	priorRef := v3FormRef{
+		APIVersion:        current.Family.APIVersion(),
 		Kind:              "AtLeastOnceQueue",
 		DefinitionVersion: "0.0.9",
 		SchemaDigest:      "sha256:aaaa111111111111111111111111111111111111111111111111111111111111",
@@ -237,7 +226,8 @@ func TestV3StateRefWithNoCompiledCodecFailsClosed(t *testing.T) {
 	}
 	unknown := v3PriorModuleWorkerRef
 	state := v3SeedStateRef(t, ctx, tfsdk.State{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}, unknown)
-	defaultRef, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	moduleWorker := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	defaultRef, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: moduleWorker.Family.APIVersion(), Kind: moduleWorker.Kind})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,12 +267,13 @@ func TestV3StateRefWithNoCompiledCodecFailsClosed(t *testing.T) {
 // earlier definition version created.
 func TestV3ImportIdentityForms(t *testing.T) {
 	ctx := context.Background()
-	defaultRef, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	moduleWorker := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	defaultRef, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: moduleWorker.Family.APIVersion(), Kind: moduleWorker.Kind})
 	if err != nil {
 		t.Fatal(err)
 	}
 	priorRef := v3PriorModuleWorkerRef
-	priorForm, _ := edgeformcatalog.ByKind("ModuleWorker")
+	priorForm := moduleWorker
 
 	t.Run("short forms resolve to the default create ref", func(t *testing.T) {
 		host := newV3FakeHost(t)
@@ -551,7 +542,7 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 		// The host nonetheless holds a DIFFERENT incarnation under that name.
 		host.storeResource(
 			"ModuleWorker", "module-worker", "prod",
-			edgeformcatalog.Family.APIVersion(), "uid-42", map[string]any{},
+			"edge.forms.takoform.com", "uid-42", map[string]any{},
 		)
 		response := frameworkresource.ReadResponse{State: state}
 		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
@@ -578,7 +569,7 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 		host2.forgetOperation("op_apply_uncommitted")
 		host2.storeResource(
 			"ModuleWorker", "module-worker", "prod",
-			edgeformcatalog.Family.APIVersion(), "uid-42", map[string]any{},
+			"edge.forms.takoform.com", "uid-42", map[string]any{},
 		)
 		response2 := frameworkresource.ReadResponse{State: state2}
 		resource2.Read(ctx, frameworkresource.ReadRequest{State: state2}, &response2)

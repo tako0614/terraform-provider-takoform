@@ -7,7 +7,6 @@ import (
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // v3ResourceTypeLine is provider-owned authoring metadata. A Form Definition
@@ -16,7 +15,7 @@ import (
 // every exact FormRef it supports on that line, so runtime dispatch remains
 // exact even while an additive Form evolution keeps one Terraform type.
 type v3ResourceTypeLine struct {
-	GroupKind    currentformregistry.GroupKind
+	GroupKind    v3GroupKind
 	ResourceType string
 }
 
@@ -25,8 +24,8 @@ type v3ResourceTypeLine struct {
 // alternative client can consume the same Form declarations without carrying
 // or agreeing with any Terraform name.
 type v3ResourceTypeRegistry struct {
-	byRef         map[currentformregistry.ExactFormKey]string
-	artifactByRef map[currentformregistry.ExactFormKey]*v3ArtifactProjection
+	byRef         map[v3ExactFormKey]string
+	artifactByRef map[v3ExactFormKey]*v3ArtifactProjection
 }
 
 var terraformResourceTypePattern = regexp.MustCompile(`^takoform_[a-z0-9_]+$`)
@@ -39,9 +38,9 @@ func newV3ResourceTypeRegistry(
 		return nil, fmt.Errorf("takoform provider: exact Form registry is nil")
 	}
 	registry := &v3ResourceTypeRegistry{
-		byRef: map[currentformregistry.ExactFormKey]string{}, artifactByRef: map[currentformregistry.ExactFormKey]*v3ArtifactProjection{},
+		byRef: map[v3ExactFormKey]string{}, artifactByRef: map[v3ExactFormKey]*v3ArtifactProjection{},
 	}
-	seenLines := map[currentformregistry.GroupKind]struct{}{}
+	seenLines := map[v3GroupKind]struct{}{}
 	typeKinds := map[string]string{}
 	for _, line := range lines {
 		if line.GroupKind.APIVersion == "" || line.GroupKind.Kind == "" {
@@ -74,7 +73,7 @@ func newV3ResourceTypeRegistry(
 	return registry, nil
 }
 
-func (r *v3ResourceTypeRegistry) Lookup(key currentformregistry.ExactFormKey) (string, bool) {
+func (r *v3ResourceTypeRegistry) Lookup(key v3ExactFormKey) (string, bool) {
 	if r == nil {
 		return "", false
 	}
@@ -82,7 +81,7 @@ func (r *v3ResourceTypeRegistry) Lookup(key currentformregistry.ExactFormKey) (s
 	return resourceType, ok
 }
 
-func (r *v3ResourceTypeRegistry) Artifact(key currentformregistry.ExactFormKey) (*v3ArtifactProjection, bool) {
+func (r *v3ResourceTypeRegistry) Artifact(key v3ExactFormKey) (*v3ArtifactProjection, bool) {
 	if r == nil {
 		return nil, false
 	}
@@ -103,9 +102,9 @@ func compileV3FormResources(
 		return nil, fmt.Errorf("takoform provider: resource registration dependency is nil")
 	}
 	factories := make([]func() frameworkresource.Resource, 0, len(forms))
-	registeredTypes := map[string]currentformregistry.GroupKind{}
+	registeredTypes := map[string]v3GroupKind{}
 	for _, form := range forms {
-		line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+		line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
 		ref, err := formRegistry.DefaultCreate(line)
 		if err != nil {
 			return nil, fmt.Errorf("takoform provider: registering %s: %w", form.Kind, err)

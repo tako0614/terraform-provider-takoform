@@ -12,8 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // TestV3Provider211RetainedCodecsReadExactHostResponses drives every one of
@@ -25,7 +23,7 @@ func TestV3Provider211RetainedCodecsReadExactHostResponses(t *testing.T) {
 	ctx := context.Background()
 	want := readV3Provider211RetainedGolden(t)
 	codecs := v3Codecs()
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 
 	for _, expected := range want.Identities {
 		expected := expected
@@ -45,10 +43,7 @@ func TestV3Provider211RetainedCodecsReadExactHostResponses(t *testing.T) {
 				t.Fatalf("retained registry lookup for %s = %#v/%t", ref.ExactKey(), registryRef, ok)
 			}
 
-			form, ok := edgeformcatalog.ByKind(ref.Kind)
-			if !ok {
-				t.Fatalf("current Provider 3 resource form for retained %s is missing", ref.Kind)
-			}
+			form := v3ProviderCurrentFormByKind(t, ref.Kind)
 			host := newV3FakeHost(t)
 			resource := v3Provider3CurrentResourceHarness(
 				t, form, expected.Provider3Mapping, newV3TestProviderData(t, host), codecs,
@@ -121,7 +116,7 @@ func v3Provider211RetainedHostSpec(t *testing.T, codec v3FormCodec) map[string]a
 	return model.MaterializeDefaults(codec.DesiredSchema, codec.Form.CanonicalDesired())
 }
 
-func v3Provider211RetainedWireForm(ref currentformregistry.V3Ref) map[string]any {
+func v3Provider211RetainedWireForm(ref v3FormRef) map[string]any {
 	return map[string]any{"formRef": map[string]any{
 		"apiVersion":        ref.APIVersion,
 		"kind":              ref.Kind,
@@ -136,7 +131,7 @@ func v3Provider211RetainedReadState(
 	schemaResponse frameworkresource.SchemaResponse,
 	resource *v3FormResource,
 	codec v3FormCodec,
-	ref currentformregistry.V3Ref,
+	ref v3FormRef,
 	spec map[string]any,
 	name, space, uid string,
 ) tfsdk.State {

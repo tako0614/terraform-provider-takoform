@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformselection"
 )
 
 // ExactFormKey is the WHOLE Form identity a host answers for: the namespaced
@@ -537,106 +537,57 @@ func lifecycleCapabilitiesWithUpdate() []string {
 	return []string{"create", "read", "update", "delete", "import", "observe"}
 }
 
-type candidateSet struct {
-	Format            string `json:"format"`
-	Family            string `json:"family"`
-	FormMaturity      string `json:"formMaturity"`
-	PackageAPIVersion string `json:"packageApiVersion"`
-	PublicationStatus string `json:"publicationStatus"`
-	AuthoringSource   string `json:"authoringSource"`
-	AuthoringPolicy   string `json:"authoringPolicy"`
-	Forms             []struct {
-		Kind          string  `json:"kind"`
-		Role          string  `json:"role"`
-		ResourceType  string  `json:"resourceType"`
-		Path          string  `json:"path"`
-		FormRef       FormRef `json:"formRef"`
-		PackageDigest string  `json:"packageDigest"`
-	} `json:"forms"`
-}
-
-type interfaceCandidateSet struct {
-	Format            string `json:"format"`
-	PublicationStatus string `json:"publicationStatus"`
-	AuthoringSource   string `json:"authoringSource"`
-	Interfaces        []struct {
-		Name         string `json:"name"`
-		Version      string `json:"version"`
-		SchemaDigest string `json:"schemaDigest"`
-	} `json:"interfaces"`
-}
-
-type bindingCandidateSet struct {
-	Format            string `json:"format"`
-	PublicationStatus string `json:"publicationStatus"`
-	AuthoringSource   string `json:"authoringSource"`
-	Bindings          []struct {
-		Name         string `json:"name"`
-		Version      string `json:"version"`
-		SchemaDigest string `json:"schemaDigest"`
-	} `json:"bindings"`
-}
-
-// LoadCatalog reads the real Edge Family candidate definitions and the
-// interface/binding candidate sets from a repository root. The install set
-// identity comes from the generated registry (currentformregistry.V3Current),
-// so registry/candidate drift fails closed.
+// LoadCatalog acquires the checked-in selection once and installs the exact
+// family named by the corpus. Identity and package closure come from the same
+// provider-neutral Snapshot consumed by every other current-graph adapter.
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	resolvedRoot, err := repositoryRootForContract(repoRoot)
 	if err != nil {
 		return nil, err
 	}
 	repoRoot = resolvedRoot
+	selection, err := currentformselection.LoadRepository(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("takoform: load current Form selection: %w", err)
+	}
+	snapshot := selection.Snapshot()
 	catalog := newCatalog(contract.APIVersion)
-	var set candidateSet
 	if contract.FamilyCandidateSet == "" {
 		return nil, errors.New("takoform: the corpus does not say which Form Family generation it installs")
 	}
-	setPath := filepath.Join(repoRoot, filepath.FromSlash(contract.FamilyCandidateSet), "candidate-set.json")
-	if err := decodeStrictFile(setPath, &set); err != nil {
-		return nil, err
+	wantedCandidateSet := filepath.ToSlash(filepath.Join(contract.FamilyCandidateSet, "candidate-set.json"))
+	var selectedFamily *currentformselection.Family
+	for _, family := range selection.Families() {
+		if family.CandidateSet == wantedCandidateSet {
+			copy := family
+			selectedFamily = &copy
+			break
+		}
+	}
+	if selectedFamily == nil {
+		return nil, fmt.Errorf("takoform: corpus family candidate set %q is not in the checked-in selection", wantedCandidateSet)
 	}
 	// Before anything installs: every installed Form is stamped with the
 	// family this host enforces, so recording it after the install loop would
 	// stamp them all empty and silence every guard.
-	catalog.family = set.Family
-	if set.FormMaturity != "experimental" {
-		return nil, fmt.Errorf("takoform: Beta family maturity is %q, want experimental", set.FormMaturity)
+	catalog.family = selectedFamily.Group
+	if selectedFamily.FormMaturity != "experimental" {
+		return nil, fmt.Errorf("takoform: Beta family maturity is %q, want experimental", selectedFamily.FormMaturity)
 	}
-	registry := currentformregistry.V3Current()
-	for _, candidate := range set.Forms {
-		registered, ok := registry.Lookup(currentformregistry.ExactFormKey{
-			APIVersion:        candidate.FormRef.APIVersion,
-			Kind:              candidate.Kind,
-			DefinitionVersion: candidate.FormRef.DefinitionVersion,
-			SchemaDigest:      candidate.FormRef.SchemaDigest,
-		})
+	for _, candidate := range selectedFamily.Forms {
+		raw, ok := snapshot.Definition(candidate.Ref)
 		if !ok {
-			return nil, fmt.Errorf("takoform: candidate %s is not in the generated v3 registry", candidate.Kind)
-		}
-		if registered.SchemaDigest != candidate.FormRef.SchemaDigest ||
-			registered.PackageDigest != candidate.PackageDigest ||
-			registered.DefinitionVersion != candidate.FormRef.DefinitionVersion {
-			return nil, fmt.Errorf("takoform: candidate %s drifted from the generated v3 registry", candidate.Kind)
-		}
-		definitionPath := filepath.Join(repoRoot, filepath.FromSlash(candidate.Path), "definition.json")
-		raw, err := os.ReadFile(definitionPath)
-		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("takoform: selected candidate %s is absent from the compiled Snapshot", candidate.Kind)
 		}
 		definition, err := formpackage.ValidateDefinition(raw)
 		if err != nil {
 			return nil, fmt.Errorf("takoform: candidate %s definition: %w", candidate.Kind, err)
 		}
-		digest, err := formpackage.DigestCanonicalJSON(raw)
-		if err != nil {
-			return nil, err
-		}
-		if digest != candidate.FormRef.SchemaDigest {
-			return nil, fmt.Errorf("takoform: candidate %s definition digest drifted", candidate.Kind)
-		}
 		form := &InstalledForm{
-			Ref:                candidate.FormRef,
+			Ref: FormRef{
+				APIVersion: candidate.Ref.APIVersion, Kind: candidate.Ref.Kind,
+				DefinitionVersion: candidate.Ref.DefinitionVersion, SchemaDigest: candidate.Ref.SchemaDigest,
+			},
 			PackageDigest:      candidate.PackageDigest,
 			Role:               definition.Role,
 			Title:              definition.Title,
@@ -653,21 +604,8 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			return nil, err
 		}
 	}
-	// The registry's supported set spans generations — every RELEASED ref
-	// stays supported for state compatibility — while a candidate set is one
-	// generation. What the host must cover is every identity of ITS
-	// generation: each supported ref whose group matches the candidate
-	// family. Released refs of earlier generations live in the retained
-	// candidate trees, not here.
-	currentFamily := set.Family
-	currentSupported := 0
-	for _, ref := range registry.SupportedRefs() {
-		if ref.APIVersion == currentFamily {
-			currentSupported++
-		}
-	}
-	if len(catalog.Forms) != currentSupported {
-		return nil, errors.New("takoform: candidate set does not cover its generation of the v3 registry")
+	if len(catalog.Forms) != selectedFamily.FormCount {
+		return nil, errors.New("takoform: selected family metadata does not cover its exact Snapshot generation")
 	}
 	// Fail closed on the failure this whole change exists to prevent. Every
 	// family guard is a silent early return, so a host holding a family whose
@@ -687,23 +625,19 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	if err := catalog.installConstraintSemanticsDefinitions(contract); err != nil {
 		return nil, err
 	}
-	var interfaces interfaceCandidateSet
-	interfacesPath := filepath.Join(repoRoot, "interfaces", "candidates", "v1alpha1", "candidate-set.json")
-	if err := decodeStrictFile(interfacesPath, &interfaces); err != nil {
-		return nil, err
-	}
-	for _, candidate := range interfaces.Interfaces {
-		catalog.interfaces[candidate.Name+"@"+candidate.Version] = supportRef(candidate)
+	for _, candidate := range selection.Interfaces() {
+		catalog.interfaces[candidate.Name+"@"+candidate.Version] = supportRef{
+			Name: candidate.Name, Version: candidate.Version, SchemaDigest: candidate.SchemaDigest,
+		}
 		// The Interface Definition is installed, not just its identity. A host
 		// that only knew the digest could advertise the runtime ABI it does not
 		// hold, and could not read the handler vocabulary the ABI defines, so it
 		// would have to keep a handler list of its own — a second source of
 		// truth the contract exists to remove (spec/decisions/0019).
 		var document interfaceDefinitionDocument
-		path := filepath.Join(repoRoot, "interfaces", "candidates", "v1alpha1", candidate.Name, "definition.json")
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
+		raw, ok := snapshot.InterfaceDefinition(candidate.Ref)
+		if !ok {
+			return nil, fmt.Errorf("takoform: selected interface %s is absent from the compiled Snapshot", candidate.Name)
 		}
 		digest, err := formpackage.DigestCanonicalJSON(raw)
 		if err != nil {
@@ -728,26 +662,25 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			Handlers: runtimeHandlerVocabulary(document),
 		}
 	}
-	var bindings bindingCandidateSet
 	if contract.BindingCandidateSet == "" {
 		return nil, errors.New("takoform: the corpus does not say which Binding envelope generation it installs")
 	}
-	bindingsRoot := filepath.Join(repoRoot, filepath.FromSlash(contract.BindingCandidateSet))
-	bindingsPath := filepath.Join(bindingsRoot, "candidate-set.json")
-	if err := decodeStrictFile(bindingsPath, &bindings); err != nil {
-		return nil, err
-	}
-	for _, candidate := range bindings.Bindings {
-		catalog.bindings[candidate.Name+"@"+candidate.Version] = supportRef(candidate)
+	bindingPrefix := strings.TrimSuffix(filepath.ToSlash(contract.BindingCandidateSet), "/") + "/"
+	for _, candidate := range selection.Bindings() {
+		if !strings.HasPrefix(candidate.Path, bindingPrefix) {
+			return nil, fmt.Errorf("takoform: selected binding %s is outside corpus Binding generation %q", candidate.Name, contract.BindingCandidateSet)
+		}
+		catalog.bindings[candidate.Name+"@"+candidate.Version] = supportRef{
+			Name: candidate.Name, Version: candidate.Version, SchemaDigest: candidate.SchemaDigest,
+		}
 		// The Binding Definition itself is installed, not just its identity: a
 		// host that only knew the digest could not check allowedTargetForms,
 		// the required target Interface, or the source role, and would have to
 		// take every declared binding on trust.
 		var document bindingDefinitionDocument
-		path := filepath.Join(bindingsRoot, candidate.Name, "definition.json")
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
+		raw, ok := snapshot.BindingDefinition(candidate.Ref)
+		if !ok {
+			return nil, fmt.Errorf("takoform: selected binding %s is absent from the compiled Snapshot", candidate.Name)
 		}
 		digest, err := formpackage.DigestCanonicalJSON(raw)
 		if err != nil {

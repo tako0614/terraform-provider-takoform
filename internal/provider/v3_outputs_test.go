@@ -25,7 +25,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 const (
@@ -48,7 +47,7 @@ func v3EndpointOutputs() map[string]any {
 func TestV3DeclaredOutputsAreTypedComputedAttributes(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	for _, form := range edgeformcatalog.Forms {
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
 		if len(form.Outputs) == 0 {
 			continue
 		}
@@ -353,7 +352,7 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	declaring := 0
-	for _, form := range edgeformcatalog.Forms {
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
 		if len(form.Outputs) > 0 {
 			declaring++
 			continue
@@ -365,10 +364,10 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 			t.Fatalf("%s schema: %v", form.Kind, response.Diagnostics)
 		}
 		want := len(v3CommonAttributes(form))
-		if form.Kind == workerBundleKind {
-			want += len(workerBundleAttributes())
-		} else if _, fileArtifact := v3FileBundleManifestKind(form.Kind); fileArtifact {
-			want += len(fileBundleAttributes(form.Kind))
+		if artifact, artifactBacked := v3ProviderArtifactForForm(t, form); artifactBacked && artifact.Mode == v3ArtifactModeWorkerBundle {
+			want += len(workerBundleAttributesForProjection(*artifact))
+		} else if artifact != nil && artifact.Mode == v3ArtifactModeFileBundle {
+			want += len(fileBundleAttributesForProjection(*artifact))
 		} else {
 			want += len(form.Fields)
 		}

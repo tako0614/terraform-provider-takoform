@@ -19,8 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // TestV3CreateAcceptedButUnfinishedWritesRecoverableState drives a host that
@@ -52,7 +50,8 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 		t.Fatal("accepted-but-unfinished create wrote no state: the host-owned resource is orphaned")
 	}
 
-	defaultRef, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	moduleWorker := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	defaultRef, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: moduleWorker.Family.APIVersion(), Kind: moduleWorker.Kind})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +109,7 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 // v3PriorModuleWorkerRef is a SECOND exact identity of one Kind: the same
 // group, an earlier definition version, different bytes. It is what a Form line
 // that has advanced leaves behind in existing state.
-var v3PriorModuleWorkerRef = currentformregistry.V3Ref{
+var v3PriorModuleWorkerRef = v3FormRef{
 	APIVersion:        "edge.forms.takoform.com",
 	Kind:              "ModuleWorker",
 	DefinitionVersion: "0.0.9",
@@ -126,7 +125,7 @@ func v3ResourceWithSecondDefinitionVersion(
 	t *testing.T,
 	kind string,
 	data *providerData,
-	second currentformregistry.V3Ref,
+	second v3FormRef,
 	codec model.Form,
 	asDefaultCreate bool,
 ) *v3FormResource {
@@ -148,12 +147,13 @@ func TestV3ReadAndDeleteDispatchOnTheStateFormRef(t *testing.T) {
 	host := newV3FakeHost(t)
 	ctx := context.Background()
 
-	defaultRef, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	moduleWorker := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	defaultRef, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: moduleWorker.Family.APIVersion(), Kind: moduleWorker.Kind})
 	if err != nil {
 		t.Fatal(err)
 	}
 	priorRef := v3PriorModuleWorkerRef
-	priorForm, _ := edgeformcatalog.ByKind("ModuleWorker")
+	priorForm := moduleWorker
 	resource := v3ResourceWithSecondDefinitionVersion(
 		t, "ModuleWorker", newV3TestProviderData(t, host), priorRef, priorForm, false,
 	)

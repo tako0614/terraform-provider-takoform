@@ -1,7 +1,7 @@
 # Takoform source and extraction boundary inventory
 
-Status: implementation inventory for TASK-0033 W03
-Baseline: `f71d4be4caf5a5e0c4fc97bfadeb6ebb627d1928` (2026-08-25)
+Status: W08 duplicate-authority deletion completed for TASK-0033
+Baseline: `2fbc557265bc52ac2e046b9df0be2bfa3565c3d6` (2026-08-26)
 
 This document classifies the current source graph before repository extraction.
 It is not a public contract or a publication record. The target topology is:
@@ -46,14 +46,13 @@ source graph; they are not evidence of Form Package publication.
 | `internal/topicformcatalog/`                                                                          | 2 Topic Forms and `topic.publish@1.0.0`                                                             | `takoform-forms`                                                                 | Official publisher source; consumes the exact Queue Interface ref                                                                    |
 | `internal/scheduleformcatalog/`                                                                       | 1 Schedule Form                                                                                     | `takoform-forms`                                                                 | Official publisher source; consumes exact Queue and Topic Interface refs                                                             |
 | `internal/vectorformcatalog/`                                                                         | 1 VectorIndex Form and its Interface                                                                | `takoform-forms`                                                                 | Official publisher source                                                                                                            |
-| `cmd/current-form-source/`                                                                            | Imports all eight catalogs, injects cross-family refs and emits one aggregate                       | `takoform-forms` temporarily                                                     | Replace fixed imports with publisher-owned selection data, then remove this aggregate source path at W08                             |
-| `scripts/current-form-families.mjs`                                                                   | Repeats family/Interface/Binding rosters and writes packages, candidate sets, index and Go registry | `takoform-forms` for package production                                          | Split Provider registry generation away; remove hard-coded rosters at W08                                                            |
-| `internal/standardforms/current_families.go`                                                          | Repeats the eight-family roster and 31 Provider names for docs/examples                             | `takoform-forms` for family metadata; Provider names move to Provider projection | Delete the cross-authority duplicate at W08                                                                                          |
+| `cmd/current-form-source/`                                                                            | Imports all eight catalogs, injects cross-family refs and emits the sole publisher composition       | `takoform-forms` temporarily                                                     | Retain as the sole publisher-owned composition until W13; W08 removes competing consumer/Provider paths rather than this producer     |
+| `scripts/current-form-families.mjs`                                                                   | Writes packages, candidate sets and the selected index from the Go publisher source document         | `takoform-forms` for package production                                          | Contains no independent family/contract roster and no Provider-registry producer; retain the reproducibility check until W13         |
+| `internal/standardforms/current_families.go`                                                          | Groups exact Provider projection entries for generated docs/examples                                | `terraform-provider-takoform`                                                    | Contains neither a family roster nor a Terraform-name map; documentation consumes the same projection as Provider registration       |
 | `forms/candidates/<group>/`, `forms/candidates/current-family-index.json`                             | Generated current package/candidate selection surface                                               | `takoform-forms`                                                                 | Produced only from publisher source; admitted by neutral Core using exact digests                                                    |
 | `interfaces/candidates/v1alpha1/`, `bindings/candidates/v1alpha2/`                                    | Generated current Interface and Binding candidate sets                                              | `takoform-forms`                                                                 | Produced with official family packages; interpreted by Core contracts without an official roster                                     |
-| `internal/currentformregistry/registry_v3_generated.go`                                               | Generated exact current/default and retained identity registry                                      | no final owner                                                                   | Remove at W08; Provider projection and Core Snapshot replace its two mixed responsibilities                                          |
-| `internal/currentformregistry/target_resolver.go`                                                     | Group-first exact target resolver                                                                   | `takoform` semantics                                                             | Reimplement behind Core Snapshot; remove generated/family-specific registry coupling                                                 |
-| `internal/provider/v3_current_forms.go`, `v3_resource_types.go`, `provider.go`                        | 31 typed Provider resources and current family projection                                           | `terraform-provider-takoform`                                                    | Consume an exact Provider-owned projection over Core Snapshot; never feed names back into Core/publisher source                      |
+| deleted `internal/currentformregistry/`                                                               | Former mixed current/default/retained registry and publisher resolver                               | no owner                                                                         | Removed at W08; Provider projection plus Core Snapshot own consumption, and the authoring resolver lives in `currentformmodel`        |
+| `internal/provider/v3_snapshot_assembly.go`, `v3_resource_types.go`, `provider.go`                   | 31 typed Provider resources and current family projection                                           | `terraform-provider-takoform`                                                    | Consume an exact Provider-owned projection over Core Snapshot; never feed names back into Core/publisher source                      |
 | `internal/provider/v3_lifecycle.go`, `v3_codec.go`                                                    | Provider lifecycle request/response and exact state codec dispatch                                  | `terraform-provider-takoform`                                                    | Preserve Provider 3 behavior and consume exact Snapshot identities                                                                   |
 | `scripts/takoform-v1-derive.mjs`, `cmd/portable-host-conformance/`, `internal/portableconformancev3/` | Mixed generic, family and composition conformance derivation/execution                              | split by corpus authority                                                        | Generic Core/Host corpus and runner go to `takoform`; family fixtures go to `takoform-forms`; selected composition is explicit input |
 | `conformance/takoform-v1/`                                                                            | Generated Host API v1 corpus selected from all eight current families                               | split generated output                                                           | Generic output is produced by Core conformance; each official family corpus is produced by its publisher                             |
@@ -74,17 +73,18 @@ rows above; the indirect standard-form command and the VitePress status module
 make 67 additional source/consumer paths that extraction must migrate or
 delete.
 
-### Authoring, registry and conformance consumers
+### Baseline authoring, registry and conformance consumers
 
 - `cmd/standard-form-conformance/main.go` reaches the family graph indirectly
   through `internal/standardforms`.
-- `internal/standardforms/publish_surfaces.go` and
-  `publish_surfaces_v3.go` mix current-family metadata with Provider docs and
-  examples.
+- At the baseline, `internal/standardforms/publish_surfaces.go` and
+  `publish_surfaces_v3.go` mixed current-family metadata with Provider docs and
+  examples; W08 moved the current projection authority behind Provider.
 - `internal/runtimeconformance/workerbundle/bundle.go` and
   `internal/workerauthoring/{harness,scenarios}.go` consume the current model,
   registry, Edge catalog, or generated corpus.
-- `internal/currentformregistry/{registry_v3_test,target_resolver_test}.go`,
+- The now-deleted
+  `internal/currentformregistry/{registry_v3_test,target_resolver_test}.go`,
   `internal/projectpolicy/provider_migration_test.go`,
   `spec/artifact_media_types_test.go`, and
   `modules/worker-app/variables.tf` encode current-source assumptions that
@@ -125,7 +125,7 @@ internal/provider/v3_state.go
 internal/provider/v3_w0_types_test.go
 ```
 
-These remain Provider-owned. W07 replaces their current catalog/registry input
+These remain Provider-owned. W08 replaced their current catalog/registry input
 with a Provider-owned projection over Snapshot; it does not move Terraform
 semantics into Core.
 
@@ -160,11 +160,12 @@ formpackage
 
 currentformmodel
     -> per-family catalogs
-    -> cmd/current-form-source (fixed eight-family aggregate)
-    -> scripts/current-form-families.mjs (second fixed roster)
-    -> packages / candidate sets / exact generated registry
-       -> Provider projection + codecs
-       -> conformance derivation + reference Host
+    -> cmd/current-form-source (sole publisher composition)
+    -> scripts/current-form-families.mjs (source-document projection)
+    -> packages / candidate sets / selected index
+       -> currentformselection -> immutable Snapshot
+          -> Provider projection + codecs
+          -> conformance derivation + reference Host
 
 retainededgeformcatalog + frozen bytes
     -> Provider retained codec/state history only
@@ -184,31 +185,31 @@ takoform-forms publisher
     -> the same Core/verifier path as an external publisher
 ```
 
-## Duplicate truths to eliminate
+## W08 duplicate-authority result
 
-1. Family membership/order is repeated in each catalog, the aggregate Go
-   command, `internal/standardforms/current_families.go`, JavaScript
-   `familySpecs`, and `providerV3CurrentFamilies`.
-2. Interface and Binding membership is repeated in family catalogs, the
-   aggregate command, JavaScript constant tables and generated candidate sets.
-3. Provider Terraform names are repeated in standard-form documentation data
-   and `v3_resource_types.go`; they must have one Provider-owned projection.
-4. Current exact identities are projected into both candidate artifacts and a
-   generated Go registry; Snapshot must consume the artifacts directly.
-5. Generic Host rules and Edge-specific family semantics coexist in the
-   current conformance implementation and must be assigned to different
-   corpora.
+1. `cmd/current-form-source` is the one remaining publisher composition path;
+   its source document carries all family, Form, Interface and Binding metadata.
+2. `scripts/current-form-families.mjs` derives every selected artifact from
+   that document and no longer emits a Provider registry.
+3. `internal/currentformselection` verifies the digest-pinned selected graph
+   and compiles one neutral immutable Snapshot without catalog imports.
+4. Provider registration, state dispatch, codecs and Terraform naming consume
+   one embedded Provider projection. Generated docs consume that projection as
+   well and keep no roster or name map.
+5. reference Host and worker conformance acquire exact current identities from
+   `currentformselection`; the mixed `internal/currentformregistry` package is
+   deleted.
+6. the publisher-only group-first target resolver lives in
+   `internal/currentformmodel`; it is not a neutral Core public API.
 
 Generated files are evidence and distribution surfaces, not independent
 authoring authorities. Retained history is intentionally duplicated as frozen
 bytes and append-only ledgers; it is not regenerated or deduplicated into the
 current family source.
 
-## W03 exit result
+## W08 exit result
 
-Every current family source category, direct matching consumer, generated
-public surface, Provider edge, conformance edge and retained-history surface at
-baseline `f71d4be4` now has a final authority and migration treatment. The fixed
-roster locations are classified for W08 deletion. W04-W07 may therefore prove
-the replacement artifact path; this inventory does not itself open W08 or
-authorize physical repository extraction.
+The competing consumer and Provider rosters, generated registry, aggregate
+consumer lookup and dual writers are removed. Official catalog and rendering
+source remains behind one publisher composition until W13; physical repository
+extraction remains W16 work rather than an implicit consequence of W08.

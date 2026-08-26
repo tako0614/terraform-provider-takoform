@@ -21,14 +21,22 @@ import (
 )
 
 type sourceDocument struct {
-	Families   []sourceFamily   `json:"families"`
-	Interfaces []sourceContract `json:"interfaces"`
-	Bindings   []sourceContract `json:"bindings"`
+	PackageAPIVersion        string           `json:"packageApiVersion"`
+	FamilyIndexFormat        string           `json:"familyIndexFormat"`
+	FormMaturity             string           `json:"formMaturity"`
+	PublicationStatus        string           `json:"publicationStatus"`
+	InterfaceAuthoringSource string           `json:"interfaceAuthoringSource"`
+	BindingAuthoringSource   string           `json:"bindingAuthoringSource"`
+	Families                 []sourceFamily   `json:"families"`
+	Interfaces               []sourceContract `json:"interfaces"`
+	Bindings                 []sourceContract `json:"bindings"`
 }
 
 type sourceFamily struct {
-	Group string          `json:"group"`
-	Forms json.RawMessage `json:"forms"`
+	Group           string          `json:"group"`
+	AuthoringSource string          `json:"authoringSource"`
+	AuthoringPolicy string          `json:"authoringPolicy"`
+	Forms           json.RawMessage `json:"forms"`
 }
 
 type sourceContract struct {
@@ -56,13 +64,25 @@ func main() {
 }
 
 func renderSource() (sourceDocument, error) {
-	var document sourceDocument
-	appendFamily := func(group string, forms any) error {
+	document := sourceDocument{
+		PackageAPIVersion:        "packages.forms.takoform.com/v1alpha5",
+		FamilyIndexFormat:        "takoform.current-family-index@v1",
+		FormMaturity:             "experimental",
+		PublicationStatus:        "unpublished",
+		InterfaceAuthoringSource: "cmd/current-form-source",
+		BindingAuthoringSource:   "cmd/current-form-source",
+	}
+	appendFamily := func(group, authoringSource string, forms any) error {
 		raw, err := json.Marshal(forms)
 		if err != nil {
 			return fmt.Errorf("marshal %s source Forms: %w", group, err)
 		}
-		document.Families = append(document.Families, sourceFamily{Group: group, Forms: raw})
+		document.Families = append(document.Families, sourceFamily{
+			Group:           group,
+			AuthoringSource: authoringSource,
+			AuthoringPolicy: "service-shape-preserving-contract",
+			Forms:           raw,
+		})
 		return nil
 	}
 	appendContracts := func(destination *[]sourceContract, contracts any) error {
@@ -86,7 +106,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Edge Forms: %w", err)
 	}
-	if err := appendFamily(edgeformcatalog.Family.APIVersion(), edgeForms); err != nil {
+	if err := appendFamily(edgeformcatalog.Family.APIVersion(), "internal/edgeformcatalog", edgeForms); err != nil {
 		return sourceDocument{}, err
 	}
 	edgeInterfaces, err := edgeformcatalog.RenderInterfaces()
@@ -108,7 +128,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Function Forms: %w", err)
 	}
-	if err := appendFamily(functionformcatalog.Family.APIVersion(), functionForms); err != nil {
+	if err := appendFamily(functionformcatalog.Family.APIVersion(), "internal/functionformcatalog", functionForms); err != nil {
 		return sourceDocument{}, err
 	}
 	functionInterfaces, err := functionformcatalog.RenderInterfaces()
@@ -123,7 +143,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Container Forms: %w", err)
 	}
-	if err := appendFamily(containerformcatalog.Family.APIVersion(), containerForms); err != nil {
+	if err := appendFamily(containerformcatalog.Family.APIVersion(), "internal/containerformcatalog", containerForms); err != nil {
 		return sourceDocument{}, err
 	}
 	containerInterfaces, err := containerformcatalog.RenderInterfaces()
@@ -138,7 +158,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Queue Forms: %w", err)
 	}
-	if err := appendFamily(queueformcatalog.Family.APIVersion(), queueForms); err != nil {
+	if err := appendFamily(queueformcatalog.Family.APIVersion(), "internal/queueformcatalog", queueForms); err != nil {
 		return sourceDocument{}, err
 	}
 	queueInterfaces, err := queueformcatalog.RenderInterfaces()
@@ -157,7 +177,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Table Forms: %w", err)
 	}
-	if err := appendFamily(tableformcatalog.Family.APIVersion(), tableForms); err != nil {
+	if err := appendFamily(tableformcatalog.Family.APIVersion(), "internal/tableformcatalog", tableForms); err != nil {
 		return sourceDocument{}, err
 	}
 	tableInterfaces, err := tableformcatalog.RenderInterfaces()
@@ -172,7 +192,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Vector Forms: %w", err)
 	}
-	if err := appendFamily(vectorformcatalog.Family.APIVersion(), vectorForms); err != nil {
+	if err := appendFamily(vectorformcatalog.Family.APIVersion(), "internal/vectorformcatalog", vectorForms); err != nil {
 		return sourceDocument{}, err
 	}
 	vectorInterfaces, err := vectorformcatalog.RenderInterfaces()
@@ -187,7 +207,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Topic Forms: %w", err)
 	}
-	if err := appendFamily(topicformcatalog.Family.APIVersion(), topicForms); err != nil {
+	if err := appendFamily(topicformcatalog.Family.APIVersion(), "internal/topicformcatalog", topicForms); err != nil {
 		return sourceDocument{}, err
 	}
 	topicInterfaces, err := topicformcatalog.RenderInterfaces()
@@ -206,7 +226,7 @@ func renderSource() (sourceDocument, error) {
 	if err != nil {
 		return sourceDocument{}, fmt.Errorf("render Schedule Forms: %w", err)
 	}
-	if err := appendFamily(scheduleformcatalog.Family.APIVersion(), scheduleForms); err != nil {
+	if err := appendFamily(scheduleformcatalog.Family.APIVersion(), "internal/scheduleformcatalog", scheduleForms); err != nil {
 		return sourceDocument{}, err
 	}
 

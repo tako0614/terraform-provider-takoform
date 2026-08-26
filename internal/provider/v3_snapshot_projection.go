@@ -9,7 +9,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 const (
@@ -36,12 +35,12 @@ const (
 // HCL names, collection/set choices, provider defaults, validators or the
 // retained state codec declarations shipped by Provider 3.0.0.
 type v3ProviderProjection struct {
-	Format         string                      `json:"format"`
-	HostAPI        string                      `json:"hostApi"`
-	Forms          []v3ProjectedForm           `json:"forms"`
-	Resources      []v3ProjectedResource       `json:"resources"`
-	DefaultCreates []currentformregistry.V3Ref `json:"defaultCreates"`
-	ReadableRefs   []currentformregistry.V3Ref `json:"readableRefs"`
+	Format         string                `json:"format"`
+	HostAPI        string                `json:"hostApi"`
+	Forms          []v3ProjectedForm     `json:"forms"`
+	Resources      []v3ProjectedResource `json:"resources"`
+	DefaultCreates []v3FormRef           `json:"defaultCreates"`
+	ReadableRefs   []v3FormRef           `json:"readableRefs"`
 }
 
 // v3ProjectedForm owns the exact authoring declaration used by Terraform.
@@ -49,10 +48,10 @@ type v3ProviderProjection struct {
 // entry additionally carries its immutable canonical Definition because it is
 // outside the current 31-package Snapshot but remains state-readable history.
 type v3ProjectedForm struct {
-	Generation string                    `json:"generation"`
-	Ref        currentformregistry.V3Ref `json:"ref"`
-	Form       model.Form                `json:"form"`
-	Definition json.RawMessage           `json:"definition,omitempty"`
+	Generation string          `json:"generation"`
+	Ref        v3FormRef       `json:"ref"`
+	Form       model.Form      `json:"form"`
+	Definition json.RawMessage `json:"definition,omitempty"`
 }
 
 // v3ProjectedResource is one exact FormRef-to-Terraform mapping. Register is
@@ -60,11 +59,11 @@ type v3ProjectedForm struct {
 // readable refs reuse a resource type solely for exact state dispatch and are
 // never separately registered.
 type v3ProjectedResource struct {
-	Ref               currentformregistry.V3Ref `json:"ref"`
-	ResourceType      string                    `json:"resourceType"`
-	Register          bool                      `json:"register"`
-	RegistrationOrder *int                      `json:"registrationOrder,omitempty"`
-	Artifact          *v3ArtifactProjection     `json:"artifact,omitempty"`
+	Ref               v3FormRef             `json:"ref"`
+	ResourceType      string                `json:"resourceType"`
+	Register          bool                  `json:"register"`
+	RegistrationOrder *int                  `json:"registrationOrder,omitempty"`
+	Artifact          *v3ArtifactProjection `json:"artifact,omitempty"`
 }
 
 // v3ArtifactProjection selects the bounded Provider-only local authoring
@@ -126,14 +125,14 @@ func (r *v3FormResource) v3ArtifactBackedRevision() bool {
 
 type v3ProjectionIndex struct {
 	document           v3ProviderProjection
-	forms              map[currentformregistry.ExactFormKey]v3ProjectedForm
-	resources          map[currentformregistry.ExactFormKey]v3ProjectedResource
-	defaults           map[currentformregistry.GroupKind]currentformregistry.V3Ref
-	readable           map[currentformregistry.ExactFormKey]currentformregistry.V3Ref
-	currentOrder       []currentformregistry.ExactFormKey
-	currentKeys        map[currentformregistry.ExactFormKey]struct{}
-	retainedKeys       map[currentformregistry.ExactFormKey]struct{}
-	unreadableRetained map[currentformregistry.ExactFormKey]struct{}
+	forms              map[v3ExactFormKey]v3ProjectedForm
+	resources          map[v3ExactFormKey]v3ProjectedResource
+	defaults           map[v3GroupKind]v3FormRef
+	readable           map[v3ExactFormKey]v3FormRef
+	currentOrder       []v3ExactFormKey
+	currentKeys        map[v3ExactFormKey]struct{}
+	retainedKeys       map[v3ExactFormKey]struct{}
+	unreadableRetained map[v3ExactFormKey]struct{}
 }
 
 var projectedTerraformResourceTypePattern = regexp.MustCompile(`^takoform_[a-z0-9_]+$`)
@@ -151,13 +150,13 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 	}
 	index := &v3ProjectionIndex{
 		document:           document,
-		forms:              make(map[currentformregistry.ExactFormKey]v3ProjectedForm, len(document.Forms)),
-		resources:          make(map[currentformregistry.ExactFormKey]v3ProjectedResource, len(document.Resources)),
-		defaults:           make(map[currentformregistry.GroupKind]currentformregistry.V3Ref, len(document.DefaultCreates)),
-		readable:           make(map[currentformregistry.ExactFormKey]currentformregistry.V3Ref, len(document.ReadableRefs)),
-		currentKeys:        make(map[currentformregistry.ExactFormKey]struct{}),
-		retainedKeys:       make(map[currentformregistry.ExactFormKey]struct{}),
-		unreadableRetained: make(map[currentformregistry.ExactFormKey]struct{}),
+		forms:              make(map[v3ExactFormKey]v3ProjectedForm, len(document.Forms)),
+		resources:          make(map[v3ExactFormKey]v3ProjectedResource, len(document.Resources)),
+		defaults:           make(map[v3GroupKind]v3FormRef, len(document.DefaultCreates)),
+		readable:           make(map[v3ExactFormKey]v3FormRef, len(document.ReadableRefs)),
+		currentKeys:        make(map[v3ExactFormKey]struct{}),
+		retainedKeys:       make(map[v3ExactFormKey]struct{}),
+		unreadableRetained: make(map[v3ExactFormKey]struct{}),
 	}
 
 	for position := range document.Forms {
@@ -211,8 +210,8 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 		)
 	}
 
-	registeredOrders := make(map[int]currentformregistry.ExactFormKey)
-	registeredTypes := make(map[string]currentformregistry.ExactFormKey)
+	registeredOrders := make(map[int]v3ExactFormKey)
+	registeredTypes := make(map[string]v3ExactFormKey)
 	artifactRules, workerArtifactRules, fileArtifactRules := 0, 0, 0
 	for position, resource := range document.Resources {
 		key := resource.Ref.ExactKey()
@@ -271,7 +270,7 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 	if len(registeredOrders) != len(index.currentKeys) {
 		return nil, fmt.Errorf("takoform provider: projection has %d registered resource types for %d current exact refs", len(registeredOrders), len(index.currentKeys))
 	}
-	index.currentOrder = make([]currentformregistry.ExactFormKey, len(registeredOrders))
+	index.currentOrder = make([]v3ExactFormKey, len(registeredOrders))
 	for order := range index.currentOrder {
 		key, ok := registeredOrders[order]
 		if !ok {
@@ -356,7 +355,7 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 	return index, nil
 }
 
-func validateProjectedRef(ref currentformregistry.V3Ref) error {
+func validateProjectedRef(ref v3FormRef) error {
 	if strings.TrimSpace(ref.APIVersion) == "" || strings.TrimSpace(ref.Kind) == "" || strings.TrimSpace(ref.DefinitionVersion) == "" {
 		return fmt.Errorf("exact FormRef is incomplete: %#v", ref)
 	}
@@ -476,37 +475,34 @@ func normalizeProjectedValue(value any) any {
 	}
 }
 
-// v3FormRegistry is the provider-local exact-ref seam. The legacy generated
-// registry and the projection-built registry both implement it during bounded
-// W02-W07 parity; W08 removes the former assembly path.
+// v3FormRegistry is the provider-local exact-ref seam backed by the immutable
+// Provider projection. Form identity is always resolved through this seam;
+// the removed generated registry is not a runtime fallback.
 type v3FormRegistry interface {
-	DefaultCreate(currentformregistry.GroupKind) (currentformregistry.V3Ref, error)
-	Lookup(currentformregistry.ExactFormKey) (currentformregistry.V3Ref, bool)
-	SupportedRefs() []currentformregistry.V3Ref
-	SupportedRefsFor(currentformregistry.GroupKind) []currentformregistry.V3Ref
-	SupportedRefsForKind(string) []currentformregistry.V3Ref
+	DefaultCreate(v3GroupKind) (v3FormRef, error)
+	Lookup(v3ExactFormKey) (v3FormRef, bool)
+	SupportedRefs() []v3FormRef
+	SupportedRefsFor(v3GroupKind) []v3FormRef
+	SupportedRefsForKind(string) []v3FormRef
 }
 
 type v3ProjectedRegistry struct {
-	defaultCreates map[currentformregistry.GroupKind]currentformregistry.ExactFormKey
-	supported      map[currentformregistry.ExactFormKey]currentformregistry.V3Ref
+	defaultCreates map[v3GroupKind]v3ExactFormKey
+	supported      map[v3ExactFormKey]v3FormRef
 }
 
-func v3RegistryWithRef(registry v3FormRegistry, ref currentformregistry.V3Ref, asDefaultCreate bool) (v3FormRegistry, error) {
-	switch typed := registry.(type) {
-	case *currentformregistry.V3Registry:
-		return typed.Register(ref, asDefaultCreate)
-	case *v3ProjectedRegistry:
-		return typed.withRef(ref, asDefaultCreate)
-	default:
+func v3RegistryWithRef(registry v3FormRegistry, ref v3FormRef, asDefaultCreate bool) (v3FormRegistry, error) {
+	typed, ok := registry.(*v3ProjectedRegistry)
+	if !ok {
 		return nil, fmt.Errorf("takoform: unsupported exact Form registry implementation %T", registry)
 	}
+	return typed.withRef(ref, asDefaultCreate)
 }
 
 func newV3ProjectedRegistry(index *v3ProjectionIndex) *v3ProjectedRegistry {
 	registry := &v3ProjectedRegistry{
-		defaultCreates: make(map[currentformregistry.GroupKind]currentformregistry.ExactFormKey, len(index.defaults)),
-		supported:      make(map[currentformregistry.ExactFormKey]currentformregistry.V3Ref, len(index.forms)),
+		defaultCreates: make(map[v3GroupKind]v3ExactFormKey, len(index.defaults)),
+		supported:      make(map[v3ExactFormKey]v3FormRef, len(index.forms)),
 	}
 	for groupKind, ref := range index.defaults {
 		registry.defaultCreates[groupKind] = ref.ExactKey()
@@ -517,37 +513,37 @@ func newV3ProjectedRegistry(index *v3ProjectionIndex) *v3ProjectedRegistry {
 	return registry
 }
 
-func (registry *v3ProjectedRegistry) DefaultCreate(groupKind currentformregistry.GroupKind) (currentformregistry.V3Ref, error) {
+func (registry *v3ProjectedRegistry) DefaultCreate(groupKind v3GroupKind) (v3FormRef, error) {
 	key, ok := registry.defaultCreates[groupKind]
 	if !ok {
-		return currentformregistry.V3Ref{}, fmt.Errorf("takoform: provider v3 has no default create Form for %s kind %q", groupKind.APIVersion, groupKind.Kind)
+		return v3FormRef{}, fmt.Errorf("takoform: provider v3 has no default create Form for %s kind %q", groupKind.APIVersion, groupKind.Kind)
 	}
 	ref, ok := registry.supported[key]
 	if !ok {
-		return currentformregistry.V3Ref{}, fmt.Errorf("takoform: default create Form %s is not in the supported set", key)
+		return v3FormRef{}, fmt.Errorf("takoform: default create Form %s is not in the supported set", key)
 	}
 	return ref, nil
 }
 
-func (registry *v3ProjectedRegistry) Lookup(key currentformregistry.ExactFormKey) (currentformregistry.V3Ref, bool) {
+func (registry *v3ProjectedRegistry) Lookup(key v3ExactFormKey) (v3FormRef, bool) {
 	ref, ok := registry.supported[key]
 	return ref, ok
 }
 
-func (registry *v3ProjectedRegistry) SupportedRefs() []currentformregistry.V3Ref {
-	return registry.sortedRefs(func(currentformregistry.ExactFormKey) bool { return true })
+func (registry *v3ProjectedRegistry) SupportedRefs() []v3FormRef {
+	return registry.sortedRefs(func(v3ExactFormKey) bool { return true })
 }
 
-func (registry *v3ProjectedRegistry) SupportedRefsFor(groupKind currentformregistry.GroupKind) []currentformregistry.V3Ref {
-	return registry.sortedRefs(func(key currentformregistry.ExactFormKey) bool { return key.GroupKind() == groupKind })
+func (registry *v3ProjectedRegistry) SupportedRefsFor(groupKind v3GroupKind) []v3FormRef {
+	return registry.sortedRefs(func(key v3ExactFormKey) bool { return key.GroupKind() == groupKind })
 }
 
-func (registry *v3ProjectedRegistry) SupportedRefsForKind(kind string) []currentformregistry.V3Ref {
-	return registry.sortedRefs(func(key currentformregistry.ExactFormKey) bool { return key.Kind == kind })
+func (registry *v3ProjectedRegistry) SupportedRefsForKind(kind string) []v3FormRef {
+	return registry.sortedRefs(func(key v3ExactFormKey) bool { return key.Kind == kind })
 }
 
-func (registry *v3ProjectedRegistry) sortedRefs(keep func(currentformregistry.ExactFormKey) bool) []currentformregistry.V3Ref {
-	refs := make([]currentformregistry.V3Ref, 0, len(registry.supported))
+func (registry *v3ProjectedRegistry) sortedRefs(keep func(v3ExactFormKey) bool) []v3FormRef {
+	refs := make([]v3FormRef, 0, len(registry.supported))
 	for key, ref := range registry.supported {
 		if keep(key) {
 			refs = append(refs, ref)
@@ -569,13 +565,13 @@ func (registry *v3ProjectedRegistry) sortedRefs(keep func(currentformregistry.Ex
 	return refs
 }
 
-func (registry *v3ProjectedRegistry) withRef(ref currentformregistry.V3Ref, asDefaultCreate bool) (*v3ProjectedRegistry, error) {
+func (registry *v3ProjectedRegistry) withRef(ref v3FormRef, asDefaultCreate bool) (*v3ProjectedRegistry, error) {
 	if err := validateProjectedRef(ref); err != nil {
 		return nil, err
 	}
 	next := &v3ProjectedRegistry{
-		defaultCreates: make(map[currentformregistry.GroupKind]currentformregistry.ExactFormKey, len(registry.defaultCreates)+1),
-		supported:      make(map[currentformregistry.ExactFormKey]currentformregistry.V3Ref, len(registry.supported)+1),
+		defaultCreates: make(map[v3GroupKind]v3ExactFormKey, len(registry.defaultCreates)+1),
+		supported:      make(map[v3ExactFormKey]v3FormRef, len(registry.supported)+1),
 	}
 	for groupKind, key := range registry.defaultCreates {
 		next.defaultCreates[groupKind] = key

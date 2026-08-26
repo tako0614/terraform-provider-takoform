@@ -22,10 +22,9 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
-func setV3FormIdentityState(ctx context.Context, state *tfsdk.State, ref currentformregistry.V3Ref) diag.Diagnostics {
+func setV3FormIdentityState(ctx context.Context, state *tfsdk.State, ref v3FormRef) diag.Diagnostics {
 	var diags diag.Diagnostics
 	diags.Append(state.SetAttribute(ctx, path.Root("form_api_version"), types.StringValue(ref.APIVersion))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("form_kind"), types.StringValue(ref.Kind))...)
@@ -482,8 +481,8 @@ func (identity v3StateIdentity) formRef() (v3FormRefValue, bool) {
 
 // exactKey is the registry lookup key of one recorded identity: the WHOLE
 // four-member tuple, never a group+kind prefix of it.
-func (value v3FormRefValue) exactKey() currentformregistry.ExactFormKey {
-	return currentformregistry.ExactFormKey{
+func (value v3FormRefValue) exactKey() v3ExactFormKey {
+	return v3ExactFormKey{
 		APIVersion:        value.APIVersion,
 		Kind:              value.Kind,
 		DefinitionVersion: value.DefinitionVersion,

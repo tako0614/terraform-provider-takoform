@@ -96,7 +96,8 @@ const PROVIDER_IMPLEMENTATION_ROOTS = Object.freeze([
   "formpackage",
   "internal/clientv3",
   "internal/currentformmodel",
-  "internal/currentformregistry",
+  "internal/currentformselection",
+  "internal/currentformsnapshot",
   "internal/provider",
   "internal/retainededgeformcatalog",
   "internal/workerauthoring",
@@ -120,7 +121,8 @@ const PROVIDER_COMMANDS = Object.freeze([
     "test",
     "-count=1",
     "./internal/provider",
-    "./internal/currentformregistry",
+    "./internal/currentformselection",
+    "./internal/currentformsnapshot",
     "./internal/clientv3",
   ]),
   Object.freeze([
@@ -135,9 +137,9 @@ const PROVIDER_COMMANDS = Object.freeze([
   ]),
 ]);
 export const PROVIDER_COMPATIBILITY_TESTS = Object.freeze([
-  "TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet",
+  "TestProviderV3ReleaseLedgerMatchesExactProviderProjection",
   "TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState",
-  "TestProviderV211IdentityLedgerIsEmbedded",
+  "TestV3Provider211RetainedGoldenLocksImmutableHistory",
   "TestRetainedProvider211DefinitionsRemainByteIdentical",
   "TestV3CodecTableCoversEverySupportedRef",
   "TestV3PerRefCodecEncodesTheStateRefFieldSet",
@@ -150,7 +152,8 @@ const PROVIDER_COMPATIBILITY_COMMAND = Object.freeze([
   "-json",
   "-count=1",
   "./internal/provider",
-  "./internal/currentformregistry",
+  "./internal/currentformselection",
+  "./internal/currentformsnapshot",
   "-run",
   `^(?:${PROVIDER_COMPATIBILITY_TESTS.join("|")})$`,
 ]);
