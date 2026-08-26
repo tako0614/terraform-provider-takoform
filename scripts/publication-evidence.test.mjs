@@ -123,7 +123,7 @@ function makeCanonicalClone(source, commit, prefix = "takoform-publication-evide
 }
 
 function makeClone() {
-  return makeCanonicalClone(ROOT, DOCUMENT.candidateBaseline.commit);
+  return makeCanonicalClone(ROOT, git(ROOT, "rev-parse", "HEAD"));
 }
 
 function slug(kind) {
@@ -463,7 +463,7 @@ process.stdout.write(JSON.stringify(report) + "\\n");
 }
 
 function buildSourceFixture(options = {}) {
-  const root = makeClone();
+  const root = makeCanonicalClone(ROOT, DOCUMENT.candidateBaseline.commit);
   // The future fixture must be self-verifying: do not let an out-of-tree copy
   // of the verifier be the only reason its evidence can close.
   writeText(
@@ -773,6 +773,30 @@ describe("canonical repository authority", () => {
     expect(() => validatePublicationEvidence(DOCUMENT, { repositoryRoot: root })).toThrow(
       /not the canonical Takoform repository/,
     );
+  });
+
+  test("accepts source evidence closed against the canonical current HEAD", () => {
+    const root = makeClone();
+    const currentHead = git(ROOT, "rev-parse", "HEAD");
+    const changed = clone(DOCUMENT);
+    changed.evidence.specification.sourceSnapshot =
+      deriveSpecificationSourceSnapshot(ROOT, currentHead);
+    const raw = `${JSON.stringify(changed, null, 2)}\n`;
+    writeText(root, "spec/publication-evidence.json", raw);
+    for (const relativePath of PUBLICATION_EVIDENCE_PROJECTION_PATHS) {
+      writeText(root, relativePath, raw);
+    }
+    git(
+      root,
+      "add",
+      "spec/publication-evidence.json",
+      ...PUBLICATION_EVIDENCE_PROJECTION_PATHS,
+    );
+    git(root, "commit", "-m", "test: close source evidence on canonical HEAD");
+    expect(() => validatePublicationEvidence(changed, {
+      repositoryRoot: root,
+      releaseTrack: SPECIFICATION_TRACK,
+    })).not.toThrow();
   });
 
   test("accepts only the CI checkout's disabled automatic Git GC setting", () => {
