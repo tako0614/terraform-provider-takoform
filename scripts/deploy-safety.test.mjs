@@ -1008,9 +1008,11 @@ describe("owner gate private mutable state and cleanup", () => {
     const { fixture, snapshot } = toolSnapshot();
     const state = createManagedGateState(fixture.managedHome);
     const moduleDirectory = join(state.gomodcache, "example.invalid", "module");
-    mkdirSync(moduleDirectory, { recursive: true, mode: 0o500 });
+    mkdirSync(moduleDirectory, { recursive: true, mode: 0o700 });
+    chmodSync(moduleDirectory, 0o500);
     chmodSync(dirname(moduleDirectory), 0o500);
     expect(lstatSync(snapshot.go.root).mode & 0o7777).toBe(0o500);
+    expect(lstatSync(dirname(moduleDirectory)).mode & 0o7777).toBe(0o500);
     expect(lstatSync(moduleDirectory).mode & 0o7777).toBe(0o500);
 
     prepareManagedHomeForRemoval(fixture.managedHome);
