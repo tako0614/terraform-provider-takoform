@@ -237,7 +237,13 @@ export function assertSafeRepositoryGitConfiguration(raw, canonicalOrigin) {
   if (values.get("core.bare") !== "false") {
     throw new Error("publication requires a non-bare repository");
   }
-  if (values.get("remote.origin.url") !== canonicalOrigin) {
+  const canonicalHttpsOrigins = new Set([
+    canonicalOrigin,
+    canonicalOrigin.endsWith(".git")
+      ? canonicalOrigin.slice(0, -4)
+      : canonicalOrigin,
+  ]);
+  if (!canonicalHttpsOrigins.has(values.get("remote.origin.url"))) {
     throw new Error("repository origin URL is not the canonical URL");
   }
   if (
