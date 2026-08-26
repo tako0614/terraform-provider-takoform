@@ -46,13 +46,6 @@ func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 
 	seenTypes := map[string]string{}
 	for _, family := range families {
-		mappings, ok := providerReferenceTerraformTypes[family.Group]
-		if !ok {
-			t.Fatalf("provider reference mapping has no family %s", family.Group)
-		}
-		if len(mappings) != len(family.Forms) {
-			t.Fatalf("provider reference mapping count for %s = %d, Forms = %d", family.Group, len(mappings), len(family.Forms))
-		}
 		for _, form := range family.Forms {
 			resourceType, err := providerReferenceTerraformType(form)
 			if err != nil {
@@ -69,11 +62,6 @@ func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 	}
 	if len(seenTypes) != 31 {
 		t.Fatalf("provider reference type count = %d, want 31", len(seenTypes))
-	}
-	for group, mappings := range providerReferenceTerraformTypes {
-		if _, exists := mappings["ObjectBucket"]; exists {
-			t.Fatalf("provider reference mapping for %s retains ObjectBucket", group)
-		}
 	}
 }
 

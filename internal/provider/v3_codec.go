@@ -30,13 +30,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // v3FormCodec is one exact FormRef together with the Form declaration that
 // decodes state written under it and encodes a spec for it.
 type v3FormCodec struct {
-	Ref           currentformregistry.V3Ref
+	Ref           v3FormRef
 	Form          model.Form
 	DesiredSchema map[string]any
 }
@@ -51,20 +50,20 @@ type v3CodecDeclaration struct {
 // returns a copy, so a build's own table can never be reshaped at a distance.
 type v3CodecTable struct {
 	registry v3FormRegistry
-	codecs   map[currentformregistry.ExactFormKey]v3CodecDeclaration
+	codecs   map[v3ExactFormKey]v3CodecDeclaration
 }
 
 // withCodec returns a copy of the table that also supports ref, decoded and
 // encoded by form. asDefaultCreate makes it the create target of its
 // group+kind.
-func (t *v3CodecTable) withCodec(ref currentformregistry.V3Ref, form model.Form, asDefaultCreate bool) (*v3CodecTable, error) {
+func (t *v3CodecTable) withCodec(ref v3FormRef, form model.Form, asDefaultCreate bool) (*v3CodecTable, error) {
 	registry, err := v3RegistryWithRef(t.registry, ref, asDefaultCreate)
 	if err != nil {
 		return nil, err
 	}
 	next := &v3CodecTable{
 		registry: registry,
-		codecs:   make(map[currentformregistry.ExactFormKey]v3CodecDeclaration, len(t.codecs)+1),
+		codecs:   make(map[v3ExactFormKey]v3CodecDeclaration, len(t.codecs)+1),
 	}
 	for key, existing := range t.codecs {
 		next.codecs[key] = existing
@@ -79,7 +78,7 @@ func (t *v3CodecTable) withCodec(ref currentformregistry.V3Ref, form model.Form,
 
 // defaultCreate resolves the codec a NEW resource of one kind is created
 // under.
-func (t *v3CodecTable) defaultCreate(groupKind currentformregistry.GroupKind) (v3FormCodec, error) {
+func (t *v3CodecTable) defaultCreate(groupKind v3GroupKind) (v3FormCodec, error) {
 	ref, err := t.registry.DefaultCreate(groupKind)
 	if err != nil {
 		return v3FormCodec{}, err
@@ -96,7 +95,7 @@ func (t *v3CodecTable) defaultCreate(groupKind currentformregistry.GroupKind) (v
 // written before a Form line advanced stays readable. A miss is fatal by
 // design: the caller must not query another identity of the same kind and read
 // its 404 as deletion.
-func (t *v3CodecTable) forStateKey(key currentformregistry.ExactFormKey) (v3FormCodec, bool) {
+func (t *v3CodecTable) forStateKey(key v3ExactFormKey) (v3FormCodec, bool) {
 	ref, supported := t.registry.Lookup(key)
 	if !supported {
 		return v3FormCodec{}, false
@@ -145,9 +144,9 @@ func (v3SchemaOnlyTargetResolver) ResolveResourceTarget(target model.ResourceTar
 // knownRefsForKind is every exact identity of one kind this build can serve —
 // exactly what a fail-closed diagnostic must name so the operator can see which
 // provider version to pin.
-func (t *v3CodecTable) knownRefsForKind(kind string) []currentformregistry.V3Ref {
+func (t *v3CodecTable) knownRefsForKind(kind string) []v3FormRef {
 	all := t.registry.SupportedRefsForKind(kind)
-	out := make([]currentformregistry.V3Ref, 0, len(all))
+	out := make([]v3FormRef, 0, len(all))
 	for _, ref := range all {
 		if _, known := t.codecs[ref.ExactKey()]; known {
 			out = append(out, ref)
@@ -157,7 +156,7 @@ func (t *v3CodecTable) knownRefsForKind(kind string) []currentformregistry.V3Ref
 }
 
 // v3RenderRefs renders a supported-identity list for a diagnostic.
-func v3RenderRefs(refs []currentformregistry.V3Ref) string {
+func v3RenderRefs(refs []v3FormRef) string {
 	if len(refs) == 0 {
 		return "none"
 	}
@@ -173,10 +172,10 @@ func v3RenderRefs(refs []currentformregistry.V3Ref) string {
 // ref of that kind the build knows, and it never proposes a substitute: reading
 // the resource under a different exact FormRef would reinterpret one contract
 // as another, and a 404 from that query would then look like deletion.
-func v3UnsupportedStateRefError(kind string, got v3FormRefValue, known []currentformregistry.V3Ref) diag.Diagnostic {
+func v3UnsupportedStateRefError(kind string, got v3FormRefValue, known []v3FormRef) diag.Diagnostic {
 	return v3Diagnostic{
 		Summary: "State Form identity is not supported by this provider",
-		Ref: currentformregistry.V3Ref{
+		Ref: v3FormRef{
 			APIVersion: got.APIVersion, Kind: got.Kind,
 			DefinitionVersion: got.DefinitionVersion, SchemaDigest: got.SchemaDigest,
 		},

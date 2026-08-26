@@ -13,7 +13,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformsnapshot"
 )
 
@@ -76,9 +75,8 @@ func mustProviderV3SnapshotAssembly() *v3ProviderAssembly {
 
 // providerV3CurrentForms, v3TerraformResourceTypes, and v3Codecs are the
 // production dependency seams used by Provider 3 behavior and its immutable
-// goldens. They all resolve through the same once-verified embedded assembly;
-// the catalog-backed counterparts are named legacy* and remain comparison-only
-// until W08 removes them.
+// goldens. They all resolve through the same once-verified embedded assembly.
+// W08 deleted the former catalog-backed comparison implementations.
 func providerV3CurrentForms() []model.Form {
 	forms := mustProviderV3SnapshotAssembly().currentForms
 	return append([]model.Form(nil), forms...)
@@ -206,8 +204,8 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 
 	registry := newV3ProjectedRegistry(projection)
 	resourceTypes := &v3ResourceTypeRegistry{
-		byRef:         make(map[currentformregistry.ExactFormKey]string, len(projection.resources)),
-		artifactByRef: make(map[currentformregistry.ExactFormKey]*v3ArtifactProjection),
+		byRef:         make(map[v3ExactFormKey]string, len(projection.resources)),
+		artifactByRef: make(map[v3ExactFormKey]*v3ArtifactProjection),
 	}
 	for key, resource := range projection.resources {
 		resourceTypes.byRef[key] = resource.ResourceType
@@ -215,7 +213,7 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 			resourceTypes.artifactByRef[key] = cloneV3ArtifactProjection(resource.Artifact)
 		}
 	}
-	codecs := &v3CodecTable{registry: registry, codecs: make(map[currentformregistry.ExactFormKey]v3CodecDeclaration, len(projection.readable))}
+	codecs := &v3CodecTable{registry: registry, codecs: make(map[v3ExactFormKey]v3CodecDeclaration, len(projection.readable))}
 	for key := range projection.readable {
 		entry := projection.forms[key]
 		definitionRaw := entry.Definition
@@ -422,9 +420,9 @@ func validateV3ArtifactPath(value, label string) error {
 }
 
 func validateProjectionAgainstSnapshot(index *v3ProjectionIndex, snapshot *currentformsnapshot.Snapshot, closure v3ArtifactClosure) error {
-	snapshotForms := make(map[currentformregistry.ExactFormKey]currentformsnapshot.Form)
+	snapshotForms := make(map[v3ExactFormKey]currentformsnapshot.Form)
 	for _, form := range snapshot.Forms() {
-		key := currentformregistry.ExactFormKey{
+		key := v3ExactFormKey{
 			APIVersion: form.Ref.APIVersion, Kind: form.Ref.Kind, DefinitionVersion: form.Ref.DefinitionVersion, SchemaDigest: form.Ref.SchemaDigest,
 		}
 		snapshotForms[key] = form

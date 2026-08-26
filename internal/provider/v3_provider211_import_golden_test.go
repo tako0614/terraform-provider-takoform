@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 // TestV3Provider211RetainedCanonicalImportAdoptsHostExactRefs proves the
@@ -34,10 +33,7 @@ func TestV3Provider211RetainedCanonicalImportAdoptsHostExactRefs(t *testing.T) {
 			if !ok || codec.Ref != ref {
 				t.Fatalf("retained import codec for %s = %#v/%t, want %#v", ref.Kind, codec.Ref, ok, ref)
 			}
-			form, ok := edgeformcatalog.ByKind(ref.Kind)
-			if !ok {
-				t.Fatalf("current Provider 3 resource form for retained %s is missing", ref.Kind)
-			}
+			form := v3ProviderCurrentFormByKind(t, ref.Kind)
 			host := newV3FakeHost(t)
 			resource := v3Provider3CurrentResourceHarness(
 				t, form, expected.Provider3Mapping, newV3TestProviderData(t, host), codecs,

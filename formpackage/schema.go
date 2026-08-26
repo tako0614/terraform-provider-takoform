@@ -101,9 +101,8 @@ var namespacedFormGroupPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}
 // This used to be the other way round: a `/v1beta1$` pattern selected the
 // current schema and ANY other namespaced group silently fell through to the
 // retained one. A family minted at a version the pattern did not anticipate,
-// including the `edge.forms.takoform.com/v1` that
-// internal/currentformregistry/registry_v3_test.go already pins as the stable
-// successor, would have been validated against the wrong published $id without
+// including a future versioned successor to the current versionless Edge
+// group, would have been validated against the wrong published $id without
 // an error. Naming the retained set instead makes the default correct and
 // makes adding to it an edit somebody has to justify.
 var retainedFamilyGroups = map[string]struct{}{

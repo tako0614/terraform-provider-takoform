@@ -16,7 +16,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 const v3Provider3CodecGoldenPath = "testdata/v3-provider3-codec-golden.json"
@@ -35,10 +34,10 @@ type v3Provider3CodecGolden struct {
 }
 
 type v3Provider3CodecGoldenResource struct {
-	FormRef       currentformregistry.V3Ref `json:"formRef"`
-	FieldCodec    string                    `json:"fieldCodecDigest"`
-	ApplyRequest  string                    `json:"applyRequestDigest"`
-	ReadbackState string                    `json:"readbackStateDigest"`
+	FormRef       v3FormRef `json:"formRef"`
+	FieldCodec    string    `json:"fieldCodecDigest"`
+	ApplyRequest  string    `json:"applyRequestDigest"`
+	ReadbackState string    `json:"readbackStateDigest"`
 }
 
 func TestV3Provider3CodecGoldenLocksAllResources(t *testing.T) {
@@ -55,14 +54,15 @@ func deriveV3Provider3CodecGolden(t *testing.T) v3Provider3CodecGolden {
 	t.Helper()
 	const wantResourceCount = 31
 	ctx := context.Background()
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 	typesByRef := v3TerraformResourceTypes()
 	codecs := v3Codecs()
 	resources := make(map[string]v3Provider3CodecGoldenResource, wantResourceCount)
 
-	for _, form := range providerV3CurrentForms() {
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
 		form := form
-		line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+		_, artifactBacked := v3ProviderArtifactForForm(t, form)
+		line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
 		ref, err := registry.DefaultCreate(line)
 		if err != nil {
 			t.Fatalf("default ref for %s/%s: %v", line.APIVersion, line.Kind, err)
@@ -117,11 +117,11 @@ func deriveV3Provider3CodecGolden(t *testing.T) v3Provider3CodecGolden {
 				"hcl": v3AttributeName(field), "wire": field.Wire, "kind": field.Kind,
 				"value": wire,
 			})
-			if !v3ArtifactBackedRevision(form.Kind) {
+			if !artifactBacked {
 				values[v3AttributeName(field)] = value
 			}
 		}
-		if v3ArtifactBackedRevision(form.Kind) {
+		if artifactBacked {
 			values["manifest_digest"] = types.StringValue("sha256:6a5cbf24f5d0c86479ae13b9d1731a626a1729f01aef65403c5c8ac82ed85f43")
 		}
 
@@ -198,7 +198,7 @@ func v3Provider3GoldenOutputs(t *testing.T, kind string, outputs []model.Field) 
 	return result
 }
 
-func v3AssertProvider3GoldenRequest(t *testing.T, body map[string]any, ref currentformregistry.V3Ref) {
+func v3AssertProvider3GoldenRequest(t *testing.T, body map[string]any, ref v3FormRef) {
 	t.Helper()
 	if _, leaked := body["packageDigest"]; leaked {
 		t.Fatal("apply request asserted a packageDigest")

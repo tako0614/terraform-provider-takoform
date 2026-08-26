@@ -28,7 +28,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // v3ImportIdentity is one parsed import ID.
@@ -141,7 +140,7 @@ func v3ParseImportDocument(raw string) (v3ImportIdentity, error) {
 // v3UnsupportedImportRefError refuses an import that names an exact identity
 // this build cannot decode. Adopting it under a different ref would write state
 // claiming a contract the resource was never applied under.
-func v3UnsupportedImportRefError(got v3FormRefValue, known []currentformregistry.V3Ref) diag.Diagnostic {
+func v3UnsupportedImportRefError(got v3FormRefValue, known []v3FormRef) diag.Diagnostic {
 	return diag.NewErrorDiagnostic(
 		"Import Form identity is not supported by this provider",
 		fmt.Sprintf(

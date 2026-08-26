@@ -9,7 +9,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/queueformcatalog"
 )
 
@@ -35,13 +34,13 @@ type TargetResolver struct {
 	inProgress          map[string]bool
 	relationsInProgress map[string]bool
 	queueInterface      formpackage.InterfaceRef
-	aggregate           *currentformregistry.TargetResolver
+	aggregate           *model.TargetResolver
 }
 
 var _ model.TargetContractResolver = (*TargetResolver)(nil)
 var _ model.ExactFormRelationResolver = (*TargetResolver)(nil)
-var _ currentformregistry.ExactFamilySource = (*TargetResolver)(nil)
-var _ currentformregistry.RequiredInterfaceSource = (*TargetResolver)(nil)
+var _ model.ExactFamilySource = (*TargetResolver)(nil)
+var _ model.RequiredInterfaceSource = (*TargetResolver)(nil)
 
 // QueuePullInterfaceRef returns the canonical queue.pull Interface identity
 // from the Queue family source. It is the one cross-family dependency this
@@ -76,7 +75,7 @@ func NewTargetResolver(queueRefs ...formpackage.InterfaceRef) (*TargetResolver, 
 		relationsInProgress: map[string]bool{},
 		queueInterface:      queueRef,
 	}
-	aggregate, err := currentformregistry.NewTargetResolver(resolver, resolver)
+	aggregate, err := model.NewTargetResolver(resolver, resolver)
 	if err != nil {
 		return nil, fmt.Errorf("constructing Topic Form target resolver: %w", err)
 	}

@@ -31,7 +31,6 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 const v3Provider3BranchGoldenPath = "testdata/v3-provider3-branch-golden.json"
@@ -54,7 +53,7 @@ type v3Provider3BranchGolden struct {
 
 type v3Provider3FieldBranchGolden struct {
 	Semantic        string                              `json:"semantic"`
-	FormRef         currentformregistry.V3Ref           `json:"formRef"`
+	FormRef         v3FormRef                           `json:"formRef"`
 	Field           string                              `json:"field"`
 	Wire            string                              `json:"wire"`
 	Required        bool                                `json:"required"`
@@ -115,11 +114,11 @@ type v3Provider3HostEnvelopeBranch struct {
 type v3Provider3BranchDependencies struct {
 	CurrentForms []model.Form
 	Registry     interface {
-		DefaultCreate(currentformregistry.GroupKind) (currentformregistry.V3Ref, error)
-		Lookup(currentformregistry.ExactFormKey) (currentformregistry.V3Ref, bool)
-		SupportedRefs() []currentformregistry.V3Ref
-		SupportedRefsFor(currentformregistry.GroupKind) []currentformregistry.V3Ref
-		SupportedRefsForKind(string) []currentformregistry.V3Ref
+		DefaultCreate(v3GroupKind) (v3FormRef, error)
+		Lookup(v3ExactFormKey) (v3FormRef, bool)
+		SupportedRefs() []v3FormRef
+		SupportedRefsFor(v3GroupKind) []v3FormRef
+		SupportedRefsForKind(string) []v3FormRef
 	}
 	Codecs *v3CodecTable
 }
@@ -140,8 +139,8 @@ func TestV3Provider3BranchGoldenLocksBehavior(t *testing.T) {
 
 func deriveV3Provider3BranchGolden(t *testing.T) v3Provider3BranchGolden {
 	return deriveV3Provider3BranchGoldenWith(t, v3Provider3BranchDependencies{
-		CurrentForms: providerV3CurrentForms(),
-		Registry:     currentformregistry.V3Current(),
+		CurrentForms: mustProviderV3SnapshotAssembly().currentForms,
+		Registry:     mustProviderV3SnapshotAssembly().registry,
 		Codecs:       v3Codecs(),
 	})
 }
@@ -169,7 +168,7 @@ func deriveV3Provider3FieldBranches(t *testing.T, dependencies v3Provider3Branch
 		form      model.Form
 		field     model.Field
 		fieldPath string
-		ref       currentformregistry.V3Ref
+		ref       v3FormRef
 	}
 	byKind := map[model.FieldKind]candidate{}
 	registry := dependencies.Registry
@@ -178,10 +177,10 @@ func deriveV3Provider3FieldBranches(t *testing.T, dependencies v3Provider3Branch
 	// characterizes the actual codec, not the manifest adapter (which has its
 	// own vectors below).
 	for _, form := range dependencies.CurrentForms {
-		if v3ArtifactBackedRevision(form.Kind) {
+		if _, artifactBacked := v3ProviderArtifactForForm(t, form); artifactBacked {
 			continue
 		}
-		ref, err := registry.DefaultCreate(currentformregistry.GroupKind{
+		ref, err := registry.DefaultCreate(v3GroupKind{
 			APIVersion: form.Family.APIVersion(), Kind: form.Kind,
 		})
 		if err != nil {
@@ -222,7 +221,7 @@ func deriveV3Provider3FieldBranches(t *testing.T, dependencies v3Provider3Branch
 	return result
 }
 
-func deriveV3Provider3FieldBranch(t *testing.T, dependencies v3Provider3BranchDependencies, form model.Form, field model.Field, fieldPath string, ref currentformregistry.V3Ref) v3Provider3FieldBranchGolden {
+func deriveV3Provider3FieldBranch(t *testing.T, dependencies v3Provider3BranchDependencies, form model.Form, field model.Field, fieldPath string, ref v3FormRef) v3Provider3FieldBranchGolden {
 	t.Helper()
 	field = v3Provider3PopulateNestedExample(form, field, fieldPath)
 	branchForm := form

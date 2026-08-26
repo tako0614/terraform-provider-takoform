@@ -7,7 +7,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // RenderedContract is one Interface Definition rendered to publishable bytes
@@ -109,7 +108,7 @@ type targetContractResolver struct {
 	relations           map[string][]model.Relation
 	inProgress          map[string]bool
 	relationsInProgress map[string]bool
-	aggregate           *currentformregistry.TargetResolver
+	aggregate           *model.TargetResolver
 }
 
 func newTargetContractResolver() *targetContractResolver {
@@ -120,7 +119,7 @@ func newTargetContractResolver() *targetContractResolver {
 		inProgress:          map[string]bool{},
 		relationsInProgress: map[string]bool{},
 	}
-	aggregate, err := currentformregistry.NewTargetResolver(resolver, resolver)
+	aggregate, err := model.NewTargetResolver(resolver, resolver)
 	if err != nil {
 		panic(fmt.Sprintf("constructing Table Form target resolver: %v", err))
 	}

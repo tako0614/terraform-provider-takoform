@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformselection"
 )
 
 func corpusRoot(t *testing.T) string {
@@ -67,15 +67,16 @@ func TestVerifyCorpus(t *testing.T) {
 	}
 }
 
-// TestVerifyPinsRegistryIdentities proves the contract's probe FormRefs are
-// the exact generated Edge Family registry identities, byte for byte.
+// TestVerifyPinsSelectedIdentities proves the contract's probe FormRefs are
+// the exact artifact-selected Edge Family identities, byte for byte.
 //
 // It reads probeInventory rather than a list of its own. The list of its own is
 // what this test used to be, it omitted WorkerCustomDomain and WorkerEndpoint,
-// and the corpus's WorkerEndpoint packageDigest drifted from the registry with
-// nothing able to notice — the same "enumerated by hand, complete until someone
-// forgets" defect the tenant matrix already had to fix once.
-func TestVerifyPinsRegistryIdentities(t *testing.T) {
+// and the corpus's WorkerEndpoint packageDigest drifted from the selected
+// artifact set with nothing able to notice — the same "enumerated by hand,
+// complete until someone forgets" defect the tenant matrix already had to fix
+// once.
+func TestVerifyPinsSelectedIdentities(t *testing.T) {
 	contract, err := Verify(corpusRoot(t))
 	if err != nil {
 		t.Fatalf("verify: %v", err)
@@ -84,21 +85,33 @@ func TestVerifyPinsRegistryIdentities(t *testing.T) {
 	if len(inventory) != 16 {
 		t.Fatalf("the corpus pins %d resource probes; the Edge Family lane drives sixteen", len(inventory))
 	}
+	repositoryRoot, err := repositoryRootForContract(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection, err := currentformselection.LoadRepository(repositoryRoot)
+	if err != nil {
+		t.Fatalf("load current selection: %v", err)
+	}
+	selected := make(map[string]currentformselection.Form)
+	for _, form := range selection.Forms() {
+		selected[form.Ref.APIVersion+"\x00"+form.Ref.Kind] = form
+	}
 	for _, entry := range inventory {
 		probe := entry.Probe
-		registered, err := currentformregistry.V3ForKind(probe.Identity.FormRef.APIVersion, probe.Identity.FormRef.Kind)
-		if err != nil {
-			t.Fatalf("registry lookup %s: %v", probe.Identity.FormRef.Kind, err)
+		registered, ok := selected[probe.Identity.FormRef.APIVersion+"\x00"+probe.Identity.FormRef.Kind]
+		if !ok {
+			t.Fatalf("selected Form lookup %s failed", probe.Identity.FormRef.Kind)
 		}
-		if registered.SchemaDigest != probe.Identity.FormRef.SchemaDigest ||
+		if registered.Ref.SchemaDigest != probe.Identity.FormRef.SchemaDigest ||
 			registered.PackageDigest != probe.Identity.PackageDigest ||
-			registered.DefinitionVersion != probe.Identity.FormRef.DefinitionVersion {
+			registered.Ref.DefinitionVersion != probe.Identity.FormRef.DefinitionVersion {
 			t.Fatalf(
-				"probe %s drifted from the generated registry: corpus %s/%s/%s, registry %s/%s/%s",
+				"probe %s drifted from the selected Snapshot: corpus %s/%s/%s, selection %s/%s/%s",
 				probe.Identity.FormRef.Kind,
 				probe.Identity.FormRef.DefinitionVersion, probe.Identity.FormRef.SchemaDigest,
 				probe.Identity.PackageDigest,
-				registered.DefinitionVersion, registered.SchemaDigest, registered.PackageDigest,
+				registered.Ref.DefinitionVersion, registered.Ref.SchemaDigest, registered.PackageDigest,
 			)
 		}
 	}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // RenderedContract is one catalog Interface or Binding Definition rendered to
@@ -147,7 +146,7 @@ type targetContractResolver struct {
 	relations           map[string][]currentformmodel.Relation
 	inProgress          map[string]bool
 	relationsInProgress map[string]bool
-	aggregate           *currentformregistry.TargetResolver
+	aggregate           *currentformmodel.TargetResolver
 }
 
 func newTargetContractResolver() *targetContractResolver {
@@ -158,7 +157,7 @@ func newTargetContractResolver() *targetContractResolver {
 		inProgress:          map[string]bool{},
 		relationsInProgress: map[string]bool{},
 	}
-	aggregate, err := currentformregistry.NewTargetResolver(resolver, resolver)
+	aggregate, err := currentformmodel.NewTargetResolver(resolver, resolver)
 	if err != nil {
 		panic(fmt.Sprintf("constructing edge Form target resolver: %v", err))
 	}

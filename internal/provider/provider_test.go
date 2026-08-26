@@ -18,8 +18,6 @@ import (
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 func TestProviderResourcesIncludeCurrentServiceForms(t *testing.T) {
@@ -308,7 +306,7 @@ func v3ProviderResourceTypeNames() []string {
 	forms := providerV3CurrentForms()
 	names := make([]string, 0, len(forms))
 	for _, form := range forms {
-		ref, err := currentformregistry.V3ForKind(form.Family.APIVersion(), form.Kind)
+		ref, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind})
 		if err != nil {
 			panic(err)
 		}

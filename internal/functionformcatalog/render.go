@@ -162,7 +162,7 @@ func (r *TargetResolver) ResolveExactFormRelations(ref model.TargetFormRef) ([]m
 }
 
 // ExactFormRelations is the family-adapter spelling consumed by the aggregate
-// currentformregistry resolver. The aggregate has already checked the full
+// currentformmodel resolver. The aggregate has already checked the full
 // exact FormRef; this method repeats the same check through the local seam.
 func (r *TargetResolver) ExactFormRelations(ref model.TargetFormRef) ([]model.Relation, error) {
 	return r.ResolveExactFormRelations(ref)

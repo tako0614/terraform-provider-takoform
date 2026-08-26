@@ -1,47 +1,40 @@
-package currentformregistry
+package currentformmodel
 
 import (
 	"fmt"
 	"sort"
-
-	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
-// ExactFamilySource is one family adapter for TargetResolver. A source owns
-// how its immutable Definitions are rendered, but the aggregate resolver owns
-// selection: group first, then kind, then the whole exact Form identity. This
-// prevents a same-named kind in another installed family from changing which
-// contract a ResourceTarget means.
+// ExactFamilySource is one publisher-authoring adapter for TargetResolver. A
+// source owns how its immutable Definitions are rendered, while the aggregate
+// resolver owns group-first, kind-second, exact-identity selection.
 type ExactFamilySource interface {
 	FamilyAPIVersion() string
 	ResourceNamePattern() string
-	TargetFormRefs(kind string) ([]model.TargetFormRef, error)
-	ExactFormRelations(ref model.TargetFormRef) ([]model.Relation, error)
+	TargetFormRefs(kind string) ([]TargetFormRef, error)
+	ExactFormRelations(ref TargetFormRef) ([]Relation, error)
 }
 
-// RequiredInterfaceSource resolves the shared exact Interface vocabulary.
-// It is separate from family lookup because an Interface contract is open to
-// every Form that proves it provides that exact behavior; it is not a latest
-// or default Form selection.
+// RequiredInterfaceSource resolves the shared exact Interface vocabulary. It
+// is independent of family lookup because an Interface is an exact contract,
+// not a latest/default Form selection.
 type RequiredInterfaceSource interface {
-	RequiredInterface(name, version string) (model.RequiredInterface, error)
+	RequiredInterface(name, version string) (RequiredInterface, error)
 }
 
-// TargetResolver combines injected family adapters into the Form-neutral
-// ResourceTarget resolver. It holds no built-in family list and creates no
-// definitions. A host or generation pipeline supplies the exact families it
-// installed; adding another input widens only the explicitly keyed group.
+// TargetResolver is the publisher-private union of explicitly injected family
+// authoring sources. It has no built-in official-family roster.
 type TargetResolver struct {
 	families        map[string]ExactFamilySource
 	interfaceSource RequiredInterfaceSource
 }
 
-// NewTargetResolver constructs an immutable union of exact family sources.
-// Duplicate or empty group keys are refused because lookup order must never
-// decide which Definition a ResourceTarget means.
+// NewTargetResolver constructs an immutable union. Empty and duplicate group
+// keys fail closed so input order can never decide an exact target.
 func NewTargetResolver(interfaceSource RequiredInterfaceSource, sources ...ExactFamilySource) (*TargetResolver, error) {
 	resolver := &TargetResolver{
-		families: make(map[string]ExactFamilySource, len(sources)), interfaceSource: interfaceSource,
+		families:        make(map[string]ExactFamilySource, len(sources)),
+		interfaceSource: interfaceSource,
 	}
 	for _, source := range sources {
 		if source == nil {
@@ -63,29 +56,28 @@ func NewTargetResolver(interfaceSource RequiredInterfaceSource, sources ...Exact
 }
 
 // ResolveResourceTarget resolves exactly the group+kind+contract tuple. It
-// never searches another family, chooses a latest Definition, or substitutes
-// a default create target.
-func (r *TargetResolver) ResolveResourceTarget(target model.ResourceTarget) (model.ResolvedResourceTarget, error) {
+// never searches another family or substitutes a latest/default Definition.
+func (r *TargetResolver) ResolveResourceTarget(target ResourceTarget) (ResolvedResourceTarget, error) {
 	source, known := r.families[target.Group]
 	if !known {
-		return model.ResolvedResourceTarget{}, fmt.Errorf(
+		return ResolvedResourceTarget{}, fmt.Errorf(
 			"takoform: ResourceTarget group %q is not among the injected exact families", target.Group,
 		)
 	}
-	resolved := model.ResolvedResourceTarget{ResourceNamePattern: source.ResourceNamePattern()}
+	resolved := ResolvedResourceTarget{ResourceNamePattern: source.ResourceNamePattern()}
 	switch {
 	case target.Contract.ExactForm:
 		refs, err := source.TargetFormRefs(target.Kind)
 		if err != nil {
-			return model.ResolvedResourceTarget{}, err
+			return ResolvedResourceTarget{}, err
 		}
 		if err := validateExactTargetRefs(target, refs); err != nil {
-			return model.ResolvedResourceTarget{}, err
+			return ResolvedResourceTarget{}, err
 		}
-		resolved.TargetFormRefs = refs
+		resolved.TargetFormRefs = append([]TargetFormRef(nil), refs...)
 	case target.Contract.Interface != nil:
 		if r.interfaceSource == nil {
-			return model.ResolvedResourceTarget{}, fmt.Errorf(
+			return ResolvedResourceTarget{}, fmt.Errorf(
 				"takoform: ResourceTarget %s/%s requires Interface %s@%s but no Interface source was injected",
 				target.Group, target.Kind, target.Contract.Interface.Name, target.Contract.Interface.Version,
 			)
@@ -94,19 +86,18 @@ func (r *TargetResolver) ResolveResourceTarget(target model.ResourceTarget) (mod
 			target.Contract.Interface.Name, target.Contract.Interface.Version,
 		)
 		if err != nil {
-			return model.ResolvedResourceTarget{}, err
+			return ResolvedResourceTarget{}, err
 		}
 		resolved.RequiredInterface = &required
 	default:
-		return model.ResolvedResourceTarget{}, fmt.Errorf("takoform: ResourceTarget %s/%s has no contract", target.Group, target.Kind)
+		return ResolvedResourceTarget{}, fmt.Errorf("takoform: ResourceTarget %s/%s has no contract", target.Group, target.Kind)
 	}
 	return resolved, nil
 }
 
-// ResolveExactFormRelations returns the relation contract of the one exact
-// Definition named by ref. The ref must first be present in that family's
-// declared exact set; a source cannot use this call as a latest/default alias.
-func (r *TargetResolver) ResolveExactFormRelations(ref model.TargetFormRef) ([]model.Relation, error) {
+// ResolveExactFormRelations returns the relation contract for one exact
+// Definition after proving the ref belongs to the injected Definition set.
+func (r *TargetResolver) ResolveExactFormRelations(ref TargetFormRef) ([]Relation, error) {
 	source, known := r.families[ref.APIVersion]
 	if !known {
 		return nil, fmt.Errorf("takoform: exact target Form group %q is not among the injected exact families", ref.APIVersion)
@@ -129,14 +120,14 @@ func (r *TargetResolver) ResolveExactFormRelations(ref model.TargetFormRef) ([]m
 	if err != nil {
 		return nil, err
 	}
-	return append([]model.Relation(nil), relations...), nil
+	return append([]Relation(nil), relations...), nil
 }
 
-func validateExactTargetRefs(target model.ResourceTarget, refs []model.TargetFormRef) error {
+func validateExactTargetRefs(target ResourceTarget, refs []TargetFormRef) error {
 	if len(refs) == 0 {
 		return fmt.Errorf("takoform: ResourceTarget %s/%s resolved no exact Definitions", target.Group, target.Kind)
 	}
-	seen := map[model.TargetFormRef]bool{}
+	seen := map[TargetFormRef]bool{}
 	for _, ref := range refs {
 		if ref.APIVersion != target.Group || ref.Kind != target.Kind || ref.DefinitionVersion == "" || ref.SchemaDigest == "" {
 			return fmt.Errorf(
@@ -161,6 +152,6 @@ func validateExactTargetRefs(target model.ResourceTarget, refs []model.TargetFor
 }
 
 var (
-	_ model.TargetContractResolver    = (*TargetResolver)(nil)
-	_ model.ExactFormRelationResolver = (*TargetResolver)(nil)
+	_ TargetContractResolver    = (*TargetResolver)(nil)
+	_ ExactFormRelationResolver = (*TargetResolver)(nil)
 )

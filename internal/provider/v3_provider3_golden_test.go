@@ -14,8 +14,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
-	"github.com/tako0614/terraform-provider-takoform/internal/retainededgeformcatalog"
 )
 
 const v3Provider3GoldenPath = "testdata/v3-provider3-golden.json"
@@ -35,7 +33,7 @@ type v3Provider3Golden struct {
 }
 
 type v3Provider3GoldenResource struct {
-	FormRef       currentformregistry.V3Ref             `json:"formRef"`
+	FormRef       v3FormRef                             `json:"formRef"`
 	SchemaVersion int64                                 `json:"schemaVersion"`
 	Attributes    map[string]v3Provider3GoldenAttribute `json:"attributes"`
 	Codec         v3Provider3GoldenCodec                `json:"codec"`
@@ -59,8 +57,8 @@ type v3Provider3GoldenAttribute struct {
 // create target. PackageDigest is retained on both refs as provenance even
 // though it is deliberately excluded from ExactFormKey.
 type v3Provider3GoldenCodec struct {
-	StateRef         currentformregistry.V3Ref `json:"stateRef"`
-	DefaultCreateRef currentformregistry.V3Ref `json:"defaultCreateRef"`
+	StateRef         v3FormRef `json:"stateRef"`
+	DefaultCreateRef v3FormRef `json:"defaultCreateRef"`
 }
 
 func TestV3Provider3GoldenLocksCurrentSurface(t *testing.T) {
@@ -73,17 +71,18 @@ func TestV3Provider3GoldenLocksCurrentSurface(t *testing.T) {
 
 // TestV3Provider3GoldenRetainsProvider211History keeps the Provider 2.1.1
 // compatibility boundary visible beside the current 31-resource lock. The
-// historical ObjectBucket identity remains in the registry for old state, but
-// Provider 3 must neither map nor decode it. Other retained identities remain
-// mapped and exact-codec readable. This test only reads the existing registry
-// and retained catalog; it never rewrites release ledgers.
+// historical ObjectBucket identity remains in the embedded projection for old
+// state, but Provider 3 must neither map nor decode it. Other retained
+// identities remain mapped and exact-codec readable. This test only reads the
+// verified embedded assembly and frozen retained definitions; it never
+// rewrites release ledgers.
 func TestV3Provider3GoldenRetainsProvider211History(t *testing.T) {
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 	types := v3TerraformResourceTypes()
 	codecs := v3Codecs()
-	retainedGroup := retainededgeformcatalog.Family.APIVersion()
+	retainedGroup := "edge.forms.takoform.com/v1beta1"
 
-	retained := make([]currentformregistry.V3Ref, 0)
+	retained := make([]v3FormRef, 0)
 	for _, ref := range registry.SupportedRefs() {
 		if ref.APIVersion == retainedGroup {
 			retained = append(retained, ref)
@@ -113,17 +112,17 @@ func TestV3Provider3GoldenRetainsProvider211History(t *testing.T) {
 func deriveV3Provider3Golden(t *testing.T) v3Provider3Golden {
 	t.Helper()
 	const wantResourceCount = 31
-	forms := providerV3CurrentForms()
+	forms := mustProviderV3SnapshotAssembly().currentForms
 	if len(forms) != wantResourceCount {
 		t.Fatalf("current Provider 3 Form projection = %d, want %d", len(forms), wantResourceCount)
 	}
 
 	ctx := context.Background()
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 	types := v3TerraformResourceTypes()
 	codecs := v3Codecs()
 	resources := make(map[string]v3Provider3GoldenResource, len(forms))
-	seenRefs := make(map[currentformregistry.ExactFormKey]string, len(forms))
+	seenRefs := make(map[v3ExactFormKey]string, len(forms))
 	for _, form := range forms {
 		if form.Kind == "ObjectBucket" {
 			t.Fatal("withdrawn ObjectBucket appeared in the current Provider 3 projection")
@@ -131,7 +130,7 @@ func deriveV3Provider3Golden(t *testing.T) v3Provider3Golden {
 		if group := form.Family.APIVersion(); group == "" || containsSlash(group) {
 			t.Fatalf("current Form %s/%s has a versioned or empty family group", group, form.Kind)
 		}
-		line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+		line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
 		ref, err := registry.DefaultCreate(line)
 		if err != nil {
 			t.Fatalf("default create ref for %s/%s: %v", line.APIVersion, line.Kind, err)
@@ -215,11 +214,11 @@ func deriveV3Provider3Golden(t *testing.T) v3Provider3Golden {
 		}
 		currentRefs++
 		if _, present := seenRefs[ref.ExactKey()]; !present {
-			t.Fatalf("generated current registry ref %s is absent from the Provider 3 mapping", ref.ExactKey())
+			t.Fatalf("embedded current projection ref %s is absent from the Provider 3 mapping", ref.ExactKey())
 		}
 	}
 	if currentRefs != wantResourceCount {
-		t.Fatalf("generated current registry has %d refs, want %d", currentRefs, wantResourceCount)
+		t.Fatalf("embedded current projection has %d refs, want %d", currentRefs, wantResourceCount)
 	}
 
 	return v3Provider3Golden{

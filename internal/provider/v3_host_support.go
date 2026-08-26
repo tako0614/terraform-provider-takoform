@@ -54,7 +54,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // v3SupportCache reads each support profile at most once per provider
@@ -63,7 +62,7 @@ import (
 // one fact into N round trips inside `terraform plan`.
 type v3SupportCache struct {
 	mu         sync.Mutex
-	forms      map[currentformregistry.ExactFormKey]v3SupportAnswer
+	forms      map[v3ExactFormKey]v3SupportAnswer
 	interfaces map[string]v3SupportAnswer
 	bindings   map[string]v3SupportAnswer
 	services   map[string]v3SupportAnswer
@@ -81,7 +80,7 @@ type v3SupportAnswer struct {
 
 func newV3SupportCache() *v3SupportCache {
 	return &v3SupportCache{
-		forms:      map[currentformregistry.ExactFormKey]v3SupportAnswer{},
+		forms:      map[v3ExactFormKey]v3SupportAnswer{},
 		interfaces: map[string]v3SupportAnswer{},
 		bindings:   map[string]v3SupportAnswer{},
 		services:   map[string]v3SupportAnswer{},
@@ -101,7 +100,7 @@ func v3SupportRefusal(err error) bool {
 	return apiErr.Code == "form_unknown" || apiErr.Code == "resource_not_found"
 }
 
-func (c *v3SupportCache) formSupport(ctx context.Context, client *clientv3.Client, ref currentformregistry.V3Ref) v3SupportAnswer {
+func (c *v3SupportCache) formSupport(ctx context.Context, client *clientv3.Client, ref v3FormRef) v3SupportAnswer {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := ref.ExactKey()
@@ -274,7 +273,7 @@ func v3SupportInt(value any) (int64, bool) {
 // resources actually need: create and delete for every resource, and update
 // only where the Form declares one.
 func (r *v3FormResource) checkSupportedOperations(
-	profile v3SupportProfile, ref currentformregistry.V3Ref, resp *resource.ModifyPlanResponse,
+	profile v3SupportProfile, ref v3FormRef, resp *resource.ModifyPlanResponse,
 ) {
 	declared := profile.stringSlice("operations")
 	if len(declared) == 0 {

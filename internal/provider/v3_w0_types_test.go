@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // TestV3W0TypedFieldsSurvivePlanWireReadState is the provider-side W0
@@ -26,7 +25,7 @@ import (
 func TestV3W0TypedFieldsSurvivePlanWireReadState(t *testing.T) {
 	host := newV3FakeHost(t)
 	form := v3W0SyntheticForm()
-	ref := currentformregistry.V3Ref{
+	ref := v3FormRef{
 		APIVersion: form.Family.APIVersion(), Kind: form.Kind, DefinitionVersion: form.DefinitionVersion,
 		SchemaDigest: "sha256:" + strings.Repeat("a", 64), PackageDigest: "sha256:" + strings.Repeat("b", 64),
 	}

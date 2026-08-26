@@ -1307,8 +1307,7 @@ func validateProviderV3IdentityRelease(repo string, release providerIdentityRele
 // candidate lane moved past the published release, byte-equality with the
 // candidate set carried this fence implicitly, and now it is carried
 // explicitly so a mutated published entry is refused in every generation
-// state. The digest matches scripts/current-form-families.mjs's
-// FROZEN_PROVIDER_RELEASES entry for the same release.
+// state. The release deploy verifier independently pins the same digest.
 var frozenLedgerEntryDigests = map[string]string{
 	"2.1.1": "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
 }

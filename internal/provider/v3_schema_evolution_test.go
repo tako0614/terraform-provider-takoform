@@ -22,7 +22,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
@@ -312,7 +311,7 @@ func TestV3StateUpgraderRoundTrip(t *testing.T) {
 
 // v3PriorEndpointRef is the synthetic earlier definition version of
 // WorkerEndpoint the Form-line tests record state under.
-var v3PriorEndpointRef = currentformregistry.V3Ref{
+var v3PriorEndpointRef = v3FormRef{
 	APIVersion:        edgeformcatalog.Family.APIVersion(),
 	Kind:              "WorkerEndpoint",
 	DefinitionVersion: "0.0.9",

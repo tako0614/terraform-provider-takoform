@@ -12,7 +12,6 @@ import (
 	frameworkschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 const v3Provider3FrameworkGoldenPath = "testdata/v3-provider3-framework-golden.json"
@@ -26,8 +25,8 @@ type v3Provider3FrameworkGolden struct {
 }
 
 type v3Provider3FrameworkGoldenResource struct {
-	FormRef        currentformregistry.V3Ref `json:"formRef"`
-	BehaviorDigest string                    `json:"behaviorDigest"`
+	FormRef        v3FormRef `json:"formRef"`
+	BehaviorDigest string    `json:"behaviorDigest"`
 }
 
 // TestV3Provider3FrameworkBehaviorGoldenLocksAllResources covers the behavior
@@ -46,11 +45,11 @@ func TestV3Provider3FrameworkBehaviorGoldenLocksAllResources(t *testing.T) {
 
 func deriveV3Provider3FrameworkGolden(t *testing.T) v3Provider3FrameworkGolden {
 	t.Helper()
-	registry := currentformregistry.V3Current()
+	registry := mustProviderV3SnapshotAssembly().registry
 	typesByRef := v3TerraformResourceTypes()
 	resources := make(map[string]v3Provider3FrameworkGoldenResource, 31)
-	for _, form := range providerV3CurrentForms() {
-		line := currentformregistry.GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
+	for _, form := range mustProviderV3SnapshotAssembly().currentForms {
+		line := v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind}
 		ref, err := registry.DefaultCreate(line)
 		if err != nil {
 			t.Fatal(err)
@@ -65,12 +64,13 @@ func deriveV3Provider3FrameworkGolden(t *testing.T) v3Provider3FrameworkGolden {
 		if response.Diagnostics.HasError() {
 			t.Fatalf("schema for %s: %v", resourceType, response.Diagnostics)
 		}
+		_, artifactBacked := v3ProviderArtifactForForm(t, form)
 		vector := map[string]any{
 			"attributes":          v3Provider3FrameworkAttributes(t, response.Schema.Attributes),
 			"role":                form.Role,
 			"declaresUpdate":      form.DeclaresUpdate(),
 			"derivesRevisionName": candidate.derivesRevisionName(),
-			"artifactBacked":      v3ArtifactBackedRevision(form.Kind),
+			"artifactBacked":      artifactBacked,
 			"desiredFieldCount":   len(form.Fields),
 			"declaredOutputCount": len(form.Outputs),
 			"schemaDescription":   response.Schema.Description,

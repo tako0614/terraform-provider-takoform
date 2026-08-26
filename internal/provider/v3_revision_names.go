@@ -53,7 +53,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // v3RevisionNameDigestLength is how much of the content digest the derived name
@@ -362,7 +361,7 @@ func (r *v3FormResource) v3PlanCodec(ctx context.Context, resp *resource.ModifyP
 		}
 		return v3FormCodec{}, false
 	}
-	codec, err := r.codecTable().defaultCreate(currentformregistry.GroupKind{
+	codec, err := r.codecTable().defaultCreate(v3GroupKind{
 		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
 	})
 	return codec, err == nil

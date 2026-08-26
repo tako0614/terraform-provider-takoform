@@ -52,6 +52,24 @@ func TestFormValidationAndSchemaNeedNoProviderResourceType(t *testing.T) {
 	}
 }
 
+func TestFormValidationRejectsUnsafeAuthoringIdentity(t *testing.T) {
+	t.Parallel()
+	for name, mutate := range map[string]func(*Form){
+		"kind": func(form *Form) { form.Kind = "../Example" },
+		"slug": func(form *Form) { form.Slug = "../../example" },
+	} {
+		name, mutate := name, mutate
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			form := testForm()
+			mutate(&form)
+			if err := form.Validate(); err == nil {
+				t.Fatal("unsafe authoring identity was accepted")
+			}
+		})
+	}
+}
+
 // TestLifecycleCapabilitiesFollowMutableFields proves the capability set is
 // derived from what the Form can actually represent, not from its role: a
 // mutable role with nothing mutable to change declares no update, and no Form

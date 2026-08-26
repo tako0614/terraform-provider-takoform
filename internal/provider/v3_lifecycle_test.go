@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
@@ -165,7 +164,11 @@ func v3BundleModulesValue(name, contentFile string) types.List {
 func v3ExpectedManifestDigest(t *testing.T, mainModule, contentFile string, content []byte) string {
 	t.Helper()
 	sum := sha256.Sum256(content)
-	manifest := workerBundleManifest(mainModule, []v3BundleModule{{
+	artifact, ok := v3ProviderArtifactProjectionForKind(t, workerBundleKind)
+	if !ok {
+		t.Fatal("embedded Provider projection has no WorkerBundle artifact rule")
+	}
+	manifest := workerBundleManifestForProjection(*artifact, mainModule, []v3BundleModule{{
 		Name:        mainModule,
 		ContentType: "application/javascript+module",
 		ContentFile: contentFile,
@@ -827,7 +830,8 @@ func TestV3ReadRejectsUnknownStateFormRefBeforeHost(t *testing.T) {
 	if !strings.Contains(detail, "other.example.com/v1alpha1") {
 		t.Fatalf("diagnostic does not name the state identity: %s", detail)
 	}
-	defaultRef, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	moduleWorker := v3ProviderCurrentFormByKind(t, "ModuleWorker")
+	defaultRef, err := mustProviderV3SnapshotAssembly().registry.DefaultCreate(v3GroupKind{APIVersion: moduleWorker.Family.APIVersion(), Kind: moduleWorker.Kind})
 	if err != nil {
 		t.Fatal(err)
 	}
