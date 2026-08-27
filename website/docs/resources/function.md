@@ -11,13 +11,24 @@ Logical identity of one regional JavaScript function. Code, configuration, resou
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/Function`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_function/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `function.forms.takoform.com/Function` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/function.forms.takoform.com/function/definition.json`](../../forms/candidates/function.forms.takoform.com/function/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_function/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "function.forms.takoform.com",
+  "kind": "Function",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:7811632bfa32b1ffde95bf6efc8ee67e4f6c0778e452c56e61d89dd5b4969388"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:4aa262c080f2d2e2b26c6590ef77813a5ea94d6e5a83971d58a5d9273025cdbe`.
 
 ## Arguments
 

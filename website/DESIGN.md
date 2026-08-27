@@ -84,14 +84,14 @@ card padding is not part of this system.
   treatment, and status vocabulary.
 - The facts: project `Experimental`; current Provider `3.0.0` is a
   Registry-published non-normative implementation of Host API
-  `forms.takoform.com/v1` and all 31 Experimental Forms across eight
-  versionless families. The current package envelope is
-  `packages.forms.takoform.com/v1alpha5` and package artifacts remain
-  unpublished. The `release/version.json` descriptor remains `candidate-only`
-  source metadata after owner publication; the release identity ledger owns
-  live distribution truth. Provider `2.1.1` and earlier lanes remain immutable
-  Registry history. Host implementation source and live service availability
-  are different evidence.
+  `forms.takoform.com/v1`, mapping 31 typed resources across eight
+  versionless families. The standalone Edge source publishes 16
+  content-addressed Form packages. The current package envelope is
+  `packages.forms.takoform.com/v1alpha5`. The `release/version.json`
+  descriptor remains `candidate-only` source metadata after owner publication;
+  the release identity ledger owns live distribution truth. Provider `2.1.1`
+  and earlier lanes remain immutable Registry history. Host implementation
+  source and live service availability are different evidence.
 
 ## What pages may differ on
 

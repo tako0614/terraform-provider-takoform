@@ -11,13 +11,24 @@ HTTPS attachment that serves one canonical customer-owned hostname from the acti
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerCustomDomain`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_container_custom_domain/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `container.forms.takoform.com/ContainerCustomDomain` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/container.forms.takoform.com/container-custom-domain/definition.json`](../../forms/candidates/container.forms.takoform.com/container-custom-domain/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_container_custom_domain/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "container.forms.takoform.com",
+  "kind": "ContainerCustomDomain",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:0032d7759696f746454236001a8aec84df30d30c673b2bdfcf360086043399d9"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:864e7b6000a22abe265eff00720de0c3ee32cb95143f2942a8c6a387a15b7169`.
 
 ## Arguments
 

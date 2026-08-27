@@ -11,13 +11,24 @@ Fanout topic whose accepted publishes are delivered at least once to every match
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `topic.forms.takoform.com/Topic`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_topic/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `topic.forms.takoform.com/Topic` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/topic.forms.takoform.com/topic/definition.json`](../../forms/candidates/topic.forms.takoform.com/topic/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_topic/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "topic.forms.takoform.com",
+  "kind": "Topic",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:425e21346190addd2ffb8a95d69afaa81f18f3a8d3d158de6496014482acaf80"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:468ebf9836b45b2392a327644f989d1a2aa8fbed58efb4761a22a744ea185e4c`.
 
 ## Arguments
 

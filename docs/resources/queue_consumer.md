@@ -11,13 +11,24 @@ Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, inv
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `edge.forms.takoform.com/QueueConsumer`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_queue_consumer/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/QueueConsumer` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/queue-consumer/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_queue_consumer/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "edge.forms.takoform.com",
+  "kind": "QueueConsumer",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:fffd4cc133eb03aa7fd57af9316a68fb9813544e78e0e55111df1341d8b8f453"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:3c6b332cf45df58f7a7db3eea8d03fec2aa4103b5e53c3452335639fa40a6266`.
 
 ## Arguments
 

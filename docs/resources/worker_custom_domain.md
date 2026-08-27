@@ -11,13 +11,24 @@ Attaches one DNS hostname to a Module Worker so its active deployment serves tha
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `edge.forms.takoform.com/WorkerCustomDomain`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_custom_domain/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/WorkerCustomDomain` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/worker-custom-domain/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_worker_custom_domain/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "edge.forms.takoform.com",
+  "kind": "WorkerCustomDomain",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:1e4ae27dd53dfb8db977e3627e0b14f0d5e284703e9c435f48af31bd8e474110"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:94453c8f24eccf11e2a7142fb8711b47a8b039a7124a9498c498ec466c0574ed`.
 
 ## Arguments
 

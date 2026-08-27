@@ -11,13 +11,24 @@ Unordered at-least-once pull queue with visibility timeout, receive counting, op
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `queue.forms.takoform.com/PullQueue`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_pull_queue/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `queue.forms.takoform.com/PullQueue` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/queue.forms.takoform.com/pull-queue/definition.json`](../../forms/candidates/queue.forms.takoform.com/pull-queue/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_pull_queue/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "queue.forms.takoform.com",
+  "kind": "PullQueue",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:1ee156919f8399cac58ecf16e73a90239224cb01c81be634d8c305dbf3156599"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:67f5eb98e6ac3617f383f76778a382527ab4312edd5c63ef81f49d7bda1caa82`.
 
 ## Arguments
 

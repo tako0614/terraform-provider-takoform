@@ -1,9 +1,9 @@
 package standardforms
 
-// publish_surfaces_v3.go renders non-normative official Terraform Provider
-// reference docs and examples for all of its current mappings. Form Definitions
-// do not contain Terraform resource types; the provider-neutral all-family
-// inventory is rendered separately below.
+// publish_surfaces_v3.go renders non-normative Terraform Provider reference
+// docs and examples for all of its current mappings. Form Definitions do not
+// contain Terraform resource types; the all-family inventory is rendered
+// separately below.
 
 import (
 	"encoding/json"
@@ -13,10 +13,12 @@ import (
 	"strings"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
+	"github.com/tako0614/terraform-provider-takoform/internal/provider"
 )
 
 const (
 	edgeFamilyGroup            = "edge.forms.takoform.com"
+	edgeFormsPublisherBaseURL  = "https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/"
 	workerRuntimeInterfaceName = "worker.runtime"
 )
 
@@ -285,6 +287,53 @@ func v3RevisionOwnerExample(form model.Form) string {
 	return form.Slug
 }
 
+// providerReferenceSurfaceForForm returns the Provider-owned exact identity
+// and package provenance that travel with a generated resource surface. The
+// model.Form intentionally has no digest fields: those are resolved from the
+// same exact Provider projection used by runtime registration.
+func providerReferenceSurfaceForForm(form model.Form) provider.ProviderV3ReferenceSurface {
+	surfaces, err := provider.CurrentProviderV3ReferenceSurfaces()
+	if err != nil {
+		panic(fmt.Errorf("load Provider 3 reference surface for %s/%s: %w", form.Family.APIVersion(), form.Kind, err))
+	}
+	for _, surface := range surfaces {
+		if surface.Form.Family.APIVersion() == form.Family.APIVersion() &&
+			surface.Form.Kind == form.Kind &&
+			surface.Form.DefinitionVersion == form.DefinitionVersion {
+			return surface
+		}
+	}
+	panic(fmt.Errorf("Provider 3 reference surface has no exact identity for %s/%s@%s", form.Family.APIVersion(), form.Kind, form.DefinitionVersion))
+}
+
+// formDefinitionReference points readers at the authority that owns the
+// current Form Definition. Published Edge definitions live in the standalone
+// takoform-forms repository at an immutable commit; other current mappings
+// are explicitly embedded Provider projections, not public package claims.
+func formDefinitionReference(form model.Form) string {
+	definitionPath := "forms/candidates/" + form.Family.Group + "/" + form.Slug + "/definition.json"
+	if form.Family.Group == edgeFamilyGroup {
+		return "The published Edge Form Definition is maintained in the [takoform-forms source](" + edgeFormsPublisherBaseURL + form.Family.Group + "/" + form.Slug + "/definition.json)."
+	}
+	return "The exact current mapping is an embedded Provider projection, not a public Form Package: [`" + definitionPath + "`](../../" + definitionPath + ")."
+}
+
+// v3ExactFormIdentitySection renders the complete immutable FormRef instead
+// of only its group/kind shorthand. packageDigest is distribution provenance,
+// so it is shown on its own line and never folded into FormRef.
+func v3ExactFormIdentitySection(form model.Form) string {
+	surface := providerReferenceSurfaceForForm(form)
+	ref := surface.FormRef
+	var builder strings.Builder
+	builder.WriteString("\n## Exact FormRef\n\n")
+	builder.WriteString("This Provider mapping carries the following exact four-field FormRef:\n\n")
+	fmt.Fprintf(&builder, "```json\n{\n  \"apiVersion\": %q,\n  \"kind\": %q,\n  \"definitionVersion\": %q,\n  \"schemaDigest\": %q\n}\n```\n", ref.APIVersion, ref.Kind, ref.DefinitionVersion, ref.SchemaDigest)
+	if surface.PackageDigest != "" {
+		fmt.Fprintf(&builder, "\n`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `%s`.\n", surface.PackageDigest)
+	}
+	return builder.String()
+}
+
 // v3ResourceDoc renders one family resource reference document.
 func v3ResourceDoc(form model.Form) string {
 	var builder strings.Builder
@@ -302,14 +351,11 @@ description: |-
 
 `, resourceType, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This page documents a non-normative official Terraform Provider mapping for the\n" +
-		"current Experimental Form `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n" +
-		"The mapping name is provider metadata: it is absent from the Form Definition and cannot change\n" +
-		"the Form's canonical bytes or digest. Provider publication and support are versioned separately.\n" +
-		"The configured host selects and\n" +
-		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
-		"price, or implementation. See the [complete example](https://takoform.com/examples/resources/" +
-		resourceType + "/resource.tf).\n")
+	builder.WriteString("This page documents the current Provider 3 mapping; its current exact FormRef `" +
+		form.Family.APIVersion() + "/" + form.Kind + "` is recorded below.\n" +
+		"The resource type is Provider metadata. " + formDefinitionReference(form) + "\n" +
+		"See the complete exact identity and the [complete example](https://takoform.com/examples/resources/" + resourceType + "/resource.tf).\n")
+	builder.WriteString(v3ExactFormIdentitySection(form))
 	builder.WriteString("\n## Arguments\n\n")
 	builder.WriteString(v3NameArgumentDoc(form))
 	if form.Kind == "WorkerBundle" {
@@ -485,11 +531,10 @@ func v3ExampleHCL(form model.Form) string {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # This resource type is non-normative official-provider metadata. The
-      # current versionless Form and its digest do not contain this name.
-      # Provider 2.1.1 carries only retained versioned history; use a provider
-      # release whose exact-Form registry includes this current identity.
-      version = ">= 3.0.0"
+      # This resource type is non-normative Provider metadata. The current
+      # exact FormRef and digest do not contain this name.
+      # Provider 2.1.1's 15 versioned identities remain retained history.
+      version = "= 3.0.0"
     }
   }
 }
@@ -660,8 +705,8 @@ func v3ObjectHCL(field model.Field) string {
 	return builder.String()
 }
 
-// v3ProviderExampleValue projects a portable wire fixture into the official
-// Provider's authoring shape. ResourceRefs are full {apiVersion,kind,name}
+// v3ProviderExampleValue projects a portable wire fixture into the Provider's
+// authoring shape. ResourceRefs are full {apiVersion,kind,name}
 // objects on the Host wire, but the Provider exposes only the target name: the
 // exact group and kind come from the source Form's declared ResourceTarget.
 // The projection must recurse because tagged targets such as Schedule carry
@@ -759,13 +804,13 @@ func v3FormInventorySection() string {
 		}
 	}
 	fmt.Fprintf(&builder, `
-The current roster is exactly %d Forms in %d versionless families. Edge has
-exactly %d members and intentionally has no current ObjectBucket Form,
+Current Provider 3 mapping has exactly %d typed resources in %d versionless families. Edge has
+exactly %d members in that mapping and intentionally has no ObjectBucket Form,
 `+"`edge.objects`"+` Interface, or ObjectBucket Binding. Retained versioned
 Provider 2.1.1 packages remain immutable history and are not members of this
-current roster.
+mapping.
 
-The official Terraform Provider reference docs and examples under
+The Terraform Provider reference docs and examples under
 `+"`docs/resources`"+` and `+"`examples/resources`"+` cover only mappings that
 the provider explicitly owns. Their `+"`takoform_*`"+` names are non-normative
 and cannot affect a Form Definition or digest. Missing mappings for other

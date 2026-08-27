@@ -11,13 +11,24 @@ Fixed-dimension dense vector index with a creation-time distance metric. The vec
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `vector.forms.takoform.com/VectorIndex`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_dense_vector_index/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `vector.forms.takoform.com/VectorIndex` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/vector.forms.takoform.com/vector-index/definition.json`](../../forms/candidates/vector.forms.takoform.com/vector-index/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_dense_vector_index/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "vector.forms.takoform.com",
+  "kind": "VectorIndex",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:46e4a807db0a90295c13edd82f03cf81d17df780f5d5cb7758377862205c692b"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:083bba1ed55f1d272df074a420464894d4d04d8afb75c4e7fad68ea6137bc1fc`.
 
 ## Arguments
 

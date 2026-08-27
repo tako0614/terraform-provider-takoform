@@ -11,13 +11,24 @@ Immutable content-addressed executable snapshot of one Function: artifact manife
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/FunctionVersion`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_function_version/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `function.forms.takoform.com/FunctionVersion` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/function.forms.takoform.com/function-version/definition.json`](../../forms/candidates/function.forms.takoform.com/function-version/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_function_version/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "function.forms.takoform.com",
+  "kind": "FunctionVersion",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:314e6c1b5c9e79dd0d8c23aeb92737d70d303c6f78a4c9729397dda5e79f2b14"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:c5e376d6743d36617e2a893a2e8c170b8d8cd1a2f7187d7753d668b71ec7e7bf`.
 
 ## Arguments
 

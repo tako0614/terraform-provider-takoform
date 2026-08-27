@@ -148,15 +148,38 @@ describe("the committed status document", () => {
       path.join(repositoryRoot, "website/.vitepress/config.mts"),
       "utf8",
     );
-    expect(config).toContain(
-      "Specification 1.1 / separate Host API v1 candidate",
-    );
-    expect(config).toContain(
-      "Provider 3 typed reference (31 current Experimental Forms)",
-    );
+    expect(config).toContain("Core v1.0.1 source");
+    expect(config).toContain("Current Provider 3 mapping (31 resources)");
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
     expect(config).not.toContain("Specification 1.1 candidate");
     expect(config).not.toContain("Provider 3 candidate reference");
+    expect(config).not.toContain('link: "/spec/');
+    expect(config).not.toContain('link: "/proposals/');
+  });
+
+  test("separates external Form publication from the embedded candidate snapshot", () => {
+    const publicFormsCommit =
+      "026f862975b9adb0e2bfd9c6214a5e6691dfb596";
+    const versions = readFileSync(
+      path.join(repositoryRoot, "website/docs/versions.md"),
+      "utf8",
+    );
+    expect(versions).toContain(publicFormsCommit);
+    expect(versions).toContain("Embedded Edge candidate snapshot");
+    expect(versions).toContain("not publication evidence");
+
+    const footer = readFileSync(
+      path.join(
+        repositoryRoot,
+        "website/.vitepress/theme/components/SiteFooter.vue",
+      ),
+      "utf8",
+    );
+    expect(footer).toContain("Provider {{ status.providerPublished }}");
+    expect(footer).toContain("API/Core 1.0.1");
+    expect(footer).toContain("{{ status.currentFormCount }} mappings");
+    expect(footer).toContain("/docs/versions.html");
+    expect(footer).not.toMatch(/W09|package status|takoform-site|distribution/i);
   });
 
   test("keeps every live status owner on the independent current identities", () => {
@@ -180,17 +203,20 @@ describe("the committed status document", () => {
       "v2.1.1 is the Registry-published current provider",
     );
 
-    for (const relativePath of [
-      "website/index.md",
-      "website/docs/index.md",
-      "website/ja/index.md",
-      "website/ja/docs/index.md",
-    ]) {
+    for (const relativePath of ["website/index.md", "website/ja/index.md"]) {
       const page = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
-      expect(page).toContain("separate");
-      expect(page).toContain("unpublished");
+      expect(page).toContain("**`3.0.0`**");
+      expect(page).toContain("**`v1.0.1`**");
       expect(page).not.toContain("Specification 1.1 candidate / Host API v1");
     }
+
+    const versions = readFileSync(
+      path.join(repositoryRoot, "website/docs/versions.md"),
+      "utf8",
+    );
+    expect(versions).toContain("two domain version axes");
+    expect(versions).toContain("API/Core");
+    expect(versions).toContain("definitionVersion");
 
     const decision = readFileSync(
       path.join(

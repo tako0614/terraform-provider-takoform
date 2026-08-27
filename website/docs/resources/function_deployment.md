@@ -11,13 +11,24 @@ The one active traffic selection for a Function. One or two immutable versions c
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/FunctionDeployment`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_function_deployment/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `function.forms.takoform.com/FunctionDeployment` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/function.forms.takoform.com/function-deployment/definition.json`](../../forms/candidates/function.forms.takoform.com/function-deployment/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_function_deployment/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "function.forms.takoform.com",
+  "kind": "FunctionDeployment",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:85e10197b9d10275da71e8291c0891b2d9b231f094be2f87d3f0b8d160a56574"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:1d1fc99df92fd9151748183610b53f0c3b014cb16d6b46833ac81ef24e237958`.
 
 ## Arguments
 

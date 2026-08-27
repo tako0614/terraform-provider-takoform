@@ -6,6 +6,7 @@ import { defineConfig } from "vitepress";
 import { prepareSiteStatus, SITE_STATUS_ROUTE } from "./site-status.mjs";
 
 const github = "https://github.com/tako0614/terraform-provider-takoform";
+const coreSpec = "https://github.com/tako0614/takoform/tree/v1.0.1/spec";
 
 // The published/preview facts are derived from the repository once, here, at
 // build time. They reach the footer through themeConfig so every page states
@@ -31,8 +32,6 @@ const siteStatus = {
 };
 
 const projectNavItems = [
-  { text: "Proposals", link: "/proposals/" },
-  { text: "Form inventory", link: "/forms/" },
   { text: "Conformance evidence", link: "/conformance/" },
   { text: "Release", link: "/release/" },
 ];
@@ -48,7 +47,7 @@ const compatibilityNavItems = [
 
 const englishNav = [
   { text: "Current", link: "/docs/" },
-  { text: "Spec", link: "/spec/" },
+  { text: "Core v1.0.1 source", link: coreSpec },
   {
     text: "Compatibility",
     items: compatibilityNavItems,
@@ -61,8 +60,6 @@ const englishNav = [
 // points at the same targets and marks them 英語のみ, matching the note
 // convention used inside the Japanese pages.
 const japaneseProjectNavItems = [
-  { text: "Proposals (英語のみ)", link: "/proposals/" },
-  { text: "Form inventory (英語のみ)", link: "/forms/" },
   { text: "Conformance evidence (英語のみ)", link: "/conformance/" },
   { text: "Release (英語のみ)", link: "/release/" },
 ];
@@ -77,7 +74,7 @@ const japaneseCompatibilityNavItems = [
 
 const japaneseNav = [
   { text: "Current", link: "/ja/docs/" },
-  { text: "Spec", link: "/ja/spec/" },
+  { text: "Core v1.0.1 source (英語のみ)", link: coreSpec },
   {
     text: "Compatibility",
     items: japaneseCompatibilityNavItems,
@@ -154,93 +151,10 @@ const currentStackResourceItems = [
   { text: "Vector index", link: "/docs/resources/dense_vector_index.html" },
 ];
 
-const specSidebar = [
-  {
-    text: "Spec",
-    items: [
-      { text: "Contract map", link: "/spec/" },
-      { text: "Overview", link: "/spec/overview.html" },
-    ],
-  },
-  {
-    text: "Concepts",
-    items: [
-      { text: "Portability boundary", link: "/spec/portability-boundary.html" },
-      { text: "Form Families", link: "/spec/form-families.html" },
-      { text: "Project lifecycle", link: "/spec/project-lifecycle.html" },
-      { text: "Release evidence policy", link: "/spec/publication-freeze.html" },
-      { text: "Versioning", link: "/spec/versioning.html" },
-      { text: "Conformance", link: "/spec/conformance.html" },
-    ],
-  },
-  {
-    text: "Contracts",
-    items: [
-      { text: "Host API v1", link: "/spec/host-api/v1.html" },
-      { text: "Form Definition", link: "/spec/form-definition/" },
-      { text: "Form Package", link: "/spec/form-package/" },
-      { text: "Interface contracts", link: "/spec/interface-contract/" },
-      { text: "Binding contracts", link: "/spec/binding-contract/" },
-      { text: "Artifact transport", link: "/spec/artifact-transport/" },
-      { text: "Trust", link: "/spec/trust/" },
-      { text: "Decisions", link: "/spec/decisions/" },
-    ],
-  },
-  {
-    text: "Withdrawn epochs / Migration",
-    collapsed: true,
-    items: [
-      { text: "Versions & compatibility", link: "/docs/versions.html" },
-      { text: "Host API lanes", link: "/spec/host-api/" },
-      { text: "Retained Host API v1beta4", link: "/spec/host-api/v1beta4.html" },
-      { text: "Retained Host API v1beta1", link: "/spec/host-api/v1beta1.html" },
-      { text: "v2 to v3 migration boundary", link: "/release/migrations/v2-to-v3.html" },
-    ],
-  },
-];
-
-const edgeProposalItems = [
-  { text: "Family overview", link: "/proposals/edge/" },
-  { text: "Module worker", link: "/proposals/edge/module-worker.html" },
-  { text: "Worker bundle", link: "/proposals/edge/worker-bundle.html" },
-  {
-    text: "Static asset bundle",
-    link: "/proposals/edge/static-asset-bundle.html",
-  },
-  { text: "Worker version", link: "/proposals/edge/worker-version.html" },
-  { text: "Worker deployment", link: "/proposals/edge/worker-deployment.html" },
-  {
-    text: "Worker custom domain",
-    link: "/proposals/edge/worker-custom-domain.html",
-  },
-  { text: "Worker endpoint", link: "/proposals/edge/worker-endpoint.html" },
-  {
-    text: "Worker cron trigger",
-    link: "/proposals/edge/worker-cron-trigger.html",
-  },
-  { text: "Edge KV namespace", link: "/proposals/edge/edge-kv-namespace.html" },
-  { text: "SQLite database", link: "/proposals/edge/sqlite-database.html" },
-  {
-    text: "SQLite migration set",
-    link: "/proposals/edge/sqlite-migration-set.html",
-  },
-  {
-    text: "SQLite migration application",
-    link: "/proposals/edge/sqlite-migration-application.html",
-  },
-  {
-    text: "At-least-once queue",
-    link: "/proposals/edge/at-least-once-queue.html",
-  },
-  { text: "Queue consumer", link: "/proposals/edge/queue-consumer.html" },
-  { text: "Durable workflow", link: "/proposals/edge/durable-workflow.html" },
-  { text: "Actor namespace", link: "/proposals/edge/actor-namespace.html" },
-];
-
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "Provider 3 quick start",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -249,7 +163,7 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Provider 3 typed reference (31 current Experimental Forms)",
+      text: "Current Provider 3 mapping (31 resources)",
       items: currentStackResourceItems,
     },
     {
@@ -257,6 +171,7 @@ const englishSidebar = {
       collapsed: true,
       items: [
         { text: "Versions & compatibility", link: "/docs/versions.html" },
+        { text: "Host API history (Core source)", link: `${coreSpec}/host-api` },
         {
           text: "v2 to v3 migration boundary",
           link: "/release/migrations/v2-to-v3.html",
@@ -264,28 +179,11 @@ const englishSidebar = {
       ],
     },
   ],
-  "/spec/": specSidebar,
-  "/proposals/": [
-    {
-      text: "Current 8-family / 31-Form candidate corpus",
-      items: [{ text: "Overview", link: "/proposals/" }, ...edgeProposalItems],
-    },
-    {
-      text: "Additional current families (decision 0043)",
-      collapsed: true,
-      items: [
-        { text: "Function family", link: "/proposals/function/" },
-        { text: "Container family", link: "/proposals/container/" },
-        { text: "Table family", link: "/proposals/table/" },
-        { text: "Pull queue family", link: "/proposals/queue/" },
-        { text: "Topic family", link: "/proposals/topic/" },
-        { text: "Schedule family", link: "/proposals/schedule/" },
-        { text: "Vector family", link: "/proposals/vector/" },
-      ],
-    },
-  ],
   "/forms/": [
-    { text: "Forms", items: [{ text: "Current inventory", link: "/forms/" }] },
+    {
+      text: "Provider mapping",
+      items: [{ text: "Current mapping", link: "/forms/" }],
+    },
   ],
   "/conformance/": [
     {
@@ -304,7 +202,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "Provider 3 quick start",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -315,7 +213,7 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Provider 3 typed reference (current 31 Forms)",
+      text: "Current Provider 3 mapping (31 resources)",
       items: currentStackResourceItems,
     },
     {
@@ -327,16 +225,14 @@ const japaneseSidebar = {
           link: "/ja/docs/versions.html",
         },
         {
+          text: "Host API history (Core source, 英語のみ)",
+          link: `${coreSpec}/host-api`,
+        },
+        {
           text: "v2 to v3 migration boundary (英語のみ)",
           link: "/release/migrations/v2-to-v3.html",
         },
       ],
-    },
-  ],
-  "/ja/spec/": [
-    {
-      text: "Spec",
-      items: [{ text: "契約マップ", link: "/ja/spec/" }],
     },
   ],
 };
@@ -345,9 +241,12 @@ export default defineConfig({
   lang: "en",
   title: "Takoform",
   description:
-    "One provider. Dependent on none. Portable resource contracts for Terraform and OpenTofu.",
+    "One typed provider. Any compatible host. Portable resource contracts for Terraform and OpenTofu.",
   cleanUrls: false,
   lastUpdated: false,
+  // Spec and proposal Markdown remains addressable for historical URL and
+  // fixture continuity. sync-website-spec projects those sources as concise
+  // non-authoritative stubs; they are intentionally absent from navigation.
   srcExclude: ["**/README.md", "**/DESIGN.md", "static/**"],
   outDir: "public",
   // The 404 page is generated like every other page; it must not appear in the

@@ -1,88 +1,39 @@
 # バージョンと互換性
 
-Takoform では、Specification、Provider、Host API、Form Family、Form definition、
-Form Package を独立した軸として扱います。一つの軸の version は、別の軸の
-preview や成熟度を意味しません。
+Takoform の domain version axes は API/Core release の SemVer と各 Form の
+`definitionVersion` の二つです。Provider SemVer、package/schema の ID・digest、
+withdrawn lane は artifact / history identity であり、domain axis を増やしません。
 
-## Current design target
+## Current identity
 
-| 軸                    | 現在の identity                            | 意味と利用可能性                                                                                                                                                               |
-| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform 1.1**                           | first numbered release。公開状態は exact append-only release ledger だけから導出する。1.0 は公開前に撤回され再利用しない。             |
-| Host API              | **`forms.takoform.com/v1`**                | stable Specification contract。                                                                                                                                                 |
-| Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Forms。すべて Experimental。                                                                                                                                |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | package artifact は unpublished。                                                                                                                                               |
-| Provider              | **3.0.0、Registry 公開済み**               | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。                                                                    |
+| surface | identity | 用途 |
+| --- | --- | --- |
+| API/Core | **`v1.0.1`** | `forms.takoform.com/v1` 上の current compatibility checkpoint。互換性のある 1.x は同じ lane に留まります。 |
+| external Edge publication | [`takoform-forms` commit `026f862975b9adb0e2bfd9c6214a5e6691dfb596`](https://github.com/tako0614/takoform-forms/commit/026f862975b9adb0e2bfd9c6214a5e6691dfb596) | 16 content-addressed package の公開正本。 |
+| embedded Edge candidate snapshot | [`forms/candidates/edge.forms.takoform.com/candidate-set.json`](/forms/candidates/edge.forms.takoform.com/candidate-set.json) | Provider repository 内の `publicationStatus: unpublished` snapshot。公開 evidence ではありません。 |
+| Provider | **`3.0.0`** | 8 versionless family / 31 mapping を持つ Registry 公開済み typed implementation。 |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package identity。公開は Provider release と独立します。 |
 
-Provider の配布状態は独立した軸です。**Provider 3.0.0** が current Registry
-公開済み implementation です。**Provider 2.1.1**、**Provider 2.0.0**、
-**Provider 1.0.3** は撤回された
-pre-Beta epoch のための不変の Registry 履歴として残ります
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-current major release は **3.0.0** です
-([v2 から v3 への移行境界](/release/migrations/v2-to-v3.html))。
+Exact Form は family、kind、`definitionVersion`、`schemaDigest` で識別します。
+generated resource page は対応する Form Definition に link し、この identity を
+state に保持します。Provider resource 名は adapter metadata です。
 
-## Published compatibility mapping
+## Provider compatibility history
 
-| Client / distribution       | Host API          | Form と definition                                                    | 状態 / 用途                                                           |
-| --------------------------- | ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Provider 3.0.0 distribution | Host API v1       | 8 versionless families / current Experimental Form 31 個              | current Registry 公開済み non-normative reference implementation。    |
-| Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1 の immutable historical Form 15 個 | Registry 公開済みの retained client。descriptor は設計上 `candidate-only` metadata。 |
-| Provider 2.0.0 distribution | Host API v1alpha2（撤回済み epoch） | 撤回された 9 個の v1alpha2 Form | 不変の Registry 履歴。exact pin のみ、後継なし。 |
-| Provider 1.0.3 Legacy       | Host API v1alpha1（撤回済み epoch） | 撤回された v1 Form Package identity | 不変の Registry 履歴。recovery / migration のみ。 |
+| Provider | Host/API lane | 互換性 |
+| --- | --- | --- |
+| **3.0.0** | current Host API | 8 family / 31 typed mapping。current Registry distribution。 |
+| **2.1.1** | `forms.takoform.com/v1beta1` | [identity ledger](/release/provider-form-identities.json) にある 15 immutable Edge Form identity 用の retained client。 |
+| **2.0.0** | withdrawn `v1alpha2` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |
+| **1.0.3** | withdrawn `v1alpha1` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |
 
-Host API v1beta1 は wire protocol、Edge Form Family v1beta1 はその上で動く
-Form の group です。definition 0.1.0 は Form の identity であり、Provider
-2.1.1 の SemVer を変更しません。
+Provider release は Form definition / package publication と独立しています。
+withdrawn Provider epoch で作成した state は [v2-to-v3 migration boundary](/release/migrations/v2-to-v3.html)
+を確認してください。自動 migration はありません。
 
-## Current Edge reference family (16 Experimental Forms)
+## Related reference
 
-現在の versionless Edge family は次の 16 個の exact Experimental `0.x` Form
-です（詳細ページは英語のみ）。
-
-- [`takoform_module_worker`](/docs/resources/module_worker.html)
-- [`takoform_worker_bundle`](/docs/resources/worker_bundle.html)
-- [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html)
-- [`takoform_worker_version`](/docs/resources/worker_version.html)
-- [`takoform_worker_deployment`](/docs/resources/worker_deployment.html)
-- [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html)
-- [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)
-- [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)
-- [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)
-- [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)
-- [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)
-- [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html)
-- [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)
-- [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)
-- [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)
-- [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
-
-Registry 公開済み Provider 3 の resource type 名は次の version floor を使います。
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = ">= 3.0.0"
-    }
-  }
-}
-```
-
-repository descriptor は owner publication 後も設計上 `candidate-only`
-metadata として残ります。この metadata は Registry client の公開状態を変更しません。
-
-## 撤回された epoch
-
-pre-Beta の epoch とその文書は撤回されました
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-撤回された resource ページはこのサイトに存在しません。identity は公開台帳に
-retired として記録され、バイト列は git 履歴と release tag に残ります。撤回
-された resource の既存利用者は exact pin（`= 2.0.0` / `= 2.1.1`、v1 state は
-`= 1.0.3`）を維持するか、
-[v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) に従ってください。
-自動 migration はなく、9 resource のいずれかを state に残したまま撤回を越えて
-upgrade すると、lifecycle request の前に fail closed します。
-
-<StatusNote />
+- [Provider resource reference](/ja/docs/)
+- [Provider mapping inventory](/forms/)
+- [Specification and release evidence](/release/)
+- [Conformance evidence](/conformance/)

@@ -8,8 +8,9 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/provider"
 )
 
-// currentFamilyInventory is a documentation view grouped from the Provider's
-// exact runtime projection. It is not a family-selection authority.
+// currentFamilyInventory is a documentation view grouped from the current
+// Provider 3 runtime projection. It is not a Form publisher roster or family
+// selection authority.
 type currentFamilyInventory struct {
 	Group string
 	Forms []model.Form
@@ -54,7 +55,7 @@ func providerReferenceTerraformType(form model.Form) (string, error) {
 			return surface.ResourceType, nil
 		}
 	}
-	return "", fmt.Errorf("official-provider reference surface has no Terraform mapping for %s/%s", form.Family.APIVersion(), form.Kind)
+	return "", fmt.Errorf("Provider reference surface has no Terraform mapping for %s/%s", form.Family.APIVersion(), form.Kind)
 }
 
 func mustProviderReferenceTerraformType(form model.Form) string {

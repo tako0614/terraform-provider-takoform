@@ -301,32 +301,20 @@ func sortedStringKeys(value map[string]any) []string {
 	return keys
 }
 
-// formInventoryDoc renders the human-readable Form inventory so the published
-// list of Forms can never disagree with the declaration the packages are built
-// from.
+// formInventoryDoc renders the human-readable Provider mapping inventory so
+// the generated projection stays aligned with the source declarations.
 func formInventoryDoc() string {
-	return `# Form inventory
+	return `# Provider mapping inventory
 
-The current Form source is provider-neutral. Terraform resource type names,
-provider schema choices, and provider releases are reference-implementation
-metadata; none participates in Form validation, canonical bytes, or digest.
-
-The design has five independent version axes. They are never one maturity
-label:
-
-| Axis | Current design target | Meaning |
-| --- | --- | --- |
-| Provider | independent | A non-normative client implementation version; not Form identity. |
-| Host API | ` + "`forms.takoform.com/v1`" + ` | Stable Host protocol required by these current definitions. |
-| Form Family | eight versionless groups | Family membership is the exact versionless ` + "`apiVersion`" + ` group. |
-| Form definition | ` + "`0.1.0`" + ` | Independent immutable version; each current Form is Experimental. |
-| Form Package API | ` + "`packages.forms.takoform.com/v1alpha5`" + ` | Package-envelope schema for versionless-family candidates. |
+This inventory records the current Provider 3 projection. Provider resource
+type names and schema choices are adapter metadata. Published Edge definitions
+are maintained in the standalone [takoform-forms source](https://github.com/tako0614/takoform-forms);
+other entries are exact embedded Provider projections. Each current FormRef
+carries an exact ` + "`definitionVersion`" + ` within its versionless family group.
 
 The generated candidate index is ` + "`forms/candidates/current-family-index.json`" + `.
-It binds all eight family candidate sets plus the global Interface and Binding
-candidate sets by exact SHA-256. Provider release and publication evidence are
-separate authorities; a provider mapping cannot widen Form semantics or change
-a Form digest.
+It binds the eight family candidate sets plus shared Interface and Binding
+sets by SHA-256, so this inventory and the checked-in contracts stay aligned.
 ` + v3FormInventorySection()
 }
 

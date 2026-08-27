@@ -7,14 +7,21 @@ and commercial policy.
 
 ## Specification lifecycle
 
-**Specification Epoch**:
-A versioned Form identity domain whose API version separates independently
-evolving Form lines. Kind names may recur across epochs without sharing Form
-SemVer or compatibility.
-_Avoid_: Release generation, admission generation
+**API/Core release**:
+A public Core compatibility checkpoint identified by API SemVer. The current
+checkpoint is `1.0.1` on the `/v1` lane; it does not version individual Forms or
+describe Host deployment/support.
+_Avoid_: Specification epoch, provider release, hosted-service availability
 
-**Legacy Epoch**:
-A frozen Specification Epoch retained only for published identity,
+**Historical Specification receipt**:
+A sealed record of one exact normative source snapshot. The retained
+Specification 1.1 receipt is historical evidence only: it is not a current
+version axis, does not create `/v1.1`, and does not publish a Form, package, or
+Provider.
+_Avoid_: Current API/Core release, mutable Specification stream
+
+**Legacy lane**:
+A frozen protocol or Form identity retained only for published identity,
 compatibility, recovery, revocation, and migration.
 _Avoid_: Current API, deprecated-but-mutable API
 
@@ -47,7 +54,7 @@ _Avoid_: Resource Shape, service type, provider resource
 
 **FormRef**:
 The immutable exact identity of one Form Definition, including its
-Specification Epoch, kind, version, and schema digest. Publication makes that
+versionless family group, kind, definitionVersion, and schema digest. Publication makes that
 identity publicly resolvable; a local candidate can carry an exact FormRef
 without claiming publication.
 _Avoid_: Latest Form, floating Form version

@@ -11,13 +11,24 @@ UTC five-field cron schedule that delivers one declared message at each matched 
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `schedule.forms.takoform.com/Schedule`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_message_schedule/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `schedule.forms.takoform.com/Schedule` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/schedule.forms.takoform.com/schedule/definition.json`](../../forms/candidates/schedule.forms.takoform.com/schedule/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_message_schedule/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "schedule.forms.takoform.com",
+  "kind": "Schedule",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:d99904fdf12f983e3691ca8af1a3afa3baaa0c55ab966dcb6d4efab909761afb"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:5ae8be6a1102a0104c1705ae4e9ee12c6cfbc68879d02fa08897e30e4e9c09c8`.
 
 ## Arguments
 

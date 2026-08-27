@@ -1,25 +1,14 @@
-# Form inventory
+# Provider mapping inventory
 
-The current Form source is provider-neutral. Terraform resource type names,
-provider schema choices, and provider releases are reference-implementation
-metadata; none participates in Form validation, canonical bytes, or digest.
-
-The design has five independent version axes. They are never one maturity
-label:
-
-| Axis | Current design target | Meaning |
-| --- | --- | --- |
-| Provider | independent | A non-normative client implementation version; not Form identity. |
-| Host API | `forms.takoform.com/v1` | Stable Host protocol required by these current definitions. |
-| Form Family | eight versionless groups | Family membership is the exact versionless `apiVersion` group. |
-| Form definition | `0.1.0` | Independent immutable version; each current Form is Experimental. |
-| Form Package API | `packages.forms.takoform.com/v1alpha5` | Package-envelope schema for versionless-family candidates. |
+This inventory records the current Provider 3 projection. Provider resource
+type names and schema choices are adapter metadata. Published Edge definitions
+are maintained in the standalone [takoform-forms source](https://github.com/tako0614/takoform-forms);
+other entries are exact embedded Provider projections. Each current FormRef
+carries an exact `definitionVersion` within its versionless family group.
 
 The generated candidate index is `forms/candidates/current-family-index.json`.
-It binds all eight family candidate sets plus the global Interface and Binding
-candidate sets by exact SHA-256. Provider release and publication evidence are
-separate authorities; a provider mapping cannot widen Form semantics or change
-a Form digest.
+It binds the eight family candidate sets plus shared Interface and Binding
+sets by SHA-256, so this inventory and the checked-in contracts stay aligned.
 
 ## `edge.forms.takoform.com`
 
@@ -92,13 +81,13 @@ a Form digest.
 | --- | --- | --- | --- |
 | `VectorIndex` | `identity` | `0.1.0` | Fixed-dimension dense vector index with a creation-time distance metric. The vector.index Interface fixes namespaced whole-record upsert, read-after-write fetch, approximate top-k query, closed metadata filtering, and deletion; this identity carries only the embedding dimension and metric. |
 
-The current roster is exactly 31 Forms in 8 versionless families. Edge has
-exactly 16 members and intentionally has no current ObjectBucket Form,
+Current Provider 3 mapping has exactly 31 typed resources in 8 versionless families. Edge has
+exactly 16 members in that mapping and intentionally has no ObjectBucket Form,
 `edge.objects` Interface, or ObjectBucket Binding. Retained versioned
 Provider 2.1.1 packages remain immutable history and are not members of this
-current roster.
+mapping.
 
-The official Terraform Provider reference docs and examples under
+The Terraform Provider reference docs and examples under
 `docs/resources` and `examples/resources` cover only mappings that
 the provider explicitly owns. Their `takoform_*` names are non-normative
 and cannot affect a Form Definition or digest. Missing mappings for other

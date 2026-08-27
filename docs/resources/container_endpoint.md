@@ -11,13 +11,24 @@ Host-assigned HTTPS reachability for the active Container Traffic. The address i
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerEndpoint`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_container_endpoint/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `container.forms.takoform.com/ContainerEndpoint` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/container.forms.takoform.com/container-endpoint/definition.json`](../../forms/candidates/container.forms.takoform.com/container-endpoint/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_container_endpoint/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "container.forms.takoform.com",
+  "kind": "ContainerEndpoint",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:06c8945bbc5d4772178a269b3e0cfd69531b476a3ed1bf32b4a9686e3f0acb99"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:5ed173de0559148e6b10f96386f348ef240772d22c37f373ab94008b58a401d5`.
 
 ## Arguments
 

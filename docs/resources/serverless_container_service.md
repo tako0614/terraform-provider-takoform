@@ -11,13 +11,24 @@ Logical identity of one request-driven serverless container service. Image, proc
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerService`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_serverless_container_service/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `container.forms.takoform.com/ContainerService` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/container.forms.takoform.com/container-service/definition.json`](../../forms/candidates/container.forms.takoform.com/container-service/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_serverless_container_service/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "container.forms.takoform.com",
+  "kind": "ContainerService",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:710993f0cebc6c70191ff19b2399efb5c1e66af5df005a7b87ff53e6a5b7c2da"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:218973ae806e3d6b24a3373e752fa8abc1eb53432eaf457cd4faa214e927d047`.
 
 ## Arguments
 

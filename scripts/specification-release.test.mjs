@@ -372,14 +372,33 @@ function withTransitionFixture(options, assertion) {
 }
 
 describe("Specification 1.1 owner ledger", () => {
-  test("documents all four W09 commit boundaries at the root", () => {
+  test("keeps the root README reader-first and release safety in dedicated guidance", () => {
     const readme = readFileSync(path.join(ROOT, "README.md"), "utf8");
-    expect(readme).toContain("four explicit boundaries");
-    expect(readme).toContain("C1 freezes the normative tree");
-    expect(readme).toContain("C2 is an");
-    expect(readme).toContain("C3 is the authoritative append-only");
-    expect(readme).toContain("C4 is its direct generated-output-only child");
-    expect(readme).not.toContain("three explicit boundaries");
+    expect(readme).toContain("# Takoform Provider");
+    expect(readme).toContain("## Quick start");
+    expect(readme).toContain('version = "= 3.0.0"');
+    expect(readme).toContain("These commands are read-only.");
+    expect(readme).not.toContain("four explicit boundaries");
+    expect(readme).not.toContain("C1 freezes the normative tree");
+
+    const contributing = readFileSync(
+      path.join(ROOT, "CONTRIBUTING.md"),
+      "utf8",
+    );
+    expect(contributing).toMatch(/Candidate tooling cannot\s+publish\./);
+    expect(contributing).toMatch(/never create a real\s+tag or GitHub Release/);
+
+    const releaseGuide = readFileSync(
+      path.join(ROOT, "release/README.md"),
+      "utf8",
+    );
+    expect(releaseGuide).toContain("Provider release identity ledger");
+    expect(releaseGuide).toMatch(
+      /31 typed resources across eight versionless families/,
+    );
+    expect(releaseGuide).toMatch(
+      /signed release-tag commit must be an ancestor of the reviewed\s+protected-main\/readback commit/,
+    );
   });
 
   test("keeps C1 open with withdrawn 1.0 and sourceSnapshot as the sole authority", () => {

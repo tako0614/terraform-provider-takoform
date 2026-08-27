@@ -18,9 +18,9 @@ go run github.com/google/go-licenses@v1.6.0 check ./... \
 
 A change is ready for review only when formatting, vet, and tests pass and any schema change includes documentation and an example.
 
-## Provider boundary
+## What belongs in this repository
 
-Keep this provider thin and host-neutral. It may expose only the Forms declared in `internal/formcatalog`, and a new Form is added there rather than by hand-writing a resource. Expanding the set is a specification and conformance change. Do not add target-pool, backend, credential, secret, pricing, billing, quota, account, or operator-policy resources. Never log bearer tokens or returned secret material.
+Keep this provider thin and host-neutral. It may expose only the current Provider 3 mappings registered in `internal/provider`; add a mapping there together with its generated docs and example rather than hand-writing a resource. Expanding the set is a provider-registration and conformance change. Do not add target-pool, backend, credential, secret, pricing, billing, quota, account, or operator-policy resources. Never log bearer tokens or returned secret material.
 
 ## Release changes
 
@@ -31,11 +31,14 @@ platform matrix, or GitHub release permissions require maintainer security
 review and a rotation plan. Never test release changes by overwriting an
 existing version; use a new semver prerelease.
 
-Form Packages have no independent release cadence: they publish with the
-provider release that embeds them (decision 0041), and the withdrawn epochs'
-published `forms/*` tags stay immutable (decision 0042). Security revocation
-statements and cumulative checkpoints live under `forms/revocations/`, are
-append-only, and use `forms/revocations/v<statementVersion>`. The revocation
-workflow dispatches from protected main, is keyless, and must not reference
-provider GPG secrets. Test the builders only with `--allow-untagged-candidate`;
-never create a real tag or GitHub Release to test a pull request.
+Form Definitions and Form Packages are owned and released by their publisher
+on an independent cadence. Provider releases are independent and occur only
+when typed adapter, schema, state/import, codec, or host-client behavior
+changes; a Provider release does not publish or version a Form Package. The
+withdrawn epochs' published `forms/*` tags stay immutable (decision 0042).
+Security revocation statements and cumulative checkpoints live under
+`forms/revocations/`, are append-only, and use
+`forms/revocations/v<statementVersion>`. The revocation workflow dispatches
+from protected main, is keyless, and must not reference provider GPG secrets.
+Test the builders only with `--allow-untagged-candidate`; never create a real
+tag or GitHub Release to test a pull request.

@@ -1,8 +1,9 @@
 # Provider v2 to v3 migration boundary
 
-Provider `3.0.0` is a breaking provider release. It exposes the 31 current
-Experimental Forms from the eight versionless families on Host API
-`forms.takoform.com/v1`; it does not promote or publish those Forms.
+Provider `3.0.0` is a breaking provider release. It registers 31 current typed
+Provider mappings from the eight versionless families on Host API
+`forms.takoform.com/v1`; Provider release does not publish or version their
+Form Definitions or packages.
 
 Provider `2.1.1` remains immutable Registry history. It carried 15
 `edge.forms.takoform.com/v1beta1` resource types plus the nine withdrawn
@@ -45,10 +46,12 @@ must refuse rather than guess.
 
 ## Retained v2.1.1 Edge state
 
-Provider 3 keeps exact state dispatch for the 14 retained v2.1.1 Edge resource
-types that have a compatible current Terraform surface. Their state remains
-bound to the exact historical FormRef recorded in it; it is not silently
-rewritten to a current versionless FormRef.
+The Provider 2.1.1 identity ledger retains 15 exact Edge FormRefs. Fourteen of
+those identities remain readable by Provider 3 state/import dispatch; their
+state remains bound to the exact FormRef recorded in it and is never silently
+rewritten to a current mapping. The fifteenth identity, ObjectBucket, remains
+retained history without a Provider 3 resource or codec and requires explicit
+pre-upgrade handling.
 
 Historical `takoform_edge_object_bucket` is the deliberate exception. Current
 Takoform has no ObjectBucket Form or `edge.objects` Interface, and Provider 3
@@ -80,12 +83,13 @@ before Takoform lifecycle mutation; nothing is silently dropped or rebound.
 
 - This document ships in the `v3.0.0` release notes.
 - `release/provider-form-identities.json` binds the exact eight-family,
-  31-Form projection and all provider-owned Terraform resource names.
+  31-resource current Provider mapping and all provider-owned Terraform
+  resource names.
 - The immutable Provider 2.1.1 identity entry and Registry readback remain
   unchanged.
 - The Provider 3 publication flow must produce its own signed candidate and
   direct Terraform/OpenTofu Registry readback for the 31-resource surface.
   A local dev override, worker-authoring matrix, or committed report is not
   Registry publication evidence.
-- Publishing Provider 3 does not publish a Form Package, promote Form maturity,
-  establish Host support, or make any Form commercially available.
+- Publishing Provider 3 does not change Form publication or maturity, establish
+  Host support, or make any Form commercially available.
