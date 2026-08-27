@@ -11,10 +11,12 @@ Applies one exact SQLite Migration Set to one exact SQLite Database. Both relati
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `edge.forms.takoform.com/SQLiteMigrationApplication`.
+This page documents a non-normative official Terraform Provider 3
+compatibility mapping for the retained Form `edge.forms.takoform.com/SQLiteMigrationApplication`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
+Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
+currently published package or that the Provider's 31-resource projection is the active publisher roster.
 The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_sqlite_migration_application/resource.tf).

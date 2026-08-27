@@ -1,20 +1,25 @@
 ---
 page_title: "Takoform provider"
-description: "Takoform API/Core v1.0.0, current Form corpus, and retained Provider history"
+description: "Takoform API/Core v1.0.1, active Edge Form candidates, and retained Provider history"
 ---
 
 # Takoform provider
 
-The first public API/Core release identity is **`v1.0.0`**, using the existing
-`forms.takoform.com/v1` wire and discovery lane. Release numbers are
-human-readable compatibility checkpoints: future compatible `v1.1.0`, `v1.2.0`,
-and later `v1.y.0` releases remain on `/v1`. The historical Specification 1.1
-is a sealed exact source receipt, not API release 1.1 or 1.1.0; it does not
-create `/v1.1` and is not an ongoing Specification version stream. The current
-corpus has eight versionless families and 31 Experimental `0.x` Forms, using
-package envelope `packages.forms.takoform.com/v1alpha5`; package artifacts
-remain unpublished. A historical Specification receipt does not promote a Form,
-publish a package, or release a Provider.
+The current public API/Core checkpoint is **`v1.0.1`**, published by the
+[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
+on the existing `forms.takoform.com/v1` wire and discovery lane. API SemVer is
+a compatibility checkpoint; compatible `1.x` checkpoints remain on `/v1`.
+Host implementation, deployment, support, and adoption are separate host-owned
+facts. The historical Specification 1.1 is a sealed exact source receipt, not
+an API release or current version axis, and it does not create `/v1.1`.
+
+The active standalone publisher is
+[`takoform-forms`](https://github.com/tako0614/takoform-forms). Its
+`edge.forms.takoform.com` source set currently contains 16 Experimental
+candidate Forms; package artifacts are unpublished. Form definition and package
+releases are independent of Provider releases. The Provider repository retains
+31 typed mappings across eight families for Provider 3 compatibility history;
+that projection is not the current publisher roster.
 
 The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and the
 `forms.takoform.com/v1alpha2` provider-v2 epoch) were withdrawn
@@ -24,13 +29,20 @@ history; the withdrawn resources have no successors in this documentation, and
 [the migration boundary](../release/migrations/v2-to-v3.md) says what existing
 state does.
 
-Provider `v3.0.0` is the current Registry-published implementation of all 31
-current Experimental Forms. It is independent and non-normative, so it cannot
+Provider `v3.0.0` is the current Registry-published implementation of those
+retained typed mappings. It is independent and non-normative, so it cannot
 block or release API/Core or alter the sealed Specification receipt. Provider
 `v2.1.1` remains immutable
 Registry history for the exact `v1beta1` identities it shipped. Using either
 requires a compatible host; Provider publication does not assert a hosted
 service's live availability.
+
+API patches are defect-only and may be batched; API minors are at most monthly
+and may be skipped; a major is normally at most annual and requires a concrete
+incompatibility and migration plan. Public releases pass prepublication
+review/gates and are read-only after publication. Form definition/package
+releases follow their publisher's independent cadence, and Provider releases
+only change the typed adapter/compatibility surface.
 
 ## Install the provider
 
@@ -71,15 +83,16 @@ A source tag, documentation page, or local build alone is not Registry publicati
 
 ## Current Provider 3 Form reference
 
-The independent Registry-published Provider 3 maps all 31 current Experimental
-Forms. These resource type names are non-normative Provider metadata; Form
-maturity and Form Package publication remain separate.
+The independent Registry-published Provider 3 maps the retained 31 typed
+compatibility entries. These resource type names are non-normative Provider
+metadata; active publisher selection, Form maturity, and Form Package
+publication remain separate.
 
 ### Edge family
 
 The versionless `edge.forms.takoform.com` family contains 16 exact
 Experimental `0.x` Forms and intentionally has no current `ObjectBucket`. It
-is one of the eight families in Specification 1.1:
+is the active standalone publisher's candidate set:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)

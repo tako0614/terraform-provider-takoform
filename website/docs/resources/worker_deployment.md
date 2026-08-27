@@ -11,10 +11,12 @@ Selects which Worker Versions of one Module Worker serve traffic and in what pro
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `edge.forms.takoform.com/WorkerDeployment`.
+This page documents a non-normative official Terraform Provider 3
+compatibility mapping for the retained Form `edge.forms.takoform.com/WorkerDeployment`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
+Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
+currently published package or that the Provider's 31-resource projection is the active publisher roster.
 The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_deployment/resource.tf).

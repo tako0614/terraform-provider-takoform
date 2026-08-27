@@ -11,10 +11,12 @@ The one active basis-point traffic selection for a Container Service. One to eig
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerTraffic`.
+This page documents a non-normative official Terraform Provider 3
+compatibility mapping for the retained Form `container.forms.takoform.com/ContainerTraffic`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
+Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
+currently published package or that the Provider's 31-resource projection is the active publisher roster.
 The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_container_traffic/resource.tf).

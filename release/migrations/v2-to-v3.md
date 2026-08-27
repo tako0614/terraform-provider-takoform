@@ -1,8 +1,9 @@
 # Provider v2 to v3 migration boundary
 
-Provider `3.0.0` is a breaking provider release. It exposes the 31 current
-Experimental Forms from the eight versionless families on Host API
-`forms.takoform.com/v1`; it does not promote or publish those Forms.
+Provider `3.0.0` is a breaking provider release. It retains 31 typed
+compatibility mappings from the eight versionless families on Host API
+`forms.takoform.com/v1`; this Provider history does not make those mappings the
+active publisher roster or publish their Form Packages.
 
 Provider `2.1.1` remains immutable Registry history. It carried 15
 `edge.forms.takoform.com/v1beta1` resource types plus the nine withdrawn
@@ -80,7 +81,8 @@ before Takoform lifecycle mutation; nothing is silently dropped or rebound.
 
 - This document ships in the `v3.0.0` release notes.
 - `release/provider-form-identities.json` binds the exact eight-family,
-  31-Form projection and all provider-owned Terraform resource names.
+  31-Form retained compatibility projection and all provider-owned Terraform
+  resource names.
 - The immutable Provider 2.1.1 identity entry and Registry readback remain
   unchanged.
 - The Provider 3 publication flow must produce its own signed candidate and

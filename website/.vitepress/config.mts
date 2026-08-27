@@ -240,7 +240,7 @@ const edgeProposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "API/Core v1.0.1 / Host API v1",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -249,7 +249,7 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Provider 3 typed reference (31 current Experimental Forms)",
+      text: "Provider 3 retained typed mapping (31 Forms)",
       items: currentStackResourceItems,
     },
     {
@@ -267,7 +267,7 @@ const englishSidebar = {
   "/spec/": specSidebar,
   "/proposals/": [
     {
-      text: "Current 8-family / 31-Form candidate corpus",
+      text: "Active Edge publisher candidates (16 Forms)",
       items: [{ text: "Overview", link: "/proposals/" }, ...edgeProposalItems],
     },
     {
@@ -304,7 +304,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "API/Core v1.0.1 / Host API v1",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -315,7 +315,7 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Provider 3 typed reference (current 31 Forms)",
+      text: "Provider 3 retained typed mapping (31 Forms)",
       items: currentStackResourceItems,
     },
     {

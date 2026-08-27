@@ -13,10 +13,16 @@ packages, reference conformance, and Provider behavior are independent evidence
 and do not block the numbered Specification. The separately generated
 compatibility report is not release evidence, an asset, or a prerequisite.
 
-Specification 1.1 references the unchanged Host API v1 candidate
-`forms.takoform.com/v1` but does not publish or promote that separate protocol
-identity, promote the 31 current Experimental `0.x` FormRefs, publish their
-packages, or advance the official Provider. Provider 3 is an independent non-normative sample;
+The public Core/API checkpoint is `v1.0.1`, published by the external
+[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
+on the unchanged Host API v1 lane `forms.takoform.com/v1`; Host implementation,
+support, deployment, and adoption remain separate. The historical Specification
+1.1 receipt does not promote that lane, publish a Form or package, or advance
+the Provider. The standalone `takoform-forms` source currently carries the
+active Edge candidate set of 16 Forms; package artifacts remain unpublished.
+Provider 3 is an independent non-normative compatibility projection retaining
+31 typed mappings across eight families; those mappings are Provider history,
+not the active publisher roster.
 Provider 2.1.1 and its Host v1beta1/15-Form identities remain immutable
 Registry history. `bun run check:specification-releases` validates the ledger,
 while `bun run check:specification-1-1-release` derives readiness solely from
@@ -24,8 +30,8 @@ the exact committed source evidence.
 
 `specification-compatibility.json` is generated from the current committed
 source and owning ledgers. It contains exactly five compatibility classes and
-the four explicit statuses, including a raw-byte pin for the literal Host API
-v1 candidate. It distinguishes retained history, independent future identities,
+the four explicit statuses, including a raw-byte pin for the retained W09 Host
+API v1 compatibility record. It distinguishes retained history, independent identities,
 unpublished candidates, and withdrawn-retained lanes. It is compatibility
 evidence only, not a publication receipt or release asset; no `/v1.1` Host
 lane, v2 schema, tag, or receipt is minted.
@@ -114,10 +120,12 @@ before live readback and immediately before its three-path write. Any other
 observed state halts for forward repair; no command deletes, overwrites, or
 retags the identity.
 
-The exact current candidate is the versionless family set rooted at
+The Provider compatibility snapshot is the versionless family set rooted at
 `edge.forms.takoform.com` and the other seven groups in the current-family
-index, using package envelope `packages.forms.takoform.com/v1alpha5`. Neither
-identity is published by recording the numbered Specification release.
+index, using package envelope `packages.forms.takoform.com/v1alpha5`. The
+active standalone publisher currently carries only the Edge candidate source;
+neither a candidate nor the historical Specification receipt is published by
+recording the numbered Specification release.
 
 ## Provider release boundary
 
@@ -164,8 +172,8 @@ The append-only release identity ledger records the separate immutable GitHub
 Release, Terraform Registry listing, signed OpenTofu installation, and exact
 31-resource schema readback that establish Provider 3 as published.
 
-Provider 3 projects exactly 31 Experimental `0.x` Forms from the eight current
-versionless families. Their exact FormRefs, provider-owned Terraform resource
+Provider 3 retains exactly 31 Experimental `0.x` mappings from the eight
+versionless families in its compatibility snapshot. Their exact FormRefs, provider-owned Terraform resource
 types, and definition/package digests are locked in
 [`provider-form-identities.json`](provider-form-identities.json). The
 `packages.forms.takoform.com/v1alpha5` candidate artifacts remain unpublished,
@@ -174,10 +182,10 @@ maturity. The same ledger retains Provider 2.1.1's exact 15-Form v1beta1 entry
 byte-for-byte as immutable history.
 
 Provider 3 removes the nine withdrawn v1alpha2 resource types and historical
-ObjectBucket from its current surface. The explicit state and resource-type
+ObjectBucket from its retained compatibility surface. The explicit state and resource-type
 boundary is in [`migrations/v2-to-v3.md`](migrations/v2-to-v3.md); in
 particular, withdrawn Terraform type names are never reoccupied by unrelated
-current Forms.
+retained Forms or future identities.
 
 ## Abandoned v2.1.0 candidate and v2.1.1 forward repair
 

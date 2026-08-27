@@ -148,12 +148,8 @@ describe("the committed status document", () => {
       path.join(repositoryRoot, "website/.vitepress/config.mts"),
       "utf8",
     );
-    expect(config).toContain(
-      "Specification 1.1 / separate Host API v1 candidate",
-    );
-    expect(config).toContain(
-      "Provider 3 typed reference (31 current Experimental Forms)",
-    );
+    expect(config).toContain("API/Core v1.0.1 / Host API v1");
+    expect(config).toContain("Provider 3 retained typed mapping (31 Forms)");
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
     expect(config).not.toContain("Specification 1.1 candidate");
     expect(config).not.toContain("Provider 3 candidate reference");

@@ -41,16 +41,15 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
   <div class="status-note">
     <template v-if="lang === 'ja'">
       <p>
-        <strong>Specification</strong>:
+        <strong>Historical Specification receipt</strong>:
         Takoform Specification <code>{{ status.specificationVersion }}</code> は
-        <code>{{ status.specificationReleaseStatus }}</code> です。この release status は
-        append-only の Specification release ledger/status document から導出されます。Host API
-        <code>{{ hostApiVersion }}</code> は Specification とは別の {{ hostApiMaturity }} contract で、
-        <code>{{ status.hostApiPublicationStatus }}</code> です。
-        current corpus の {{ status.currentFamilyCount }} 個の versionless family /
-        {{ status.currentFormCount }} 個の exact <code>0.x</code> Form は
-        {{ formMaturity }} のままです。Specification release は Form を
-        <code>1.0.0</code> に昇格させません。Form Package envelope は
+        <code>{{ status.specificationReleaseStatus }}</code> の W09 historical metadata です。
+        Public API/Core checkpoint は <code>1.0.1</code> で、Host API
+        <code>{{ hostApiVersion }}</code> の実装・support・deployment とは別です。
+        <code>{{ status.hostApiPublicationStatus }}</code> は retained compatibility metadata です。
+        Active Edge publisher source は 16 個の candidate Form を持ち、Provider 3 は
+        {{ status.currentFamilyCount }} family / {{ status.currentFormCount }} 個の typed mapping を
+        compatibility history として保持します。Form Package envelope は
         <code>{{ status.formPackageApiCurrent }}</code> で、artifact は
         <code>{{ status.formPackagePublicationStatus }}</code> です。
       </p>
@@ -65,16 +64,15 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
     </template>
     <template v-else>
       <p>
-        <strong>Specification</strong>: Takoform Specification
+        <strong>Historical Specification receipt</strong>: Takoform Specification
         <code>{{ status.specificationVersion }}</code> is
-        <code>{{ status.specificationReleaseStatus }}</code>. Its release status is
-        derived from the append-only Specification release ledger/status document.
-        Host API <code>{{ hostApiVersion }}</code> is a separate {{ hostApiMaturity }} contract and
-        remains <code>{{ status.hostApiPublicationStatus }}</code>,
-        while the current corpus's {{ status.currentFamilyCount }} versionless
-        families and {{ status.currentFormCount }} exact <code>0.x</code> Forms
-        remain {{ formMaturity }}. Releasing the Specification does not promote
-        those Forms to <code>1.0.0</code>. The Form Package envelope is
+        <code>{{ status.specificationReleaseStatus }}</code> W09 compatibility metadata.
+        The public API/Core checkpoint is <code>1.0.1</code>; Host API
+        <code>{{ hostApiVersion }}</code> implementation, support, and deployment are separate.
+        <code>{{ status.hostApiPublicationStatus }}</code> remains retained compatibility metadata.
+        The active Edge publisher source has 16 candidate Forms, while Provider 3 retains
+        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }} typed mappings as
+        compatibility history. The Form Package envelope is
         <code>{{ status.formPackageApiCurrent }}</code
         >, and its artifacts are
         <code>{{ status.formPackagePublicationStatus }}</code

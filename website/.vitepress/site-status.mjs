@@ -1,5 +1,7 @@
-// site-status.mjs — the one derivation of the independent Provider, Host API,
-// Form Family and Form-definition status axes used by public surfaces.
+// site-status.mjs — the one derivation of the Provider/Host/Form compatibility
+// projection used by public surfaces. The document intentionally retains the
+// W09 site-status@v4 shape; its Specification and Host publication fields are
+// historical compatibility metadata, not current API/Core authority.
 //
 // Two callers share this module so no surface can hand-maintain a fact the
 // repository already knows:
@@ -96,8 +98,9 @@ export const SITE_STATUS_FIELDS = [
   // understand the original v2 prefix keep receiving the same keys/order.
   "formMaturity",
   "formPackagePublicationStatus",
-  // Specification 1.1 and the complete current corpus are appended so the
-  // original Provider/Edge prefix remains tolerant-reader compatible.
+  // The retained W09 Specification receipt and Provider compatibility corpus
+  // are appended so the original Provider/Edge prefix remains tolerant-reader
+  // compatible. These fields are not a current release/version axis.
   "specificationVersion",
   "specificationReleaseStatus",
   "currentFamilyIndex",
@@ -247,6 +250,9 @@ export function deriveSiteStatusFacts(repositoryRoot) {
       `${SPECIFICATION_RELEASES}: Specification 1.1 must not publish or promote the Host API lane`,
     );
   }
+  // Retained W09/Provider compatibility metadata. Core API publication is
+  // owned by the external Core repository and is intentionally not represented
+  // by a new site-status field.
   const hostApiPublicationStatus = "unpublished-candidate";
   const hostApiMaturityMatch = hostApiCurrent.match(/\/v\d+(alpha|beta)\d+$/);
   const hostApiMaturity = hostApiMaturityMatch?.[1] ??

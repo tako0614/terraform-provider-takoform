@@ -16,17 +16,19 @@ file.
 
 | Domain axis | Current identity | Meaning and availability |
 | ---------- | ---------------- | ------------------------ |
-| API/Core release SemVer | **`1.0.0`** (first public release identity) | Human-readable compatibility checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Every compatible `1.y.0` checkpoint remains on `/v1`. |
-| Form `definitionVersion` | **8 versionless families / 31 exact Forms** | Every Form carries its own current Experimental `0.x` SemVer; a Form advances without minting a family generation. |
+| API/Core release SemVer | **`1.0.1`** ([public Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)) | Public compatibility checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Every compatible `1.y.0` checkpoint remains on `/v1`; Host implementation/support/deployment remains separate. |
+| Form `definitionVersion` (active publisher) | **1 family / 16 candidate Forms** | The standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms) source currently carries `edge.forms.takoform.com`; package artifacts are unpublished and each Form advances independently. |
 
 ## API/Core release checkpoints
 
-The first public API/Core release is identified as **`v1.0.0`** and uses the
-existing `forms.takoform.com/v1` wire and discovery lane. The release number is
-a human-readable compatibility checkpoint, not a URL path. Future compatible
-checkpoints may be `v1.1.0`, `v1.2.0`, and later `v1.y.0`; every `1.x` release
-continues to use `/v1` for wire and discovery. A protocol-breaking major gets a
-new lane only through an explicit Core decision.
+The current public API/Core checkpoint is **`v1.0.1`**, recorded by the
+[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
+at commit `8da857ca21e90d4e46edb2e3f53197dbd1df0f3b`. It uses the existing
+`forms.takoform.com/v1` wire and discovery lane. The release number is a
+human-readable compatibility checkpoint, not a URL path. Compatible `1.x`
+checkpoints remain on `/v1`; Host implementation, deployment, support, and
+adoption remain host-owned facts. A protocol-breaking major gets a new lane
+only through an explicit Core decision.
 
 The historical **Specification 1.1** is a sealed exact source receipt in the
 predecessor release ledger. It is not API release `1.1` or `1.1.0`, does not
@@ -43,7 +45,7 @@ checkpoints are API/Core releases, not new Specification numbers.
 | Form Package envelope **`packages.forms.takoform.com/v1alpha5`** | Manifest-format identifier. Package IDs and content digests identify artifact bytes, and package publication remains independent of Provider publication. |
 | Schema IDs and digests | Exact Definition or wire-schema bytes, not a second Form version. |
 | Interface/Binding refs and digests | Exact operation-surface and typed-capability contracts referenced by Forms. |
-| Provider **3.0.0**, Registry-published | Non-normative Terraform/OpenTofu client distribution for the current Forms. |
+| Provider **3.0.0**, Registry-published | Non-normative Terraform/OpenTofu client distribution retaining the Provider 3 typed mapping. |
 | Provider **2.1.1**, Registry-published | Retained Beta `v1beta1` client for the 15 immutable `edge.forms.takoform.com/v1beta1` FormRefs; its identity is recorded in the [provider Form identity ledger](/release/provider-form-identities.json). |
 | Providers **2.0.0** and **1.0.3** | Withdrawn pre-Beta client identities; immutable Registry history for exact-pin recovery and migration only. |
 
@@ -58,23 +60,23 @@ pre-Beta epochs; their Registry identities remain immutable history for
 exact-pin recovery and migration
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
 Provider 3 is a client artifact identity: it cannot block or authorize the
-API/Core `1.0.0` release or the sealed Specification 1.1 receipt, and publishing
+API/Core `1.0.1` release or the sealed Specification 1.1 receipt, and publishing
 a new Form `definitionVersion` does not wait for a Provider release.
 
 ## Published compatibility mapping
 
 | Client or distribution      | Host API          | Forms and definitions                                               | Status / use                                                                |
 | --------------------------- | ----------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Provider 3.0.0 distribution | API/Core `v1.0.0` on Host API wire v1 | 8 versionless families; 31 current Experimental Form identities | Current Registry-published non-normative reference implementation. |
+| Provider 3.0.0 distribution | API/Core `v1.0.1` on Host API wire v1 | 8-family / 31-Form retained typed compatibility mapping | Current Registry-published non-normative Provider history; not the active publisher roster. |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1; 15 immutable historical Form identities | Registry-published retained client; descriptor remains `candidate-only` metadata by design. |
 | Provider 2.0.0 distribution | Host API v1alpha2 (withdrawn epoch) | The nine withdrawn v1alpha2 Forms | Immutable Registry history; exact-pin only, no successors. |
 | Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
 
-The API/Core `1.0.0` checkpoint, its Host API wire/discovery path, and the
+The API/Core `1.0.1` checkpoint, its Host API wire/discovery path, and the
 versionless Form families are not interchangeable labels. A Form's own
 `definitionVersion` is the only per-Form domain version; it does not change the
 API/Core release or Provider SemVer. The sealed Specification 1.1 receipt does
-not silently become API release 1.1 or mint Form `1.0.0` identities, and a new
+not silently become API release 1.1 or mint stable Form identities, and a new
 Form publication does not require a Provider release.
 
 ## Current Edge reference family (16 Experimental Forms)
@@ -114,7 +116,18 @@ terraform {
 ```
 
 Provider 2.1.1 remains available for the exact retained Beta identities it
-shipped; it must not be read as implementing the current 31-Form corpus.
+shipped; Provider 3's 31 mappings are retained compatibility history and must
+not be read as the active standalone publisher's 16-Form candidate set.
+
+## Release cadence and gates
+
+API patch releases are defect-only and may be batched. Minor checkpoints are at
+most monthly and may be skipped. A major checkpoint is normally at most annual
+and requires a concrete incompatibility and migration plan. Before publication,
+the owning source is reviewed and its release gate passes; after publication,
+the checkpoint is read-only. Form definition and package releases follow the
+publisher's independent cadence, while Provider releases occur only when its
+typed adapter/compatibility surface changes.
 
 ## Publisher parity at the Form/Package boundary
 

@@ -31,11 +31,15 @@ platform matrix, or GitHub release permissions require maintainer security
 review and a rotation plan. Never test release changes by overwriting an
 existing version; use a new semver prerelease.
 
-Form Packages have no independent release cadence: they publish with the
-provider release that embeds them (decision 0041), and the withdrawn epochs'
-published `forms/*` tags stay immutable (decision 0042). Security revocation
-statements and cumulative checkpoints live under `forms/revocations/`, are
-append-only, and use `forms/revocations/v<statementVersion>`. The revocation
-workflow dispatches from protected main, is keyless, and must not reference
-provider GPG secrets. Test the builders only with `--allow-untagged-candidate`;
-never create a real tag or GitHub Release to test a pull request.
+Form Definitions and Form Packages are owned and released by their publisher
+on an independent cadence. The active standalone `takoform-forms` source is an
+Edge-first candidate set; its 16 package artifacts are currently unpublished.
+Provider releases are independent and occur only when typed adapter, schema,
+state/import, codec, or host-client behavior changes; a Provider release does
+not publish or version a Form Package. The withdrawn epochs' published
+`forms/*` tags stay immutable (decision 0042). Security revocation statements
+and cumulative checkpoints live under `forms/revocations/`, are append-only,
+and use `forms/revocations/v<statementVersion>`. The revocation workflow
+dispatches from protected main, is keyless, and must not reference provider
+GPG secrets. Test the builders only with `--allow-untagged-candidate`; never
+create a real tag or GitHub Release to test a pull request.

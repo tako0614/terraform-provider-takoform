@@ -1,31 +1,38 @@
 # Documentation
 
-This page starts with the first public API/Core release identity, `v1.0.0`,
-and its existing `/v1` wire/discovery lane, plus the exact 8-family, 31-Form
-current corpus. Compatible API/Core `1.x` checkpoints stay on `/v1`. The
-historical Specification 1.1 is a sealed source receipt, not API release 1.1
-or 1.1.0; it does not create `/v1.1` or an ongoing Specification stream.
-Provider and historical lanes remain separate so an implementation release
-cannot become API/Core authority by implication.
+This page starts with the current public API/Core checkpoint, `v1.0.1`, from
+the [Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1),
+on its existing `/v1` wire/discovery lane. Compatible API/Core `1.x`
+checkpoints stay on `/v1`; Host implementation, deployment, support, and
+adoption remain separate host-owned facts. The historical Specification 1.1 is
+a sealed source receipt, not an API release or current version axis, and it does
+not create `/v1.1`. Provider and historical lanes remain separate so an
+implementation release cannot become API/Core authority by implication.
+
+The active standalone publisher is
+[`takoform-forms`](https://github.com/tako0614/takoform-forms), whose
+`edge.forms.takoform.com` source set currently contains 16 Experimental
+candidate Forms; package artifacts are unpublished. Form and package releases
+are independent of Provider releases.
 
 ## API/Core 1.x / sealed Specification receipt
 
 | Identity | Current identity | Meaning and availability |
 | -------- | ---------------- | ------------------------ |
-| API/Core release SemVer | **`v1.0.0`** | First public release identity; human-readable checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Compatible `1.y.0` checkpoints remain on `/v1`. |
-| Form `definitionVersion` | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental and advances independently. |
+| API/Core release SemVer | **`v1.0.1`** | Public Core/API checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Compatible `1.y.0` checkpoints remain on `/v1`. |
+| Form `definitionVersion` (active publisher) | **1 family / 16 candidate Forms** | Exact `0.x` FormRefs from the standalone Edge source; each Form advances independently and package artifacts remain unpublished. |
 | Host API wire/discovery lane | **`forms.takoform.com/v1`** | Protocol path used by API/Core `1.x` checkpoints; not a third domain axis. |
 | Historical Specification receipt | **1.1** | Sealed exact source receipt; not API release `1.1` or `1.1.0`, no `/v1.1`, and no ongoing Specification stream. |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished. |
-| Provider | **3.0.0, Registry-published** | Independent non-normative reference implementation; it cannot block API/Core or alter the sealed Specification receipt. Provider 2.1.1 is retained history. |
+| Provider | **3.0.0, Registry-published** | Independent non-normative implementation retaining 31 typed mappings across eight families; this Provider history is not the active publisher roster. |
 
 The [release-evidence policy](/spec/publication-freeze.html) keeps those two
 domain axes machine-checkable. A sealed Specification receipt does not publish
-or promote the API/Core lane, relabel any current Form as `1.0.0`, mint a
+or promote the API/Core lane, relabel any current Form as a stable identity, mint a
 `/v1.1` or v2 lane, or publish a package; a stable Form identity requires an
 explicit per-Form decision.
 
-## Edge reference family (16 of 31 current Experimental Forms) {#beta-edge-platform-family}
+## Edge reference family (16 candidate Forms) {#beta-edge-platform-family}
 
 The versionless Edge family targets Host API v1, discovered at
 `/.well-known/takoform/v1`, with UID/generation/revision identity,
@@ -106,9 +113,10 @@ attachment resource.
 
 ## Current Provider 3 resource reference {#resource-reference}
 
-The independent Registry-published Provider 3 maps all 31 current Experimental
-`0.x` Forms. These names are non-normative Provider metadata and do not change
-Form maturity.
+The independent Registry-published Provider 3 retains 31 typed compatibility
+mappings across eight families. These names are non-normative Provider metadata
+and do not change Form maturity or package publication; the active publisher
+source is the 16-Form Edge candidate set above.
 
 ### Edge family
 
@@ -171,7 +179,7 @@ Existing state follows the
 ## More project surfaces
 
 - [Form Proposals](/proposals/) — design material for Forms that have not earned a public FormRef
-- [Form inventory](/forms/) — the current 31 Forms and retained compatibility identities
+- [Form inventory](/forms/) — the active Edge candidates and retained Provider compatibility identities
 - [Conformance evidence](/conformance/) — how compatibility is proven
 - [Release](/release/) — provider publication boundary, Form Packages, and migrations
 - [Glossary](/docs/glossary.html) — terms used across this documentation

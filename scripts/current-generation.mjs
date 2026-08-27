@@ -32,22 +32,57 @@ const readmePath = path.join(repositoryRoot, "README.md");
 const BEGIN = "<!-- current-generation:begin -->";
 const END = "<!-- current-generation:end -->";
 
-function render(facts) {
+// This is a provider-facing display projection of the public Core release.
+// Core owns the release identity; this repository only links to that external
+// authority and never derives Provider or Host publication from it.
+const CORE_API_RELEASE_VERSION = "1.0.1";
+const CORE_API_RELEASE_URL =
+  "https://github.com/tako0614/takoform/releases/tag/v1.0.1";
+const CORE_API_LANE = "forms.takoform.com/v1";
+const ACTIVE_FORMS_PUBLISHER_REPOSITORY =
+  "https://github.com/tako0614/takoform-forms";
+const ACTIVE_FORMS_PUBLISHER_FAMILY = "edge.forms.takoform.com";
+const ACTIVE_FORMS_PUBLISHER_FORM_COUNT = 16;
+
+function activePublisherFormCount() {
+  const candidatePath = path.join(
+    repositoryRoot,
+    "forms/candidates/edge.forms.takoform.com/candidate-set.json",
+  );
+  const candidate = JSON.parse(readFileSync(candidatePath, "utf8"));
+  if (
+    candidate.family !== ACTIVE_FORMS_PUBLISHER_FAMILY ||
+    candidate.publicationStatus !== "unpublished" ||
+    candidate.forms?.length !== ACTIVE_FORMS_PUBLISHER_FORM_COUNT
+  ) {
+    throw new Error(
+      "active Edge publisher candidate set no longer matches the public display projection",
+    );
+  }
+  return candidate.forms.length;
+}
+
+function render(facts, activeEdgeFormCount) {
   const rows = [
     [
       "API/Core release SemVer",
-      "1.0.0",
-      "first public release identity; human-readable checkpoint on the forms.takoform.com/v1 wire/discovery lane; compatible 1.y.0 checkpoints remain on /v1",
+      CORE_API_RELEASE_VERSION,
+      `public Core/API checkpoint on [the Core v${CORE_API_RELEASE_VERSION} release](${CORE_API_RELEASE_URL}), using the ${CORE_API_LANE} wire/discovery lane; compatible 1.y.0 checkpoints remain on /v1`,
     ],
     [
-      "Form definitionVersion",
-      "per exact FormRef (current 0.x)",
-      `${facts.currentFamilyCount} versionless families and ${facts.currentFormCount} exact Forms; each Form advances independently`,
+      "Form definitionVersion (active publisher)",
+      `1 family / ${activeEdgeFormCount} candidate Forms`,
+      `active Edge source set ${ACTIVE_FORMS_PUBLISHER_FAMILY}, independently owned by [takoform-forms](${ACTIVE_FORMS_PUBLISHER_REPOSITORY}); package artifacts remain unpublished`,
     ],
     [
       "Host API wire/discovery lane",
       facts.hostApiCurrent,
-      "protocol path used by API/Core 1.x checkpoints; this path is not a third domain axis",
+      "protocol path used by API/Core 1.x checkpoints; this path is not a third domain axis, and Host implementation/support/deployment remains host-owned",
+    ],
+    [
+      "Provider compatibility mapping",
+      `${facts.providerPublished} (retained)`,
+      `${facts.currentFamilyCount} families / ${facts.currentFormCount} typed mappings retained by Provider 3; this Provider history is not the active publisher roster`,
     ],
     [
       "Historical Specification receipt",
@@ -62,7 +97,7 @@ function render(facts) {
     [
       "Provider distribution",
       facts.providerPublished,
-      "current Registry-published typed reference implementation; not Specification authority",
+      "Registry-published Provider 3 retaining the typed compatibility mapping; not the active publisher roster or Specification authority",
     ],
   ];
   return [
@@ -73,9 +108,12 @@ function render(facts) {
     ...rows.map(([identity, value, note]) => `| ${identity} | \`${value}\` | ${note} |`),
     "",
     "Only API/Core release SemVer and per-Form definitionVersion are domain",
-    "version axes. The historical Specification 1.1 receipt is sealed and",
-    "separate: it is not API release 1.1 or 1.1.0, does not create `/v1.1`, and",
-    "is not an ongoing Specification stream. A Form or package publication and",
+    "version axes. The active publisher is the standalone Edge candidate/source",
+    `${ACTIVE_FORMS_PUBLISHER_FAMILY} (${activeEdgeFormCount} Forms); its package artifacts are unpublished.`,
+    "Provider 3's 31 typed mappings are retained compatibility history, not a",
+    "current publisher roster. The historical Specification 1.1 receipt is sealed",
+    "and separate: it is not API release 1.1 or 1.1.0, does not create `/v1.1`,",
+    "and is not an ongoing Specification stream. Form/package publication and",
     "Provider release remain independent artifact identities.",
     "This table is generated from repository bytes",
     "by `bun run sync:current-generation`; the numbered release ledger derives",
@@ -87,6 +125,7 @@ function render(facts) {
 }
 
 const facts = deriveSiteStatusFacts(repositoryRoot);
+const activeEdgeFormCount = activePublisherFormCount();
 const readme = readFileSync(readmePath, "utf8");
 const begin = readme.indexOf(BEGIN);
 const end = readme.indexOf(END);
@@ -96,7 +135,9 @@ if (begin === -1 || end === -1 || end < begin) {
   );
 }
 const expected =
-  readme.slice(0, begin) + render(facts) + readme.slice(end + END.length);
+  readme.slice(0, begin) +
+  render(facts, activeEdgeFormCount) +
+  readme.slice(end + END.length);
 
 if (mode === "--write") {
   writeFileSync(readmePath, expected);
