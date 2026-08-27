@@ -11,15 +11,24 @@ The one active basis-point traffic selection for a Container Service. One to eig
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents a non-normative official Terraform Provider 3
-compatibility mapping for the retained Form `container.forms.takoform.com/ContainerTraffic`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
-currently published package or that the Provider's 31-resource projection is the active publisher roster.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_container_traffic/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `container.forms.takoform.com/ContainerTraffic` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/container.forms.takoform.com/container-traffic/definition.json`](../../forms/candidates/container.forms.takoform.com/container-traffic/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_container_traffic/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "container.forms.takoform.com",
+  "kind": "ContainerTraffic",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:f191698b2a051f6d5375621b73d0bee14e82ec43f5f436aa90e3a74c5828d556"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:0e70c03c242ae270b7701dac10ef5a810c83a7ec64758d2ce13e31d01e325711`.
 
 ## Arguments
 

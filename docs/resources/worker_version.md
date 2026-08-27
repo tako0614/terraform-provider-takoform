@@ -11,15 +11,24 @@ Immutable executable snapshot of one Module Worker: a bundle, the handlers its m
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents a non-normative official Terraform Provider 3
-compatibility mapping for the retained Form `edge.forms.takoform.com/WorkerVersion`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
-currently published package or that the Provider's 31-resource projection is the active publisher roster.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_version/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/WorkerVersion` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/worker-version/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_worker_version/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "edge.forms.takoform.com",
+  "kind": "WorkerVersion",
+  "definitionVersion": "0.2.0",
+  "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:63cf4dd3e96f575d1d1631c87d2e0ff0410ca820e142b8d4fa73e30aaa651025`.
 
 ## Arguments
 

@@ -1,53 +1,19 @@
 ---
 page_title: "Takoform provider"
-description: "Takoform API/Core v1.0.1, active Edge Form candidates, and retained Provider history"
+description: "Terraform/OpenTofu Provider 3 resource reference"
 ---
 
-# Takoform provider
+# Takoform Provider
 
-The current public API/Core checkpoint is **`v1.0.1`**, published by the
-[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
-on the existing `forms.takoform.com/v1` wire and discovery lane. API SemVer is
-a compatibility checkpoint; compatible `1.x` checkpoints remain on `/v1`.
-Host implementation, deployment, support, and adoption are separate host-owned
-facts. The historical Specification 1.1 is a sealed exact source receipt, not
-an API release or current version axis, and it does not create `/v1.1`.
+Takoform Provider is a Terraform/OpenTofu client for a compatible Host. It
+maps typed resource configuration to exact Form contracts and stores the
+resulting identity and desired state in Terraform state; the Host runs the
+service. API/Core checkpoint **`v1.0.1`** uses the existing
+`forms.takoform.com/v1` wire and discovery lane.
 
-The active standalone publisher is
-[`takoform-forms`](https://github.com/tako0614/takoform-forms). Its
-`edge.forms.takoform.com` source set currently contains 16 Experimental
-candidate Forms; package artifacts are unpublished. Form definition and package
-releases are independent of Provider releases. The Provider repository retains
-31 typed mappings across eight families for Provider 3 compatibility history;
-that projection is not the current publisher roster.
+## Install and configure
 
-The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and the
-`forms.takoform.com/v1alpha2` provider-v2 epoch) were withdrawn
-([decision 0042](../spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
-Published provider releases that carried them remain immutable Registry
-history; the withdrawn resources have no successors in this documentation, and
-[the migration boundary](../release/migrations/v2-to-v3.md) says what existing
-state does.
-
-Provider `v3.0.0` is the current Registry-published implementation of those
-retained typed mappings. It is independent and non-normative, so it cannot
-block or release API/Core or alter the sealed Specification receipt. Provider
-`v2.1.1` remains immutable
-Registry history for the exact `v1beta1` identities it shipped. Using either
-requires a compatible host; Provider publication does not assert a hosted
-service's live availability.
-
-API patches are defect-only and may be batched; API minors are at most monthly
-and may be skipped; a major is normally at most annual and requires a concrete
-incompatibility and migration plan. Public releases pass prepublication
-review/gates and are read-only after publication. Form definition/package
-releases follow their publisher's independent cadence, and Provider releases
-only change the typed adapter/compatibility surface.
-
-## Install the provider
-
-Terraform and OpenTofu can install this exact pin from the canonical Registry
-address:
+Install the current Registry release and point it at a compatible Host:
 
 ```hcl
 terraform {
@@ -63,14 +29,47 @@ provider "takoform" {
   endpoint = "https://forms.example.com"
   space    = "prod"
 }
+
+resource "takoform_module_worker" "api" {
+  name = "api"
+}
 ```
 
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-## Verify the published current provider
+Provider 3 contains 31 mappings across eight families. Resource names are
+Provider metadata; contract meaning comes from the linked Form Definitions and
+the [Core v1.0.1 specification](https://github.com/tako0614/takoform/tree/v1.0.1/spec).
 
-Availability is verified, not declared by this immutable documentation.
+## Resource reference
+
+### Edge (16)
+
+- [ModuleWorker](resources/module_worker.md), [WorkerBundle](resources/worker_bundle.md), [StaticAssetBundle](resources/static_asset_bundle.md), [WorkerVersion](resources/worker_version.md)
+- [WorkerDeployment](resources/worker_deployment.md), [WorkerCustomDomain](resources/worker_custom_domain.md), [WorkerEndpoint](resources/worker_endpoint.md), [WorkerCronTrigger](resources/worker_cron_trigger.md)
+- [EdgeKVNamespace](resources/edge_kv_namespace.md), [SQLiteDatabase](resources/sqlite_database.md), [SQLiteMigrationSet](resources/sqlite_migration_set.md), [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
+- [AtLeastOnceQueue](resources/at_least_once_queue.md), [QueueConsumer](resources/queue_consumer.md), [DurableWorkflow](resources/durable_workflow.md), [ActorNamespace](resources/actor_namespace.md)
+
+### Function (4)
+
+- [Function](resources/function.md), [FunctionVersion](resources/function_version.md), [FunctionDeployment](resources/function_deployment.md), [FunctionEndpoint](resources/function_endpoint.md)
+
+### Container (5)
+
+- [ContainerService](resources/serverless_container_service.md), [ContainerRevision](resources/container_revision.md), [ContainerTraffic](resources/container_traffic.md), [ContainerEndpoint](resources/container_endpoint.md), [ContainerCustomDomain](resources/container_custom_domain.md)
+
+### Queue, schedule, table, topic, and vector (6)
+
+- [PullQueue](resources/pull_queue.md), [Schedule](resources/message_schedule.md), [Table](resources/table.md), [Topic](resources/topic.md), [TopicSubscription](resources/topic_subscription.md), [VectorIndex](resources/dense_vector_index.md)
+
+Each generated resource page shows the full four-field FormRef, its separate
+package digest, typed arguments, state behavior, import contract, and source
+Form. The [mapping inventory](../forms/) lists the roster and each
+`definitionVersion`; the [identity ledger](../release/provider-form-identities.json)
+retains the exact release identities.
+
+## Verify the release
 
 ```console
 curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
@@ -79,77 +78,11 @@ cd terraform-provider-takoform
 git checkout --detach v3.0.0
 ```
 
-A source tag, documentation page, or local build alone is not Registry publication or installation evidence.
+Version and migration history are kept in `website/docs/versions.md` and the
+[v2-to-v3 migration guide](../release/migrations/v2-to-v3.md).
 
-## Current Provider 3 Form reference
+## Host requirements
 
-The independent Registry-published Provider 3 maps the retained 31 typed
-compatibility entries. These resource type names are non-normative Provider
-metadata; active publisher selection, Form maturity, and Form Package
-publication remain separate.
-
-### Edge family
-
-The versionless `edge.forms.takoform.com` family contains 16 exact
-Experimental `0.x` Forms and intentionally has no current `ObjectBucket`. It
-is the active standalone publisher's candidate set:
-
-- [ModuleWorker](resources/module_worker.md)
-- [WorkerBundle](resources/worker_bundle.md)
-- [StaticAssetBundle](resources/static_asset_bundle.md)
-- [WorkerVersion](resources/worker_version.md)
-- [WorkerDeployment](resources/worker_deployment.md)
-- [WorkerCustomDomain](resources/worker_custom_domain.md)
-- [WorkerEndpoint](resources/worker_endpoint.md)
-- [WorkerCronTrigger](resources/worker_cron_trigger.md)
-- [EdgeKVNamespace](resources/edge_kv_namespace.md)
-- [SQLiteDatabase](resources/sqlite_database.md)
-- [SQLiteMigrationSet](resources/sqlite_migration_set.md)
-- [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
-- [AtLeastOnceQueue](resources/at_least_once_queue.md)
-- [QueueConsumer](resources/queue_consumer.md)
-- [DurableWorkflow](resources/durable_workflow.md)
-- [ActorNamespace](resources/actor_namespace.md)
-
-### Function family
-
-- [Function](resources/function.md)
-- [FunctionVersion](resources/function_version.md)
-- [FunctionDeployment](resources/function_deployment.md)
-- [FunctionEndpoint](resources/function_endpoint.md)
-
-### Container family
-
-- [ContainerService](resources/serverless_container_service.md)
-- [ContainerRevision](resources/container_revision.md)
-- [ContainerTraffic](resources/container_traffic.md)
-- [ContainerEndpoint](resources/container_endpoint.md)
-- [ContainerCustomDomain](resources/container_custom_domain.md)
-
-### Table, queue, topic, schedule, and vector families
-
-- [Table](resources/table.md)
-- [PullQueue](resources/pull_queue.md)
-- [Topic](resources/topic.md)
-- [TopicSubscription](resources/topic_subscription.md)
-- [Schedule](resources/message_schedule.md)
-- [VectorIndex](resources/dense_vector_index.md)
-
-The provider exposes no generic carrier
-for a Form it was not built against: a resource whose Form identity comes from
-the configuration cannot verify that identity, because the lane's Form
-Definition response carries neither the canonical definition bytes the
-`schemaDigest` pins nor the Form's role
-([decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md)).
-Supporting a third-party Form is a provider build, not a configuration value.
-
-## Authority boundary
-
-- Takoform owns Form schemas, immutable identities, lifecycle vocabulary, and
-  portable conformance tooling.
-- A host owns installation, executable support, activation, placement,
-  credentials, and recovery policy.
-- Each host or commercial service owns its implementations, capacity, billing,
-  quota, SLA, and live catalog.
-- Provider release, Form publication, Form maturity, and host availability are
-  independent facts.
+Before applying, confirm that the configured Host advertises support for every
+exact FormRef in the plan. Executable compatibility checks are listed in
+[Conformance](../conformance/index.md).

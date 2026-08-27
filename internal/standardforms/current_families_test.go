@@ -1,6 +1,7 @@
 package standardforms
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -35,7 +36,7 @@ func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 		}
 		for _, form := range family.Forms {
 			if strings.Contains(form.Kind, "ObjectBucket") {
-				t.Fatalf("current inventory retains withdrawn Form %s/%s", family.Group, form.Kind)
+				t.Fatalf("current Provider 3 mapping includes withdrawn Form %s/%s", family.Group, form.Kind)
 			}
 		}
 		total += len(family.Forms)
@@ -101,13 +102,18 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 	t.Parallel()
 
 	forms := map[string]map[string]bool{
+		"edge.forms.takoform.com/ModuleWorker": {
+			"current exact FormRef `edge.forms.takoform.com/ModuleWorker`":                                                                        true,
+			"takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/module-worker/definition.json": true,
+		},
 		"container.forms.takoform.com/ContainerCustomDomain": {
-			"retained Form `container.forms.takoform.com/ContainerCustomDomain`": true,
-			"target `ContainerService` resource":                                             true,
-			`"apiVersion":"container.forms.takoform.com"`:                                    true,
+			"current exact FormRef `container.forms.takoform.com/ContainerCustomDomain`": true,
+			"embedded Provider projection":                true,
+			"target `ContainerService` resource":          true,
+			`"apiVersion":"container.forms.takoform.com"`: true,
 		},
 		"function.forms.takoform.com/FunctionVersion": {
-			"retained Form `function.forms.takoform.com/FunctionVersion`": true,
+			"current exact FormRef `function.forms.takoform.com/FunctionVersion`": true,
 		},
 		"container.forms.takoform.com/ContainerRevision": {},
 	}
@@ -124,6 +130,23 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 					t.Errorf("%s generated surface is missing %q", key, needle)
 				}
 			}
+			ref := providerReferenceSurfaceForForm(form)
+			for _, needle := range []string{
+				fmt.Sprintf(`"apiVersion": %q`, ref.FormRef.APIVersion),
+				fmt.Sprintf(`"kind": %q`, ref.FormRef.Kind),
+				fmt.Sprintf(`"definitionVersion": %q`, ref.FormRef.DefinitionVersion),
+				fmt.Sprintf(`"schemaDigest": %q`, ref.FormRef.SchemaDigest),
+			} {
+				if !strings.Contains(content, needle) {
+					t.Errorf("%s generated surface is missing exact FormRef member %q", key, needle)
+				}
+			}
+			if ref.PackageDigest != "" {
+				needle := fmt.Sprintf("`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `%s`", ref.PackageDigest)
+				if !strings.Contains(content, needle) {
+					t.Errorf("%s generated surface is missing package provenance %q", key, needle)
+				}
+			}
 			if owner := map[string]string{
 				"function.forms.takoform.com/FunctionVersion":    "function",
 				"container.forms.takoform.com/ContainerRevision": "container-service",
@@ -137,7 +160,7 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 		}
 	}
 	for key := range forms {
-		t.Errorf("current Form inventory is missing test subject %s", key)
+		t.Errorf("current Provider mapping inventory is missing test subject %s", key)
 	}
 }
 

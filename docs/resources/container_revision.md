@@ -11,15 +11,24 @@ Immutable serving snapshot of one Container Service: a digest-pinned OCI image, 
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents a non-normative official Terraform Provider 3
-compatibility mapping for the retained Form `container.forms.takoform.com/ContainerRevision`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
-currently published package or that the Provider's 31-resource projection is the active publisher roster.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_container_revision/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `container.forms.takoform.com/ContainerRevision` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/container.forms.takoform.com/container-revision/definition.json`](../../forms/candidates/container.forms.takoform.com/container-revision/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_container_revision/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "container.forms.takoform.com",
+  "kind": "ContainerRevision",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:2d453c251dec50393a042211ba24fd306f57ecd603008cc0981c274320203025"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:3b777c9b7a19d8d944ccc8e7cde7555f97ba328a6cd6ef03dda1a06c89fe9b7e`.
 
 ## Arguments
 
