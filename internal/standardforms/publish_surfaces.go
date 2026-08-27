@@ -311,16 +311,24 @@ The current Form source is provider-neutral. Terraform resource type names,
 provider schema choices, and provider releases are reference-implementation
 metadata; none participates in Form validation, canonical bytes, or digest.
 
-The design has five independent version axes. They are never one maturity
-label:
+The design has exactly two domain version axes. They are never one maturity
+label. API/Core release SemVer uses human-readable compatibility checkpoints;
+the first public release identity is ` + "`v1.0.0`" + `, and compatible ` + "`1.x`" + ` releases
+remain on the ` + "`forms.takoform.com/v1`" + ` wire/discovery lane. Each Form carries
+its own ` + "`definitionVersion`" + `.
 
-| Axis | Current design target | Meaning |
+| Domain axis | Current design target | Meaning |
 | --- | --- | --- |
-| Provider | independent | A non-normative client implementation version; not Form identity. |
-| Host API | ` + "`forms.takoform.com/v1`" + ` | Stable Host protocol required by these current definitions. |
-| Form Family | eight versionless groups | Family membership is the exact versionless ` + "`apiVersion`" + ` group. |
-| Form definition | ` + "`0.1.0`" + ` | Independent immutable version; each current Form is Experimental. |
-| Form Package API | ` + "`packages.forms.takoform.com/v1alpha5`" + ` | Package-envelope schema for versionless-family candidates. |
+| API/Core release SemVer | ` + "`v1.0.0`" + ` (first public release identity) | Human-readable compatibility checkpoint on ` + "`forms.takoform.com/v1`" + `; future compatible ` + "`v1.y.0`" + ` checkpoints remain on /v1. |
+| Form ` + "`definitionVersion`" + ` | ` + "`0.1.0`" + ` per exact FormRef | Independent immutable version; each current Form is Experimental. |
+
+The versionless Form Family group, ` + "`schemaDigest`" + `, package envelope, Provider
+SemVer, and Specification numbers are artifact/history identities rather than
+additional domain axes. The historical Specification 1.1 is a sealed source
+receipt: it is not API release 1.1 or 1.1.0, does not create /v1.1, and is not
+an ongoing Specification stream. Form Family membership remains the exact
+versionless ` + "`apiVersion`" + ` group, and the current package envelope is
+` + "`packages.forms.takoform.com/v1alpha5`" + `.
 
 The generated candidate index is ` + "`forms/candidates/current-family-index.json`" + `.
 It binds all eight family candidate sets plus the global Interface and Binding

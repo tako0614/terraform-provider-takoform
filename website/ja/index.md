@@ -14,24 +14,32 @@ hero:
       link: /ja/spec/
 ---
 
-## Specification 1.1 / separate unpublished Host API v1 candidate
+## API/Core 1.x / sealed Specification receipt
 
-Takoform は Experimental specification project です。provider の人間向け
-SemVer、ホスト protocol、Form の identity を別々の軸として示し、一つの version
-を別の maturity と取り違えないようにします。
+Takoform は Experimental specification project です。最初の public API/Core
+release identity は **`v1.0.0`** で、既存の `forms.takoform.com/v1`
+wire/discovery lane を使います。release number は human-readable compatibility
+checkpoint で、互換性のある `v1.1.0`、`v1.2.0`、後続の `v1.y.0` はすべて
+`/v1` に留まります。
 
-| 軸                    | 現在の identity                        | 意味と利用可能性                                                                                                       |
-| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform Specification 1.1**         | release status は append-only の `release/specification-releases.json` ledger と生成された `takoform-site.json` status document から導出されます。normative `spec/` tree の exact committed snapshot が release authority です。1.0 は公開前に撤回され再利用しない。 |
-| Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の separate unpublished protocol candidate。                |
-| Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRefs。すべて Experimental のまま。                                                              |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |
-| Provider              | **3.0.0、Registry 公開済み**           | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。             |
+歴史的な Specification 1.1 は sealed な exact source receipt であり、API release
+1.1 / 1.1.0 ではありません。`/v1.1` を作らず、継続的な Specification version
+stream でもありません。Form Package publication は separate かつ unpublished、
+Provider release は独立した client artifact です。
 
-Specification release、Form maturity、Package publication、Provider release は
-独立しています。Specification 1.1 は Host API v1 を publish / promote せず、
-current Form を `1.0.0` に昇格させず、`/v1.1` / v2 lane や package を mint
-せず、Provider 3 は Specification を block できません。
+| identity | 現在の identity | 意味と利用可能性 |
+| -------- | --------------- | ---------------- |
+| API/Core release SemVer | **`v1.0.0`** | 最初の public release identity。`forms.takoform.com/v1` wire/discovery lane 上の human-readable checkpoint。互換性のある `1.y.0` は `/v1` に留まる。 |
+| Form `definitionVersion` | **8 versionless families / 31 Forms** | exact current `0.x` FormRef。すべて Experimental で独立して進む。 |
+| Host API wire/discovery lane | **`forms.takoform.com/v1`** | API/Core `1.x` checkpoint が使う protocol path。第三の domain axis ではない。 |
+| Historical Specification receipt | **1.1** | sealed exact source receipt。API release `1.1` / `1.1.0` ではなく、`/v1.1` も継続的な version stream も作らない。 |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | separate package/distribution schema identity。package artifact は unpublished。 |
+| Provider | **3.0.0、Registry 公開済み** | current 31 Forms 向け independent non-normative reference implementation。Provider 2.1.1 は retained history。 |
+
+API/Core release、Form maturity、Package publication、Provider release は独立
+しています。sealed Specification receipt は API/Core lane を publish / promote
+せず、current Form を `1.0.0` に昇格させず、`/v1.1` / v2 lane や package を
+mint しません。Provider 3 は API/Core を block できません。
 
 ```hcl
 terraform {

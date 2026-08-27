@@ -1,19 +1,20 @@
 ---
 page_title: "Takoform provider"
-description: "Takoform Specification 1.1, current Form corpus, and retained Provider history"
+description: "Takoform API/Core v1.0.0, current Form corpus, and retained Provider history"
 ---
 
 # Takoform provider
 
-Takoform Specification 1.1 is the current numbered specification identity. Its
-release status is derived from the append-only
-`release/specification-releases.json` ledger and
-reflected in the generated `takoform-site.json` status document. The separate
-Host API v1 contract at `forms.takoform.com/v1` remains `unpublished-candidate`.
-Its exact current corpus has eight versionless families and 31 Experimental
-`0.x` Forms, using package envelope `packages.forms.takoform.com/v1alpha5`; package
-artifacts remain unpublished. A Specification release does not promote any Form
-to `1.0.0`, publish a Form Package, or release a Provider.
+The first public API/Core release identity is **`v1.0.0`**, using the existing
+`forms.takoform.com/v1` wire and discovery lane. Release numbers are
+human-readable compatibility checkpoints: future compatible `v1.1.0`, `v1.2.0`,
+and later `v1.y.0` releases remain on `/v1`. The historical Specification 1.1
+is a sealed exact source receipt, not API release 1.1 or 1.1.0; it does not
+create `/v1.1` and is not an ongoing Specification version stream. The current
+corpus has eight versionless families and 31 Experimental `0.x` Forms, using
+package envelope `packages.forms.takoform.com/v1alpha5`; package artifacts
+remain unpublished. A historical Specification receipt does not promote a Form,
+publish a package, or release a Provider.
 
 The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and the
 `forms.takoform.com/v1alpha2` provider-v2 epoch) were withdrawn
@@ -25,7 +26,8 @@ state does.
 
 Provider `v3.0.0` is the current Registry-published implementation of all 31
 current Experimental Forms. It is independent and non-normative, so it cannot
-block or release Specification 1.1. Provider `v2.1.1` remains immutable
+block or release API/Core or alter the sealed Specification receipt. Provider
+`v2.1.1` remains immutable
 Registry history for the exact `v1beta1` identities it shipped. Using either
 requires a compatible host; Provider publication does not assert a hosted
 service's live availability.

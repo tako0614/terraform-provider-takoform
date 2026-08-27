@@ -16,46 +16,52 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 
 <!-- current-generation:begin -->
 
-| Axis | Current identity | |
+| Identity | Current identity | Meaning |
 | --- | --- | --- |
-| Specification | `1.1` | released; one exact committed normative source snapshot is release authority |
-| Host API candidate | `forms.takoform.com/v1` | unpublished-candidate; separate protocol identity |
-| Current Form corpus | `forms/candidates/current-family-index.json` | 8 versionless families, 31 exact `0.x` experimental Forms |
+| API/Core release SemVer | `1.0.0` | first public release identity; human-readable checkpoint on the forms.takoform.com/v1 wire/discovery lane; compatible 1.y.0 checkpoints remain on /v1 |
+| Form definitionVersion | `per exact FormRef (current 0.x)` | 8 versionless families and 31 exact Forms; each Form advances independently |
+| Host API wire/discovery lane | `forms.takoform.com/v1` | protocol path used by API/Core 1.x checkpoints; this path is not a third domain axis |
+| Historical Specification receipt | `1.1` | sealed exact source receipt; not API release 1.1 or 1.1.0, no /v1.1, and no ongoing Specification stream |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifacts are unpublished |
 | Provider distribution | `3.0.0` | current Registry-published typed reference implementation; not Specification authority |
 
-These identities are independent. A Specification 1.1 release does not
-publish or promote the separate Host API v1 candidate, relabel any current
-Form as `1.0.0`, publish a Form Package, or release the non-normative Provider.
+Only API/Core release SemVer and per-Form definitionVersion are domain
+version axes. The historical Specification 1.1 receipt is sealed and
+separate: it is not API release 1.1 or 1.1.0, does not create `/v1.1`, and
+is not an ongoing Specification stream. A Form or package publication and
+Provider release remain independent artifact identities.
 This table is generated from repository bytes
 by `bun run sync:current-generation`; the numbered release ledger derives
-the Specification row as `candidate-open` or `released` without changing any
-Host API, Form, package, or Provider identity.
+historical Specification receipt state without changing any API/Core, Form,
+package, or Provider identity.
 
 <!-- current-generation:end -->
 
-## Specification 1.1, compatibility, and retained Provider history
+## API/Core 1.x, compatibility, and retained Provider history
 
-Takoform Specification 1.1 is the current Specification. Its release status is
-derived from the append-only `release/specification-releases.json` ledger and
-reflected in the generated `takoform-site.json` status document. Its normative
-source references the literal Host API v1 contract. Host API v1 is a separate,
-unpublished protocol candidate; publishing Specification 1.1 does not publish
-or promote it. The Specification's sole release prerequisite is an exact
-committed snapshot of the normative `spec/` tree. Candidate Forms, reference
-conformance, Providers, external Hosts, products, deployments, signers, and
-operators are implementation or adoption evidence, not Specification authority
+The first public API/Core release identity is **`v1.0.0`**, using the existing
+`forms.takoform.com/v1` wire and discovery lane. Release numbers are
+human-readable compatibility checkpoints: future compatible `v1.1.0`, `v1.2.0`,
+and later `v1.y.0` releases stay on `/v1`. The historical Specification 1.1
+is a sealed exact source receipt, not API release 1.1 or 1.1.0; it does not
+create `/v1.1` and is not an ongoing Specification version stream.
+
+The exact current corpus has eight versionless families and 31 Experimental
+`0.x` Forms, using package envelope `packages.forms.takoform.com/v1alpha5`;
+package artifacts remain unpublished. A sealed Specification receipt does not
+promote a Form, publish a Form Package, or release a Provider. Candidate Forms,
+reference conformance, Providers, external Hosts, products, deployments,
+signers, and operators remain implementation or adoption evidence, not API/Core
+release authority
 ([decision 0055](spec/decisions/0055-specification-release-needs-only-normative-source.md)).
 
-The separately generated [five-class compatibility report](release/specification-compatibility.json)
-binds current Form/Package, Host lifecycle, family/Host support,
-Interface/Binding/transport/service, and trust/revocation/lifecycle/version/
-release identities to raw source bytes and owning ledgers. It byte-pins the
-literal Host API v1 candidate and records candidates without publishing them.
-It is compatibility evidence only, not Specification release evidence, an
-asset, or a prerequisite. Specification 1.1 has no Host API, Form publication,
-or Provider effect; it does not mint a `/v1.1` lane, a v2 lane, schema, tag, or
-receipt. Identity `1.0` was never published, is withdrawn, and is never reused.
+The separately generated compatibility report is evidence only. It binds
+current Form/Package, Host lifecycle, family/Host support, Interface/Binding/
+transport/service, and trust/revocation/lifecycle/version/release identities to
+raw source bytes and owning ledgers, but it does not add a domain version axis,
+publish a Form, or create a wire lane. The `/v1` path is the API/Core 1.x
+wire/discovery lane; identity `1.0` in the historical Specification ledger was
+never published, is withdrawn, and is never reused.
 
 The W09 release has four explicit boundaries: C1 freezes the normative tree
 and executable tooling while publication-evidence fields stay `null`; C2 is an
@@ -64,10 +70,11 @@ publication receipt; and C4 is its direct generated-output-only child that
 refreshes the released public state. The compatibility report is checked
 separately and is never a C2/C3 asset or prerequisite.
 
-W09's current owner is the existing
+W09's historical owner was the existing
 `https://github.com/tako0614/terraform-provider-takoform.git` repository. A
-future W10 Core owner may write later releases only; it must never reissue,
-rewrite, or retag Specification 1.1.
+future W10 Core owner may define future API/Core checkpoints through an
+explicit decision; it must never reissue, rewrite, or retag the sealed
+Specification 1.1 receipt.
 
 The current corpus contains 31 exact Experimental `0.x` Forms in eight
 versionless families. The Edge family contains these 16 Forms and no current
@@ -81,12 +88,13 @@ Vector. Releasing Specification 1.1 does not silently mint Form `1.0.0`
 identities; a future stable Form starts at `1.0.0` only by an explicit
 per-Form decision.
 
-Provider SemVer is independent. Provider `v2.1.1` remains immutable,
+Provider SemVer is independent of both domain axes. Provider `v2.1.1` remains immutable,
 Registry-readback history for the retained `v1beta1` Host/family identities,
 and Provider `v2.0.0` and `v1.0.3` remain earlier published history. The
 official Provider 3 implementation may reference the exact current `0.x`
-Forms, but it is non-normative and cannot block Specification 1.1. Provider 3
-remains typed; it does not add an opaque generic JSON resource.
+Forms, but it is non-normative and cannot block API/Core or alter the sealed
+Specification receipt. Provider 3 remains typed; it does not add an opaque
+generic JSON resource.
 
 ## Using retained Provider 2.1.1 history
 
