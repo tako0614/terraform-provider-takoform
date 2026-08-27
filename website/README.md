@@ -209,30 +209,30 @@ The site must claim nothing beyond signed, committed evidence in this
 repository. The current public truth is: Core/API `v1.0.1` is published by the
 external [Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
 on `/v1`; Provider `v3.0.0` is the published, Registry readback-verified typed
-distribution retaining 31 compatibility mappings across eight families; Provider
+distribution mapping 31 current resources across eight families; Provider
 `v2.1.1` remains immutable retained Host API v1beta1 history; Provider `v2.0.0`
 is the published compatibility predecessor; Provider `v1.0.3` is the published
-Legacy client; and the active standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
-source has 16 Edge candidate Forms with unpublished package artifacts. Host
+Legacy client; and the standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
+source publishes 16 Edge content-addressed packages from its source tags. Host
 implementation, support, deployment, and adoption remain separate facts. The
 historical Specification 1.1 receipt is retained by the append-only ledger and
 is not a current API/version axis (Specification 1.0 was withdrawn before
 publication and may not be reused); and the 34
 published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The Provider compatibility
-projection retains eight versionless families and 31 exact Experimental `0.x`
-FormRefs; the active Edge source contains 16 and has no `ObjectBucket`,
+projection maps eight versionless families and 31 exact Experimental `0.x`
+FormRefs; the Edge source contains 16 and has no `ObjectBucket`,
 `edge.objects`, or `module-worker.object-bucket`. This repository does not
 assert any host's live catalog. The last published
 historical admission identity is `forms/admissions/v1.0.7`; its exact Git and
 set identities remain pinned as Legacy evidence.
 The frozen Legacy FormRef group is `forms.takoform.com/v1alpha1`. Retained
 provider-v2 Form Package indexes use `packages.forms.takoform.com/v1alpha3`;
-retained Provider 2.1.1/v1beta1 candidate packages use
-`packages.forms.takoform.com/v1alpha4`; current versionless-group candidates use
-`packages.forms.takoform.com/v1alpha5` and remain unpublished as Form Package
-artifacts. Published v1alpha1/v1alpha2 package indexes remain immutable Legacy
-evidence.
+retained Provider 2.1.1/v1beta1 packages use
+`packages.forms.takoform.com/v1alpha4`; current versionless-group packages use
+`packages.forms.takoform.com/v1alpha5` and are published independently of the
+Provider release. Published v1alpha1/v1alpha2 package indexes remain immutable
+Legacy evidence.
 
 `release/version.json` names Provider `v3.0.0` and keeps
 `publicationStatus: candidate-only` as source descriptor metadata after the

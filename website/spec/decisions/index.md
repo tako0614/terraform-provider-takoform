@@ -1,57 +1,10 @@
 # Takoform decisions
 
-These records explain normative Takoform product decisions. Current behavior
-and requirements remain in the owning specification documents; a decision
-record does not replace them.
+> Compatibility mirror — not the current Specification authority.
 
-- [0001 — Provider v1 keeps Form versions independent](0001-provider-v1-keeps-form-versions-independent.md)
-- [0002 — Artifact URLs are credential-free persisted state](0002-artifact-urls-are-credential-free-state.md)
-- [0003 — SpaceID is an opaque portable scope identity](0003-space-id-is-an-opaque-portable-scope-identity.md)
-- [0004 — Takoform is an experimental specification project](0004-takoform-is-an-experimental-specification.md)
-- [0005 — Current Form Packages use content-addressed publication locators](0005-current-form-packages-use-content-addressed-locators.md)
-- [0006 — v1alpha2 restarts Form lines without reusing v1alpha1 identities](0006-v1alpha2-restarts-form-lines.md)
-- [0007 — Current Forms exclude substrate operation](0007-current-forms-exclude-substrate-operation.md)
-- [0008 — Forms preserve proven service shape](0008-forms-preserve-service-shape.md)
-- [0009 — Form Families and namespaced API groups](0009-form-families-and-namespaced-api-versions.md)
-- [0010 — Exact Interface contracts and typed Bindings](0010-exact-interface-and-binding-contracts.md)
-- [0011 — Resource identity: UID, generation, and revision](0011-resource-identity-generation-and-revision.md)
-- [0012 — Artifacts use content-addressed upload](0012-artifacts-use-content-addressed-upload.md)
-- [0013 — The v1alpha3 lane ships in provider v2.1](0013-v1alpha3-lane-ships-in-provider-v2-1.md)
-- [0014 — Published schemas are structural minima; closure lives in code and conformance](0014-published-schemas-are-structural-minima.md)
-- [0015 — Cross-resource references are UID-pinned relations](0015-cross-resource-references-are-uid-pinned-relations.md)
-- [0016 — The Worker aggregate has one active deployment](0016-the-worker-aggregate-has-one-active-deployment.md)
-- [0017 — Provider state survives Form evolution and interruption](0017-provider-state-survives-form-evolution-and-interruption.md)
-- [0018 — The Host API is deployable behind ordinary infrastructure](0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)
-- [0019 — The Module Worker ABI is an exact contract, not a date](0019-the-module-worker-abi-is-an-exact-contract.md)
-- [0020 — The edge Interfaces state their data and delivery model](0020-the-edge-interfaces-state-their-data-and-delivery-model.md)
-- [0021 — Third-party Forms and contract distribution](0021-third-party-forms-and-contract-distribution.md)
-- [0022 — A host answers for an exact Form, and a relation pins its target's contract](0022-relations-pin-the-target-contract.md)
-- [0023 — The runtime ABI is measured separately from the control plane](0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)
-- [0024 — A worker is reachable at an address the host assigns](0024-a-worker-is-reachable-at-a-host-assigned-address.md)
-- [0025 — A Form's declared outputs are a typed contract, not a JSON blob](0025-declared-outputs-are-a-typed-contract.md)
-- [0026 — An attachment's claim is decided on canonical, resolved identity](0026-attachment-claims-are-canonical-and-acyclic.md)
-- [0028 — The resource plane is tenant-isolated, by address](0028-the-resource-plane-is-tenant-isolated.md)
-- [0029 — An immutable revision is named by its content](0029-immutable-revisions-are-named-by-their-content.md)
-- [0030 — A Form line moves; a Terraform resource type may not](0030-a-form-line-moves-a-terraform-resource-type-may-not.md)
-- [0031 — Host capability is decided at plan time](0031-host-capability-is-decided-at-plan-time.md)
-- [0032 — A provider diagnostic states identity, fence, code, and repair](0032-a-diagnostic-states-identity-fence-code-and-repair.md)
-- [0033 — Edge app assets and SQLite migrations are content-addressed](0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)
-- [0034 — edge.sql uses safe wire values and rollback-only queries](0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)
-- [0035 — Stable provider v2.1 ships the immutable Beta 1 contracts](0035-beta-contracts-ship-in-stable-provider-v2-1.md)
-- [0036 — An artifact's name states the lane it describes, not its place in a sequence](0036-artifact-names-state-the-lane-they-describe.md)
-- [0037 — Immutability begins at Stable; a pre-Stable identity may be withdrawn](0037-immutability-begins-at-stable.md)
-- [0038 — A generation move is measured, and what it costs is recorded](0038-a-generation-move-is-measured-not-assumed.md)
-- [0039 — A Host API lane is minted for one of exactly two reasons](0039-a-lane-is-minted-for-one-of-two-reasons.md)
-- [0040 — The package envelope names a manifest format, not a Form generation](0040-the-package-envelope-is-a-format-not-an-axis.md)
-- [0041 — Takoform's Form Packages publish with the provider release that embeds them](0041-form-packages-publish-with-the-provider-release.md)
-- [0042 — The pre-Beta epochs are withdrawn](0042-the-pre-beta-epochs-are-withdrawn.md)
-- [0043 — A Form Family targets a popular primitive whose APIs are vendor-locked](0043-forms-target-popular-vendor-locked-primitives.md)
-- [0044 — Graduation evidence is implementation independence, honestly attributed](0044-graduation-evidence-is-implementation-independence.md)
-- [0045 — An external standard service is a sealed slot with a protocol tag](0045-external-standard-services-are-sealed-slots.md)
-- [0046 — Stable arrives through a stable-grade Beta 2](0046-stable-arrives-through-a-stable-grade-beta-2.md)
-- [0052 — The Specification is released on its own line](0052-the-specification-is-released-on-its-own-line.md)
-- [0053 — Specification and Provider evidence are separate release authorities](0053-specification-and-provider-release-evidence.md)
-- [0054 — Standard-service identifiers are open and integrations are Host-owned](0054-standard-service-identifiers-are-open-and-host-integrated.md)
-- [0055 — Specification release needs only the normative source](0055-specification-release-needs-only-normative-source.md)
-- [0056 — Core compiles artifacts into an immutable Snapshot](0056-core-compiles-artifacts-into-an-immutable-snapshot.md)
-- [0057 — Specification 1.1 freezes compatibility and independent identities](0057-specification-1-1-compatibility-and-independent-identities.md)
+The Provider repository retains the compatibility bytes locally at this URL
+for conformance and release evidence. The canonical normative contract is
+maintained by Takoform Core; read the exact [Core v1.0.1 source](https://github.com/tako0614/takoform/blob/v1.0.1/spec/decisions/README.md).
+
+This page intentionally does not reproduce the normative body. Machine-readable
+schemas and conformance fixtures remain served from their checked-in static paths.

@@ -1,40 +1,14 @@
-# Form inventory
+# Provider mapping inventory
 
-The Provider's retained Form snapshot is provider-neutral. Terraform resource
-type names, provider schema choices, and provider releases are reference-implementation
-metadata; none participates in Form validation, canonical bytes, or digest.
-
-The design has exactly two domain version axes. They are never one maturity
-label. API/Core release SemVer uses human-readable compatibility checkpoints;
-the current public checkpoint is `v1.0.1` (see the [Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)), and compatible `1.x` releases
-remain on the `forms.takoform.com/v1` wire/discovery lane. Each Form carries
-its own `definitionVersion`.
-
-| Domain axis | Current design target | Meaning |
-| --- | --- | --- |
-| API/Core release SemVer | `v1.0.1` (public Core checkpoint) | Public Core/API release checkpoint on `forms.takoform.com/v1`; future compatible `v1.y.0` checkpoints remain on /v1. |
-| Form `definitionVersion` | `0.1.0` per exact FormRef | Independent immutable version; Provider's retained Forms are Experimental. |
-
-The versionless Form Family group, `schemaDigest`, package envelope, Provider
-SemVer, and Specification numbers are artifact/history identities rather than
-additional domain axes. The historical Specification 1.1 is a sealed source
-receipt: it is not API release 1.1 or 1.1.0, does not create /v1.1, and is not
-an ongoing Specification stream. Form Family membership remains the exact
-versionless `apiVersion` group, and the current package envelope is
-`packages.forms.takoform.com/v1alpha5`.
-
-The active standalone publisher is `takoform-forms` at
-https://github.com/tako0614/takoform-forms. Its Edge family
-`edge.forms.takoform.com` currently has 16 candidate Forms and no
-published package artifacts. Provider 3 retains typed compatibility mappings
-for the broader Provider snapshot; that 31-Form projection is not the active
-publisher roster.
+This inventory records the current Provider 3 projection. Provider resource
+type names and schema choices are adapter metadata. Published Edge definitions
+are maintained in the standalone [takoform-forms source](https://github.com/tako0614/takoform-forms);
+other entries are exact embedded Provider projections. Each current FormRef
+carries an exact `definitionVersion` within its versionless family group.
 
 The generated candidate index is `forms/candidates/current-family-index.json`.
-It binds the Provider compatibility snapshot's eight family candidate sets plus
-the global Interface and Binding candidate sets by exact SHA-256. Provider
-release and publication evidence are separate authorities; a provider mapping
-cannot widen Form semantics or change a Form digest.
+It binds the eight family candidate sets plus shared Interface and Binding
+sets by SHA-256, so this inventory and the checked-in contracts stay aligned.
 
 ## `edge.forms.takoform.com`
 
@@ -107,18 +81,13 @@ cannot widen Form semantics or change a Form digest.
 | --- | --- | --- | --- |
 | `VectorIndex` | `identity` | `0.1.0` | Fixed-dimension dense vector index with a creation-time distance metric. The vector.index Interface fixes namespaced whole-record upsert, read-after-write fetch, approximate top-k query, closed metadata filtering, and deletion; this identity carries only the embedding dimension and metric. |
 
-Provider 3 retains exactly 31 typed mappings in 8 versionless families. Edge has
-exactly 16 members in that retained mapping and intentionally has no ObjectBucket Form,
+Current Provider 3 mapping has exactly 31 typed resources in 8 versionless families. Edge has
+exactly 16 members in that mapping and intentionally has no ObjectBucket Form,
 `edge.objects` Interface, or ObjectBucket Binding. Retained versioned
 Provider 2.1.1 packages remain immutable history and are not members of this
 mapping.
 
-The standalone `takoform-forms` source currently carries the active Edge
-publisher candidate set (`edge.forms.takoform.com`) with 16 Forms. Its
-package artifacts are unpublished; the Provider mapping above must not be read
-as a package-publication roster.
-
-The official Terraform Provider reference docs and examples under
+The Terraform Provider reference docs and examples under
 `docs/resources` and `examples/resources` cover only mappings that
 the provider explicitly owns. Their `takoform_*` names are non-normative
 and cannot affect a Form Definition or digest. Missing mappings for other

@@ -11,15 +11,24 @@ Long-lived logical identity of one ES Module Worker application. The Form fixes 
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider 3
-compatibility mapping for the retained Form `edge.forms.takoform.com/ModuleWorker`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
-currently published package or that the Provider's 31-resource projection is the active publisher roster.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_module_worker/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/ModuleWorker` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/module-worker/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_module_worker/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "edge.forms.takoform.com",
+  "kind": "ModuleWorker",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:049df2fb1eda53e4ccb0d646022a3ded8bc17c44eb433fa2e5ac0861efe42ac7"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:931eda33c673a640530b81779a5821ed27b9244c9f13dec9660867173aa69405`.
 
 ## Arguments
 

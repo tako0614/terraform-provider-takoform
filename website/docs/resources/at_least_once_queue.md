@@ -11,15 +11,24 @@ Message queue with at-least-once delivery and no ordering guarantee, exactly as 
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider 3
-compatibility mapping for the retained Form `edge.forms.takoform.com/AtLeastOnceQueue`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
-currently published package or that the Provider's 31-resource projection is the active publisher roster.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_at_least_once_queue/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/AtLeastOnceQueue` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/at-least-once-queue/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_at_least_once_queue/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "edge.forms.takoform.com",
+  "kind": "AtLeastOnceQueue",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:0355b4d3073bc2707fccb6edd8c90350892059ecf08abfec00a00d950c9eaa0e"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:6777eacc4ce141342f97f4bb06e2adaeb714461c0f2f91226f7f4c6f1a0c19b9`.
 
 ## Arguments
 

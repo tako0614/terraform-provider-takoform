@@ -11,15 +11,24 @@ Key-addressed document table with a declared partition key, optional sort key, m
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider 3
-compatibility mapping for the retained Form `table.forms.takoform.com/Table`.
-The mapping name is provider metadata: it is absent from the Form Definition and cannot change
-the Form's canonical bytes or digest. Provider publication and support are versioned separately.
-Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
-currently published package or that the Provider's 31-resource projection is the active publisher roster.
-The configured host selects and
-operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_table/resource.tf).
+This page documents the current Provider 3 mapping; its current exact FormRef `table.forms.takoform.com/Table` is recorded below.
+The resource type is Provider metadata. The exact current mapping is an embedded Provider projection, not a public Form Package: [`forms/candidates/table.forms.takoform.com/table/definition.json`](../../forms/candidates/table.forms.takoform.com/table/definition.json).
+See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_table/resource.tf).
+
+## Exact FormRef
+
+This Provider mapping carries the following exact four-field FormRef:
+
+```json
+{
+  "apiVersion": "table.forms.takoform.com",
+  "kind": "Table",
+  "definitionVersion": "0.1.0",
+  "schemaDigest": "sha256:e5c9933f637632b8e3b6b300d0d30593f291158ac088e34bb6ac0f76ec2bfc05"
+}
+```
+
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:2bf18526eb42b0e933318082b1cb88331bcc536d0d9fff76ab59cd6f44ec1bc0`.
 
 ## Arguments
 

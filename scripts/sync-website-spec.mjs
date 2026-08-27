@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// sync-website-spec.mjs — mirrors the canonical spec, proposals, forms,
+// sync-website-spec.mjs — projects the canonical spec, proposals, forms,
 // conformance, release, and provider-reference trees into the VitePress site
 // so the documentation lives on the site at the same URLs the repository uses.
 //
@@ -19,10 +19,11 @@
 //     schemas, release json) are copied into website/static/ at mirrored paths
 //     so their URLs are served verbatim.
 //
-// `spec/versioning.md` remains a frozen historical source, but it is still
-// projected at `/spec/versioning` so that the canonical URL cannot be shadowed
-// by a hand-maintained Provider page. Current Provider-facing version guidance
-// lives at `/docs/versions`.
+// Spec and proposal Markdown remains addressable for historical URL and fixture
+// continuity, but is projected as a concise non-authoritative stub. The local
+// files are compatibility fixtures; current normative authority is Core's
+// v1.0.1 source, while proposal history remains in this Provider repository.
+// Current Provider-facing version guidance lives at `/docs/versions`.
 
 import {
   copyFileSync,
@@ -50,6 +51,22 @@ const repositoryRoot = path.resolve(
 );
 const websiteRoot = path.join(repositoryRoot, "website");
 const staticRoot = path.join(websiteRoot, "static");
+
+const coreRepository = "https://github.com/tako0614/takoform";
+const coreRelease = "v1.0.1";
+const providerRepository =
+  "https://github.com/tako0614/terraform-provider-takoform";
+const specRoot = path.join(repositoryRoot, "spec");
+const proposalsRoot = path.join(repositoryRoot, "proposals");
+// This Provider-only report has no same-path file in Core v1.0.1. Keep its
+// projection linked to the owning Core trust section instead of emitting a
+// dead GitHub URL; all other mirrored paths map one-to-one below.
+const coreSpecPathOverrides = new Map([
+  [
+    "trust/0001-provider-runner-report-v2.md",
+    "trust/README.md",
+  ],
+]);
 
 const schemaUrls = new Map();
 for (const schema of discoverPublicSchemas(repositoryRoot)) {
@@ -110,7 +127,70 @@ function transformLink(target) {
   return rewritten;
 }
 
-function transformMarkdown(source) {
+function canonicalRelativePath(canonical, root) {
+  const relative = path.relative(root, canonical);
+  if (relative === "" || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return null;
+  }
+  return relative.split(path.sep).join("/");
+}
+
+function markdownTitle(source, fallback) {
+  const heading = source.match(/^#\s+(.+?)\s*$/m)?.[1];
+  return heading === undefined ? fallback : heading;
+}
+
+function coreSpecSourceUrl(canonical) {
+  const relative = canonicalRelativePath(canonical, specRoot);
+  if (relative === null) return `${coreRepository}/tree/${coreRelease}/spec`;
+  const sourcePath = coreSpecPathOverrides.get(relative) ?? relative;
+  return `${coreRepository}/blob/${coreRelease}/spec/${sourcePath}`;
+}
+
+function providerProposalSourceUrl(canonical) {
+  const relative = canonicalRelativePath(canonical, repositoryRoot);
+  if (relative === null) return providerRepository;
+  return `${providerRepository}/blob/main/${relative}`;
+}
+
+function renderCompatibilityStub(source, canonical) {
+  const specRelative = canonicalRelativePath(canonical, specRoot);
+  if (specRelative !== null) {
+    const title = markdownTitle(source, "Core specification mirror");
+    return [
+      `# ${title}`,
+      "",
+      "> Compatibility mirror — not the current Specification authority.",
+      "",
+      "The Provider repository retains the compatibility bytes locally at this URL",
+      "for conformance and release evidence. The canonical normative contract is",
+      `maintained by Takoform Core; read the exact [Core v1.0.1 source](${coreSpecSourceUrl(canonical)}).`,
+      "",
+      "This page intentionally does not reproduce the normative body. Machine-readable",
+      "schemas and conformance fixtures remain served from their checked-in static paths.",
+    ].join("\n");
+  }
+
+  const proposalRelative = canonicalRelativePath(canonical, proposalsRoot);
+  if (proposalRelative !== null) {
+    const title = markdownTitle(source, "Archived Form proposal");
+    return [
+      `# ${title}`,
+      "",
+      "> Archived proposal — not a current Form, publication, or Provider mapping.",
+      "",
+      "This route is retained for historical URL and fixture continuity. The proposal",
+      `source and history remain in the [Provider repository](${providerProposalSourceUrl(canonical)}).`,
+    ].join("\n");
+  }
+
+  return null;
+}
+
+function transformMarkdown(source, canonical) {
+  const compatibilityStub = renderCompatibilityStub(source, canonical);
+  if (compatibilityStub !== null) return compatibilityStub;
+
   // [text](target) links
   return source.replace(
     /(!?\[[^\]]*\])\s*\(\s*(<[^>\n]*>|[^)\s]*)(?:\s+["'][^"']*["'])?\s*\)/g,
@@ -335,7 +415,7 @@ const writeProjection = () => {
   }
   for (const { canonical, site } of pages) {
     mkdirSync(path.dirname(site), { recursive: true });
-    const transformed = transformMarkdown(readFileSync(canonical, "utf8"));
+    const transformed = transformMarkdown(readFileSync(canonical, "utf8"), canonical);
     const output = transformed.endsWith("\n") ? transformed : `${transformed}\n`;
     if (Buffer.byteLength(output, "utf8") === 0) {
       throw new Error(`empty projection for ${path.relative(repositoryRoot, canonical)}`);
@@ -369,7 +449,7 @@ const checkProjection = () => {
     );
   }
   for (const { canonical, site } of pages) {
-    const expected = transformMarkdown(readFileSync(canonical, "utf8"));
+    const expected = transformMarkdown(readFileSync(canonical, "utf8"), canonical);
     const output = expected.endsWith("\n") ? expected : `${expected}\n`;
     const expectedBytes = Buffer.from(output, "utf8");
     let actual;

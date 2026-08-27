@@ -3,7 +3,7 @@ terraform {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
       # This example targets the stable Host API v1 Provider 3 line.
-      version = ">= 3.0.0"
+      version = "= 3.0.0"
     }
   }
 }

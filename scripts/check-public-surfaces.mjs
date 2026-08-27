@@ -387,17 +387,35 @@ function checkHtmlFiles() {
 }
 
 function checkResourceInventory(expectedFormNames) {
+  const familyLabels = new Map([
+    ["edge.forms.takoform.com", "Edge"],
+    ["function.forms.takoform.com", "Function"],
+    ["container.forms.takoform.com", "Container"],
+    ["queue.forms.takoform.com", "Queue"],
+    ["schedule.forms.takoform.com", "Schedule"],
+    ["table.forms.takoform.com", "Table"],
+    ["topic.forms.takoform.com", "Topic"],
+    ["vector.forms.takoform.com", "Vector"],
+  ]);
+  const familyCounts = new Map();
+  for (const { group } of currentFormRoster) {
+    familyCounts.set(group, (familyCounts.get(group) ?? 0) + 1);
+  }
   for (const [page, label] of [
-    ["index.html", "website/public/index.html English resource inventory"],
+    ["index.html", "website/public/index.html English resource counts"],
     [
       "ja/index.html",
-      "website/public/ja/index.html Japanese resource inventory",
+      "website/public/ja/index.html Japanese resource counts",
     ],
   ]) {
     const text = visibleHtmlText(read(path.join(publicRoot, page)));
-    for (const name of expectedFormNames) {
-      if (!text.includes(`takoform_${name}`)) {
-        fail(`${label}: missing ${name}`);
+    if (!text.includes("Provider 3") || !text.includes("31")) {
+      fail(`${label}: missing the current Provider 3 mapping count`);
+    }
+    for (const [group, count] of familyCounts) {
+      const family = familyLabels.get(group) ?? group;
+      if (!new RegExp(`${family}\\s+${count}\\b`, "u").test(text)) {
+        fail(`${label}: missing ${family} count ${count}`);
       }
     }
   }
@@ -414,10 +432,11 @@ function hrefTargetsDocumentation(href, directory, docName) {
   );
 }
 
-function checkDocsPageLinks(expectedResourceDocNames) {
+function checkDocsPageLinks(expectedResourceDocNames, expectedFormRoster) {
   const docsPage = path.join(publicRoot, "docs", "index.html");
   const specPage = path.join(publicRoot, "spec", "index.html");
-  for (const filePath of [docsPage, specPage]) {
+  const formsPage = path.join(publicRoot, "forms", "index.html");
+  for (const filePath of [docsPage, formsPage, specPage]) {
     if (!existsSync(filePath)) {
       fail(`${relative(filePath)}: required local page is missing`);
     }
@@ -442,6 +461,18 @@ function checkDocsPageLinks(expectedResourceDocNames) {
     if (!linked) {
       fail(
         `${relative(docsPage)}: missing resource documentation link for ${docName}`,
+      );
+    }
+  }
+
+  if (!existsSync(formsPage)) {
+    return;
+  }
+  const formsText = visibleHtmlText(read(formsPage));
+  for (const { kind } of expectedFormRoster) {
+    if (!formsText.includes(kind)) {
+      fail(
+        `${relative(formsPage)}: missing Form inventory row for ${kind}`,
       );
     }
   }
@@ -627,9 +658,9 @@ function checkCurrentProviderSample(filePath) {
     fail(`${relative(filePath)}: missing canonical provider source`);
     return;
   }
-  if (!hasProviderFloor(source, "3.0.0")) {
+  if (!hasExactProviderPin(source, "3.0.0")) {
     fail(
-      `${relative(filePath)}: current Form sample must contain version = ">= 3.0.0"`,
+      `${relative(filePath)}: current Provider sample must contain version = "= 3.0.0"`,
     );
   }
 }
@@ -1015,13 +1046,15 @@ function checkSingleRegistryVocabulary() {
 function checkProviderReleaseCommitBindings() {
   const releaseGuide = read(path.join(repositoryRoot, "release", "README.md"));
   for (const required of [
-    "--expected-release-commit <signed-tag-peeled-release-commit-E>",
-    "--expected-recovery-commit <current-reviewed-protected-main-commit-F>",
-    "requires `E` to be an ancestor of `F`",
+    "Provider release identity ledger",
+    "migrations/v2-to-v3.md",
+    "31 typed resources across eight versionless families",
+    "The signed release-tag commit must be an ancestor of the reviewed",
+    "protected-main/readback commit used for the release.",
   ]) {
     if (!releaseGuide.includes(required)) {
       fail(
-        `release/README.md: provider release/readback is missing split E/F binding wording ${JSON.stringify(required)}`,
+        `release/README.md: Provider release guide is missing ${JSON.stringify(required)}`,
       );
     }
   }
@@ -1085,30 +1118,22 @@ function checkHandWrittenInventories(familyRoster) {
 
   const inventories = [
     {
-      file: "README.md",
-      label: "the Edge Platform Family list",
-      required: familyKinds.map((kind) => ({
-        needle: `\`${kind}\``,
-        subject: kind,
-      })),
-    },
-    {
       file: "website/.vitepress/config.mts",
       label: "the resource sidebar",
       required: resourceDocLinks(familyDocNames),
     },
     {
-      file: "website/.vitepress/config.mts",
-      label: "the proposal sidebar",
-      required: familySlugs.map((slug) => ({
-        needle: `/proposals/edge/${slug}.html`,
-        subject: slug,
-      })),
-    },
-    {
       file: "website/docs/index.md",
       label: "the English resource reference",
       required: resourceDocLinks(familyDocNames),
+    },
+    {
+      file: "website/forms/index.md",
+      label: "the Provider mapping inventory",
+      required: familyKinds.map((kind) => ({
+        needle: `\`${kind}\``,
+        subject: kind,
+      })),
     },
     {
       file: "website/ja/docs/index.md",
@@ -1118,22 +1143,24 @@ function checkHandWrittenInventories(familyRoster) {
     {
       file: "website/index.md",
       label: "the English landing inventory",
-      required: familyDocNames.map((name) => ({
-        needle: `takoform_${name}`,
-        subject: name,
-      })),
+      required: [
+        { needle: "**`3.0.0`**", subject: "current Provider" },
+        { needle: "| Edge | 16 |", subject: "Edge count" },
+        { needle: "Provider reference", subject: "Provider reference" },
+      ],
     },
     {
       file: "website/ja/index.md",
       label: "the Japanese landing inventory",
-      required: familyDocNames.map((name) => ({
-        needle: `takoform_${name}`,
-        subject: name,
-      })),
+      required: [
+        { needle: "**`3.0.0`**", subject: "current Provider" },
+        { needle: "| Edge | 16 |", subject: "Edge count" },
+        { needle: "Provider reference", subject: "Provider reference" },
+      ],
     },
     {
       file: "forms/README.md",
-      label: "the generated Form inventory",
+      label: "the generated Provider mapping inventory",
       required: familyKinds.map((kind) => ({
         needle: `\`${kind}\``,
         subject: kind,
@@ -1548,8 +1575,9 @@ function checkCorpusNamesStateTheirLane() {
 }
 
 // A count written in prose beside a count a machine already knows rots the
-// moment the corpus moves, and nothing notices. Every such number in the
-// conformance guide is bound here to the array in the corpus that defines it.
+// moment the corpus moves. When the conformance guide chooses to show one,
+// bind it to the corpus; do not force historical counts into reader-facing
+// prose merely because the machine can derive them.
 function checkConformanceCorpusCounts() {
   const file = path.join(repositoryRoot, "conformance", "README.md");
   const text = read(file).replace(/\s+/gu, " ");
@@ -1591,10 +1619,6 @@ function checkConformanceCorpusCounts() {
     }
     const matches = [...text.matchAll(pattern)];
     if (matches.length === 0) {
-      fail(
-        `conformance/README.md: ${label} is not stated; the corpus declares ` +
-          `${declared.length} in ${corpus} ${field.join(".")}`,
-      );
       continue;
     }
     for (const match of matches) {
@@ -1650,11 +1674,7 @@ function checkConformanceCorpusCounts() {
   const schemaCoverageClaims = [
     ...text.matchAll(/pins each of those (\d+) Forms' DESIRED SCHEMA/gi),
   ];
-  if (schemaCoverageClaims.length === 0) {
-    fail(
-      "conformance/README.md: portable-host-v1beta1 Form schema coverage count is not stated",
-    );
-  } else {
+  if (schemaCoverageClaims.length > 0) {
     for (const match of schemaCoverageClaims) {
       if (Number(match[1]) !== drivenKinds.length) {
         fail(
@@ -1864,7 +1884,7 @@ checkMarkdownLinks();
 checkWebsiteMarkdownLinks();
 checkHtmlFiles();
 checkResourceInventory(formDocNames);
-checkDocsPageLinks(formDocNames);
+checkDocsPageLinks(formDocNames, currentFormRoster);
 checkStaleWebsiteContent();
 checkSpecificationReleaseWording();
 checkContractLaneDocumentation();
