@@ -17,7 +17,7 @@
   "formMaturity": "experimental",
   "formPackagePublicationStatus": "unpublished",
   "specificationVersion": "1.1",
-  "specificationReleaseStatus": "candidate-open",
+  "specificationReleaseStatus": "released",
   "currentFamilyIndex": "forms/candidates/current-family-index.json",
   "currentFamilyIndexDigest": "sha256:337a138c8d2561ade5b5ff44570c0d6a5543922f98d265c961874b06ef7ba703",
   "currentFamilyCount": 8,
