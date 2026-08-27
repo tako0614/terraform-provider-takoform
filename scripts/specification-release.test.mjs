@@ -873,6 +873,19 @@ describe("release-state-neutral current wording", () => {
   });
 });
 
+describe("Specification release CI checkout", () => {
+  test("validates the exact pull-request head instead of a synthetic merge ref", () => {
+    const workflow = readFileSync(
+      path.join(ROOT, ".github/workflows/quality.yml"),
+      "utf8",
+    );
+    expect(workflow).toContain(
+      "ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+    );
+    expect(workflow).toContain("fetch-depth: 0");
+  });
+});
+
 test("receipt writer is create-only and writes only the ledger projections", () => {
   const root = mkdtempSync(path.join(tmpdir(), "takoform-spec-receipt-"));
   for (const relativePath of [
