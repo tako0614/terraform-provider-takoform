@@ -203,7 +203,7 @@ describe("production deployment readback", () => {
   });
 });
 
-test("website snapshot copy includes its complete module closure", () => {
+test("retained website source keeps its closure while the active contract omits it", () => {
   const deploySource = readFileSync(
     new URL("./deploy.mjs", import.meta.url),
     "utf8",
@@ -221,19 +221,18 @@ test("website snapshot copy includes its complete module closure", () => {
   const website = contract.surfaces.find(
     (surface) => surface.surface === "takoform-website",
   );
-  expect(website).toBeDefined();
-  const provenance = website.obligations.provenance;
-  expect(provenance).toContain("two concurrent read-only VitePress builds");
-  expect(provenance).toContain(
+  expect(website).toBeUndefined();
+  expect(deploySource).toContain("two concurrent read-only VitePress builds");
+  expect(deploySource).toContain(
     "page byte-for-byte after the writer's trailing-whitespace-only normalization",
   );
-  expect(provenance).toContain(
+  expect(deploySource).toContain(
     "content-addressed asset set by exact path and bytes",
   );
-  expect(provenance).toContain("`hashmap.json` is the sole byte exception");
-  expect(provenance).toContain("exact page-key set");
-  expect(provenance).not.toContain("page semantically");
-  expect(provenance).not.toContain("asset set by role");
+  expect(deploySource).toContain("hashmap.json\\` is the sole byte exception");
+  expect(deploySource).toContain("exact page-key set");
+  expect(deploySource).not.toContain("page semantically");
+  expect(deploySource).not.toContain("asset set by role");
 });
 
 test("website deploy materializes redirected mutable state create-only", () => {
