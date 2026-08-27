@@ -1,40 +1,64 @@
 # Versions and compatibility
 
-Takoform keeps independent Specification, Provider, Host API, Form Family,
-Form definition, and Form Package axes. A version on one axis is not a
-pre-release label for another axis.
+Takoform has exactly two domain version axes: the Host API major and each
+Form's own `definitionVersion`. A version on one domain axis is not a
+pre-release label for the other. Provider SemVer, package and schema IDs or
+digests, Interface/Binding references, Specification releases, and retained
+lanes are artifact/history identities rather than additional domain axes.
+
+The frozen predecessor source remains at
+[`spec/versioning.md`](https://github.com/tako0614/terraform-provider-takoform/blob/896fb0e6c94557d97ba7445924fda18a8430ba8f/spec/versioning.md).
+These current Provider pages are maintained separately from that historical
+file.
 
 ## Current design target
 
-| Axis                  | Current identity                           | Meaning and availability                                                                                                                                                                     |
-| --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.1**                           | First numbered release; publication status is derived only from the exact append-only release ledger. Identity 1.0 was withdrawn before publication and may not be reused.     |
-| Host API              | **`forms.takoform.com/v1`**                | Stable Specification contract for discovery, exact Form availability, operations, fencing, and errors.                                                                                       |
-| Form corpus           | **8 versionless families / 31 Forms**     | Exact current `0.x` FormRefs; all remain Experimental and independently versioned.                                                                                                           |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | Separate package/distribution identifier. Package artifacts remain unpublished.                                                                                                              |
-| Provider              | **3.0.0, Registry-published**              | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained Registry history.                                                                     |
+| Domain axis | Current identity | Meaning and availability |
+| ---------- | ---------------- | ------------------------ |
+| Host API major | **`forms.takoform.com/v1`** (unpublished candidate) | Protocol envelope, discovery, exact Form availability, operations, fencing, and errors. |
+| Form `definitionVersion` | **8 versionless families / 31 exact Forms** | Every Form carries its own current Experimental `0.x` SemVer; a Form advances without minting a family generation. |
 
-Provider distribution is a separate axis. **Provider 3.0.0** is the current
-Registry-published implementation. **Provider 2.1.1**, **Provider 2.0.0**, and
-**Provider 1.0.3** remain
-installable Registry history for earlier epochs
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
-([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)). Provider 3
-cannot block or authorize Specification 1.1.
+## Artifact and history identities
+
+| Identity | Current or retained meaning |
+| -------- | --------------------------- |
+| Specification **1.1** | Released identity of one exact normative source snapshot. It does not publish or promote Host API v1, a Form, a package, or Provider 3; identity 1.0 was withdrawn before publication and may not be reused. |
+| Form Family group | Versionless namespace in each exact FormRef; older versioned groups remain retained or withdrawn history. |
+| Form Package envelope **`packages.forms.takoform.com/v1alpha5`** | Manifest-format identifier. Package IDs and content digests identify artifact bytes, and package publication remains independent of Provider publication. |
+| Schema IDs and digests | Exact Definition or wire-schema bytes, not a second Form version. |
+| Interface/Binding refs and digests | Exact operation-surface and typed-capability contracts referenced by Forms. |
+| Provider **3.0.0**, Registry-published | Non-normative Terraform/OpenTofu client distribution for the current Forms. |
+| Provider **2.1.1**, Registry-published | Retained Beta `v1beta1` client for the 15 immutable `edge.forms.takoform.com/v1beta1` FormRefs; its identity is recorded in the [provider Form identity ledger](/release/provider-form-identities.json). |
+| Providers **2.0.0** and **1.0.3** | Withdrawn pre-Beta client identities; immutable Registry history for exact-pin recovery and migration only. |
+
+Provider distribution is an artifact identity, not a domain axis. **Provider 3.0.0** is the current
+Registry-published implementation. **Provider 2.1.1** is retained Beta
+`v1beta1` history:
+it targets Host API `forms.takoform.com/v1beta1` and the
+`edge.forms.takoform.com/v1beta1` family, and remains installable for the exact
+FormRefs recorded in the [provider Form identity ledger](/release/provider-form-identities.json).
+By contrast, **Provider 2.0.0** and **Provider 1.0.3** are the withdrawn
+pre-Beta epochs; their Registry identities remain immutable history for
+exact-pin recovery and migration
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
+Provider 3 is a client artifact identity: it cannot block or authorize
+Specification 1.1, and publishing a new Form `definitionVersion` does not wait
+for a Provider release.
 
 ## Published compatibility mapping
 
 | Client or distribution      | Host API          | Forms and definitions                                               | Status / use                                                                |
 | --------------------------- | ----------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Provider 3.0.0 distribution | Host API v1       | 8 versionless families; 31 current Experimental Form identities     | Current Registry-published non-normative reference implementation.          |
+| Provider 3.0.0 distribution | Host API v1 candidate       | 8 versionless families; 31 current Experimental Form identities     | Current Registry-published non-normative reference implementation.          |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1; 15 immutable historical Form identities | Registry-published retained client; descriptor remains `candidate-only` metadata by design. |
 | Provider 2.0.0 distribution | Host API v1alpha2 (withdrawn epoch) | The nine withdrawn v1alpha2 Forms | Immutable Registry history; exact-pin only, no successors. |
 | Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
 
-The current Host API v1 contract and versionless Form families are not
-interchangeable labels. A Form's own definition SemVer does not change either
-the Specification or Provider SemVer, and Specification 1.1 does not silently
-mint Form `1.0.0` identities.
+The current Host API v1 candidate and versionless Form families are not
+interchangeable labels. A Form's own `definitionVersion` is the only per-Form
+domain version; it does not change either the Specification or Provider SemVer.
+Specification 1.1 does not silently mint Form `1.0.0` identities, and a new
+Form publication does not require a Provider release.
 
 ## Current Edge reference family (16 Experimental Forms)
 
@@ -72,8 +96,17 @@ terraform {
 }
 ```
 
-Provider 2.1.1 remains available for the exact historical identities it
+Provider 2.1.1 remains available for the exact retained Beta identities it
 shipped; it must not be read as implementing the current 31-Form corpus.
+
+## Publisher parity at the Form/Package boundary
+
+Official and external/third-party publishers are equal at the Form and Form
+Package publication boundary. Only the publisher identity and domain differ;
+the contract, verification, trust/admission, lifecycle, and authority rules do
+not. An official namespace confers no stronger semantics. Operators explicitly
+choose the trusted source, issuer, signature/revocation policy, and Host Support
+policy; publisher provenance is not part of FormRef equality.
 
 ## Withdrawn epochs
 
@@ -82,7 +115,7 @@ The pre-Beta epochs and their documentation were withdrawn
 The withdrawn resource pages no longer exist on this site; the identities are
 recorded as retired in the published ledgers, and the bytes stay in the
 repository's git history and release tags. Existing users of the withdrawn
-resources keep an exact pin (`= 2.0.0` or `= 2.1.1`, `= 1.0.3` for v1 state)
+resources keep an exact pin (`= 2.0.0`, `= 1.0.3` for v1 state)
 or follow the [v2 to v3 migration boundary](/release/migrations/v2-to-v3.html):
 stay pinned, remove from state, or destroy while still pinned. Nothing is
 migrated automatically, and upgrading past the withdrawal with one of the nine
