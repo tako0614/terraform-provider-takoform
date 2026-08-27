@@ -44,7 +44,14 @@ describe("Specification 1.1 compatibility manifest", () => {
       }
     }
     const statuses = new Set(MANIFEST.classes.flatMap((entry) => entry.entries.map((value) => value.status)));
-    expect(statuses).toEqual(new Set(STATUS_VALUES));
+    const released = SPECIFICATION_LEDGER.releases.some(
+      (release) => release?.version === "1.1",
+    );
+    expect(statuses).toEqual(
+      released
+        ? new Set(["retained", "unpublished-candidate", "withdrawn-retained"])
+        : new Set(STATUS_VALUES),
+    );
   });
 
   test("contains the exact occupied identity sets derived from owning ledgers", () => {
