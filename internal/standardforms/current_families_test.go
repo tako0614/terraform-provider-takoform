@@ -102,12 +102,12 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 
 	forms := map[string]map[string]bool{
 		"container.forms.takoform.com/ContainerCustomDomain": {
-			"current Experimental Form `container.forms.takoform.com/ContainerCustomDomain`": true,
+			"retained Form `container.forms.takoform.com/ContainerCustomDomain`": true,
 			"target `ContainerService` resource":                                             true,
 			`"apiVersion":"container.forms.takoform.com"`:                                    true,
 		},
 		"function.forms.takoform.com/FunctionVersion": {
-			"current Experimental Form `function.forms.takoform.com/FunctionVersion`": true,
+			"retained Form `function.forms.takoform.com/FunctionVersion`": true,
 		},
 		"container.forms.takoform.com/ContainerRevision": {},
 	}

@@ -101,8 +101,8 @@ function verifyOneCopy(document, relativePath, facts, failures) {
   }
   if (document.hostApiPublicationStatus !== "unpublished-candidate") {
     failures.push(
-      `${relativePath}: hostApiPublicationStatus must keep Host API v1 separate ` +
-        "and unpublished while Specification 1.1 is released independently",
+      `${relativePath}: retained hostApiPublicationStatus must keep Host API v1 ` +
+        "separate and unpublished as W09 compatibility metadata",
     );
   }
   if (

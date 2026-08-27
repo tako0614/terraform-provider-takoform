@@ -3,9 +3,9 @@ terraform {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
       # This resource type is non-normative official-provider metadata. The
-      # current versionless Form and its digest do not contain this name.
+      # retained versionless Form and its digest do not contain this name.
       # Provider 2.1.1 carries only retained versioned history; use a provider
-      # release whose exact-Form registry includes this current identity.
+      # release whose exact-Form registry includes this retained identity.
       version = ">= 3.0.0"
     }
   }

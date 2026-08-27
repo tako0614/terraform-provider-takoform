@@ -18,17 +18,21 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 
 | Identity | Current identity | Meaning |
 | --- | --- | --- |
-| API/Core release SemVer | `1.0.0` | first public release identity; human-readable checkpoint on the forms.takoform.com/v1 wire/discovery lane; compatible 1.y.0 checkpoints remain on /v1 |
-| Form definitionVersion | `per exact FormRef (current 0.x)` | 8 versionless families and 31 exact Forms; each Form advances independently |
-| Host API wire/discovery lane | `forms.takoform.com/v1` | protocol path used by API/Core 1.x checkpoints; this path is not a third domain axis |
+| API/Core release SemVer | `1.0.1` | public Core/API checkpoint on [the Core v1.0.1 release](https://github.com/tako0614/takoform/releases/tag/v1.0.1), using the forms.takoform.com/v1 wire/discovery lane; compatible 1.y.0 checkpoints remain on /v1 |
+| Form definitionVersion (active publisher) | `1 family / 16 candidate Forms` | active Edge source set edge.forms.takoform.com, independently owned by [takoform-forms](https://github.com/tako0614/takoform-forms); package artifacts remain unpublished |
+| Host API wire/discovery lane | `forms.takoform.com/v1` | protocol path used by API/Core 1.x checkpoints; this path is not a third domain axis, and Host implementation/support/deployment remains host-owned |
+| Provider compatibility mapping | `3.0.0 (retained)` | 8 families / 31 typed mappings retained by Provider 3; this Provider history is not the active publisher roster |
 | Historical Specification receipt | `1.1` | sealed exact source receipt; not API release 1.1 or 1.1.0, no /v1.1, and no ongoing Specification stream |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifacts are unpublished |
-| Provider distribution | `3.0.0` | current Registry-published typed reference implementation; not Specification authority |
+| Provider distribution | `3.0.0` | Registry-published Provider 3 retaining the typed compatibility mapping; not the active publisher roster or Specification authority |
 
 Only API/Core release SemVer and per-Form definitionVersion are domain
-version axes. The historical Specification 1.1 receipt is sealed and
-separate: it is not API release 1.1 or 1.1.0, does not create `/v1.1`, and
-is not an ongoing Specification stream. A Form or package publication and
+version axes. The active publisher is the standalone Edge candidate/source
+edge.forms.takoform.com (16 Forms); its package artifacts are unpublished.
+Provider 3's 31 typed mappings are retained compatibility history, not a
+current publisher roster. The historical Specification 1.1 receipt is sealed
+and separate: it is not API release 1.1 or 1.1.0, does not create `/v1.1`,
+and is not an ongoing Specification stream. Form/package publication and
 Provider release remain independent artifact identities.
 This table is generated from repository bytes
 by `bun run sync:current-generation`; the numbered release ledger derives
@@ -39,20 +43,22 @@ package, or Provider identity.
 
 ## API/Core 1.x, compatibility, and retained Provider history
 
-The first public API/Core release identity is **`v1.0.0`**, using the existing
-`forms.takoform.com/v1` wire and discovery lane. Release numbers are
-human-readable compatibility checkpoints: future compatible `v1.1.0`, `v1.2.0`,
-and later `v1.y.0` releases stay on `/v1`. The historical Specification 1.1
-is a sealed exact source receipt, not API release 1.1 or 1.1.0; it does not
-create `/v1.1` and is not an ongoing Specification version stream.
+The current public API/Core checkpoint is **`v1.0.1`**, published by the
+[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
+on the existing `forms.takoform.com/v1` wire and discovery lane. API SemVer is
+a human-readable compatibility checkpoint; compatible `1.x` checkpoints remain
+on `/v1`. Host implementation, deployment, support, and adoption are separate
+host-owned facts. The historical Specification 1.1 is a sealed exact source
+receipt, not an API release or current version axis, and it does not create
+`/v1.1`.
 
-The exact current corpus has eight versionless families and 31 Experimental
-`0.x` Forms, using package envelope `packages.forms.takoform.com/v1alpha5`;
-package artifacts remain unpublished. A sealed Specification receipt does not
-promote a Form, publish a Form Package, or release a Provider. Candidate Forms,
-reference conformance, Providers, external Hosts, products, deployments,
-signers, and operators remain implementation or adoption evidence, not API/Core
-release authority
+The active standalone publisher is
+[`takoform-forms`](https://github.com/tako0614/takoform-forms). Its
+`edge.forms.takoform.com` source set contains 16 Experimental candidate Forms;
+package artifacts are unpublished. Form definition and package releases are
+independent of Provider releases. The Provider repository retains 31 typed
+mappings across eight families for Provider 3 compatibility history; that
+projection is not the current publisher roster
 ([decision 0055](spec/decisions/0055-specification-release-needs-only-normative-source.md)).
 
 The separately generated compatibility report is evidence only. It binds
@@ -76,25 +82,33 @@ future W10 Core owner may define future API/Core checkpoints through an
 explicit decision; it must never reissue, rewrite, or retag the sealed
 Specification 1.1 receipt.
 
-The current corpus contains 31 exact Experimental `0.x` Forms in eight
-versionless families. The Edge family contains these 16 Forms and no current
+The retained Provider 3 mapping contains 31 exact Experimental `0.x` Forms in
+eight versionless families. The active Edge candidate set contains these 16
+Forms and no
 `ObjectBucket`: `ModuleWorker`, `WorkerBundle`, `StaticAssetBundle`,
 `WorkerVersion`, `WorkerDeployment`, `WorkerCustomDomain`, `WorkerEndpoint`,
 `WorkerCronTrigger`, `EdgeKVNamespace`, `SQLiteDatabase`,
 `SQLiteMigrationSet`, `SQLiteMigrationApplication`, `AtLeastOnceQueue`,
-`QueueConsumer`, `DurableWorkflow`, and `ActorNamespace`. The other current
-families are Container, Function, Pull Queue, Schedule, Table, Topic, and
-Vector. Releasing Specification 1.1 does not silently mint Form `1.0.0`
-identities; a future stable Form starts at `1.0.0` only by an explicit
+`QueueConsumer`, `DurableWorkflow`, and `ActorNamespace`. The retained mapping's
+other families are Container, Function, Pull Queue, Schedule, Table, Topic, and
+Vector. Releasing the historical Specification receipt does not silently mint
+stable Form identities; a future stable Form starts only by an explicit
 per-Form decision.
 
 Provider SemVer is independent of both domain axes. Provider `v2.1.1` remains immutable,
 Registry-readback history for the retained `v1beta1` Host/family identities,
 and Provider `v2.0.0` and `v1.0.3` remain earlier published history. The
-official Provider 3 implementation may reference the exact current `0.x`
-Forms, but it is non-normative and cannot block API/Core or alter the sealed
+official Provider 3 implementation retains typed mappings for the Provider
+snapshot, but it is non-normative and cannot block API/Core or alter the sealed
 Specification receipt. Provider 3 remains typed; it does not add an opaque
-generic JSON resource.
+generic JSON resource. A Provider release only changes the typed adapter and
+its compatibility surface; it does not publish a Form Package.
+
+API patches are defect-only and may be batched; API minors are at most monthly
+and may be skipped; a major is normally at most annual and requires a concrete
+incompatibility and migration plan. Every public release passes prepublication
+review/gates and is read-only after publication. Form definition/package
+releases follow their publisher's independent cadence.
 
 ## Using retained Provider 2.1.1 history
 

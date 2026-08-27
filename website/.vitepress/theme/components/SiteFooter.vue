@@ -40,24 +40,22 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>Specification</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
-        derived from the append-only Specification release ledger/status document);
-        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
-        {{ status.hostApiPublicationStatus }});
-        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
+        <strong>API/Core</strong>: 1.0.1 public checkpoint; historical Specification
+        receipt {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
+        Host API {{ hostApiVersion }} ({{ hostApiMaturity }},
+        {{ status.hostApiPublicationStatus }} retained metadata); active Edge publisher
+        source has 16 candidate Forms; Provider 3 retains {{ status.currentFamilyCount }}
+        families / {{ status.currentFormCount }} typed mappings.
         Form Package {{ status.formPackageApiCurrent }} is
         {{ status.formPackagePublicationStatus }}.
       </p>
       <p v-else>
-        <strong>Specification</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
-        derived from the append-only Specification release ledger/status document);
-        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
-        {{ status.hostApiPublicationStatus }});
-        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
+        <strong>API/Core</strong>: 1.0.1 public checkpoint; historical Specification
+        receipt {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }});
+        Host API {{ hostApiVersion }} ({{ hostApiMaturity }},
+        {{ status.hostApiPublicationStatus }} retained metadata); active Edge publisher
+        source has 16 candidate Forms; Provider 3 retains {{ status.currentFamilyCount }}
+        families / {{ status.currentFormCount }} typed mappings.
         Form Package {{ status.formPackageApiCurrent }} is
         {{ status.formPackagePublicationStatus }}.
       </p>

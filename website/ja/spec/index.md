@@ -9,8 +9,9 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.1。first numbered release identity。publication state は append-only numbered ledger から導出し、authority は normative `spec/` tree の exact committed snapshot 1つだけ（1.0 は公開前に撤回され再利用しない） |
-| 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
+| API/Core checkpoint | `v1.0.1`。外部 Core の public compatibility checkpoint。`forms.takoform.com/v1` lane を使い、Host の実装・support・deployment とは別の事実 |
+| Historical Specification receipt | Takoform 1.1。first numbered release の sealed exact source receipt。publication state は append-only numbered ledger から導出し、1.0 は公開前に撤回され再利用しない |
+| Provider 3 retained mapping | 8 versionless families / 31 exact Experimental `0.x` typed mappings。active standalone Edge publisher の roster や package publication ではない |
 | Host API candidate | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、Specification とは separate and unpublished) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
 | Provider distribution | independent。Provider 3.0.0 は current Registry-published non-normative reference implementation、`v2.1.1` は retained history |

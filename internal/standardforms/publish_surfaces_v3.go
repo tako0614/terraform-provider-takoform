@@ -302,10 +302,12 @@ description: |-
 
 `, resourceType, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This page documents a non-normative official Terraform Provider mapping for the\n" +
-		"current Experimental Form `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n" +
+	builder.WriteString("This page documents a non-normative official Terraform Provider 3\n" +
+		"compatibility mapping for the retained Form `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n" +
 		"The mapping name is provider metadata: it is absent from the Form Definition and cannot change\n" +
 		"the Form's canonical bytes or digest. Provider publication and support are versioned separately.\n" +
+		"Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a\n" +
+		"currently published package or that the Provider's 31-resource projection is the active publisher roster.\n" +
 		"The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](https://takoform.com/examples/resources/" +
@@ -486,9 +488,9 @@ func v3ExampleHCL(form model.Form) string {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
       # This resource type is non-normative official-provider metadata. The
-      # current versionless Form and its digest do not contain this name.
+      # retained versionless Form and its digest do not contain this name.
       # Provider 2.1.1 carries only retained versioned history; use a provider
-      # release whose exact-Form registry includes this current identity.
+      # release whose exact-Form registry includes this retained identity.
       version = ">= 3.0.0"
     }
   }
@@ -759,11 +761,16 @@ func v3FormInventorySection() string {
 		}
 	}
 	fmt.Fprintf(&builder, `
-The current roster is exactly %d Forms in %d versionless families. Edge has
-exactly %d members and intentionally has no current ObjectBucket Form,
+Provider 3 retains exactly %d typed mappings in %d versionless families. Edge has
+exactly %d members in that retained mapping and intentionally has no ObjectBucket Form,
 `+"`edge.objects`"+` Interface, or ObjectBucket Binding. Retained versioned
 Provider 2.1.1 packages remain immutable history and are not members of this
-current roster.
+mapping.
+
+The standalone `+"`takoform-forms`"+` source currently carries the active Edge
+publisher candidate set (`+"`edge.forms.takoform.com`"+`) with 16 Forms. Its
+package artifacts are unpublished; the Provider mapping above must not be read
+as a package-publication roster.
 
 The official Terraform Provider reference docs and examples under
 `+"`docs/resources`"+` and `+"`examples/resources`"+` cover only mappings that

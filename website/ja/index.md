@@ -16,29 +16,30 @@ hero:
 
 ## API/Core 1.x / sealed Specification receipt
 
-Takoform は Experimental specification project です。最初の public API/Core
-release identity は **`v1.0.0`** で、既存の `forms.takoform.com/v1`
-wire/discovery lane を使います。release number は human-readable compatibility
-checkpoint で、互換性のある `v1.1.0`、`v1.2.0`、後続の `v1.y.0` はすべて
-`/v1` に留まります。
+Takoform は Experimental specification project です。現在の public API/Core
+checkpoint は **`v1.0.1`**（[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)）で、既存の
+`forms.takoform.com/v1` wire/discovery lane を使います。release number は
+human-readable compatibility checkpoint で、互換性のある `1.x` は `/v1` に
+留まります。Host の実装・deployment・support・adoption は別の host-owned fact です。
 
-歴史的な Specification 1.1 は sealed な exact source receipt であり、API release
-1.1 / 1.1.0 ではありません。`/v1.1` を作らず、継続的な Specification version
-stream でもありません。Form Package publication は separate かつ unpublished、
-Provider release は独立した client artifact です。
+歴史的な Specification 1.1 は sealed な exact source receipt であり、current
+version axis や API release ではありません。`/v1.1` を作らず、継続的な
+Specification stream でもありません。standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
+の Edge source は 16 candidate Form、package artifact は unpublished です。
+Form/package publication と Provider release は独立した事実です。
 
 | identity | 現在の identity | 意味と利用可能性 |
 | -------- | --------------- | ---------------- |
-| API/Core release SemVer | **`v1.0.0`** | 最初の public release identity。`forms.takoform.com/v1` wire/discovery lane 上の human-readable checkpoint。互換性のある `1.y.0` は `/v1` に留まる。 |
-| Form `definitionVersion` | **8 versionless families / 31 Forms** | exact current `0.x` FormRef。すべて Experimental で独立して進む。 |
+| API/Core release SemVer | **`v1.0.1`** | 公開 Core/API checkpoint。`forms.takoform.com/v1` wire/discovery lane 上の human-readable checkpoint。互換性のある `1.y.0` は `/v1` に留まる。 |
+| Form `definitionVersion` (active publisher) | **1 family / 16 candidate Forms** | Edge source の exact `0.x` FormRef。すべて Experimental で独立して進み、package artifact は unpublished。 |
 | Host API wire/discovery lane | **`forms.takoform.com/v1`** | API/Core `1.x` checkpoint が使う protocol path。第三の domain axis ではない。 |
 | Historical Specification receipt | **1.1** | sealed exact source receipt。API release `1.1` / `1.1.0` ではなく、`/v1.1` も継続的な version stream も作らない。 |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | separate package/distribution schema identity。package artifact は unpublished。 |
-| Provider | **3.0.0、Registry 公開済み** | current 31 Forms 向け independent non-normative reference implementation。Provider 2.1.1 は retained history。 |
+| Provider | **3.0.0、Registry 公開済み** | 8 family / 31 typed mapping を retained compatibility history として持つ independent implementation。active publisher roster ではない。 |
 
 API/Core release、Form maturity、Package publication、Provider release は独立
 しています。sealed Specification receipt は API/Core lane を publish / promote
-せず、current Form を `1.0.0` に昇格させず、`/v1.1` / v2 lane や package を
+せず、current Form を stable identity に昇格させず、`/v1.1` / v2 lane や package を
 mint しません。Provider 3 は API/Core を block できません。
 
 ```hcl
@@ -52,7 +53,7 @@ terraform {
 }
 ```
 
-## Edge reference family (31 current Forms のうち 16)
+## Edge reference family (active candidate 16 Forms)
 
 Host API v1 の上で versionless Form Families が動きます。Edge family の
 16 個の exact `0.x` Form はすべて Experimental です。worker は identity、module
@@ -80,7 +81,8 @@ bytes、handler を宣言する version、traffic deployment、host が割り当
 | [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | deployment が供給する class として多段の durable 実行を持つ            |
 | [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | 実行文脈1つ・専用ストレージ・alarm 1つを持つ addressable actor         |
 
-Registry 公開済み Provider 3 は、ほかの current Forms 15 個も mapping します。
+Registry 公開済み Provider 3 は、active publisher の roster ではなく、ほかの
+retained compatibility mapping も保持します。
 
 - Function: [`takoform_function`](/docs/resources/function.html)、[`takoform_function_version`](/docs/resources/function_version.html)、[`takoform_function_deployment`](/docs/resources/function_deployment.html)、[`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
 - Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html)、[`takoform_container_revision`](/docs/resources/container_revision.html)、[`takoform_container_traffic`](/docs/resources/container_traffic.html)、[`takoform_container_endpoint`](/docs/resources/container_endpoint.html)、[`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
@@ -90,8 +92,9 @@ Registry 公開済み Provider 3 は、ほかの current Forms 15 個も mapping
 
 ::: warning Provider distribution boundary
 この resource 名は independent Provider 3 implementation の metadata で、normative
-ではありません。Provider 3.0.0 は Registry 公開済みですが、31 Form Package は
-unpublished のままです。
+ではありません。Provider 3.0.0 は Registry 公開済みですが、active Edge source の
+16 Form Package artifact は unpublished のままです。Provider 3 の 31 mapping は
+retained compatibility history です。
 :::
 
 worker の capability は exact な

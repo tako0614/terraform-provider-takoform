@@ -16,29 +16,32 @@ hero:
 
 ## API/Core 1.x / sealed Specification receipt
 
-Takoform is an Experimental specification project. The first public API/Core
-release identity is **`v1.0.0`**, using the existing
-`forms.takoform.com/v1` wire and discovery lane. Release numbers are
-human-readable compatibility checkpoints: future compatible `v1.1.0`, `v1.2.0`,
-and later `v1.y.0` releases remain on `/v1`.
+Takoform is an Experimental specification project. The current public API/Core
+checkpoint is **`v1.0.1`**, published by the
+[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1),
+using the existing `forms.takoform.com/v1` wire and discovery lane. Release
+numbers are human-readable compatibility checkpoints; compatible `1.x`
+checkpoints remain on `/v1`. Host implementation, deployment, support, and
+adoption remain separate host-owned facts.
 
-The historical Specification 1.1 is a sealed exact source receipt, not API
-release 1.1 or 1.1.0; it does not create `/v1.1` and is not an ongoing
-Specification version stream. Form Package publication remains separate and
-unpublished, and Provider release remains an independent client artifact.
+The historical Specification 1.1 is a sealed exact source receipt, not an API
+release or current version axis; it does not create `/v1.1` or an ongoing
+Specification stream. The standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
+source currently carries 16 Edge candidate Forms and no published package
+artifacts. Form/package publication and Provider release remain independent.
 
 | Identity | Current identity | Meaning and availability |
 | -------- | ---------------- | ------------------------ |
-| API/Core release SemVer | **`v1.0.0`** | First public release identity; human-readable checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Compatible `1.y.0` checkpoints remain on `/v1`. |
-| Form `definitionVersion` | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental and advances independently. |
+| API/Core release SemVer | **`v1.0.1`** | Public Core/API checkpoint; human-readable compatibility checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Compatible `1.y.0` checkpoints remain on `/v1`. |
+| Form `definitionVersion` (active publisher) | **1 family / 16 candidate Forms** | Exact Edge source FormRefs; every Form remains Experimental and advances independently; package artifacts are unpublished. |
 | Host API wire/discovery lane | **`forms.takoform.com/v1`** | Protocol path used by API/Core `1.x` checkpoints; not a third domain axis. |
 | Historical Specification receipt | **1.1** | Sealed exact source receipt; not API release `1.1` or `1.1.0`, no `/v1.1`, and no ongoing Specification stream. |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished. |
-| Provider | **3.0.0, Registry-published** | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained history. |
+| Provider | **3.0.0, Registry-published** | Independent non-normative implementation retaining the eight-family/31-Form typed compatibility mapping; Provider 2.1.1 is retained history. |
 
 API/Core release, Form maturity, Form Package publication, and Provider release
 are independent. The sealed Specification receipt does not publish or promote
-the API/Core lane, promote current Forms to `1.0.0`, mint `/v1.1` or v2 lanes, or
+the API/Core lane, promote current Forms to a stable identity, mint `/v1.1` or v2 lanes, or
 publish a package; Provider 3 cannot block it. Provider 2.1.1 remains immutable
 Registry history for the historical identities it shipped.
 
@@ -53,9 +56,9 @@ terraform {
 }
 ```
 
-## Edge reference family (16 of 31 current Experimental Forms)
+## Edge reference family (16 candidate Forms)
 
-Host API v1 carries the versionless current Form families
+Host API v1 carries the versionless Form family identities
 ([Form Families](/spec/form-families.html)). The Edge family's 16 exact
 `0.x` Forms are Experimental. A worker becomes reachable
 through a chain of immutable resources: identity, module bytes, an exported
@@ -81,7 +84,8 @@ host-assigned address.
 | [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | durable multi-step execution as a class the worker's deployment serves         |
 | [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | addressable actors with one live context, private storage, and one alarm       |
 
-The Registry-published Provider 3 also maps the other 15 current Forms:
+The Registry-published Provider 3 retains mappings for the other 15 Forms in
+its compatibility snapshot:
 
 - Function: [`takoform_function`](/docs/resources/function.html), [`takoform_function_version`](/docs/resources/function_version.html), [`takoform_function_deployment`](/docs/resources/function_deployment.html), [`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
 - Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html), [`takoform_container_revision`](/docs/resources/container_revision.html), [`takoform_container_traffic`](/docs/resources/container_traffic.html), [`takoform_container_endpoint`](/docs/resources/container_endpoint.html), [`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
@@ -92,7 +96,8 @@ The Registry-published Provider 3 also maps the other 15 current Forms:
 ::: warning Provider distribution boundary
 These resource names are the independent Provider 3 implementation surface.
 Provider 3.0.0 is Registry-published, but the names are not normative and the
-31 current Form Packages remain unpublished. The
+16 active Edge candidate Form Package artifacts remain unpublished; Provider 3's
+31-entry mapping is retained compatibility history. The
 [release-evidence policy](/spec/publication-freeze.html) keeps Specification
 authority separate.
 :::

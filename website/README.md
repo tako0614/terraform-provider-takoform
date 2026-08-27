@@ -206,20 +206,24 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: Provider `v3.0.0` is the published,
-Registry readback-verified current typed distribution for the 31 exact current
-Forms; Provider `v2.1.1` remains immutable retained Host API v1beta1 history;
-Provider `v2.0.0` is the published compatibility predecessor; Provider
-`v1.0.3` is the published Legacy client; Takoform Specification 1.1 publication
-state is derived from the append-only numbered ledger, while literal Host API
-v1 is a separate unpublished protocol candidate (Specification 1.0 was
-withdrawn before publication and may not be reused); and the 34
+repository. The current public truth is: Core/API `v1.0.1` is published by the
+external [Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
+on `/v1`; Provider `v3.0.0` is the published, Registry readback-verified typed
+distribution retaining 31 compatibility mappings across eight families; Provider
+`v2.1.1` remains immutable retained Host API v1beta1 history; Provider `v2.0.0`
+is the published compatibility predecessor; Provider `v1.0.3` is the published
+Legacy client; and the active standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
+source has 16 Edge candidate Forms with unpublished package artifacts. Host
+implementation, support, deployment, and adoption remain separate facts. The
+historical Specification 1.1 receipt is retained by the append-only ledger and
+is not a current API/version axis (Specification 1.0 was withdrawn before
+publication and may not be reused); and the 34
 published Form Package identities are immutable Legacy evidence. There is no
-current central Takoform approval or admission. The current generated corpus
-contains eight versionless families and 31 exact Experimental `0.x` FormRefs;
-Edge contains 16 and has no current `ObjectBucket`, `edge.objects`, or
-`module-worker.object-bucket`. This repository does not assert any host's live
-catalog. The last published
+current central Takoform approval or admission. The Provider compatibility
+projection retains eight versionless families and 31 exact Experimental `0.x`
+FormRefs; the active Edge source contains 16 and has no `ObjectBucket`,
+`edge.objects`, or `module-worker.object-bucket`. This repository does not
+assert any host's live catalog. The last published
 historical admission identity is `forms/admissions/v1.0.7`; its exact Git and
 set identities remain pinned as Legacy evidence.
 The frozen Legacy FormRef group is `forms.takoform.com/v1alpha1`. Retained

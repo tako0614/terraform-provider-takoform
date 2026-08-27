@@ -1,70 +1,28 @@
 # Versioning and compatibility
 
-Takoform has exactly two domain version axes: the public API/Core release
-SemVer and each Form's own `definitionVersion`. They describe different
-compatibility contracts and MUST NOT be aligned to imply a shared release or
-maturity level. API/Core releases are human-readable compatibility checkpoints;
-they do not rename the wire or discovery lane. Provider SemVer, package and
-schema identifiers or digests, Interface and Binding references, Specification
-releases, and retained lanes are artifact/history identities, not additional
-domain axes. Form maturity and the complete lifecycle are defined in
-[`project-lifecycle.md`](project-lifecycle.md).
+Takoform versions protocol, Forms, packages, and the Terraform/OpenTofu
+provider for different reasons. Their numbers MUST NOT be aligned to imply a
+shared release or maturity level. Form maturity and the complete lifecycle are
+defined in [`project-lifecycle.md`](project-lifecycle.md).
 
-The frozen predecessor source remains at
-[`spec/versioning.md`](https://github.com/tako0614/terraform-provider-takoform/blob/896fb0e6c94557d97ba7445924fda18a8430ba8f/spec/versioning.md).
-This current Provider page is maintained separately and is intentionally not
-generated from that historical file.
+## Version axes
 
-## Domain version axes
-
-| Domain contract | Identifier | Meaning |
-| --------------- | ---------- | ------- |
-| API/Core release SemVer | The first release identity, `1.0.0`, on the `forms.takoform.com/v1` wire/discovery lane | Human-readable compatibility checkpoint; all compatible `1.y.0` releases remain on `/v1` |
-| Form definition | SemVer `definitionVersion` inside an exact `FormRef` | Compatibility of one portable desired-state contract |
-
-These are the only domain version axes. The Host API wire/discovery path
-`forms.takoform.com/v1` is the protocol identity carried by all compatible
-API/Core `1.x` checkpoints; it is not a third version axis. A Form Family
-`apiVersion` is a versionless namespace in the `FormRef`, not a
-family-generation axis. The `schemaDigest` then binds the exact Definition
-bytes. Package envelope IDs and digests, schema `$id` values and digests,
-Interface/Binding refs and digests, Provider SemVer, and Specification numbers
-identify artifacts or history. They may contain version words, but they do not
-negotiate a second Form or Host contract.
-
-## API/Core release checkpoints
-
-The first public API/Core release is identified as **`v1.0.0`** and uses the
-existing `forms.takoform.com/v1` wire and discovery lane. The release number is
-a human-readable compatibility checkpoint, not a URL path. Future compatible
-checkpoints may be `v1.1.0`, `v1.2.0`, and later `v1.y.0`; every `1.x` release
-continues to use `/v1` for wire and discovery. A protocol-breaking major gets a
-new lane only through an explicit Core decision.
-
-The historical **Specification 1.1** is a sealed exact source receipt in the
-predecessor release ledger. It is not API release `1.1` or `1.1.0`, does not
-create `/v1.1`, and is not an ongoing Specification version stream. Future
-checkpoints are API/Core releases, not new Specification numbers.
-
-## Artifact and history identities
-
-| Identity | What it names |
-| -------- | ------------- |
-| Specification `1.1` | Sealed historical identity of one exact normative source snapshot recorded by the predecessor release ledger; it is not API release 1.1 or 1.1.0, has no Host API, Form, package, or Provider publication effect, and is not an ongoing version stream |
-| Host API wire/discovery lane `forms.takoform.com/v1` | The protocol path used by the API/Core `1.x` compatibility checkpoints; the path is not a third domain version axis |
-| Form Package envelope and package digest | A manifest format and one closed package byte inventory; package publication is independent of Provider publication |
-| Schema `$id` and digest | The exact schema bytes used by a Definition or wire contract |
-| Interface / Binding ref and schema digest | An exact operation-surface or typed-capability contract referenced by a Form |
-| Provider SemVer | A Terraform/OpenTofu client distribution and its state/schema compatibility promises |
-| Retained or withdrawn lanes and old FormRefs | Immutable release history; they are never relabelled as the current domain axes |
+| Concern      | Identifier                                      | Meaning                                                                                    |
+| ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Host API     | API group carried by the separate Host API v1 candidate, `forms.takoform.com/v1` | Protocol envelope, discovery, and lifecycle compatibility                              |
+| Form group   | Versionless reverse-DNS API group inside an exact `FormRef` | Namespace boundary between current Form Families; occupied older groups remain exact history |
+| Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its group                      |
+| Form Package | Exact package identity plus content digest      | Immutable distribution of one exact Form and its fixtures                                  |
+| Interface / Binding contract | Exact ref plus schema digest       | Immutable operation-surface and typed-capability contracts referenced by Forms             |
+| Provider     | Provider SemVer                                 | Terraform/OpenTofu protocol, typed surface, persisted state, and host-client compatibility |
 
 ### A name is absolute or it rots
 
-The two domain axes are independent by design, and artifact/history identities
-sit beside them. A reader who expects every version word to describe a domain
-axis cannot tell which identity a `v1beta1` or a `v3` belongs to. What separates
-a version word that stays true from one that goes quietly false is not the
-category, though. It is whether the name is **absolute** or **relative**.
+The axes above are independent by design, so their numbers disagree, and a
+reader who expects them to agree cannot tell which axis a `v1beta1` or a `v3`
+belongs to. What separates a version word that stays true from one that goes
+quietly false is not the axis, though. It is whether the name is **absolute**
+or **relative**.
 
 An **absolute** name states which thing it names: `forms.takoform.com/v1beta1`
 means that lane and no other, on the day it was written and afterwards. A
@@ -94,29 +52,24 @@ retained history and stay as they are — the rule binds what is minted next.
 
 ### Current source and retained release history
 
-Specification 1.1 is a sealed exact receipt for one normative source snapshot
-in the predecessor release ledger. It references the `forms.takoform.com/v1`
-wire/discovery lane, eight versionless Form Family groups, 31 exact current
-FormRefs, and the `packages.forms.takoform.com/v1alpha5` package envelope. Each
-current FormRef keeps its own `0.x` `definitionVersion` and Experimental
-maturity. The receipt is not API release `1.1` or `1.1.0`, does not create
-`/v1.1`, and is not an ongoing Specification version stream. The first public
-API/Core release is `v1.0.0` on `/v1`; compatible `1.x` checkpoints stay on
-that lane.
+The current Specification 1.1 source references the separate, unpublished
+Host API v1 candidate at `forms.takoform.com/v1`, eight versionless Form Family
+groups, 31 exact current FormRefs, and the `packages.forms.takoform.com/v1alpha5`
+package envelope. The current FormRefs keep their independent `0.x` Definition
+versions and Experimental maturity. Publishing Specification 1.1 does not
+publish or promote Host API v1 and does not rewrite the Forms as `1.0.0`;
+publishing Host API v1 separately would not rewrite them either.
 
 Provider 2.1.1 is an independent retained release projection: Host
 `forms.takoform.com/v1beta1`, the versioned
 `edge.forms.takoform.com/v1beta1` family, 15 exact FormRefs, and package
-envelope `packages.forms.takoform.com/v1alpha4`. Provider 3.0.0 is a separate
-Registry-published client projection for the current identities. These
-Provider, package, family, and FormRef values are named absolutely and must
-never be inferred from or relabelled as either domain axis.
+envelope `packages.forms.takoform.com/v1alpha4`. Both projections are named
+absolutely and must never be inferred from or relabelled as the other.
 
 ### What freezes each value
 
-A domain version says which compatibility contract moves; an artifact/history
-identity says which exact bytes or release it names. Whether either may move is
-decided by what has already published it.
+An axis says what a number means; it does not say whether the number may move.
+That is decided by what has already published it.
 
 | Value | Frozen by |
 | --- | --- |
@@ -182,15 +135,9 @@ its use by the retained Provider 2.1.1 Beta family is fixed by
 (the namespaced family groups it carries are decided in
 [`decisions/0009`](decisions/0009-form-families-and-namespaced-api-versions.md)).
 
-Publishing a new Form and its package does not wait for a Provider release. A
-Provider release is needed only when that client distribution must change; it
-is not a gate on a publisher minting a new Form `definitionVersion` and exact
-package digest.
+## Provider versions are independent
 
-## Provider SemVer is a distribution identity
-
-Provider SemVer is a client artifact identity, not one of the two domain version
-axes. A provider release version describes only:
+A provider release version describes only:
 
 - Terraform/OpenTofu protocol compatibility;
 - resource and data-source schema compatibility;
@@ -212,10 +159,6 @@ states. Changing the provider major MUST NOT reset, renumber, promote, or
 deprecate a Form. Changing a Form MUST NOT require a provider release when the
 provider can already carry that Form's data and exact identity correctly.
 
-In particular, publishing a new Form `definitionVersion` does not wait for a
-Provider release. The Provider may add support later, or an already-capable
-Provider may support it without changing its SemVer.
-
 Provider `v2.1.1` is therefore a Registry-published stable provider version
 that targets the retained Beta Host API `forms.takoform.com/v1beta1` and 15 exact
 Experimental FormRefs in `edge.forms.takoform.com/v1beta1`. The release
@@ -226,11 +169,9 @@ are immutable provider compatibility data even while their package artifacts
 remain unpublished.
 
 Provider 3.0.0 is a separate Registry-published, non-normative reference
-implementation targeting the API/Core `v1.0.0` checkpoint on Host API wire
-`v1` and the exact current `0.x` FormRefs. Its release status cannot close or
-block the API/Core release or the sealed Specification 1.1 receipt, and
-publication alone does not prove a particular Host or production deployment is
-ready.
+implementation targeting Host API v1 and the exact current `0.x` FormRefs. Its
+release status cannot close or block Specification 1.1, and publication alone
+does not prove a particular Host or production deployment is ready.
 
 A later Stable `1.0.0` Form is a new exact identity. Existing Beta state remains
 bound to its Beta FormRef and codec for read, refresh, update, and delete; a
@@ -242,11 +183,7 @@ The provider compatibility decision is recorded in
 Current provider release facts belong to [`../release/`](../release/index.md),
 not this compatibility policy.
 
-## Form `definitionVersion`
-
-The Form's `definitionVersion` is the only per-Form domain version. The
-versionless family group and the exact `schemaDigest` remain identity material;
-neither is a second Form version stream.
+## Form versions
 
 ### Proposal
 
@@ -290,8 +227,8 @@ The current generator index names 31 exact Experimental Forms across eight
 versionless families; Edge contains 16 and has no `ObjectBucket`. Each Form
 keeps its own `0.x` Definition version. A breaking correction advances only
 that Form's SemVer and digest. It does not mint a family generation, and
-the API/Core `1.x` release lane does not promote it. The sealed Specification
-1.1 receipt likewise has no Form publication effect. The occupied
+publishing Specification 1.1 or the separate Host API v1 candidate does not
+promote it. The occupied
 v1beta1/Provider 2.1.1 FormRefs and published-schema bytes remain immutable
 history.
 
@@ -340,7 +277,7 @@ reinterprets state written against one contract as another, and the substituted
 query's `resource_not_found` is then indistinguishable from deletion. Removing an
 exact FormRef from a client's supported set is therefore a compatibility change
 in that client, governed by its own versioning — for the Terraform/OpenTofu
-provider, by "Provider SemVer is a distribution identity" above, which already forbids
+provider, by "Provider versions are independent" above, which already forbids
 silently reinterpreting persisted state as a different FormRef within a major.
 
 A group rename asks the same question of every member at once, and answers it
@@ -376,7 +313,7 @@ replacement unit, or any other semantic break. A Form that breaks
 `takoform_worker_version`'s schema becomes `takoform_worker_version_v2`, or a
 different Form kind; both types then exist in one build, the old one serving the
 state written under it through its own codec. Removing the old type is a
-provider major under "Provider SemVer is a distribution identity" above.
+provider major under "Provider versions are independent" above.
 
 Every v1beta1-lane resource carries a schema version and registers a state
 upgrader for each earlier version, so a resource type can outlive a change to
@@ -411,18 +348,9 @@ maturity. Different closed package bytes produce a different package digest
 and therefore a different current publication locator. They do not require a
 new Form SemVer unless the Form contract itself changed.
 
-### Official and external publishers
+## Host API group
 
-Official and external/third-party publishers are equal at the Form and Form
-Package publication boundary. Only the publisher identity and domain differ;
-the contract, verification, trust/admission, lifecycle, and authority rules do
-not. An official namespace confers no stronger semantics. Operators explicitly
-choose the trusted source, issuer, signature/revocation policy, and Host Support
-policy; publisher provenance is not part of FormRef equality.
-
-## Host API wire and discovery lane
-
-The repository carries the literal Host API v1 wire
+The repository carries the literal Host API v1 candidate wire
 `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` with API base
 `/apis/forms.takoform.com/v1`. It carries versionless family groups, exact
 FormRefs, UID/generation/revision identity, long-running Operations,
@@ -430,14 +358,11 @@ content-addressed artifact upload, declared constraints, standard-service
 support, and Host Support Profiles. The exact normative contract is
 [`host-api/v1.md`](host-api/v1.md).
 
-API/Core `v1.0.0` is the first public release checkpoint on this wire and
-discovery lane. Compatible `1.x` checkpoints keep using `/v1`; a protocol
-breaking major requires an explicit Core decision and a new lane. The
-historical Specification 1.1 receipt is separate: it does not publish or
-promote this lane, is not API release 1.1, and does not create `/v1.1`. The
-source-only prerequisite and historical receipt are defined by [decision
-0055](decisions/0055-specification-release-needs-only-normative-source.md) and
-the predecessor release ledger.
+The v1 source does not by itself claim that Specification 1.1 has been
+released, and publishing Specification 1.1 does not publish or promote this
+Host API candidate. The release assertion stays red until one clean committed
+snapshot of the normative `spec/` tree is recorded as defined by
+[decision 0055](decisions/0055-specification-release-needs-only-normative-source.md).
 
 The three pre-Beta wires — `forms.takoform.com/v1alpha1` at the unversioned
 `/.well-known/takoform`, `/v1alpha2` at `/.well-known/takoform/v1alpha2`, and
@@ -496,18 +421,13 @@ remain valuable adoption evidence. Decisions 0044 and 0046 are retained as the
 history of that evidence program, but decision 0053 supersedes them as
 Specification and Provider release authorities.
 
-API/Core release compatibility and Form maturity are independent. Releasing
-the `v1.0.0` checkpoint does not rename the eight versionless family groups,
+Host API maturity and Form maturity are independent. Releasing
+`forms.takoform.com/v1` does not rename the eight versionless family groups,
 change any current exact `0.x` FormRef, or create a Form `1.0.0` line. A future
 Stable Form identity begins at `1.0.0` only through an explicit per-Form
 decision. Provider 3 is likewise independent and non-normative: it may
 implement the current exact Forms without defining their semantics or blocking
-the API/Core release or sealed Specification receipt.
-
-Thus the only domain version choices are the API/Core release SemVer and each
-Form's `definitionVersion`; the `/v1` wire/discovery path plus Provider,
-package, schema, Interface/Binding, Specification, and retained-lane version
-words remain protocol, artifact, or history identities.
+the Specification.
 
 ## Deprecation, Legacy, and revocation
 

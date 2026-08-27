@@ -9,7 +9,8 @@ import (
 )
 
 // currentFamilyInventory is a documentation view grouped from the Provider's
-// exact runtime projection. It is not a family-selection authority.
+// exact runtime projection. It is retained Provider 3 compatibility history,
+// not an active Form publisher roster or family-selection authority.
 type currentFamilyInventory struct {
 	Group string
 	Forms []model.Form

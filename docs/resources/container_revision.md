@@ -11,10 +11,12 @@ Immutable serving snapshot of one Container Service: a digest-pinned OCI image, 
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerRevision`.
+This page documents a non-normative official Terraform Provider 3
+compatibility mapping for the retained Form `container.forms.takoform.com/ContainerRevision`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
+Provider 3's mapping is retained compatibility history; it is not a claim that this Form has a
+currently published package or that the Provider's 31-resource projection is the active publisher roster.
 The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_container_revision/resource.tf).

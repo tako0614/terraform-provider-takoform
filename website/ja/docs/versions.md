@@ -16,8 +16,8 @@ release、保持された lane は追加の domain axis ではなく、artifact/
 
 | domain axis | 現在の identity | 意味と利用可能性 |
 | ---------- | --------------- | ---------------- |
-| API/Core release SemVer | **`1.0.0`**（first public release identity） | `forms.takoform.com/v1` の wire/discovery lane 上の human-readable compatibility checkpoint。互換性のある `1.y.0` はすべて `/v1` に留まる。 |
-| Form `definitionVersion` | **8 versionless families / 31 exact Forms** | 各 Form が独自の Experimental `0.x` SemVer を持つ。Form の変更で family generation は作らない。 |
+| API/Core release SemVer | **`1.0.1`**（[public Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)） | `forms.takoform.com/v1` の wire/discovery lane 上の公開 compatibility checkpoint。互換性のある `1.y.0` は `/v1` に留まり、Host 実装・support・deployment は別の事実。 |
+| Form `definitionVersion`（active publisher） | **1 family / 16 candidate Forms** | standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms) の Edge source。package artifact は unpublished で、Form ごとに独立して進む。 |
 
 これが唯一の二つの domain version axis です。`forms.takoform.com/v1` は API/Core
 `1.x` checkpoint が使う wire/discovery path であり、第三の version axis では
@@ -26,12 +26,11 @@ release、保持された lane は追加の domain axis ではなく、artifact/
 
 ## API/Core release checkpoint
 
-最初の public API/Core release は **`v1.0.0`** で、既存の
-`forms.takoform.com/v1` wire/discovery lane を使います。release number は URL
-path ではありません。将来の互換 checkpoint は `v1.1.0`、`v1.2.0`、後続の
-`v1.y.0` とでき、すべての `1.x` release は `/v1` で wire/discovery します。
-protocol-breaking な major に新しい lane を作る場合だけ、明示的な Core decision
-が必要です。
+現在の public API/Core checkpoint は **`v1.0.1`** で、[Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
+に記録されています。既存の `forms.takoform.com/v1` wire/discovery lane を使い、
+互換性のある `1.x` release は `/v1` に留まります。Host の実装・deployment・support・
+adoption は別の host-owned fact です。protocol-breaking な major に新しい lane を
+作る場合だけ、明示的な Core decision が必要です。
 
 歴史的な **Specification 1.1** は predecessor release ledger に残る sealed な
 exact source receipt です。API release `1.1` / `1.1.0` ではなく、`/v1.1` を
@@ -48,7 +47,7 @@ exact source receipt です。API release `1.1` / `1.1.0` ではなく、`/v1.1`
 | Form Package envelope **`packages.forms.takoform.com/v1alpha5`** | manifest format の identity。package ID と content digest は artifact bytes を識別し、package 公開は Provider 公開と独立する。 |
 | Schema ID / digest | exact な Definition または wire schema の bytes。別の Form version stream ではない。 |
 | Interface/Binding ref / digest | Form が参照する exact な operation-surface / typed-capability contract。 |
-| Provider **3.0.0、Registry 公開済み** | current Forms 向け non-normative Terraform/OpenTofu client distribution。 |
+| Provider **3.0.0、Registry 公開済み** | 8 family / 31 mapping を retained compatibility history として持つ non-normative Terraform/OpenTofu client distribution。 |
 | Provider **2.1.1、Registry 公開済み** | Host API / Form Family `v1beta1` の 15 個の immutable FormRef を持つ retained Beta client。identity は [provider Form identity ledger](/release/provider-form-identities.json) に記録される。 |
 | Provider **2.0.0 / 1.0.3** | withdrawn pre-Beta client identity。不変の Registry 履歴として exact-pin recovery / migration のみ。 |
 
@@ -70,17 +69,24 @@ current major release は **3.0.0** です。新しい Form の
 
 | Client / distribution       | Host API          | Form と definition                                                    | 状態 / 用途                                                           |
 | --------------------------- | ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Provider 3.0.0 distribution | API/Core `v1.0.0` checkpoint on Host API wire v1 | 8 versionless families / current Experimental Form 31 個 | current Registry 公開済み non-normative reference implementation。 |
+| Provider 3.0.0 distribution | API/Core `v1.0.1` checkpoint on Host API wire v1 | 8-family / 31-Form retained typed compatibility mapping | current Registry 公開済み non-normative Provider history。active publisher roster ではない。 |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1 の immutable historical Form 15 個 | Registry 公開済みの retained client。descriptor は設計上 `candidate-only` metadata。 |
 | Provider 2.0.0 distribution | Host API v1alpha2（撤回済み epoch） | 撤回された 9 個の v1alpha2 Form | 不変の Registry 履歴。exact pin のみ、後継なし。 |
 | Provider 1.0.3 Legacy       | Host API v1alpha1（撤回済み epoch） | 撤回された v1 Form Package identity | 不変の Registry 履歴。recovery / migration のみ。 |
 
-API/Core `v1.0.0` checkpoint とその `/v1` wire/discovery path、versionless Form
+API/Core `v1.0.1` checkpoint とその `/v1` wire/discovery path、versionless Form
 family は相互に置き換えられる label ではありません。`definitionVersion` は
 Form ごとの唯一の domain version であり、`schemaDigest` と group は identity
 material です。definition 0.1.0 は Form の identity であり、Provider 2.1.1 の
 SemVer を変更しません。新しい Form の公開は Provider release を必要としません。
 sealed Specification 1.1 receipt は API release 1.1 にならず、`/v1.1` も作りません。
+
+## Release cadence / gate
+
+API patch は defect-only かつ batch 可、minor は月 1 回以下で skip 可です。major は通常
+年 1 回以下で、具体的な incompatibility と migration plan が必要です。publication 前は
+review と gate を通し、publication 後は read-only です。Form definition/package release は
+publisher が独立して行い、Provider release は typed adapter/compatibility の変更時だけ行います。
 
 ## Form / Package publication 境界の publisher parity
 
@@ -94,7 +100,7 @@ policy、Host Support policy を明示的に選び、publisher provenance は Fo
 
 ## Current Edge reference family (16 Experimental Forms)
 
-現在の versionless Edge family は次の 16 個の exact Experimental `0.x` Form
+現在の versionless Edge family は standalone publisher の次の 16 個の exact Experimental `0.x` Form
 です（詳細ページは英語のみ）。
 
 - [`takoform_module_worker`](/docs/resources/module_worker.html)
