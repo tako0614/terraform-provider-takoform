@@ -4708,7 +4708,7 @@
           "sources": [
             {
               "path": "release/specification-releases.json",
-              "sha256": "sha256:87260ddd31be82edfa4f51ea33290df8fa38d8e8a9e255061e0049e76a7a052e"
+              "sha256": "sha256:5013901f82db29b900fc611511ac27583204524c0562aca11b36088cc2f9bca3"
             }
           ],
           "owningLedger": "release/specification-releases.json",
@@ -4722,21 +4722,21 @@
         },
         {
           "identity": "takoform.specification@1.1",
-          "status": "new-independent",
+          "status": "retained",
           "sources": [
             {
               "path": "release/specification-releases.json",
-              "sha256": "sha256:87260ddd31be82edfa4f51ea33290df8fa38d8e8a9e255061e0049e76a7a052e"
+              "sha256": "sha256:5013901f82db29b900fc611511ac27583204524c0562aca11b36088cc2f9bca3"
             }
           ],
           "owningLedger": "release/specification-releases.json",
           "migration": {
-            "kind": "new-independent",
-            "from": null,
-            "to": "takoform.specification@1.1",
-            "reason": "numbered Specification identity is independent of Host, Form, package, and Provider axes"
+            "kind": "retained",
+            "from": "takoform.specification@1.1",
+            "to": null,
+            "reason": "published Specification identity is append-only retained history"
           },
-          "publication": "unpublished-candidate"
+          "publication": "retained"
         },
         {
           "identity": "takoform.trust.profile@v1",

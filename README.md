@@ -18,7 +18,7 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 
 | Axis | Current identity | |
 | --- | --- | --- |
-| Specification | `1.1` | candidate-open; one exact committed normative source snapshot is release authority |
+| Specification | `1.1` | released; one exact committed normative source snapshot is release authority |
 | Host API candidate | `forms.takoform.com/v1` | unpublished-candidate; separate protocol identity |
 | Current Form corpus | `forms/candidates/current-family-index.json` | 8 versionless families, 31 exact `0.x` experimental Forms |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifacts are unpublished |
