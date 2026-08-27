@@ -18,6 +18,11 @@
 //   - referenced machine files (forms/*.json, conformance corpus, formpackage
 //     schemas, release json) are copied into website/static/ at mirrored paths
 //     so their URLs are served verbatim.
+//
+// `website/spec/versioning.md` is an explicit current Provider-owned page. The
+// canonical `spec/versioning.md` is a frozen predecessor source and is kept
+// byte-for-byte in the repository; it is intentionally not projected over the
+// current website page.
 
 import {
   copyFileSync,
@@ -127,7 +132,11 @@ function transformMarkdown(source) {
 
 // pages: canonical source -> site projection (with transforms)
 const pages = [];
-for (const file of markdownFiles(path.join(repositoryRoot, "spec"))) {
+// `spec/versioning.md` is retained historical source; its current Provider
+// website page is the explicit site-owned exception above.
+for (const file of markdownFiles(path.join(repositoryRoot, "spec")).filter(
+  (file) => file !== "versioning.md",
+)) {
   // The spec/README.md overview is projected as overview.md so the curated
   // contract-map index at /spec/ stays in place.
   const name =
@@ -283,6 +292,8 @@ for (const [sourceRoot, targetRoot, include] of staticDirectories) {
 const siteOwnedPages = new Set([
   // the curated contract map at /spec/; spec/README.md projects to overview.md
   path.join(websiteRoot, "spec", "index.md"),
+  // current Provider versioning page; the frozen spec/versioning.md is not its source
+  path.join(websiteRoot, "spec", "versioning.md"),
 ]);
 const projectedPageRoots = ["spec", "proposals", "forms", "conformance", "release"].map(
   (directory) => path.join(websiteRoot, directory),
