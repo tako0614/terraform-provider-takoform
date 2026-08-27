@@ -21,5 +21,38 @@
     "formPublicationEffect": "none",
     "providerEffect": "none"
   },
-  "releases": []
+  "releases": [
+    {
+      "format": "takoform.specification-release-receipt@v1",
+      "version": "1.1",
+      "title": "Takoform Specification 1.1",
+      "track": "specification-v1",
+      "hostApiLane": "forms.takoform.com/v1",
+      "sourceCommit": "00ae5ee4e2ea2eb62ea796499a93081374dc36b9",
+      "releaseCommit": "35c03a76326c808e859aa77172e086f15a2aeb5d",
+      "sourceSnapshotSha256": "sha256:23a9b14dc79f46fae632624fc5c442f947f63565e9d7f9d0a614598b5027ae03",
+      "sourceEvidenceSha256": "sha256:6f2ba3d51261f2559d0738ed2b22f51d7066d4d5b9f9bf0213694f352b677a84",
+      "prerequisites": [
+        "specification-source-snapshot"
+      ],
+      "hostApiEffect": "none",
+      "formPublicationEffect": "none",
+      "providerEffect": "none",
+      "tag": "specification/1.1",
+      "tagObject": "e2c1ba71766a6b25cae0826df99c8906a7f3f20b",
+      "annotatedTag": true,
+      "release": {
+        "id": 377480828,
+        "url": "https://github.com/tako0614/terraform-provider-takoform/releases/tag/specification/1.1",
+        "immutable": true
+      },
+      "assets": [
+        {
+          "name": "takoform-specification-1.1-source-snapshot.json",
+          "sourcePath": "spec/publication-evidence.json",
+          "sha256": "sha256:6f2ba3d51261f2559d0738ed2b22f51d7066d4d5b9f9bf0213694f352b677a84"
+        }
+      ]
+    }
+  ]
 }
