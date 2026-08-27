@@ -37,6 +37,7 @@ import {
   releaseFromEvidence,
   sourceSnapshotDigest,
   validateC2DiffPaths,
+  validateSpecificationRecoveryPath,
 } from "./specification-release.mjs";
 
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
@@ -102,14 +103,6 @@ const PROVIDER_RECOVERY_ALLOWED_PATHS = Object.freeze([
   "scripts/release-deploy.mjs",
   "scripts/release-deploy.test.mjs",
   "scripts/testdata/provider-release-candidate-30507374579-1-metadata.json",
-]);
-const SPECIFICATION_RECOVERY_ALLOWED_PATHS = Object.freeze([
-  "package.json",
-  "release/README.md",
-  "scripts/release-deploy.mjs",
-  "scripts/release-deploy.test.mjs",
-  "scripts/specification-release.mjs",
-  "scripts/specification-release.test.mjs",
 ]);
 const PROVIDER_SURFACE = "takoform-provider-release";
 const FORM_SURFACE = "takoform-form-package-release";
@@ -203,18 +196,18 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "uses the canonical old repository as the sole Specification 1.1 authority, requires a clean non-shallow attached main equal to freshly fetched origin/main, runs the complete owner gate, requires C2 to be the direct evidence-only child of the normative C1 commit, and binds the exact committed source-snapshot evidence bytes; the five-class compatibility report remains a separately checked W09 report and is not release authority",
+        "uses the canonical old repository as the sole Specification 1.1 authority, requires a clean non-shallow attached main equal to freshly fetched origin/main, runs the complete owner gate, requires C2 to be the direct evidence-only child of the normative C1 commit, and binds the exact committed source-snapshot evidence bytes; the normal history is C2 -> C3 -> C4, while the sole exceptional history is C2 -> R -> C3 -> C4 where R is one direct single-parent child of C2 whose diff includes scripts/release-deploy.mjs and contains only scripts/release-deploy.mjs, scripts/release-deploy.test.mjs, scripts/specification-release.mjs, and scripts/specification-release.test.mjs; the five-class compatibility report remains a separately checked W09 report and is not release authority",
       "post-conditions":
-        "publishes at most one create-only Specification 1.1 identity bound to annotated specification/1.1 and the exact C1 source/C2 release commits, rereads the immutable release and exact downloaded source evidence bytes, appends one C3 receipt only after authoritative tag/release readback matches, and requires a separate non-authoritative C4 derived-public-truth commit before the branch is green; no Form, package, Provider, Host API lane, v2 schema, v2 tag, or v2 receipt is created",
+        "publishes at most one create-only Specification 1.1 identity bound to annotated specification/1.1 and the exact C1 source/C2 release commits, rereads the immutable release and exact downloaded source evidence bytes, and appends one C3 receipt only after authoritative tag/release readback matches; record-receipt requires expected-recovery-commit equal to C2 normally or the exact R during recovery, binds current protected main to it, repeats the recovery fence before live readback and immediately before writing, compares the C3 diff with its immediate C2-or-R base, and keeps receipt.releaseCommit, tag, release body, and asset authority bound to immutable C2; a separate non-authoritative C4 derived-public-truth commit is required before the branch is green, and no Form, package, Provider, Host API lane, v2 schema, v2 tag, or v2 receipt is created",
       reversal:
         "an unpublished C1/C2 candidate may be withdrawn; an exact tag-only state or exact retained draft may be completed only by the explicit bound recovery phases, while any mismatched publication is halted for forward repair and a published numbered Specification identity is never deleted, overwritten, or reissued",
       "failure-handling":
-        "fails closed before any mutation on missing source evidence, non-evidence C1/C2 drift, a dirty, shallow, detached, stale, or non-canonical checkout, an existing identity, or an ambiguous GitHub response; failures report the exact surface and observed local tag, remote tag, draft, and immutable release state, never delete an identity, and never retry blindly",
+        "fails closed before any mutation on missing source evidence, non-evidence C1/C2 drift, a dirty, shallow, detached, stale, or non-canonical checkout, an existing identity, an extra or merge-parent recovery edge, a forbidden recovery path, or an ambiguous GitHub response; failures report the exact surface and observed local tag, remote tag, draft, and immutable release state, never delete an identity, and never retry blindly",
       "independent-review":
         "the operator reviews the exact C1 source/C2 release commits, separately checked five-class compatibility report, reserved 1.0/no-reuse rule, and zero Host/Form/Provider effects before invoking publish; no compatibility report, Provider, Host, product, signer, or adoption result can substitute for the normative source prerequisite",
       "no-overwrite":
         "requires specification/1.1 and its GitHub Release identity to be absent, creates one deterministic annotated object with a zero-object-id local compare-and-swap, uses a create-only remote lease, and rejects any existing or mismatched tag/release without transferring or reusing withdrawn 1.0",
-      halt: "prepare returns AWAITING_REVIEW after mutation-free C1 preflight; publish consumes only the exact pushed C2 commit, explicit recovery consumes only an exact tag-only or retained-draft state, verify is read-only, record-receipt writes only the C3 ledger projections after live exact readback, and deterministic public-truth regeneration remains a separate C4 commit",
+      halt: "prepare returns AWAITING_REVIEW after mutation-free C1 preflight; publish consumes only the exact pushed C2 commit, explicit recovery consumes only an exact tag-only or retained-draft state at the single allowed R, verify is read-only, record-receipt accepts only the exact C2-or-R protected-main pin and writes only the C3 ledger projections after live exact readback, and deterministic public-truth regeneration remains a separate C4 commit",
     },
   },
 ]);
@@ -273,6 +266,7 @@ const PHASES = {
       "tag",
       "expected-release-commit",
       "expected-tag-object",
+      "expected-recovery-commit",
       "release-id",
     ],
   },
@@ -737,26 +731,45 @@ function assertSpecificationRecoveryFence(
   context,
   { releaseCommit, recoveryCommit, label },
 ) {
-  assertRecoveryCommitAncestor(
-    context,
+  if (!COMMIT.test(releaseCommit ?? "") || !COMMIT.test(recoveryCommit ?? "")) {
+    throw new Error(`${label} requires exact lowercase commits`);
+  }
+  recoveryGit(context, ["cat-file", "-e", `${releaseCommit}^{commit}`]);
+  recoveryGit(context, ["cat-file", "-e", `${recoveryCommit}^{commit}`]);
+  const recoveryParents =
+    releaseCommit === recoveryCommit
+      ? null
+      : (() => {
+          const ancestry = asText(
+            recoveryGit(context, [
+              "rev-list",
+              "--parents",
+              "-n",
+              "1",
+              recoveryCommit,
+            ]),
+          )
+            .trim()
+            .split(" ");
+          return ancestry[0] === recoveryCommit &&
+            ancestry.every((entry) => COMMIT.test(entry))
+            ? ancestry.slice(1)
+            : null;
+        })();
+  const changed =
+    releaseCommit === recoveryCommit
+      ? []
+      : exactDiffPaths(context, releaseCommit, recoveryCommit, {
+          recovery: true,
+        });
+  const problems = validateSpecificationRecoveryPath({
     releaseCommit,
     recoveryCommit,
-    `${label} release/recovery ancestry`,
-  );
-  if (releaseCommit === recoveryCommit) return [];
-  const changed = exactDiffPaths(context, releaseCommit, recoveryCommit, {
-    recovery: true,
+    recoveryParents,
+    changedPaths: changed,
   });
-  if (
-    !changed.includes("scripts/release-deploy.mjs") ||
-    changed.some(
-      (relativePath) =>
-        !SPECIFICATION_RECOVERY_ALLOWED_PATHS.includes(relativePath),
-    )
-  ) {
-    throw new Error(
-      `${label}: recovery diff must contain only the exact reviewed Specification recovery implementation, tests, package command, and release documentation; observed ${changed.join(", ") || "no changes"}`,
-    );
+  if (problems.length !== 0) {
+    throw new Error(`${label}: ${problems.join("; ")}`);
   }
   return changed;
 }
@@ -1037,9 +1050,13 @@ function specificationRecoverDraft(context, options) {
   );
 }
 
-function specificationLiveReceipt(context, options, { exactMain }) {
+function specificationLiveReceipt(
+  context,
+  options,
+  { exactMain, expectedCurrentCommit = options["expected-release-commit"] },
+) {
   const releaseCommit = options["expected-release-commit"];
-  const currentMain = assertCurrentProtectedMain(context, releaseCommit, {
+  const currentMain = assertCurrentProtectedMain(context, expectedCurrentCommit, {
     exact: exactMain,
   });
   if (!exactMain) {
@@ -1094,10 +1111,23 @@ function specificationVerify(context, options) {
 }
 
 function specificationRecordReceipt(context, options) {
-  specificationOwnerGateAndFence(context, options["expected-release-commit"]);
+  const releaseCommit = options["expected-release-commit"];
+  const recoveryCommit = options["expected-recovery-commit"];
+  const assertReceiptFence = (label) => {
+    const current = specificationOwnerGateAndFence(context, recoveryCommit);
+    assertSpecificationRecoveryFence(context, {
+      releaseCommit,
+      recoveryCommit: current,
+      label,
+    });
+    return current;
+  };
+  assertReceiptFence("Specification record-receipt pre-readback fence");
   const verified = specificationLiveReceipt(context, options, {
     exactMain: true,
+    expectedCurrentCommit: recoveryCommit,
   });
+  assertReceiptFence("Specification record-receipt pre-write fence");
   const ledger = appendReleaseReceipt(verified.receipt, context.repo);
   return emit(context, {
     kind: "takos.deploy-result@v1",
@@ -1106,6 +1136,7 @@ function specificationRecordReceipt(context, options) {
     tag: SPECIFICATION_TAG,
     sourceCommit: verified.input.sourceCommit,
     releaseCommit: verified.input.releaseCommit,
+    recoveryCommit,
     tagObject: options["expected-tag-object"],
     releaseId: verified.release.id,
     releaseUrl: verified.release.html_url,
@@ -1230,8 +1261,10 @@ function normalGitEnvironment() {
 
 function githubUploadEnvironment(context) {
   const environment = githubCommandEnvironment(context);
-  delete environment.GH_TOKEN;
-  environment.GH_ENTERPRISE_TOKEN = process.env.GH_TOKEN;
+  environment.GH_TOKEN = process.env.GH_TOKEN;
+  delete environment.GITHUB_TOKEN;
+  delete environment.GH_ENTERPRISE_TOKEN;
+  delete environment.GITHUB_ENTERPRISE_TOKEN;
   return environment;
 }
 

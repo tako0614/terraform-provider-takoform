@@ -65,6 +65,12 @@ export const C3_ALLOWED_PATHS = Object.freeze([
   LEDGER_PATH,
   ...LEDGER_PROJECTION_PATHS,
 ]);
+export const SPECIFICATION_RECOVERY_ALLOWED_PATHS = Object.freeze([
+  "scripts/release-deploy.mjs",
+  "scripts/release-deploy.test.mjs",
+  "scripts/specification-release.mjs",
+  "scripts/specification-release.test.mjs",
+]);
 export const C4_REQUIRED_PATHS = Object.freeze([
   "README.md",
   "release/specification-compatibility.json",
@@ -483,6 +489,61 @@ export function validateC3DiffPaths(paths) {
   if (unexpected.length !== 0) {
     problems.push(
       `C3 receipt/ledger projection-only diff contains forbidden paths: ${unexpected.join(", ")}`,
+    );
+  }
+  return problems;
+}
+
+export function validateSpecificationRecoveryPath({
+  releaseCommit,
+  recoveryCommit,
+  recoveryParents,
+  changedPaths: recoveryChangedPaths,
+}) {
+  const problems = [];
+  if (!FULL_SHA.test(releaseCommit ?? "")) {
+    problems.push("Specification recovery C2 must be an exact lowercase commit");
+  }
+  if (!FULL_SHA.test(recoveryCommit ?? "")) {
+    problems.push("Specification recovery R must be an exact lowercase commit");
+  }
+  const pathProblems = validatePathList(
+    recoveryChangedPaths,
+    "Specification recovery diff",
+  );
+  problems.push(...pathProblems);
+  if (problems.length !== 0) {
+    return problems;
+  }
+  if (releaseCommit === recoveryCommit) {
+    if (recoveryChangedPaths.length !== 0) {
+      problems.push("Normal C2 recovery pin must have no recovery diff");
+    }
+    return problems;
+  }
+
+  if (
+    !Array.isArray(recoveryParents) ||
+    recoveryParents.length !== 1 ||
+    recoveryParents[0] !== releaseCommit
+  ) {
+    problems.push(
+      `Specification recovery R ${recoveryCommit} must be the direct single-parent child of C2 ${releaseCommit}; observed parents ${Array.isArray(recoveryParents) ? recoveryParents.join(", ") || "none" : "unreadable"}`,
+    );
+  }
+
+  if (!recoveryChangedPaths.includes("scripts/release-deploy.mjs")) {
+    problems.push(
+      "Specification recovery diff must include scripts/release-deploy.mjs",
+    );
+  }
+  const forbidden = recoveryChangedPaths.filter(
+    (relativePath) =>
+      !SPECIFICATION_RECOVERY_ALLOWED_PATHS.includes(relativePath),
+  );
+  if (forbidden.length !== 0) {
+    problems.push(
+      `Specification recovery diff must contain only the exact reviewed Specification recovery paths; forbidden ${forbidden.join(", ")}`,
     );
   }
   return problems;
@@ -1022,17 +1083,29 @@ export function validateReceiptTransitionHistory(
   }
   const c3 = introductions[0].commit;
   const c3Parents = commitParents(root, c3);
-  if (
-    c3Parents === null ||
-    c3Parents.length !== 1 ||
-    c3Parents[0] !== release.releaseCommit
-  ) {
+  if (c3Parents === null || c3Parents.length !== 1) {
     problems.push(
-      `C3 ${c3} must be the direct single-parent child of C2 ${release.releaseCommit}`,
+      `C3 ${c3} must be the direct single-parent child of C2 ${release.releaseCommit} or its exact recovery R`,
     );
     return problems;
   }
-  problems.push(...validateC3DiffPaths(changedPaths(root, release.releaseCommit, c3)));
+  const c3Base = c3Parents[0];
+  const recoveryParents =
+    c3Base === release.releaseCommit ? null : commitParents(root, c3Base);
+  const recoveryChangedPaths =
+    c3Base === release.releaseCommit
+      ? []
+      : changedPaths(root, release.releaseCommit, c3Base);
+  const recoveryProblems = validateSpecificationRecoveryPath({
+    releaseCommit: release.releaseCommit,
+    recoveryCommit: c3Base,
+    recoveryParents,
+    changedPaths: recoveryChangedPaths,
+  });
+  problems.push(...recoveryProblems);
+  if (recoveryProblems.length !== 0) return problems;
+
+  problems.push(...validateC3DiffPaths(changedPaths(root, c3Base, c3)));
   const c3Bytes = C3_ALLOWED_PATHS.map((relativePath) =>
     showBytes(root, c3, relativePath),
   );

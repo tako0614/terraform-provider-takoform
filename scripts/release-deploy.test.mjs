@@ -491,6 +491,41 @@ describe("release surface contract and strict parsing", () => {
     expect(specification.obligations.provenance).toContain(
       "separately checked W09 report and is not release authority",
     );
+    expect(specification.obligations.provenance).toContain(
+      "normal history is C2 -> C3 -> C4",
+    );
+    expect(specification.obligations.provenance).toContain(
+      "sole exceptional history is C2 -> R -> C3 -> C4",
+    );
+    expect(specification.obligations.provenance).toContain(
+      "R is one direct single-parent child of C2",
+    );
+    for (const relativePath of [
+      "scripts/release-deploy.mjs",
+      "scripts/release-deploy.test.mjs",
+      "scripts/specification-release.mjs",
+      "scripts/specification-release.test.mjs",
+    ]) {
+      expect(specification.obligations.provenance).toContain(relativePath);
+    }
+    expect(specification.obligations.provenance).not.toContain(
+      "release/README.md",
+    );
+    expect(specification.obligations.provenance).not.toContain(
+      "website/release/index.md",
+    );
+    expect(specification.obligations["post-conditions"]).toContain(
+      "expected-recovery-commit equal to C2 normally or the exact R",
+    );
+    expect(specification.obligations["post-conditions"]).toContain(
+      "repeats the recovery fence before live readback and immediately before writing",
+    );
+    expect(specification.obligations["post-conditions"]).toContain(
+      "keeps receipt.releaseCommit, tag, release body, and asset authority bound to immutable C2",
+    );
+    expect(specification.obligations["failure-handling"]).toContain(
+      "extra or merge-parent recovery edge",
+    );
   });
 
   test("accepts only exact phase options and canonical values", () => {
@@ -614,14 +649,14 @@ describe("release surface contract and strict parsing", () => {
         "--expected-tag-object",
         "a".repeat(40),
         "--expected-recovery-commit",
-        "b".repeat(40),
+        commit,
       ]),
     ).toEqual({
       phase: "recover-tag-only",
       tag: "specification/1.1",
       "expected-release-commit": commit,
       "expected-tag-object": "a".repeat(40),
-      "expected-recovery-commit": "b".repeat(40),
+      "expected-recovery-commit": commit,
     });
     expect(
       parseReleaseSurfaceArgs("takoform-specification-release", [
@@ -638,21 +673,51 @@ describe("release surface contract and strict parsing", () => {
         "41",
       ])["release-id"],
     ).toBe("41");
-    for (const phase of ["verify", "record-receipt"]) {
-      expect(
-        parseReleaseSurfaceArgs("takoform-specification-release", [
-          phase,
-          "--tag",
-          "specification/1.1",
-          "--expected-release-commit",
-          commit,
-          "--expected-tag-object",
-          "a".repeat(40),
-          "--release-id",
-          "41",
-        ]).phase,
-      ).toBe(phase);
-    }
+    expect(
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "verify",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--release-id",
+        "41",
+      ]).phase,
+    ).toBe("verify");
+    expect(
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "record-receipt",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--expected-recovery-commit",
+        commit,
+        "--release-id",
+        "41",
+      ]),
+    ).toMatchObject({
+      phase: "record-receipt",
+      "expected-release-commit": commit,
+      "expected-recovery-commit": commit,
+    });
+    expect(() =>
+      parseReleaseSurfaceArgs("takoform-specification-release", [
+        "record-receipt",
+        "--tag",
+        "specification/1.1",
+        "--expected-release-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--release-id",
+        "41",
+      ]),
+    ).toThrow("usage:");
 
     for (const withdrawn of [
       "plan",
@@ -1225,6 +1290,40 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
         label: "Specification recovery test",
       }),
     ).toThrow("exact reviewed Specification recovery");
+
+    const extra = createC2();
+    extra.runGit("commit", "--allow-empty", "-m", "unexpected extra commit");
+    writeFileSync(join(extra.root, "scripts", "release-deploy.mjs"), "R\n");
+    extra.runGit("add", ".");
+    extra.runGit("commit", "-m", "reviewed recovery after extra commit");
+    expect(() =>
+      releaseDeployTestHooks.assertSpecificationRecoveryFence(
+        context(execFileSync, { repo: extra.root }),
+        {
+          releaseCommit: extra.releaseCommit,
+          recoveryCommit: extra.runGit("rev-parse", "HEAD"),
+          label: "Specification extra recovery test",
+        },
+      ),
+    ).toThrow("direct single-parent child of C2");
+
+    const merge = createC2();
+    merge.runGit("switch", "-c", "recovery-side");
+    writeFileSync(join(merge.root, "scripts", "release-deploy.mjs"), "R\n");
+    merge.runGit("add", ".");
+    merge.runGit("commit", "-m", "reviewed recovery side");
+    merge.runGit("switch", "main");
+    merge.runGit("merge", "--no-ff", "-m", "merge recovery", "recovery-side");
+    expect(() =>
+      releaseDeployTestHooks.assertSpecificationRecoveryFence(
+        context(execFileSync, { repo: merge.root }),
+        {
+          releaseCommit: merge.releaseCommit,
+          recoveryCommit: merge.runGit("rev-parse", "HEAD"),
+          label: "Specification merge recovery test",
+        },
+      ),
+    ).toThrow("direct single-parent child of C2");
   });
 
   test("rejects a merge-parent C2 even when its resulting tree is evidence-only", () => {
@@ -1275,7 +1374,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
             ],
       ]);
     const fake = (executable, args, options = {}) => {
-      calls.push({ executable, args: [...args] });
+      calls.push({ executable, args: [...args], env: { ...options.env } });
       const ownerGateOutput = ownerGateToolOutput(
         ownerGateTools,
         executable,
@@ -1568,9 +1667,23 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
       wait: () => {},
     });
     expect(verified.status).toBe("VERIFIED");
+
+    writeFileSync(
+      join(fixture.root, "scripts", "release-deploy.mjs"),
+      "reviewed retained-draft recovery repair\n",
+    );
+    fixture.runGit("add", "scripts/release-deploy.mjs");
+    fixture.runGit("commit", "-m", "repair Specification release recovery");
+    const recoveryCommit = fixture.runGit("rev-parse", "HEAD");
+    fixture.runGit("push", "origin", "main");
     const recorded = runReleaseSurface({
       surface: "takoform-specification-release",
-      args: ["record-receipt", ...liveArgs],
+      args: [
+        "record-receipt",
+        ...liveArgs,
+        "--expected-recovery-commit",
+        recoveryCommit,
+      ],
       repo: fixture.root,
       stdout: io.stdout,
       stderr: io.stderr,
@@ -1579,6 +1692,7 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     });
     expect(recorded).toMatchObject({
       phase: "record-receipt",
+      recoveryCommit,
       receiptCount: 1,
       mutation: "C3_LEDGER_PROJECTIONS_ONLY",
       status: "RECEIPT_WRITTEN_AWAITING_C3_AND_C4_COMMITS",
@@ -1599,6 +1713,24 @@ describe("Specification 1.1 deterministic C2 publication inputs", () => {
     expect(JSON.stringify(receiptLedger.releases[0])).not.toContain(
       "compatibility",
     );
+    expect(receiptLedger.releases[0]).not.toHaveProperty("recoveryCommit");
+    const uploadCalls = calls.filter(
+      ({ executable, args }) =>
+        executable === "gh" &&
+        args[0] === "api" &&
+        args.includes("POST") &&
+        args.some((argument) => argument.startsWith("https://uploads.github.com/")),
+    );
+    expect(uploadCalls.length).toBeGreaterThanOrEqual(2);
+    for (const upload of uploadCalls) {
+      expect(upload.env.GH_TOKEN).toBe("operator-only-test-token");
+      expect(upload.env.GITHUB_TOKEN).toBeUndefined();
+      expect(upload.env.GH_ENTERPRISE_TOKEN).toBeUndefined();
+      expect(upload.env.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
+      expect(upload.env.GH_HOST).toBe("github.com");
+      expect(upload.env.GH_CONFIG_DIR).toBeTruthy();
+      expect(upload.args).not.toContain("operator-only-test-token");
+    }
     expect(
       fixture
         .runGit("status", "--porcelain=v1")
@@ -1665,10 +1797,10 @@ describe("workflow dispatch authority and correlation", () => {
     const execution = context(() => "");
     const environment =
       releaseDeployTestHooks.githubUploadEnvironment(execution);
-    expect(environment.GH_TOKEN).toBeUndefined();
+    expect(environment.GH_TOKEN).toBe("operator-only-test-token");
     expect(environment.GITHUB_TOKEN).toBeUndefined();
     expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
-    expect(environment.GH_ENTERPRISE_TOKEN).toBe("operator-only-test-token");
+    expect(environment.GH_ENTERPRISE_TOKEN).toBeUndefined();
     expect(environment.GH_HOST).toBe("github.com");
     expect(environment.GH_CONFIG_DIR).toBe(execution.githubConfigDirectory);
   });
@@ -3197,6 +3329,7 @@ describe("local immutable GitHub Release publication", () => {
     let loseFirstUploadResponse = true;
     let published = false;
     let fenceCalls = 0;
+    const uploadEnvironments = [];
     const draft = () => ({
       id: 7,
       tag_name: tag,
@@ -3229,7 +3362,7 @@ describe("local immutable GitHub Release publication", () => {
         "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
       assets: remoteAssets,
     });
-    const fake = (_executable, args) => {
+    const fake = (_executable, args, options = {}) => {
       calls.push([...args]);
       if (isReleaseList(args)) {
         return JSON.stringify([[{ id: 7, tag_name: tag, draft: !published }]]);
@@ -3244,6 +3377,7 @@ describe("local immutable GitHub Release publication", () => {
         args.includes("POST") &&
         args.some((argument) => argument.includes("/assets?name="))
       ) {
+        uploadEnvironments.push({ ...options.env });
         const path = args[args.indexOf("--input") + 1];
         const name = decodeURIComponent(
           args
@@ -3330,6 +3464,14 @@ describe("local immutable GitHub Release publication", () => {
           ),
         ),
       ).toBe(true);
+    }
+    expect(uploadEnvironments).toHaveLength(2);
+    for (const environment of uploadEnvironments) {
+      expect(environment.GH_TOKEN).toBe("operator-only-test-token");
+      expect(environment.GITHUB_TOKEN).toBeUndefined();
+      expect(environment.GH_ENTERPRISE_TOKEN).toBeUndefined();
+      expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
+      expect(environment.GH_CONFIG_DIR).toBe(execution.githubConfigDirectory);
     }
     expect(
       calls.some(

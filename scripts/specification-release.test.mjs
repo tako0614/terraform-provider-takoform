@@ -26,6 +26,7 @@ import {
   RELEASE_STATE_CURRENT_PUBLIC_PATHS,
   RELEASE_STATE_NEUTRAL_SOURCE_PATHS,
   RELEASE_RECEIPT_FORMAT,
+  SPECIFICATION_RECOVERY_ALLOWED_PATHS,
   SOURCE_EVIDENCE_ASSET,
   SOURCE_EVIDENCE_PATH,
   appendReleaseReceipt,
@@ -38,6 +39,7 @@ import {
   validateLedger,
   validateReceiptTransitionHistory,
   validateReleaseShape,
+  validateSpecificationRecoveryPath,
 } from "./specification-release.mjs";
 import {
   CANONICAL_ORIGIN,
@@ -254,6 +256,41 @@ function transitionFixture(options = {}) {
   const c1 = commitFixture(root, "test: C1 frozen source");
   const c2 = commitFixture(root, "test: C2 publication", { allowEmpty: true });
 
+  let recovery = null;
+  if (options.recovery) {
+    if (options.extraBeforeRecovery) {
+      commitFixture(root, "test: unexpected commit before recovery", {
+        allowEmpty: true,
+      });
+    }
+    if (options.mergeRecovery) {
+      fixtureGit(root, "switch", "-c", "test-recovery-side", c2);
+      writeFixture(root, "scripts/release-deploy.mjs", "reviewed recovery\n");
+      writeFixture(
+        root,
+        "scripts/specification-release.test.mjs",
+        "reviewed recovery test\n",
+      );
+      commitFixture(root, "test: recovery side parent");
+      fixtureGit(root, "switch", "main");
+      fixtureGit(
+        root,
+        "merge",
+        "--no-ff",
+        "-m",
+        "test: merge-parent recovery",
+        "test-recovery-side",
+      );
+      recovery = fixtureGit(root, "rev-parse", "HEAD");
+    } else {
+      writeFixture(root, "scripts/release-deploy.mjs", "reviewed recovery\n");
+      if (options.forbiddenRecoveryPath) {
+        writeFixture(root, options.forbiddenRecoveryPath, "forbidden recovery\n");
+      }
+      recovery = commitFixture(root, "test: reviewed recovery R");
+    }
+  }
+
   const release = receipt();
   release.sourceCommit = c1;
   release.releaseCommit = c2;
@@ -309,6 +346,7 @@ function transitionFixture(options = {}) {
   return {
     c1,
     c2,
+    recovery,
     c3,
     c4,
     history: [
@@ -472,6 +510,66 @@ describe("C1/C2/C3 commit fences", () => {
       "website/public/release/specification-releases.json",
     );
   });
+
+  test("Specification recovery is either C2 itself or one exact direct reviewed child", () => {
+    expect(SPECIFICATION_RECOVERY_ALLOWED_PATHS).toEqual([
+      "scripts/release-deploy.mjs",
+      "scripts/release-deploy.test.mjs",
+      "scripts/specification-release.mjs",
+      "scripts/specification-release.test.mjs",
+    ]);
+    expect(
+      validateSpecificationRecoveryPath({
+        releaseCommit,
+        recoveryCommit: releaseCommit,
+        recoveryParents: null,
+        changedPaths: [],
+      }),
+    ).toEqual([]);
+    expect(
+      validateSpecificationRecoveryPath({
+        releaseCommit,
+        recoveryCommit: releaseCommit,
+        recoveryParents: null,
+        changedPaths: ["scripts/release-deploy.mjs"],
+      }).join("\n"),
+    ).toContain("must have no recovery diff");
+    expect(
+      validateSpecificationRecoveryPath({
+        releaseCommit,
+        recoveryCommit: "c".repeat(40),
+        recoveryParents: [releaseCommit],
+        changedPaths: [
+          "scripts/release-deploy.mjs",
+          "scripts/specification-release.mjs",
+        ],
+      }),
+    ).toEqual([]);
+    expect(
+      validateSpecificationRecoveryPath({
+        releaseCommit,
+        recoveryCommit: "c".repeat(40),
+        recoveryParents: ["d".repeat(40)],
+        changedPaths: ["scripts/release-deploy.mjs"],
+      }).join("\n"),
+    ).toContain("direct single-parent child of C2");
+    expect(
+      validateSpecificationRecoveryPath({
+        releaseCommit,
+        recoveryCommit: "c".repeat(40),
+        recoveryParents: [releaseCommit],
+        changedPaths: ["release/README.md"],
+      }).join("\n"),
+    ).toContain("must include scripts/release-deploy.mjs");
+    expect(
+      validateSpecificationRecoveryPath({
+        releaseCommit,
+        recoveryCommit: "c".repeat(40),
+        recoveryParents: [releaseCommit],
+        changedPaths: ["scripts/release-deploy.mjs", "spec/README.md"],
+      }).join("\n"),
+    ).toContain("spec/README.md");
+  });
 });
 
 describe("C3/C4 fixed-point history", () => {
@@ -519,6 +617,44 @@ describe("C3/C4 fixed-point history", () => {
         [],
       );
     });
+  });
+
+  test("accepts one exact C2/R/C3/C4 recovery history", () => {
+    withTransitionFixture(
+      { recovery: true, laterDescendant: true },
+      ({ release, history, root }) => {
+        expect(validateReceiptTransitionHistory(release, history, root)).toEqual(
+          [],
+        );
+      },
+    );
+  });
+
+  test("rejects extra, merge-parent, and forbidden Specification recovery edges", () => {
+    withTransitionFixture(
+      { recovery: true, extraBeforeRecovery: true },
+      ({ release, history, root }) => {
+        expect(
+          validateReceiptTransitionHistory(release, history, root).join("\n"),
+        ).toContain("direct single-parent child of C2");
+      },
+    );
+    withTransitionFixture(
+      { recovery: true, mergeRecovery: true },
+      ({ release, history, root }) => {
+        expect(
+          validateReceiptTransitionHistory(release, history, root).join("\n"),
+        ).toContain("direct single-parent child of C2");
+      },
+    );
+    withTransitionFixture(
+      { recovery: true, forbiddenRecoveryPath: "spec/README.md" },
+      ({ release, history, root }) => {
+        expect(
+          validateReceiptTransitionHistory(release, history, root).join("\n"),
+        ).toContain("spec/README.md");
+      },
+    );
   });
 
   test("rejects a missing C4", () => {
