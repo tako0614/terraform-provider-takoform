@@ -23,6 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
+          # The Specification release gate validates the repository's exact
+          # first-parent history. A pull_request merge ref is a synthetic merge
+          # commit and is therefore not the branch history being reviewed.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
