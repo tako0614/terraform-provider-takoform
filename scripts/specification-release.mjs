@@ -572,11 +572,6 @@ export function validateC4DiffPaths(paths) {
       problems.push(`C4 derived-public diff must include ${required}`);
     }
   }
-  if (!paths.some((entry) => entry.startsWith("website/public/assets/"))) {
-    problems.push(
-      "C4 derived-public diff must include the rebuilt website/public/assets closure",
-    );
-  }
   const unexpected = paths.filter((entry) => !isAllowedC4Path(entry));
   if (unexpected.length !== 0) {
     problems.push(
@@ -944,9 +939,6 @@ function validateC4AssetTransition(root, c3, c4, changedPathsAtC4) {
     problems.push(
       `C4 website asset diff must be exact content-hash replacements; unexpected ${unexpected.join(", ") || "none"}; missing ${missing.join(", ") || "none"}`,
     );
-  }
-  if (expected.length === 0) {
-    problems.push("C4 must replace at least one content-hashed website asset");
   }
   return problems;
 }

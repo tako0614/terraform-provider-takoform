@@ -30,15 +30,24 @@ unpublished candidates, and withdrawn-retained lanes. It is compatibility
 evidence only, not a publication receipt or release asset; no `/v1.1` Host
 lane, v2 schema, tag, or receipt is minted.
 
-The W09 workflow keeps four commits distinct. C1 is the normative freeze and
-executable tooling with an evidence-empty record. C2 changes exactly the source
-snapshot evidence and its two byte-identical website projections. C3 changes
-exactly the authoritative append-only publication receipt and its two
+The normal W09 workflow keeps four commits distinct. C1 is the normative freeze
+and executable tooling with an evidence-empty record. C2 changes exactly the
+source snapshot evidence and its two byte-identical website projections. C3
+changes exactly the authoritative append-only publication receipt and its two
 byte-identical website projections. C4 is a direct child of C3 and refreshes
 only derived public truth: the README generation table, the informational
 compatibility report, the machine-readable site status, and reproducible
 website output. The compatibility report is checked separately and never
 enters C2, C3, the release asset set, or release authority.
+
+One reviewed recovery-only commit R may appear as the direct child of C2, making
+the exceptional history `C1 -> C2 -> R -> C3 -> C4`. R must include
+`scripts/release-deploy.mjs`, may change only that script,
+`scripts/release-deploy.test.mjs`, `scripts/specification-release.mjs`, and
+`scripts/specification-release.test.mjs`, and may not change normative source,
+evidence, a ledger, a Form, a Provider, or a Host contract. R is operational
+provenance only: the annotated tag, Release body, asset bytes, and C3 receipt
+remain bound to C2.
 
 The enforced C4 write set is exact and bounded: `README.md`; the canonical,
 static, and public Specification compatibility JSON; the static and public
@@ -47,7 +56,10 @@ site-status JSON; every generated VitePress `website/public/**/*.html` page
 closure changed by that deterministic build. The immutable runtime-ABI fixture
 `website/public/conformance/runtime-abi-v1/bundles/unsupported-media-type/page.html`,
 source projection `website/docs/reference.md`, public `hashmap.json`, ledgers,
-and all other paths remain byte-identical and are outside C4.
+and all other paths remain byte-identical and are outside C4. If the fresh build
+preserves every content-hashed asset path and byte, C4 preserves that closure
+unchanged; asset churn is never manufactured merely to make a release-state
+transition visible.
 
 W09's current owner is the existing
 `https://github.com/tako0614/terraform-provider-takoform.git` repository. A
@@ -69,13 +81,14 @@ bun run deploy -- takoform-specification-release publish --tag specification/1.1
 
 # Read-only authoritative verification, then C3 receipt projection writer
 bun run deploy -- takoform-specification-release verify --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --release-id <release-id>
-bun run deploy -- takoform-specification-release record-receipt --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --release-id <release-id>
+bun run deploy -- takoform-specification-release record-receipt --tag specification/1.1 --expected-release-commit <C2> --expected-tag-object <tag-object> --expected-recovery-commit <C2-or-R> --release-id <release-id>
 
 # After committing the exact three-path C3, derive the non-authoritative C4
 bun run sync:current-generation
 bun run sync:specification-compatibility
 bun run sync:website-spec
 bun run website:build
+# Commit the exact generated C4 before running its ancestry-aware gate.
 bun run check
 ```
 
@@ -93,10 +106,13 @@ ancestry commit after C3, requires a direct single-parent edge, and permits
 later descendants only after that exact fixed point.
 
 If publication stops after the exact annotated tag, use `recover-tag-only` with
-the original C2, exact tag object and reviewed current commit. If it stops with
-the exact retained draft, use `recover-draft` with those values and the exact
-release id. Any other observed state halts for forward repair; no command
-deletes, overwrites or retags the identity.
+the original C2, exact tag object, and `--expected-recovery-commit` equal to C2
+or the exact reviewed R on protected `main`. If it stops with the exact retained
+draft, use `recover-draft` with those values and the exact release id. The same
+C2-or-R value is required by `record-receipt`, which repeats the recovery fence
+before live readback and immediately before its three-path write. Any other
+observed state halts for forward repair; no command deletes, overwrites, or
+retags the identity.
 
 The exact current candidate is the versionless family set rooted at
 `edge.forms.takoform.com` and the other seven groups in the current-family

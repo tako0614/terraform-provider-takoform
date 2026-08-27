@@ -183,7 +183,7 @@ function releasedCompatibility() {
   };
 }
 
-function writeC4Inputs(root, state) {
+function writeC4Inputs(root, state, { preserveAssetClosure = false } = {}) {
   const compatibility =
     state === "released" ? releasedCompatibility() : candidateCompatibility();
   const status = {
@@ -223,16 +223,18 @@ function writeC4Inputs(root, state) {
   ]) {
     writeFixture(root, relativePath, html);
   }
-  const candidateAsset = "website/public/assets/app.CAND0001.js";
-  const releasedAsset = "website/public/assets/app.RELS0001.js";
-  rmSync(path.join(root, state === "released" ? candidateAsset : releasedAsset), {
-    force: true,
-  });
-  writeFixture(
-    root,
-    state === "released" ? releasedAsset : candidateAsset,
-    `export const specificationReleaseStatus = ${JSON.stringify(state)};\n`,
-  );
+  if (!preserveAssetClosure) {
+    const candidateAsset = "website/public/assets/app.CAND0001.js";
+    const releasedAsset = "website/public/assets/app.RELS0001.js";
+    rmSync(path.join(root, state === "released" ? candidateAsset : releasedAsset), {
+      force: true,
+    });
+    writeFixture(
+      root,
+      state === "released" ? releasedAsset : candidateAsset,
+      `export const specificationReleaseStatus = ${JSON.stringify(state)};\n`,
+    );
+  }
   for (const relativePath of C4_PRESERVED_PUBLIC_PATHS) {
     writeFixture(
       root,
@@ -322,7 +324,9 @@ function transitionFixture(options = {}) {
       fixtureGit(root, "switch", "main");
       fixtureGit(root, "merge", "--no-ff", "--no-commit", "test-side");
     }
-    writeC4Inputs(root, "released");
+    writeC4Inputs(root, "released", {
+      preserveAssetClosure: options.unchangedAssetClosure,
+    });
     if (options.keepGeneratedHtmlStale) {
       writeFixture(
         root,
@@ -574,6 +578,7 @@ describe("C1/C2/C3 commit fences", () => {
 
 describe("C3/C4 fixed-point history", () => {
   test("C4 permits only the explicit generated/public set", () => {
+    expect(validateC4DiffPaths([...C4_REQUIRED_PATHS])).toEqual([]);
     expect(
       validateC4DiffPaths([
         ...C4_REQUIRED_PATHS,
@@ -609,6 +614,17 @@ describe("C3/C4 fixed-point history", () => {
         validateC4DiffPaths([...C4_REQUIRED_PATHS, relativePath]).join("\n"),
       ).toContain("forbidden paths");
     }
+  });
+
+  test("accepts exact C3/C4 with an unchanged content-hashed asset closure", () => {
+    withTransitionFixture(
+      { unchangedAssetClosure: true },
+      ({ release, history, root }) => {
+        expect(validateReceiptTransitionHistory(release, history, root)).toEqual(
+          [],
+        );
+      },
+    );
   });
 
   test("accepts exact C3/C4 followed by a later descendant", () => {
