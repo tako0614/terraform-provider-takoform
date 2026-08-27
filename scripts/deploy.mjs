@@ -68,6 +68,11 @@ import {
   runReleaseSurface,
 } from "./release-deploy.mjs";
 import {
+  applyAuthorityTombstoneToContract,
+  assertAuthorityInvocationAllowed,
+  readAuthorityTombstone,
+} from "./authority-tombstone.mjs";
+import {
   CLOUDFLARE_ACCOUNT_ENV,
   CLOUDFLARE_ZONE_ENV,
   createPinnedWranglerEnvironment,
@@ -151,12 +156,33 @@ const CONTRACT = {
   ],
 };
 
+let authorityTombstone;
+try {
+  authorityTombstone = readAuthorityTombstone(repo);
+} catch (error) {
+  process.stderr.write(`deploy blocked: ${error.message}\n`);
+  process.exit(1);
+}
+const EFFECTIVE_CONTRACT = applyAuthorityTombstoneToContract(
+  CONTRACT,
+  authorityTombstone,
+);
+
 if (process.argv.includes("--contract")) {
-  process.stdout.write(`${JSON.stringify(CONTRACT, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(EFFECTIVE_CONTRACT, null, 2)}\n`);
   process.exit(0);
 }
 
 const invocation = process.argv.slice(2);
+try {
+  // This is deliberately before isReleaseSurface/runReleaseSurface and before
+  // any credential, Cloudflare, external Git, or source gate is constructed
+  // below. The tombstone module may inspect only local history/readback.
+  assertAuthorityInvocationAllowed(invocation[0], authorityTombstone);
+} catch (error) {
+  process.stderr.write(`deploy blocked: ${error.message}\n`);
+  process.exit(1);
+}
 if (isReleaseSurface(invocation[0])) {
   try {
     runReleaseSurface({
@@ -195,7 +221,7 @@ const unknownOptions = invocation.filter(
     !arg.startsWith(EXPECTED_VERSION_PREFIX),
 );
 const requested = invocation.filter((arg) => !arg.startsWith("--"));
-const known = CONTRACT.surfaces.map((entry) => entry.surface);
+const known = EFFECTIVE_CONTRACT.surfaces.map((entry) => entry.surface);
 if (
   requested.length !== 1 ||
   requested[0] !== SITE.surface ||

@@ -281,7 +281,7 @@ test("post-publication readback can bind the exact custom 404 body", async () =>
   expect(expected).toBe(digest);
 });
 
-test("website deploy contract declares the published identity obligation", () => {
+test("the active authority tombstone removes the website deploy identity", () => {
   const result = Bun.spawnSync({
     cmd: [process.execPath, "scripts/deploy.mjs", "--contract"],
     cwd: new URL("..", import.meta.url).pathname,
@@ -294,47 +294,7 @@ test("website deploy contract declares the published identity obligation", () =>
     ({ surface }) => surface === "takoform-website",
   );
 
-  expect(website.triggers).toContain("published-identity");
-  expect(website.requiresEnv).toEqual([
-    "TAKOFORM_CLOUDFLARE_ACCOUNT_ID",
-    "TAKOFORM_CLOUDFLARE_ZONE_ID",
-  ]);
-  for (const variable of website.requiresEnv) {
-    expect(Object.values(website.obligations).join("\n")).toContain(variable);
-  }
-  expect(website.requiresTools).toEqual([
-    "git",
-    "bun",
-    "go",
-    "node",
-    "tar",
-  ]);
-  expect(website.requiresScripts).toEqual([
-    "check:public-surfaces",
-    "check:website-deploy-snapshot",
-    "check:website-snapshot",
-  ]);
-  expect(website.obligations.provenance).toContain(
-    "independent non-local detached Git authority clone",
-  );
-  expect(website.obligations.provenance).toContain(
-    "static public-surface gate",
-  );
-  expect(website.obligations.provenance).toContain(
-    "two concurrent read-only VitePress builds",
-  );
-  expect(website.obligations["no-overwrite"]).toContain(
-    INITIAL_SCHEMA_ORIGIN_MINT_ACK,
-  );
-  expect(website.obligations["no-overwrite"]).toContain(
-    "current deployed source ledger",
-  );
-  expect(website.obligations["no-overwrite"]).toContain(
-    "Unpublished draft commits are not publication authority",
-  );
-  expect(website.obligations["no-overwrite"]).not.toContain(
-    "every reachable historical ledger revision",
-  );
+  expect(website).toBeUndefined();
 });
 
 test("website deploy parsing cannot route a release surface through website writers", () => {

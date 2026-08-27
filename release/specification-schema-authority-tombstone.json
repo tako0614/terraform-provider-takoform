@@ -1,0 +1,63 @@
+{
+  "format": "takoform.specification-schema-authority-tombstone@v1",
+  "status": "active",
+  "predecessorRepository": "https://github.com/tako0614/terraform-provider-takoform.git",
+  "predecessorSourceCommit": "1fa34160a4ed152443b4ea424a324f7677716e36",
+  "predecessorSourceTree": "7e4a2578af2f50b826fba1004fdd4e430c761314",
+  "predecessorWriterBlobOids": {
+    "scripts/deploy.mjs": "acca72d18f1c0342f5c413a8e039bec3d710e54d",
+    "scripts/release-deploy.mjs": "92434be6df8fe099821a63d5d18a67d52cc93be1",
+    "scripts/specification-release.mjs": "1b693d16172b5bf7f78f3cca02e40fe0ae62775b",
+    "scripts/public-schema-manifest.mjs": "416ba477abf39717af02103ce94c30f51ecd78bc",
+    "scripts/schema-publication-guard.mjs": "9ec47547843c9f70a8cbadb0dac6e3e87724b09c",
+    "website/wrangler.jsonc": "2ec5ab30974539ee4daa120dab4e7efe200aa2bb"
+  },
+  "predecessorWorkflowBlobOids": {
+    ".github/workflows/provider-release-tag.yml": "59eda81a1b87ca33fc5ee8e815d7b7253047d02c",
+    ".github/workflows/release.yml": "fba301ac83788849d4c2615d284a21c760628a71",
+    ".github/workflows/form-package-revocation.yml": "a1dbde9ab288517b49b5b08a440969dc45b4adeb"
+  },
+  "successorRepository": "https://github.com/tako0614/takoform.git",
+  "successorPreparedCommit": "a04fcfcc20fdce3dcad977c20ce7b4d310b1c5ab",
+  "successorAuthorityCommit": "94d22e4325695b4ffb215629f4bb937e35a6fed0",
+  "disabledAt": "2026-08-27T12:25:00.000Z",
+  "authorityEvidence": {
+    "format": "takoform.specification-schema-authority-transition-evidence@v1",
+    "path": "release/authority/transition-evidence.json",
+    "sha256": "sha256:b9159265a1e0733860a5fd5b5377af220ee6c8cfa3681c9e863f67849fb82583",
+    "tombstoneSha256": "sha256:f802cda506276e9fd1d3289465c6af965335498f0c0f67c44e976d14137f4bbd",
+    "canonicalPath": "release/specification-authority.json",
+    "preparedCommit": "a04fcfcc20fdce3dcad977c20ce7b4d310b1c5ab",
+    "authorityCommit": "94d22e4325695b4ffb215629f4bb937e35a6fed0"
+  },
+  "publishedSpecification": {
+    "version": "1.1",
+    "tag": "specification/1.1",
+    "tagObject": "e2c1ba71766a6b25cae0826df99c8906a7f3f20b",
+    "sourceCommit": "00ae5ee4e2ea2eb62ea796499a93081374dc36b9",
+    "releaseCommit": "35c03a76326c808e859aa77172e086f15a2aeb5d",
+    "releaseId": 377480828,
+    "releaseUrl": "https://github.com/tako0614/terraform-provider-takoform/releases/tag/specification/1.1",
+    "immutable": true,
+    "assetId": 531545608,
+    "assetName": "takoform-specification-1.1-source-snapshot.json",
+    "assetSourcePath": "spec/publication-evidence.json",
+    "assetSha256": "sha256:6f2ba3d51261f2559d0738ed2b22f51d7066d4d5b9f9bf0213694f352b677a84",
+    "sourceSnapshotSha256": "sha256:23a9b14dc79f46fae632624fc5c442f947f63565e9d7f9d0a614598b5027ae03",
+    "sourceEvidenceSha256": "sha256:6f2ba3d51261f2559d0738ed2b22f51d7066d4d5b9f9bf0213694f352b677a84"
+  },
+  "signers": {
+    "predecessorProviderSigningFingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709",
+    "successorTagSignerFingerprint": "SHA256:C9nOGYF3q5s7QoftDP/eB7oAGtmC7fjC6UX+60/VyzE",
+    "successorRecordHeadSpkiSha256": "sha256:a4f2a0811b8d9432a8d5ecea246f768470d78d0ed53214a587ba2f7c238e8cbb"
+  },
+  "disabledSurfaces": [
+    "takoform-website",
+    "takoform-specification-release",
+    "legacy-schema-publication-through-website"
+  ],
+  "retainedSurfaces": [
+    "takoform-provider-release",
+    "takoform-form-package-release"
+  ]
+}

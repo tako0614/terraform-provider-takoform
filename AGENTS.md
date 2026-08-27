@@ -4,17 +4,17 @@
 
 ## Repository
 
-- Scope: Portable Service Form specification, schemas, conformance fixtures, and typed OpenTofu provider.
+- Scope: Typed Terraform and OpenTofu Provider for exact Takoform FormRefs, retained independently from the Specification and publishers.
 - Repository kind: `product`
 - Direct sibling dependencies: なし
 - Repository gate: `bun run check`
-- Canonical docs: [README.md](README.md), [spec/README.md](spec/README.md), [spec/conformance.md](spec/conformance.md), [spec/versioning.md](spec/versioning.md)
+- Canonical docs: [README.md](README.md), [docs/index.md](docs/index.md), [docs/source-boundary-inventory.md](docs/source-boundary-inventory.md)
 
 ## Ownership
 
-- Owns: Portable Service Form specification and exact identities / Typed Terraform and OpenTofu provider / Data-only Form Packages, trust rules, and conformance corpus
-- Does not own: Any host implementation, hosted Form instance, backend lifecycle, target, or credential / Backend managers or executable package code / Cloud pricing, billing, quota, capacity, or SLA
-- Hazards: Normative changes require maintainer authorization, ADR, and contract-lock re-pin. / Do not claim publication or admission without signed live evidence. / Remain independent of Takosumi, Takoserver, and Takosumi Hosted code.
+- Owns: Terraform and OpenTofu resource mappings, schemas, state, import, codecs, and diagnostics / Provider release identities and immutable compatibility history / Provider-specific lossless projections of exact FormRefs
+- Does not own: Takoform Specification, Core, Host API, public schemas, verifier, or trust semantics / Form family semantics, publisher privilege, Host support, installation, or activation / Host implementation, backend lifecycle, targets, credentials, pricing, capacity, or SLA
+- Hazards: A Provider release never publishes or promotes a Specification, Host API, Form, or Form Package identity. / The predecessor Specification and schema writers stay tombstoned after the one-way W10 authority cutover. / Form and package source retained until the W16 publisher split is migration custody only and grants no official privilege.
 
 ## Required workflow
 
