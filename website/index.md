@@ -14,25 +14,33 @@ hero:
       link: /spec/
 ---
 
-## Specification 1.1 / separate Host API v1 candidate
+## API/Core 1.x / sealed Specification receipt
 
-Takoform is an Experimental specification project. The current stack is
-described on five independent axes so a client version, a host protocol, a
-Form identity, and package publication cannot be mistaken for one another.
+Takoform is an Experimental specification project. The first public API/Core
+release identity is **`v1.0.0`**, using the existing
+`forms.takoform.com/v1` wire and discovery lane. Release numbers are
+human-readable compatibility checkpoints: future compatible `v1.1.0`, `v1.2.0`,
+and later `v1.y.0` releases remain on `/v1`.
 
-| Axis                  | Current identity                       | Meaning and availability                                                                                                     |
-| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform Specification 1.1**         | Release status is derived from the append-only `release/specification-releases.json` ledger and reflected in the generated `takoform-site.json` status document; one exact committed snapshot of the normative `spec/` tree is release authority. Identity 1.0 was withdrawn before publication and may not be reused. |
-| Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.             |
-| Form corpus           | **8 families / 31 Forms**              | Exact current `0.x` FormRefs; every Form remains Experimental.                                                               |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                       |
-| Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained history.             |
+The historical Specification 1.1 is a sealed exact source receipt, not API
+release 1.1 or 1.1.0; it does not create `/v1.1` and is not an ongoing
+Specification version stream. Form Package publication remains separate and
+unpublished, and Provider release remains an independent client artifact.
 
-Specification release, Form maturity, Form Package publication, and Provider
-release are independent. Specification 1.1 does not publish or promote Host API
-v1, promote current Forms to `1.0.0`, mint `/v1.1` or v2 lanes, or publish a
-package; Provider 3 cannot block it. Provider 2.1.1 remains immutable Registry
-history for the historical identities it shipped.
+| Identity | Current identity | Meaning and availability |
+| -------- | ---------------- | ------------------------ |
+| API/Core release SemVer | **`v1.0.0`** | First public release identity; human-readable checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Compatible `1.y.0` checkpoints remain on `/v1`. |
+| Form `definitionVersion` | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental and advances independently. |
+| Host API wire/discovery lane | **`forms.takoform.com/v1`** | Protocol path used by API/Core `1.x` checkpoints; not a third domain axis. |
+| Historical Specification receipt | **1.1** | Sealed exact source receipt; not API release `1.1` or `1.1.0`, no `/v1.1`, and no ongoing Specification stream. |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished. |
+| Provider | **3.0.0, Registry-published** | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained history. |
+
+API/Core release, Form maturity, Form Package publication, and Provider release
+are independent. The sealed Specification receipt does not publish or promote
+the API/Core lane, promote current Forms to `1.0.0`, mint `/v1.1` or v2 lanes, or
+publish a package; Provider 3 cannot block it. Provider 2.1.1 remains immutable
+Registry history for the historical identities it shipped.
 
 ```hcl
 terraform {

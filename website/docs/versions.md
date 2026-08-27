@@ -1,10 +1,11 @@
 # Versions and compatibility
 
-Takoform has exactly two domain version axes: the Host API major and each
-Form's own `definitionVersion`. A version on one domain axis is not a
-pre-release label for the other. Provider SemVer, package and schema IDs or
-digests, Interface/Binding references, Specification releases, and retained
-lanes are artifact/history identities rather than additional domain axes.
+Takoform has exactly two domain version axes: the public API/Core release
+SemVer and each Form's own `definitionVersion`. API/Core releases are
+human-readable compatibility checkpoints; they do not rename the wire or
+discovery lane. Provider SemVer, package and schema IDs or digests,
+Interface/Binding references, Specification releases, and retained lanes are
+artifact/history identities rather than additional domain axes.
 
 The frozen predecessor source remains at
 [`spec/versioning.md`](https://github.com/tako0614/terraform-provider-takoform/blob/896fb0e6c94557d97ba7445924fda18a8430ba8f/spec/versioning.md).
@@ -15,14 +16,29 @@ file.
 
 | Domain axis | Current identity | Meaning and availability |
 | ---------- | ---------------- | ------------------------ |
-| Host API major | **`forms.takoform.com/v1`** (unpublished candidate) | Protocol envelope, discovery, exact Form availability, operations, fencing, and errors. |
+| API/Core release SemVer | **`1.0.0`** (first public release identity) | Human-readable compatibility checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Every compatible `1.y.0` checkpoint remains on `/v1`. |
 | Form `definitionVersion` | **8 versionless families / 31 exact Forms** | Every Form carries its own current Experimental `0.x` SemVer; a Form advances without minting a family generation. |
+
+## API/Core release checkpoints
+
+The first public API/Core release is identified as **`v1.0.0`** and uses the
+existing `forms.takoform.com/v1` wire and discovery lane. The release number is
+a human-readable compatibility checkpoint, not a URL path. Future compatible
+checkpoints may be `v1.1.0`, `v1.2.0`, and later `v1.y.0`; every `1.x` release
+continues to use `/v1` for wire and discovery. A protocol-breaking major gets a
+new lane only through an explicit Core decision.
+
+The historical **Specification 1.1** is a sealed exact source receipt in the
+predecessor release ledger. It is not API release `1.1` or `1.1.0`, does not
+create `/v1.1`, and is not an ongoing Specification version stream. Future
+checkpoints are API/Core releases, not new Specification numbers.
 
 ## Artifact and history identities
 
 | Identity | Current or retained meaning |
 | -------- | --------------------------- |
-| Specification **1.1** | Released identity of one exact normative source snapshot. It does not publish or promote Host API v1, a Form, a package, or Provider 3; identity 1.0 was withdrawn before publication and may not be reused. |
+| Specification **1.1** | Sealed historical identity of one exact normative source snapshot. It is not API release 1.1, does not publish or promote the `/v1` wire lane, a Form, a package, or Provider 3, and is not an ongoing version stream. Identity 1.0 was withdrawn before publication and may not be reused. |
+| Host API wire/discovery lane **`forms.takoform.com/v1`** | The protocol path used by the API/Core `1.x` compatibility checkpoints; the path is not a third domain version axis. |
 | Form Family group | Versionless namespace in each exact FormRef; older versioned groups remain retained or withdrawn history. |
 | Form Package envelope **`packages.forms.takoform.com/v1alpha5`** | Manifest-format identifier. Package IDs and content digests identify artifact bytes, and package publication remains independent of Provider publication. |
 | Schema IDs and digests | Exact Definition or wire-schema bytes, not a second Form version. |
@@ -41,23 +57,24 @@ By contrast, **Provider 2.0.0** and **Provider 1.0.3** are the withdrawn
 pre-Beta epochs; their Registry identities remain immutable history for
 exact-pin recovery and migration
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
-Provider 3 is a client artifact identity: it cannot block or authorize
-Specification 1.1, and publishing a new Form `definitionVersion` does not wait
-for a Provider release.
+Provider 3 is a client artifact identity: it cannot block or authorize the
+API/Core `1.0.0` release or the sealed Specification 1.1 receipt, and publishing
+a new Form `definitionVersion` does not wait for a Provider release.
 
 ## Published compatibility mapping
 
 | Client or distribution      | Host API          | Forms and definitions                                               | Status / use                                                                |
 | --------------------------- | ----------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Provider 3.0.0 distribution | Host API v1 candidate       | 8 versionless families; 31 current Experimental Form identities     | Current Registry-published non-normative reference implementation.          |
+| Provider 3.0.0 distribution | API/Core `v1.0.0` on Host API wire v1 | 8 versionless families; 31 current Experimental Form identities | Current Registry-published non-normative reference implementation. |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1; 15 immutable historical Form identities | Registry-published retained client; descriptor remains `candidate-only` metadata by design. |
 | Provider 2.0.0 distribution | Host API v1alpha2 (withdrawn epoch) | The nine withdrawn v1alpha2 Forms | Immutable Registry history; exact-pin only, no successors. |
 | Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
 
-The current Host API v1 candidate and versionless Form families are not
-interchangeable labels. A Form's own `definitionVersion` is the only per-Form
-domain version; it does not change either the Specification or Provider SemVer.
-Specification 1.1 does not silently mint Form `1.0.0` identities, and a new
+The API/Core `1.0.0` checkpoint, its Host API wire/discovery path, and the
+versionless Form families are not interchangeable labels. A Form's own
+`definitionVersion` is the only per-Form domain version; it does not change the
+API/Core release or Provider SemVer. The sealed Specification 1.1 receipt does
+not silently become API release 1.1 or mint Form `1.0.0` identities, and a new
 Form publication does not require a Provider release.
 
 ## Current Edge reference family (16 Experimental Forms)

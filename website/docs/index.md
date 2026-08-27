@@ -1,25 +1,29 @@
 # Documentation
 
-This page starts with Specification 1.1 and a separate unpublished Host API v1
-candidate, plus the exact 8-family, 31-Form current corpus. Provider and
-historical lanes are kept separate so an implementation release cannot become
-Specification authority by implication.
+This page starts with the first public API/Core release identity, `v1.0.0`,
+and its existing `/v1` wire/discovery lane, plus the exact 8-family, 31-Form
+current corpus. Compatible API/Core `1.x` checkpoints stay on `/v1`. The
+historical Specification 1.1 is a sealed source receipt, not API release 1.1
+or 1.1.0; it does not create `/v1.1` or an ongoing Specification stream.
+Provider and historical lanes remain separate so an implementation release
+cannot become API/Core authority by implication.
 
-## Specification 1.1 / separate Host API v1 candidate
+## API/Core 1.x / sealed Specification receipt
 
-| Axis                  | Current identity                       | Meaning and availability                                                                                                 |
-| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform Specification 1.1**         | Release status is derived from the append-only `release/specification-releases.json` ledger and reflected in the generated `takoform-site.json` status document; one exact committed snapshot of the normative `spec/` tree is release authority. Identity 1.0 was withdrawn before publication and may not be reused. |
-| Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.          |
-| Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental.                                                             |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
-| Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation; it cannot block the Specification. Provider 2.1.1 is retained history. |
+| Identity | Current identity | Meaning and availability |
+| -------- | ---------------- | ------------------------ |
+| API/Core release SemVer | **`v1.0.0`** | First public release identity; human-readable checkpoint on the `forms.takoform.com/v1` wire/discovery lane. Compatible `1.y.0` checkpoints remain on `/v1`. |
+| Form `definitionVersion` | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental and advances independently. |
+| Host API wire/discovery lane | **`forms.takoform.com/v1`** | Protocol path used by API/Core `1.x` checkpoints; not a third domain axis. |
+| Historical Specification receipt | **1.1** | Sealed exact source receipt; not API release `1.1` or `1.1.0`, no `/v1.1`, and no ongoing Specification stream. |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished. |
+| Provider | **3.0.0, Registry-published** | Independent non-normative reference implementation; it cannot block API/Core or alter the sealed Specification receipt. Provider 2.1.1 is retained history. |
 
-The [release-evidence policy](/spec/publication-freeze.html) makes those axes
-machine-checkable. Releasing Specification 1.1 does not publish or promote Host
-API v1, relabel any current Form as `1.0.0`, mint a `/v1.1` or v2 lane, or
-publish a package; a stable Form identity requires an explicit per-Form
-decision.
+The [release-evidence policy](/spec/publication-freeze.html) keeps those two
+domain axes machine-checkable. A sealed Specification receipt does not publish
+or promote the API/Core lane, relabel any current Form as `1.0.0`, mint a
+`/v1.1` or v2 lane, or publish a package; a stable Form identity requires an
+explicit per-Form decision.
 
 ## Edge reference family (16 of 31 current Experimental Forms) {#beta-edge-platform-family}
 

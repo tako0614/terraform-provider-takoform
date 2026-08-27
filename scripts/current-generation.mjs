@@ -1,13 +1,10 @@
 #!/usr/bin/env bun
 
-// Which identity is the current one cannot be worked out from the numbers.
-//
-// The axes are independent by design, so they disagree, and they disagree in
-// opposite directions: the Host API lane went v1alpha3 -> v1beta1, where the
-// digit went DOWN and only alpha < beta says which is newer, while the package
-// envelope went v1alpha3 -> v1alpha4, where the digit went up. A reader who
-// tries to infer "latest" from a version word is using a rule that holds on one
-// axis and fails on the next.
+// Which identity is current cannot be inferred from a version word. The
+// public API/Core release number is a human-readable compatibility checkpoint;
+// every compatible 1.x checkpoint remains on the /v1 wire/discovery lane. Form
+// definitionVersion is the other domain axis. Provider, package, schema,
+// Specification, and retained-lane version words identify artifacts or history.
 //
 // So stop asking anyone to infer it. The repository already derives these facts
 // for /.well-known/takoform-site.json; this is a third caller of the same
@@ -38,19 +35,24 @@ const END = "<!-- current-generation:end -->";
 function render(facts) {
   const rows = [
     [
-      "Specification",
-      facts.specificationVersion,
-      `${facts.specificationReleaseStatus}; one exact committed normative source snapshot is release authority`,
+      "API/Core release SemVer",
+      "1.0.0",
+      "first public release identity; human-readable checkpoint on the forms.takoform.com/v1 wire/discovery lane; compatible 1.y.0 checkpoints remain on /v1",
     ],
     [
-      "Host API candidate",
+      "Form definitionVersion",
+      "per exact FormRef (current 0.x)",
+      `${facts.currentFamilyCount} versionless families and ${facts.currentFormCount} exact Forms; each Form advances independently`,
+    ],
+    [
+      "Host API wire/discovery lane",
       facts.hostApiCurrent,
-      `${facts.hostApiPublicationStatus}; separate protocol identity`,
+      "protocol path used by API/Core 1.x checkpoints; this path is not a third domain axis",
     ],
     [
-      "Current Form corpus",
-      facts.currentFamilyIndex,
-      `${facts.currentFamilyCount} versionless families, ${facts.currentFormCount} exact \`0.x\` ${facts.formMaturity} Forms`,
+      "Historical Specification receipt",
+      facts.specificationVersion,
+      "sealed exact source receipt; not API release 1.1 or 1.1.0, no /v1.1, and no ongoing Specification stream",
     ],
     [
       "Form Package envelope",
@@ -66,17 +68,19 @@ function render(facts) {
   return [
     BEGIN,
     "",
-    "| Axis | Current identity | |",
+    "| Identity | Current identity | Meaning |",
     "| --- | --- | --- |",
-    ...rows.map(([axis, value, note]) => `| ${axis} | \`${value}\` | ${note} |`),
+    ...rows.map(([identity, value, note]) => `| ${identity} | \`${value}\` | ${note} |`),
     "",
-    "These identities are independent. A Specification 1.1 release does not",
-    "publish or promote the separate Host API v1 candidate, relabel any current",
-    "Form as `1.0.0`, publish a Form Package, or release the non-normative Provider.",
+    "Only API/Core release SemVer and per-Form definitionVersion are domain",
+    "version axes. The historical Specification 1.1 receipt is sealed and",
+    "separate: it is not API release 1.1 or 1.1.0, does not create `/v1.1`, and",
+    "is not an ongoing Specification stream. A Form or package publication and",
+    "Provider release remain independent artifact identities.",
     "This table is generated from repository bytes",
     "by `bun run sync:current-generation`; the numbered release ledger derives",
-    "the Specification row as `candidate-open` or `released` without changing any",
-    "Host API, Form, package, or Provider identity.",
+    "historical Specification receipt state without changing any API/Core, Form,",
+    "package, or Provider identity.",
     "",
     END,
   ].join("\n");
