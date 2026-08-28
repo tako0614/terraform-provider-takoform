@@ -211,17 +211,24 @@ func (h *v3FakeHost) wireResource(record *v3HostRecord, name string) map[string]
 }
 
 // wireResourceAs renders one record under the exact FormRef named by a read's
-// query instead of the identity that created it.
-func (h *v3FakeHost) wireResourceAs(record *v3HostRecord, name string, query url.Values) map[string]any {
-	if query.Get("group") == "" || query.Get("schemaDigest") == "" {
+// path and query instead of the identity that created it. Stable v1 carries
+// group and kind in the path; only the remaining FormRef fields are queried.
+func (h *v3FakeHost) wireResourceAs(
+	record *v3HostRecord,
+	name string,
+	pathGroup string,
+	pathKind string,
+	query url.Values,
+) map[string]any {
+	if pathGroup == "" || pathKind == "" || query.Get("schemaDigest") == "" {
 		return h.wireResource(record, name)
 	}
 	echoed := *record
-	echoed.apiVersion = query.Get("group")
-	echoed.kind = query.Get("kind")
+	echoed.apiVersion = pathGroup
+	echoed.kind = pathKind
 	echoed.form = map[string]any{"formRef": map[string]any{
-		"apiVersion":        query.Get("group"),
-		"kind":              query.Get("kind"),
+		"apiVersion":        pathGroup,
+		"kind":              pathKind,
 		"definitionVersion": query.Get("definitionVersion"),
 		"schemaDigest":      query.Get("schemaDigest"),
 	}}
@@ -533,7 +540,7 @@ func (h *v3FakeHost) serveResource(w http.ResponseWriter, r *http.Request, remai
 		// answers under the identity it was asked about. Echoing the query (rather
 		// than whichever line created the record) is what lets a test drive two
 		// FormRefs of one Kind through the same resource.
-		h.writeJSON(w, http.StatusOK, h.wireResourceAs(record, name, r.URL.Query()))
+		h.writeJSON(w, http.StatusOK, h.wireResourceAs(record, name, group, kind, r.URL.Query()))
 	case http.MethodDelete:
 		h.recordResourceQuery(r, group)
 		record, ok := h.resources[key]
@@ -566,14 +573,31 @@ func (h *v3FakeHost) serveResource(w http.ResponseWriter, r *http.Request, remai
 }
 
 // recordResourceQuery captures the exact FormRef a read or delete dispatched
-// on. The path group and the query group must always agree.
+// on. Stable v1 closes the query over these three fields; group and kind are
+// already carried by the resource path.
 func (h *v3FakeHost) recordResourceQuery(r *http.Request, pathGroup string) {
 	query := r.URL.Query()
-	if got := query.Get("group"); got != pathGroup {
-		h.t.Errorf("resource path group %q and query group %q disagree", pathGroup, got)
+	wantKeys := map[string]bool{
+		"definitionVersion": true,
+		"schemaDigest":      true,
+		"space":             true,
+	}
+	if len(query) != len(wantKeys) {
+		h.t.Errorf("resource query keys = %v, want exact stable-v1 keys", query)
+	}
+	for key := range wantKeys {
+		values, ok := query[key]
+		if !ok || len(values) != 1 || values[0] == "" {
+			h.t.Errorf("resource query key %q = %v, want exactly one non-empty value", key, values)
+		}
+	}
+	for key := range query {
+		if !wantKeys[key] {
+			h.t.Errorf("resource query carries non-stable-v1 key %q", key)
+		}
 	}
 	h.resourceQueries = append(h.resourceQueries,
-		r.Method+" "+query.Get("group")+" "+query.Get("schemaDigest"))
+		r.Method+" "+pathGroup+" "+query.Get("schemaDigest"))
 }
 
 func (h *v3FakeHost) serveApply(w http.ResponseWriter, r *http.Request, group, kind, name, key string) {

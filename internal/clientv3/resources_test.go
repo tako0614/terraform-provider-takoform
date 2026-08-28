@@ -6,11 +6,39 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
 
 const testPrepareDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+func requireStableExactPathQuery(t *testing.T, query url.Values, operation string) {
+	t.Helper()
+	if len(query) != 3 || query.Get("space") != testSpace ||
+		query.Get("definitionVersion") != testRef.DefinitionVersion ||
+		query.Get("schemaDigest") != testRef.SchemaDigest || query.Has("group") || query.Has("kind") {
+		t.Errorf("%s query must carry only path-complement identity, got %v", operation, query)
+	}
+}
+
+func TestGetFormDefinitionUsesStablePathComplementQuery(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
+		path := APIRootPath + "/form-definitions/" + groupPathSegments(testGroup) + "/" + testKind
+		if r.Method == http.MethodGet && r.URL.EscapedPath() == path {
+			requireStableExactPathQuery(t, r.URL.Query(), "form definition")
+			writeJSON(t, w, http.StatusOK, map[string]any{
+				"identity":      wireFormReference(),
+				"desiredSchema": map[string]any{"type": "object"},
+			})
+			return true
+		}
+		return false
+	})
+	if _, err := client.GetFormDefinition(context.Background(), testSpace, testRef); err != nil {
+		t.Fatalf("get Form Definition: %v", err)
+	}
+}
 
 // handlePrepare echoes the requested identity and spec with a fixed
 // prepareDigest and the canonical specDigest, the way a conforming host
@@ -216,8 +244,10 @@ func TestGetResourceCapturesRevisionETag(t *testing.T) {
 	spec := map[string]any{"image": "example"}
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodGet && r.URL.EscapedPath() == splitGroupResourcePath("app", "") {
-			if r.URL.Query().Get("group") != testGroup {
-				t.Errorf("read query must carry group, got %v", r.URL.Query())
+			q := r.URL.Query()
+			if len(q) != 3 || q.Get("space") != testSpace || q.Get("definitionVersion") != testRef.DefinitionVersion ||
+				q.Get("schemaDigest") != testRef.SchemaDigest || q.Has("group") || q.Has("kind") {
+				t.Errorf("read query must carry only path-complement identity, got %v", q)
 			}
 			w.Header().Set("ETag", `"12"`)
 			writeJSON(t, w, http.StatusOK, wireResource("app", "uid-1", "2", "12", spec))
@@ -273,6 +303,7 @@ func TestObserveResourceHonorsFence(t *testing.T) {
 	spec := map[string]any{"image": "example"}
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodPost && r.URL.EscapedPath() == splitGroupResourcePath("app", "observe") {
+			requireStableExactPathQuery(t, r.URL.Query(), "observe")
 			writeJSON(t, w, http.StatusOK, map[string]any{
 				"resource": wireResource("app", "uid-1", "4", "21", spec),
 			})
@@ -304,8 +335,10 @@ func TestDeleteResourceGenerationFence(t *testing.T) {
 			if r.Header.Get("Idempotency-Key") == "" {
 				t.Errorf("delete must send an Idempotency-Key")
 			}
-			if r.URL.Query().Get("group") != testGroup {
-				t.Errorf("delete query must carry the exact FormRef, got %v", r.URL.Query())
+			q := r.URL.Query()
+			if len(q) != 3 || q.Get("space") != testSpace || q.Get("definitionVersion") != testRef.DefinitionVersion ||
+				q.Get("schemaDigest") != testRef.SchemaDigest || q.Has("group") || q.Has("kind") {
+				t.Errorf("delete query must carry only path-complement identity, got %v", q)
 			}
 			w.WriteHeader(http.StatusNoContent)
 			return true
