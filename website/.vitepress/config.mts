@@ -30,6 +30,21 @@ const siteStatus = {
   route: SITE_STATUS_ROUTE,
 };
 
+// The public JSON document keeps a few legacy Specification fields for the
+// historical release/check consumers that still read them. They are not site
+// navigation or marketing facts, so do not hydrate them into every page's
+// themeConfig (where they would look current and be duplicated in HTML).
+const siteStatusForTheme = Object.fromEntries(
+  Object.entries(siteStatus).filter(
+    ([field]) =>
+      ![
+        "specificationVersion",
+        "specificationReleaseStatus",
+        "hostApiPublicationStatus",
+      ].includes(field),
+  ),
+);
+
 const projectNavItems = [
   { text: "Proposals", link: "/proposals/" },
   { text: "Form inventory", link: "/forms/" },
@@ -48,7 +63,7 @@ const compatibilityNavItems = [
 
 const englishNav = [
   { text: "Current", link: "/docs/" },
-  { text: "Spec", link: "/spec/" },
+  { text: "Historical source", link: "/spec/" },
   {
     text: "Compatibility",
     items: compatibilityNavItems,
@@ -77,7 +92,7 @@ const japaneseCompatibilityNavItems = [
 
 const japaneseNav = [
   { text: "Current", link: "/ja/docs/" },
-  { text: "Spec", link: "/ja/spec/" },
+  { text: "履歴資料", link: "/ja/spec/" },
   {
     text: "Compatibility",
     items: japaneseCompatibilityNavItems,
@@ -156,7 +171,7 @@ const currentStackResourceItems = [
 
 const specSidebar = [
   {
-    text: "Spec",
+    text: "Historical specification source",
     items: [
       { text: "Contract map", link: "/spec/" },
       { text: "Overview", link: "/spec/overview.html" },
@@ -187,7 +202,7 @@ const specSidebar = [
     ],
   },
   {
-    text: "Withdrawn epochs / Migration",
+    text: "Withdrawn lanes / migration history",
     collapsed: true,
     items: [
       { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -240,7 +255,7 @@ const edgeProposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "Stable Host API v1 and current Forms",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -249,11 +264,11 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Provider 3 typed reference (31 current Experimental Forms)",
+      text: "Provider typed reference (official Forms)",
       items: currentStackResourceItems,
     },
     {
-      text: "Withdrawn epochs / Migration",
+      text: "Historical compatibility",
       collapsed: true,
       items: [
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -295,8 +310,8 @@ const englishSidebar = {
   ],
   "/release/": [
     {
-      text: "Release",
-      items: [{ text: "Specification and Provider releases", link: "/release/" }],
+      text: "Release records",
+      items: [{ text: "Provider releases and historical receipts", link: "/release/" }],
     },
   ],
 };
@@ -304,7 +319,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "Stable Host API v1 と current Form",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -315,11 +330,11 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Provider 3 typed reference (current 31 Forms)",
+      text: "Provider typed reference (official Form)",
       items: currentStackResourceItems,
     },
     {
-      text: "Withdrawn epochs / Migration",
+      text: "履歴互換性",
       collapsed: true,
       items: [
         {
@@ -335,7 +350,7 @@ const japaneseSidebar = {
   ],
   "/ja/spec/": [
     {
-      text: "Spec",
+      text: "仕様の履歴資料",
       items: [{ text: "契約マップ", link: "/ja/spec/" }],
     },
   ],
@@ -345,7 +360,7 @@ export default defineConfig({
   lang: "en",
   title: "Takoform",
   description:
-    "One provider. Dependent on none. Portable resource contracts for Terraform and OpenTofu.",
+    "Portable contracts for Terraform and OpenTofu, with a stable Host API and typed provider mappings.",
   cleanUrls: false,
   lastUpdated: false,
   srcExclude: ["**/README.md", "**/DESIGN.md", "static/**"],
@@ -377,7 +392,7 @@ export default defineConfig({
     search: {
       provider: "local",
     },
-    siteStatus,
+    siteStatus: siteStatusForTheme,
   },
   locales: {
     root: {
@@ -386,7 +401,7 @@ export default defineConfig({
       themeConfig: {
         nav: englishNav,
         sidebar: englishSidebar,
-        siteStatus,
+        siteStatus: siteStatusForTheme,
       },
     },
     ja: {
@@ -396,7 +411,7 @@ export default defineConfig({
       themeConfig: {
         nav: japaneseNav,
         sidebar: japaneseSidebar,
-        siteStatus,
+        siteStatus: siteStatusForTheme,
       },
     },
   },

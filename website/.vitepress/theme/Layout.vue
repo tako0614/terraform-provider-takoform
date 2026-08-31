@@ -3,6 +3,7 @@
 // provenance footer, so no page can be read without knowing whether it
 // describes the published tier or the Edge preview.
 import DefaultTheme from "vitepress/theme";
+import HistoricalBanner from "./components/HistoricalBanner.vue";
 import SiteFooter from "./components/SiteFooter.vue";
 
 const { Layout } = DefaultTheme;
@@ -10,6 +11,9 @@ const { Layout } = DefaultTheme;
 
 <template>
   <Layout>
+    <template #layout-top>
+      <HistoricalBanner />
+    </template>
     <template #layout-bottom>
       <SiteFooter />
     </template>

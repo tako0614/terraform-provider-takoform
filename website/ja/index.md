@@ -3,35 +3,43 @@ layout: home
 
 hero:
   name: Takoform
-  text: どの provider にも依存しない、1つの provider
-  tagline: ポータブルでホスト中立な、Terraform / OpenTofu 用のリソース契約
+  text: ポータブルな契約。複数の provider。
+  tagline: ホスト中立なリソース契約のための Terraform / OpenTofu tooling
   actions:
     - theme: brand
-      text: 現在の stack を見る
+      text: 現在の境界を読む
       link: /ja/docs/
     - theme: alt
-      text: 仕様を読む
+      text: 履歴資料を見る
       link: /ja/spec/
 ---
 
-## Specification 1.1 / separate unpublished Host API v1 candidate
+## Stable Host API v1 と独立した version 軸
 
-Takoform は Experimental specification project です。provider の人間向け
-SemVer、ホスト protocol、Form の identity を別々の軸として示し、一つの version
-を別の maturity と取り違えないようにします。
+Takoform の Host API `forms.takoform.com/v1` は、discovery、exact Form
+availability、lifecycle operation、fence、error を定める stable な wire
+contract です。番号付きの Specification 1.0 / 1.1 文書は immutable な履歴
+receipt であり、現在の version stream ではありません。API v1.1、Form の昇格、
+Provider release を作るものでもありません。
 
-| 軸                    | 現在の identity                        | 意味と利用可能性                                                                                                       |
-| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform Specification 1.1**         | release status は append-only の `release/specification-releases.json` ledger と生成された `takoform-site.json` status document から導出されます。normative `spec/` tree の exact committed snapshot が release authority です。1.0 は公開前に撤回され再利用しない。 |
-| Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の separate unpublished protocol candidate。                |
-| Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRefs。すべて Experimental のまま。                                                              |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |
-| Provider              | **3.0.0、Registry 公開済み**           | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。             |
+Provider release、Host protocol、Form definition、package envelope は、それぞれ
+独立した identity として扱います。
 
-Specification release、Form maturity、Package publication、Provider release は
-独立しています。Specification 1.1 は Host API v1 を publish / promote せず、
-current Form を `1.0.0` に昇格させず、`/v1.1` / v2 lane や package を mint
-せず、Provider 3 は Specification を block できません。
+| 軸                    | 現在の identity                        | 意味と利用可能性                                                                                              |
+| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の stable protocol。                             |
+| Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRef。すべて Experimental で、Form ごとに version されます。                          |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | data-only package の distribution envelope。Host API や Provider release とは独立します。                   |
+| Provider              | **3.0.0、Registry 公開済み**           | official Form の typed mapping を提供する software tooling。Provider SemVer は独立した軸です。              |
+
+canonical Registry address
+`registry.terraform.io/tako0614/takoform` は official Form の mapping だけを
+公開します。第三者も同じ package / verification path を使い、自分の namespace
+で Form を配布できます。Provider は対応する Form を build 時に明示するため、
+generic carrier や universal infrastructure provider ではありません。
+
+一つの Terraform / OpenTofu module で、複数の Takoform Provider と industry-standard
+provider を組み合わせられます。
 
 ```hcl
 terraform {
@@ -44,7 +52,7 @@ terraform {
 }
 ```
 
-## Edge reference family (31 current Forms のうち 16)
+## Edge reference family (current 31 Forms のうち 16)
 
 Host API v1 の上で versionless Form Families が動きます。Edge family の
 16 個の exact `0.x` Form はすべて Experimental です。worker は identity、module

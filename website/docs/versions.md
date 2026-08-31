@@ -1,26 +1,33 @@
 # Versions and compatibility
 
-Takoform keeps independent Specification, Provider, Host API, Form Family,
-Form definition, and Form Package axes. A version on one axis is not a
-pre-release label for another axis.
+Takoform keeps four current version streams: the Host API, each Form
+definition, the Form Package envelope, and Provider software. A version on one
+axis is not a pre-release label for another axis. Numbered Specification 1.0
+and 1.1 documents are immutable receipts retained for history, not a current
+version stream.
 
 ## Current design target
 
-| Axis                  | Current identity                           | Meaning and availability                                                                                                                                                                     |
-| --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.1**                           | First numbered release; publication status is derived only from the exact append-only release ledger. Identity 1.0 was withdrawn before publication and may not be reused.     |
-| Host API              | **`forms.takoform.com/v1`**                | Stable Specification contract for discovery, exact Form availability, operations, fencing, and errors.                                                                                       |
-| Form corpus           | **8 versionless families / 31 Forms**     | Exact current `0.x` FormRefs; all remain Experimental and independently versioned.                                                                                                           |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | Separate package/distribution identifier. Package artifacts remain unpublished.                                                                                                              |
-| Provider              | **3.0.0, Registry-published**              | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained Registry history.                                                                     |
+| Axis                  | Current identity                           | Meaning and availability                                                                                                  |
+| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Host API              | **`forms.takoform.com/v1`**                | Stable wire contract for discovery, exact Form availability, operations, fencing, and errors.                            |
+| Form corpus           | **8 versionless families / 31 Forms**     | Exact current `0.x` FormRefs; all remain Experimental and independently versioned.                                        |
+| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | Data-only distribution envelope; publication is independent of the Host API and Provider.                                |
+| Provider              | **3.0.0, Registry-published**              | Software tooling with typed mappings for official Forms only; Provider SemVer is independent of every Form and Host API. |
 
-Provider distribution is a separate axis. **Provider 3.0.0** is the current
-Registry-published implementation. **Provider 2.1.1**, **Provider 2.0.0**, and
-**Provider 1.0.3** remain
-installable Registry history for earlier epochs
+The canonical `registry.terraform.io/tako0614/takoform` address publishes the
+official Provider mappings for official Forms only. Independent third parties
+may distribute Forms under their own namespaces through the same package and
+verification path; each Provider build must explicitly support the FormRefs it
+exposes. A module can combine multiple Takoform Providers with industry-standard
+providers, so the Takoform Provider is software tooling rather than one
+universal infrastructure provider.
+
+**Provider 3.0.0** is the current Registry-published implementation.
+**Provider 2.1.1**, **Provider 2.0.0**, and **Provider 1.0.3** remain installable
+Registry history for earlier epochs
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
-([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)). Provider 3
-cannot block or authorize Specification 1.1.
+([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)).
 
 ## Published compatibility mapping
 
@@ -32,9 +39,9 @@ cannot block or authorize Specification 1.1.
 | Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
 
 The current Host API v1 contract and versionless Form families are not
-interchangeable labels. A Form's own definition SemVer does not change either
-the Specification or Provider SemVer, and Specification 1.1 does not silently
-mint Form `1.0.0` identities.
+interchangeable labels. A Form's own definition SemVer does not change Provider
+SemVer, and a historical Specification receipt does not silently mint Form
+`1.0.0` identities or an API v1.1 route.
 
 ## Current Edge reference family (16 Experimental Forms)
 

@@ -1,4 +1,10 @@
-# 仕様
+# 仕様の履歴資料
+
+> このページは、過去の Specification 1.0 / 1.1 receipt と撤回された互換性
+> evidence を参照するために保持しています。番号付き Specification は現在の
+> version stream ではありません。現行の契約は stable な Host API
+> `forms.takoform.com/v1` です。現在の境界は
+> [バージョンモデル](/ja/docs/versions.html) を参照してください。
 
 ## Identity
 
@@ -9,15 +15,14 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.1。first numbered release identity。publication state は append-only numbered ledger から導出し、authority は normative `spec/` tree の exact committed snapshot 1つだけ（1.0 は公開前に撤回され再利用しない） |
+| Historical Specification receipt | Takoform 1.1。first numbered release identity。publication state は append-only numbered ledger に記録される履歴であり、現在の API / Form / Provider の version stream ではありません（1.0 は公開前に撤回され再利用しない） |
 | 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
-| Host API candidate | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、Specification とは separate and unpublished) |
+| Current Host API | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、stable wire contract) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
 | Provider distribution | independent。Provider 3.0.0 は current Registry-published non-normative reference implementation、`v2.1.1` は retained history |
 
-Specification 1.1 は separate Host API v1 candidate を publish / promote せず、
-current Form を `1.0.0` に昇格させず、Package や Provider を publish せず、
-`/v1.1` / v2 lane も mint しません。
+Specification receipt は Host API v1 を変更せず、current Form を `1.0.0` に昇格
+させず、Package や Provider を publish せず、`/v1.1` / v2 lane も mint しません。
 
 W09 は C1（normative freeze）、C2（source evidence のみ）、C3（authoritative
 receipt のみ）、その direct child である C4（bounded deterministic public

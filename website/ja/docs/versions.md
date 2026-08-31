@@ -1,26 +1,29 @@
 # バージョンと互換性
 
-Takoform では、Specification、Provider、Host API、Form Family、Form definition、
-Form Package を独立した軸として扱います。一つの軸の version は、別の軸の
-preview や成熟度を意味しません。
+Takoform では、Host API、Form definition、Form Package envelope、Provider software
+を現在の独立した version stream として扱います。一つの軸の version は、別の軸の
+preview や成熟度を意味しません。番号付き Specification 1.0 / 1.1 は履歴 receipt
+であり、現在の version stream ではありません。
 
 ## Current design target
 
-| 軸                    | 現在の identity                            | 意味と利用可能性                                                                                                                                                               |
-| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform 1.1**                           | first numbered release。公開状態は exact append-only release ledger だけから導出する。1.0 は公開前に撤回され再利用しない。             |
-| Host API              | **`forms.takoform.com/v1`**                | stable Specification contract。                                                                                                                                                 |
-| Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Forms。すべて Experimental。                                                                                                                                |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | package artifact は unpublished。                                                                                                                                               |
-| Provider              | **3.0.0、Registry 公開済み**               | current 31 Forms の independent non-normative reference implementation。Provider 2.1.1 は retained history。                                                                    |
+| 軸                    | 現在の identity                            | 意味と利用可能性                                                                                              |
+| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Host API              | **`forms.takoform.com/v1`**                | discovery、exact Form availability、operation、fence、error の stable wire contract。                       |
+| Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Form。すべて Experimental で、Form ごとに version されます。                            |
+| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | data-only distribution envelope。publication は Host API / Provider と独立します。                          |
+| Provider              | **3.0.0、Registry 公開済み**               | official Form の typed mapping を持つ software tooling。Provider SemVer は独立した軸です。                   |
 
-Provider の配布状態は独立した軸です。**Provider 3.0.0** が current Registry
-公開済み implementation です。**Provider 2.1.1**、**Provider 2.0.0**、
-**Provider 1.0.3** は撤回された
-pre-Beta epoch のための不変の Registry 履歴として残ります
+canonical Registry address `registry.terraform.io/tako0614/takoform` は official
+Form の mapping だけを公開します。第三者は同じ package / verification path を使い、
+自分の namespace で Form を配布できます。Provider は対応 Form を build 時に明示する
+software tooling であり、universal infrastructure provider ではありません。一つの
+module で複数の Takoform Provider と industry-standard provider を組み合わせられます。
+
+**Provider 3.0.0** が current Registry 公開済み implementation です。**Provider
+2.1.1**、**Provider 2.0.0**、**Provider 1.0.3** は撤回された pre-Beta epoch の
+不変の Registry 履歴として残ります
 ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-current major release は **3.0.0** です
-([v2 から v3 への移行境界](/release/migrations/v2-to-v3.html))。
 
 ## Published compatibility mapping
 
@@ -33,7 +36,8 @@ current major release は **3.0.0** です
 
 Host API v1beta1 は wire protocol、Edge Form Family v1beta1 はその上で動く
 Form の group です。definition 0.1.0 は Form の identity であり、Provider
-2.1.1 の SemVer を変更しません。
+2.1.1 の SemVer を変更しません。番号付き Specification receipt はこれらの
+current identity を変更しません。
 
 ## Current Edge reference family (16 Experimental Forms)
 

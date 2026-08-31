@@ -1,25 +1,44 @@
 # Documentation
 
-This page starts with Specification 1.1 and a separate unpublished Host API v1
-candidate, plus the exact 8-family, 31-Form current corpus. Provider and
-historical lanes are kept separate so an implementation release cannot become
-Specification authority by implication.
+This page starts with the stable Host API v1 and the exact 8-family, 31-Form
+current corpus. Numbered Specification 1.0/1.1 documents are retained as
+historical receipts only; they are not a current version stream. Provider
+release, Form publication, and host availability remain independent facts.
 
-## Specification 1.1 / separate Host API v1 candidate
+## Stable Host API v1 and provider composition
 
-| Axis                  | Current identity                       | Meaning and availability                                                                                                 |
-| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Specification         | **Takoform Specification 1.1**         | Release status is derived from the append-only `release/specification-releases.json` ledger and reflected in the generated `takoform-site.json` status document; one exact committed snapshot of the normative `spec/` tree is release authority. Identity 1.0 was withdrawn before publication and may not be reused. |
-| Host API              | **`forms.takoform.com/v1`**            | Separate unpublished protocol candidate for discovery, exact Form availability, operations, fencing, and errors.          |
-| Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental.                                                             |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Separate package/distribution schema identifier; package artifacts remain unpublished.                                   |
-| Provider              | **3.0.0, Registry-published**          | Independent non-normative reference implementation; it cannot block the Specification. Provider 2.1.1 is retained history. |
+The Host API at `forms.takoform.com/v1` is a stable wire contract for
+discovery, exact Form availability, lifecycle operations, fencing, and errors.
+There is no `/v1.1` Host API route. The current identity set is:
 
-The [release-evidence policy](/spec/publication-freeze.html) makes those axes
-machine-checkable. Releasing Specification 1.1 does not publish or promote Host
-API v1, relabel any current Form as `1.0.0`, mint a `/v1.1` or v2 lane, or
-publish a package; a stable Form identity requires an explicit per-Form
-decision.
+| Axis                  | Current identity                       | Meaning and availability                                                                                         |
+| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Host API              | **`forms.takoform.com/v1`**            | Stable protocol; it is independent from every Form and Provider release.                                       |
+| Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental and independently versioned.                       |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Data-only distribution envelope; publication is separate from the Host API and Provider release.                |
+| Provider              | **3.0.0, Registry-published**          | Software tooling with typed mappings for official Forms only; Provider SemVer is its own stream.                |
+
+The canonical `registry.terraform.io/tako0614/takoform` distribution publishes
+official Form mappings only. Independent third parties may distribute Forms
+under their own namespaces using the same package and verification path. A
+Provider must be built against each Form it exposes; it is not a generic
+carrier or a universal infrastructure provider.
+
+Terraform/OpenTofu modules can combine multiple Takoform and industry-standard
+providers in one configuration:
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source = "registry.terraform.io/tako0614/takoform"
+    }
+    aws = {
+      source = "hashicorp/aws"
+    }
+  }
+}
+```
 
 ## Edge reference family (16 of 31 current Experimental Forms) {#beta-edge-platform-family}
 
@@ -34,8 +53,8 @@ attachment that gives it an address. An endpoint whose worker has no active
 deployment never becomes Ready, so the whole chain is one configuration:
 
 This shape uses the independent Registry-published Provider 3 reference
-implementation. It is non-normative and does not claim Specification readiness
-or Form Package publication.
+implementation for official Forms. It is non-normative and does not claim
+Form Package publication or host availability.
 
 ```hcl
 terraform {
@@ -102,9 +121,10 @@ attachment resource.
 
 ## Current Provider 3 resource reference {#resource-reference}
 
-The independent Registry-published Provider 3 maps all 31 current Experimental
-`0.x` Forms. These names are non-normative Provider metadata and do not change
-Form maturity.
+The official Registry-published Provider 3 maps the current official
+Experimental `0.x` Forms. These names are non-normative Provider metadata and
+do not change Form maturity. Third-party Form distributions require explicit
+Provider mappings and are not silently included here.
 
 ### Edge family
 

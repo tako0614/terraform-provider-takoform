@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// The footer renders the same status axes as StatusNote. Distribution
-// availability is stated separately from the current design target so a
-// candidate descriptor is never presented as a Registry publication.
+// Keep the footer focused on current identities. Numbered Specification
+// receipts remain in the historical source tree and are intentionally not
+// rendered as a current status stream.
 import { computed } from "vue";
 import { useData } from "vitepress";
 
@@ -12,14 +12,11 @@ type SiteStatus = {
   providerTargetStatus: string;
   hostApiCurrent: string;
   hostApiMaturity: string;
-  hostApiPublicationStatus: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
   currentFamilyCount: number;
   formMaturity: string;
   formPackagePublicationStatus: string;
-  specificationVersion: string;
-  specificationReleaseStatus: string;
   route: string;
 };
 
@@ -33,46 +30,42 @@ const hostApiVersion = computed(() => apiVersion(status.value.hostApiCurrent));
 const hostApiMaturity = computed(() =>
   maturityLabel(status.value.hostApiMaturity),
 );
-const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
 </script>
 
 <template>
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>Specification</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
-        derived from the append-only Specification release ledger/status document);
-        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
-        {{ status.hostApiPublicationStatus }});
+        <strong>Current contract</strong>:
+        Host API {{ hostApiVersion }} は {{ hostApiMaturity }} の stable wire contract です。
         {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
+        exact 0.x Forms ({{ maturityLabel(status.formMaturity) }}、Form ごとに独立して version)。
         Form Package {{ status.formPackageApiCurrent }} is
-        {{ status.formPackagePublicationStatus }}.
+        {{ status.formPackagePublicationStatus }} です。番号付き Specification receipt は履歴資料であり、
+        現在の version stream ではありません。
       </p>
       <p v-else>
-        <strong>Specification</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
-        derived from the append-only Specification release ledger/status document);
-        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
-        {{ status.hostApiPublicationStatus }});
+        <strong>Current contract</strong>:
+        Host API {{ hostApiVersion }} is a {{ hostApiMaturity.toLowerCase() }} stable wire contract.
         {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
+        exact 0.x Forms ({{ maturityLabel(status.formMaturity) }}, independently versioned).
         Form Package {{ status.formPackageApiCurrent }} is
-        {{ status.formPackagePublicationStatus }}.
+        {{ status.formPackagePublicationStatus }}. Numbered Specification receipts are historical
+        records, not a current version stream.
       </p>
       <p class="site-status-footer__distribution">
         <span v-if="lang === 'ja'">
-          Distribution availability: Provider {{ status.providerPublished }} は
-          Registry readback 済みの current distribution、Provider 2.0.0 は
-          公開済み compatibility predecessor、Provider 1.0.3 は公開済み
-          Legacy です。
+          <strong>Distribution boundary</strong>: `tako0614/takoform` Provider
+          {{ status.providerPublished }} は official Form の typed mapping だけを提供する software tooling です。
+          Form は第三者も同じ package / verification path で配布でき、module では複数の Takoform
+          Provider と industry-standard provider を組み合わせられます。
         </span>
         <span v-else>
-          Distribution availability: Provider {{ status.providerPublished }} is
-          the current Registry-readback retained distribution; Provider 2.0.0 is the
-          published compatibility predecessor and Provider 1.0.3 is published
-          Legacy.
+          <strong>Distribution boundary</strong>: the `tako0614/takoform` Provider
+          {{ status.providerPublished }} is software tooling with typed mappings for official Forms only,
+          not a universal infrastructure provider. Third parties may distribute Forms through the same
+          package and verification path, and a module may combine multiple Takoform and industry-standard
+          providers.
         </span>
       </p>
       <p class="site-status-footer__data">
