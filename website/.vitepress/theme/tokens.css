@@ -1,0 +1,46 @@
+:root {
+  --color-paper: oklch(14% 0.012 25);
+  --color-paper-2: oklch(18% 0.014 25);
+  --color-paper-3: oklch(22% 0.016 25);
+  --color-ink: oklch(94% 0.008 25);
+  --color-ink-2: oklch(79% 0.012 25);
+  --color-muted: oklch(63% 0.014 25);
+  --color-rule: oklch(31% 0.012 25);
+  --color-accent: oklch(70% 0.17 25);
+  --color-accent-strong: oklch(77% 0.15 25);
+  --color-accent-ink: var(--color-paper);
+  --color-focus: oklch(83% 0.15 25);
+
+  --font-display: "Geist", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --font-body: "Geist", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --font-mono: "Geist Mono", "IBM Plex Mono", ui-monospace, monospace;
+
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 7rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.9531rem;
+  --text-2xl: 2.4414rem;
+  --text-display: clamp(2.75rem, 5vw + 1rem, 5.25rem);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 180ms;
+  --dur-medium: 260ms;
+
+  --radius-card: 8px;
+  --radius-pill: 999px;
+  --radius-input: 6px;
+}

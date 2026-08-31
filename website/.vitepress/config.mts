@@ -1,9 +1,16 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitepress";
 
 import { prepareSiteStatus, SITE_STATUS_ROUTE } from "./site-status.mjs";
+import {
+  CORE_LIBRARY_VERSION,
+  HOST_API_LANE,
+  JAPANESE_VERSION_MODEL_ROUTE,
+  VERSION_MODEL_ROUTE,
+} from "./version-model.mjs";
 
 const github = "https://github.com/tako0614/terraform-provider-takoform";
 
@@ -20,7 +27,7 @@ const siteDirectory = path.resolve(
 const snapshotReadOnlyFlag = process.env.TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY;
 if (snapshotReadOnlyFlag !== undefined && snapshotReadOnlyFlag !== "1") {
   throw new Error(
-    "TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY must be exactly \"1\" when set",
+    'TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY must be exactly "1" when set',
   );
 }
 const siteStatus = {
@@ -30,16 +37,39 @@ const siteStatus = {
   route: SITE_STATUS_ROUTE,
 };
 
+const siteOrigin = "https://takoform.com";
+
+const routeFromRelativePath = (relativePath: string) => {
+  const normalized = relativePath.replaceAll("\\", "/").replace(/\.md$/, "");
+  if (normalized === "index") return "/";
+  if (normalized.endsWith("/index")) {
+    return `/${normalized.slice(0, -"/index".length)}/`;
+  }
+  return `/${normalized}.html`;
+};
+
+const localizedSourceAliases = new Map([
+  ["docs/reference-landing.md", "ja/docs/reference.md"],
+  ["ja/docs/reference.md", "docs/reference-landing.md"],
+]);
+
+const alternateSourcePath = (relativePath: string) =>
+  localizedSourceAliases.get(relativePath) ??
+  (relativePath.startsWith("ja/")
+    ? relativePath.slice(3)
+    : `ja/${relativePath}`);
+
 const projectNavItems = [
   { text: "Proposals", link: "/proposals/" },
   { text: "Form inventory", link: "/forms/" },
   { text: "Conformance evidence", link: "/conformance/" },
-  { text: "Release", link: "/release/" },
 ];
 
-// Current design target comes before withdrawn history in every sidebar.
-const compatibilityNavItems = [
-  { text: "Versions & compatibility", link: "/docs/versions.html" },
+const historicalNavItems = [
+  { text: "Historical specification", link: "/spec/" },
+  { text: "Legacy reference projection", link: "/docs/reference.html" },
+  { text: "Legacy glossary projection", link: "/docs/glossary.html" },
+  { text: "Historical releases", link: "/release/" },
   {
     text: "v2 to v3 migration boundary",
     link: "/release/migrations/v2-to-v3.html",
@@ -47,43 +77,55 @@ const compatibilityNavItems = [
 ];
 
 const englishNav = [
-  { text: "Current", link: "/docs/" },
-  { text: "Spec", link: "/spec/" },
+  { text: "Overview", link: "/" },
+  { text: "Get started", link: "/docs/" },
   {
-    text: "Compatibility",
-    items: compatibilityNavItems,
+    text: "Concepts",
+    items: [
+      { text: "Concepts", link: "/docs/concepts.html" },
+      { text: "Ownership", link: "/docs/ownership.html" },
+    ],
   },
+  { text: "Version model", link: VERSION_MODEL_ROUTE },
+  { text: "Reference", link: "/docs/reference-landing.html" },
+  { text: "History", link: "/docs/history.html" },
   { text: "Project", items: projectNavItems },
+  { text: "Historical source", items: historicalNavItems },
   { text: "GitHub", link: github },
 ];
 
-// The project trees are published once, in English. The Japanese navigation
-// points at the same targets and marks them 英語のみ, matching the note
-// convention used inside the Japanese pages.
 const japaneseProjectNavItems = [
-  { text: "Proposals (英語のみ)", link: "/proposals/" },
-  { text: "Form inventory (英語のみ)", link: "/forms/" },
-  { text: "Conformance evidence (英語のみ)", link: "/conformance/" },
-  { text: "Release (英語のみ)", link: "/release/" },
+  { text: "提案 (英語のみ)", link: "/proposals/" },
+  { text: "Form 一覧 (英語のみ)", link: "/forms/" },
+  { text: "適合性の証拠 (英語のみ)", link: "/conformance/" },
 ];
 
-const japaneseCompatibilityNavItems = [
-  { text: "Versions & compatibility (英語のみ)", link: "/docs/versions.html" },
+const japaneseHistoricalNavItems = [
+  { text: "仕様資料（履歴）", link: "/ja/spec/" },
+  { text: "用語集（旧 projection・英語のみ）", link: "/docs/glossary.html" },
+  { text: "リリース資料（英語のみ）", link: "/release/" },
   {
-    text: "v2 to v3 migration boundary (英語のみ)",
+    text: "v2 から v3 の移行境界（英語のみ）",
     link: "/release/migrations/v2-to-v3.html",
   },
 ];
 
 const japaneseNav = [
-  { text: "Current", link: "/ja/docs/" },
-  { text: "Spec", link: "/ja/spec/" },
+  { text: "概要", link: "/ja/" },
+  { text: "はじめる", link: "/ja/docs/" },
   {
-    text: "Compatibility",
-    items: japaneseCompatibilityNavItems,
+    text: "概念",
+    items: [
+      { text: "概念", link: "/ja/docs/concepts.html" },
+      { text: "所有範囲", link: "/ja/docs/ownership.html" },
+    ],
   },
-  { text: "Project", items: japaneseProjectNavItems },
-  { text: "GitHub", link: github },
+  { text: "バージョンモデル", link: JAPANESE_VERSION_MODEL_ROUTE },
+  { text: "リファレンス", link: "/ja/docs/reference.html" },
+  { text: "履歴", link: "/ja/docs/history.html" },
+  { text: "プロジェクト", items: japaneseProjectNavItems },
+  { text: "履歴資料", items: japaneseHistoricalNavItems },
+  { text: "English", link: "/" },
 ];
 
 const edgeResourceItems = [
@@ -136,9 +178,15 @@ const currentStackResourceItems = [
     text: "Container service",
     link: "/docs/resources/serverless_container_service.html",
   },
-  { text: "Container revision", link: "/docs/resources/container_revision.html" },
+  {
+    text: "Container revision",
+    link: "/docs/resources/container_revision.html",
+  },
   { text: "Container traffic", link: "/docs/resources/container_traffic.html" },
-  { text: "Container endpoint", link: "/docs/resources/container_endpoint.html" },
+  {
+    text: "Container endpoint",
+    link: "/docs/resources/container_endpoint.html",
+  },
   {
     text: "Container custom domain",
     link: "/docs/resources/container_custom_domain.html",
@@ -156,45 +204,78 @@ const currentStackResourceItems = [
 
 const specSidebar = [
   {
-    text: "Spec",
+    text: "Historical Specification 1.1 receipt",
     items: [
-      { text: "Contract map", link: "/spec/" },
-      { text: "Overview", link: "/spec/overview.html" },
+      { text: "Contract map (historical)", link: "/spec/" },
+      { text: "Overview (historical)", link: "/spec/overview.html" },
     ],
   },
   {
-    text: "Concepts",
+    text: "Historical concepts",
     items: [
-      { text: "Portability boundary", link: "/spec/portability-boundary.html" },
-      { text: "Form Families", link: "/spec/form-families.html" },
-      { text: "Project lifecycle", link: "/spec/project-lifecycle.html" },
-      { text: "Release evidence policy", link: "/spec/publication-freeze.html" },
-      { text: "Versioning", link: "/spec/versioning.html" },
-      { text: "Conformance", link: "/spec/conformance.html" },
+      {
+        text: "Portability boundary (historical)",
+        link: "/spec/portability-boundary.html",
+      },
+      { text: "Form Families (historical)", link: "/spec/form-families.html" },
+      {
+        text: "Project lifecycle (historical)",
+        link: "/spec/project-lifecycle.html",
+      },
+      {
+        text: "Release evidence policy (historical)",
+        link: "/spec/publication-freeze.html",
+      },
+      { text: "Versioning (historical)", link: "/spec/versioning.html" },
+      { text: "Conformance (historical)", link: "/spec/conformance.html" },
     ],
   },
   {
-    text: "Contracts",
+    text: "Historical contracts",
     items: [
-      { text: "Host API v1", link: "/spec/host-api/v1.html" },
-      { text: "Form Definition", link: "/spec/form-definition/" },
-      { text: "Form Package", link: "/spec/form-package/" },
-      { text: "Interface contracts", link: "/spec/interface-contract/" },
-      { text: "Binding contracts", link: "/spec/binding-contract/" },
-      { text: "Artifact transport", link: "/spec/artifact-transport/" },
-      { text: "Trust", link: "/spec/trust/" },
-      { text: "Decisions", link: "/spec/decisions/" },
+      {
+        text: "Host API v1 (historical source)",
+        link: "/spec/host-api/v1.html",
+      },
+      {
+        text: "Form Definition (historical source)",
+        link: "/spec/form-definition/",
+      },
+      { text: "Form Package (historical source)", link: "/spec/form-package/" },
+      {
+        text: "Interface contracts (historical source)",
+        link: "/spec/interface-contract/",
+      },
+      {
+        text: "Binding contracts (historical source)",
+        link: "/spec/binding-contract/",
+      },
+      {
+        text: "Artifact transport (historical source)",
+        link: "/spec/artifact-transport/",
+      },
+      { text: "Trust (historical source)", link: "/spec/trust/" },
+      { text: "Decisions (historical source)", link: "/spec/decisions/" },
     ],
   },
   {
-    text: "Withdrawn epochs / Migration",
+    text: "Withdrawn epochs / migration",
     collapsed: true,
     items: [
-      { text: "Versions & compatibility", link: "/docs/versions.html" },
-      { text: "Host API lanes", link: "/spec/host-api/" },
-      { text: "Retained Host API v1beta4", link: "/spec/host-api/v1beta4.html" },
-      { text: "Retained Host API v1beta1", link: "/spec/host-api/v1beta1.html" },
-      { text: "v2 to v3 migration boundary", link: "/release/migrations/v2-to-v3.html" },
+      { text: "Current version model", link: VERSION_MODEL_ROUTE },
+      { text: "Host API lanes (historical)", link: "/spec/host-api/" },
+      {
+        text: "Retained Host API v1beta4",
+        link: "/spec/host-api/v1beta4.html",
+      },
+      {
+        text: "Retained Host API v1beta1",
+        link: "/spec/host-api/v1beta1.html",
+      },
+      {
+        text: "v2 to v3 migration boundary",
+        link: "/release/migrations/v2-to-v3.html",
+      },
     ],
   },
 ];
@@ -240,12 +321,14 @@ const edgeProposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "Provider guide",
       items: [
         { text: "Quick start", link: "/docs/" },
-        { text: "Versions & compatibility", link: "/docs/versions.html" },
-        { text: "Reference", link: "/docs/reference.html" },
-        { text: "Glossary", link: "/docs/glossary.html" },
+        { text: "Concepts", link: "/docs/concepts.html" },
+        { text: "Ownership", link: "/docs/ownership.html" },
+        { text: "Version model", link: VERSION_MODEL_ROUTE },
+        { text: "Reference landing", link: "/docs/reference-landing.html" },
+        { text: "History", link: "/docs/history.html" },
       ],
     },
     {
@@ -253,10 +336,13 @@ const englishSidebar = {
       items: currentStackResourceItems,
     },
     {
-      text: "Withdrawn epochs / Migration",
+      text: "Historical source / migration",
       collapsed: true,
       items: [
-        { text: "Versions & compatibility", link: "/docs/versions.html" },
+        { text: "Historical specification", link: "/spec/" },
+        { text: "Legacy reference projection", link: "/docs/reference.html" },
+        { text: "Legacy glossary projection", link: "/docs/glossary.html" },
+        { text: "Historical releases", link: "/release/" },
         {
           text: "v2 to v3 migration boundary",
           link: "/release/migrations/v2-to-v3.html",
@@ -295,8 +381,8 @@ const englishSidebar = {
   ],
   "/release/": [
     {
-      text: "Release",
-      items: [{ text: "Specification and Provider releases", link: "/release/" }],
+      text: "Historical release evidence",
+      items: [{ text: "Provider and receipt history", link: "/release/" }],
     },
   ],
 };
@@ -304,30 +390,38 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Specification 1.1 / separate Host API v1 candidate",
+      text: "Provider の導入",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
-        {
-          text: "Versions & compatibility (英語のみ)",
-          link: "/ja/docs/versions.html",
-        },
-        { text: "用語集 (英語のみ)", link: "/docs/glossary.html" },
+        { text: "概念", link: "/ja/docs/concepts.html" },
+        { text: "所有範囲", link: "/ja/docs/ownership.html" },
+        { text: "バージョンモデル", link: JAPANESE_VERSION_MODEL_ROUTE },
+        { text: "リファレンス", link: "/ja/docs/reference.html" },
+        { text: "履歴", link: "/ja/docs/history.html" },
       ],
     },
     {
-      text: "Provider 3 typed reference (current 31 Forms)",
+      text: "Provider 3 のリソース（英語のみ）",
       items: currentStackResourceItems,
     },
     {
-      text: "Withdrawn epochs / Migration",
+      text: "履歴資料 / 移行",
       collapsed: true,
       items: [
         {
-          text: "Versions & compatibility (英語のみ)",
-          link: "/ja/docs/versions.html",
+          text: "仕様資料（履歴）",
+          link: "/ja/spec/",
         },
         {
-          text: "v2 to v3 migration boundary (英語のみ)",
+          text: "用語集（旧 projection・英語のみ）",
+          link: "/docs/glossary.html",
+        },
+        {
+          text: "リリース資料（英語のみ）",
+          link: "/release/",
+        },
+        {
+          text: "v2 から v3 の移行境界（英語のみ）",
           link: "/release/migrations/v2-to-v3.html",
         },
       ],
@@ -335,8 +429,12 @@ const japaneseSidebar = {
   ],
   "/ja/spec/": [
     {
-      text: "Spec",
-      items: [{ text: "契約マップ", link: "/ja/spec/" }],
+      text: "仕様資料（履歴）",
+      items: [
+        { text: "契約マップ（履歴）", link: "/ja/spec/" },
+        { text: "現行の概念", link: "/ja/docs/concepts.html" },
+        { text: "現行のバージョンモデル", link: JAPANESE_VERSION_MODEL_ROUTE },
+      ],
     },
   ],
 };
@@ -344,8 +442,7 @@ const japaneseSidebar = {
 export default defineConfig({
   lang: "en",
   title: "Takoform",
-  description:
-    "One provider. Dependent on none. Portable resource contracts for Terraform and OpenTofu.",
+  description: `Portable resource contracts for Terraform and OpenTofu. Host API ${HOST_API_LANE}; Core library ${CORE_LIBRARY_VERSION}.`,
   cleanUrls: false,
   lastUpdated: false,
   srcExclude: ["**/README.md", "**/DESIGN.md", "static/**"],
@@ -372,6 +469,52 @@ export default defineConfig({
   // pass keeps MiniSearch insertion order (and its emitted chunk hash) stable
   // across fresh builds, including the isolated snapshot output.
   buildConcurrency: 1,
+  transformHead({ pageData }) {
+    const relativePath = pageData.relativePath.replaceAll("\\", "/");
+    const route = routeFromRelativePath(relativePath);
+    const alternatePath = alternateSourcePath(relativePath);
+    const alternateExists = existsSync(path.join(siteDirectory, alternatePath));
+    const isJapanese = relativePath.startsWith("ja/");
+    const canonical = `${siteOrigin}${route}`;
+    const entries = [["link", { rel: "canonical", href: canonical }]] as [
+      string,
+      Record<string, string>,
+    ][];
+
+    if (alternateExists) {
+      const alternateRoute = routeFromRelativePath(alternatePath);
+      const englishRoute = isJapanese ? alternateRoute : route;
+      const japaneseRoute = isJapanese ? route : alternateRoute;
+      entries.push(
+        [
+          "link",
+          {
+            rel: "alternate",
+            hreflang: "en",
+            href: `${siteOrigin}${englishRoute}`,
+          },
+        ],
+        [
+          "link",
+          {
+            rel: "alternate",
+            hreflang: "ja",
+            href: `${siteOrigin}${japaneseRoute}`,
+          },
+        ],
+        [
+          "link",
+          {
+            rel: "alternate",
+            hreflang: "x-default",
+            href: `${siteOrigin}${englishRoute}`,
+          },
+        ],
+      );
+    }
+
+    return entries;
+  },
   themeConfig: {
     outline: { level: [2, 3] },
     search: {
@@ -383,6 +526,11 @@ export default defineConfig({
     root: {
       label: "English",
       lang: "en",
+      description: `Portable resource contracts for Terraform and OpenTofu. Host API ${HOST_API_LANE}; Core library ${CORE_LIBRARY_VERSION}.`,
+      head: [
+        ["meta", { property: "og:locale", content: "en_US" }],
+        ["meta", { name: "twitter:card", content: "summary" }],
+      ],
       themeConfig: {
         nav: englishNav,
         sidebar: englishSidebar,
@@ -393,6 +541,11 @@ export default defineConfig({
       label: "日本語",
       lang: "ja",
       link: "/ja/",
+      description: `Terraform / OpenTofu の移植可能なリソース契約。Host API ${HOST_API_LANE}、Core ライブラリ ${CORE_LIBRARY_VERSION}。`,
+      head: [
+        ["meta", { property: "og:locale", content: "ja_JP" }],
+        ["meta", { name: "twitter:card", content: "summary" }],
+      ],
       themeConfig: {
         nav: japaneseNav,
         sidebar: japaneseSidebar,

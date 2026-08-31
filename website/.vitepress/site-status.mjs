@@ -1,5 +1,8 @@
-// site-status.mjs — the one derivation of the independent Provider, Host API,
-// Form Family and Form-definition status axes used by public surfaces.
+// site-status.mjs — the compatibility document for machine-readable Provider,
+// Host API, Form Family, and Form-definition facts used by public surfaces.
+// The human-facing site names four current streams (Host API, Form definition,
+// Core SemVer, and Provider SemVer); this document keeps its historical field
+// shape so existing readers do not lose compatibility metadata.
 //
 // Two callers share this module so no surface can hand-maintain a fact the
 // repository already knows:
@@ -96,8 +99,9 @@ export const SITE_STATUS_FIELDS = [
   // understand the original v2 prefix keep receiving the same keys/order.
   "formMaturity",
   "formPackagePublicationStatus",
-  // Specification 1.1 and the complete current corpus are appended so the
-  // original Provider/Edge prefix remains tolerant-reader compatible.
+  // Historical Specification receipt metadata and the complete current corpus
+  // are appended so the original Provider/Edge prefix remains tolerant-reader
+  // compatible. These fields are evidence metadata, not a current stream.
   "specificationVersion",
   "specificationReleaseStatus",
   "currentFamilyIndex",
@@ -121,7 +125,7 @@ export const SITE_STATUS_DEPRECATED_FIELDS = Object.freeze({
   candidateSetDigest:
     "retained Edge-family compatibility digest; currentFamilyIndexDigest is corpus authority",
   openPublicationBlockers:
-    "retained beta-history count; specificationReleaseStatus is Specification authority",
+    "retained beta-history count; specificationReleaseStatus is historical receipt metadata",
 });
 
 const ROOT_MARKERS = [

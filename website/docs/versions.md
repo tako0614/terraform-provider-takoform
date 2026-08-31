@@ -1,91 +1,67 @@
-# Versions and compatibility
+---
+title: Version model
+description: Four independent version streams define the Takoform compatibility boundary.
+---
 
-Takoform keeps independent Specification, Provider, Host API, Form Family,
-Form definition, and Form Package axes. A version on one axis is not a
-pre-release label for another axis.
+# Version model
 
-## Current design target
+Takoform has exactly four current version streams. The first two describe
+domain compatibility; the latter two are independent software releases.
 
-| Axis                  | Current identity                           | Meaning and availability                                                                                                                                                                     |
-| --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform 1.1**                           | First numbered release; publication status is derived only from the exact append-only release ledger. Identity 1.0 was withdrawn before publication and may not be reused.     |
-| Host API              | **`forms.takoform.com/v1`**                | Stable Specification contract for discovery, exact Form availability, operations, fencing, and errors.                                                                                       |
-| Form corpus           | **8 versionless families / 31 Forms**     | Exact current `0.x` FormRefs; all remain Experimental and independently versioned.                                                                                                           |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | Separate package/distribution identifier. Package artifacts remain unpublished.                                                                                                              |
-| Provider              | **3.0.0, Registry-published**              | Independent non-normative reference implementation for all 31 current Forms; Provider 2.1.1 is retained Registry history.                                                                     |
+| Stream       | Current form                    | Owner and meaning                                                                                                      |
+| ------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Host API     | `forms.takoform.com/v1`         | The literal discovery and operation lane. Compatible changes stay inside this lane; there is no `/v1.1` route.         |
+| Form         | Each Form's `definitionVersion` | The exact service shape and lifecycle contract. A family is versionless; each Form carries its own definition version. |
+| Core library | `v1.1.0`                        | The independently released Core module/library. Its SemVer does not set a Host API or Provider version.                |
+| Provider     | `3.0.0`                         | This repository's Registry-published typed mapping. Its SemVer does not publish a Form or host capability.             |
 
-Provider distribution is a separate axis. **Provider 3.0.0** is the current
-Registry-published implementation. **Provider 2.1.1**, **Provider 2.0.0**, and
-**Provider 1.0.3** remain
-installable Registry history for earlier epochs
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
-([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)). Provider 3
-cannot block or authorize Specification 1.1.
+## What is not a version stream
 
-## Published compatibility mapping
+The Specification 1.1 receipt is a one-time historical snapshot of normative
+evidence. It is not a current release train and does not create a Host API
+lane. The withdrawn Specification 1.0 identity is retained only in history.
 
-| Client or distribution      | Host API          | Forms and definitions                                               | Status / use                                                                |
-| --------------------------- | ----------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Provider 3.0.0 distribution | Host API v1       | 8 versionless families; 31 current Experimental Form identities     | Current Registry-published non-normative reference implementation.          |
-| Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1; 15 immutable historical Form identities | Registry-published retained client; descriptor remains `candidate-only` metadata by design. |
-| Provider 2.0.0 distribution | Host API v1alpha2 (withdrawn epoch) | The nine withdrawn v1alpha2 Forms | Immutable Registry history; exact-pin only, no successors. |
-| Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
+Form Package envelopes, schema `$id` values, content digests, record formats,
+family labels, and Provider descriptors identify artifacts or publication
+state. They do not add a fifth stream.
 
-The current Host API v1 contract and versionless Form families are not
-interchangeable labels. A Form's own definition SemVer does not change either
-the Specification or Provider SemVer, and Specification 1.1 does not silently
-mint Form `1.0.0` identities.
+## Read a Form identity
 
-## Current Edge reference family (16 Experimental Forms)
+When a host advertises a Form, read the complete FormRef rather than a package
+or Provider label. Its `formId` selects the service shape and its
+`definitionVersion` selects that Form's contract revision. A content digest
+then identifies the exact bytes that were received. A family label groups
+related Forms for discovery but remains versionless.
 
-The current Edge family is versionless and contains these 16 exact
-Experimental `0.x` Forms:
+The Provider compiles a typed surface for the FormRefs it supports. It does
+not provide a generic carrier for an unknown Form, and a Provider release does
+not silently upgrade a Form definition.
 
-- [`takoform_module_worker`](/docs/resources/module_worker.html)
-- [`takoform_worker_bundle`](/docs/resources/worker_bundle.html)
-- [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html)
-- [`takoform_worker_version`](/docs/resources/worker_version.html)
-- [`takoform_worker_deployment`](/docs/resources/worker_deployment.html)
-- [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html)
-- [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)
-- [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)
-- [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)
-- [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)
-- [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)
-- [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html)
-- [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)
-- [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)
-- [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)
-- [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
+## Provider release history
 
-The independent Registry-published Provider 3 uses these resource names
-without making them normative or changing Form maturity:
+The following are immutable distribution records, not additional current
+streams:
 
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = ">= 3.0.0"
-    }
-  }
-}
-```
+| Provider release | Historical role                                                                 |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `3.0.0`          | Current Registry-published typed mapping for the current 31 Experimental Forms. |
+| `2.1.1`          | Retained compatibility client for the historical Host API v1beta1 lane.         |
+| `2.0.0`          | Retained client for the withdrawn v1alpha2 epoch.                               |
+| `1.0.3`          | Retained Legacy client for the withdrawn v1alpha1 epoch.                        |
 
-Provider 2.1.1 remains available for the exact historical identities it
-shipped; it must not be read as implementing the current 31-Form corpus.
+Existing state that depends on a withdrawn epoch remains pinned to its exact
+Provider release. Follow the [v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)
+when moving that state; there is no automatic migration.
 
-## Withdrawn epochs
+## Version checks in practice
 
-The pre-Beta epochs and their documentation were withdrawn
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
-The withdrawn resource pages no longer exist on this site; the identities are
-recorded as retired in the published ledgers, and the bytes stay in the
-repository's git history and release tags. Existing users of the withdrawn
-resources keep an exact pin (`= 2.0.0` or `= 2.1.1`, `= 1.0.3` for v1 state)
-or follow the [v2 to v3 migration boundary](/release/migrations/v2-to-v3.html):
-stay pinned, remove from state, or destroy while still pinned. Nothing is
-migrated automatically, and upgrading past the withdrawal with one of the nine
-still in state fails closed before any lifecycle request.
+1. Confirm the host's literal Host Support Profile and `forms.takoform.com/v1` endpoint.
+2. Confirm the Form's `formId` and `definitionVersion` before writing its fields.
+3. Pin the Core library SemVer used by the host integration.
+4. Pin the Provider SemVer in Terraform or OpenTofu and inspect the plan.
+
+The [reference landing page](/docs/reference-landing.html) links each current
+resource. The [history page](/docs/history.html) explains the retained
+Specification evidence and old URLs.
 
 <StatusNote />

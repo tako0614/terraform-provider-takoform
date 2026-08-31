@@ -1,84 +1,39 @@
 <script setup lang="ts">
-// The footer renders the same status axes as StatusNote. Distribution
-// availability is stated separately from the current design target so a
-// candidate descriptor is never presented as a Registry publication.
 import { computed } from "vue";
 import { useData } from "vitepress";
 
+import {
+  CORE_LIBRARY_VERSION,
+  HOST_API_LANE,
+  JAPANESE_VERSION_MODEL_ROUTE,
+  VERSION_MODEL_ROUTE,
+} from "../../version-model.mjs";
+
 type SiteStatus = {
-  format: string;
   providerPublished: string;
-  providerTarget: string;
-  providerTargetStatus: string;
-  hostApiCurrent: string;
-  hostApiMaturity: string;
-  hostApiPublicationStatus: string;
-  formPackageApiCurrent: string;
   currentFormCount: number;
-  currentFamilyCount: number;
-  formMaturity: string;
-  formPackagePublicationStatus: string;
-  specificationVersion: string;
-  specificationReleaseStatus: string;
-  route: string;
 };
 
 const { lang, theme } = useData();
 const status = computed<SiteStatus>(() => theme.value.siteStatus as SiteStatus);
-
-const apiVersion = (value: string) => value.split("/").at(-1) ?? value;
-const maturityLabel = (value: string) =>
-  value.length === 0 ? value : `${value[0].toUpperCase()}${value.slice(1)}`;
-const hostApiVersion = computed(() => apiVersion(status.value.hostApiCurrent));
-const hostApiMaturity = computed(() =>
-  maturityLabel(status.value.hostApiMaturity),
-);
-const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
 </script>
 
 <template>
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>Specification</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
-        derived from the append-only Specification release ledger/status document);
-        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
-        {{ status.hostApiPublicationStatus }});
-        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
-        Form Package {{ status.formPackageApiCurrent }} is
-        {{ status.formPackagePublicationStatus }}.
+        <strong>Takoform</strong> · Host API <code>{{ HOST_API_LANE }}</code> ·
+        Core <code>{{ CORE_LIBRARY_VERSION }}</code> · Provider
+        <code>{{ status.providerPublished }}</code> ·
+        {{ status.currentFormCount }} Forms
+        <a :href="JAPANESE_VERSION_MODEL_ROUTE">バージョンモデル</a>
       </p>
       <p v-else>
-        <strong>Specification</strong>:
-        {{ status.specificationVersion }} ({{ status.specificationReleaseStatus }}, release status
-        derived from the append-only Specification release ledger/status document);
-        Host API {{ hostApiVersion }} (separate {{ hostApiMaturity }},
-        {{ status.hostApiPublicationStatus }});
-        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ formMaturity }}, no implicit 1.0.0 promotion).
-        Form Package {{ status.formPackageApiCurrent }} is
-        {{ status.formPackagePublicationStatus }}.
-      </p>
-      <p class="site-status-footer__distribution">
-        <span v-if="lang === 'ja'">
-          Distribution availability: Provider {{ status.providerPublished }} は
-          Registry readback 済みの current distribution、Provider 2.0.0 は
-          公開済み compatibility predecessor、Provider 1.0.3 は公開済み
-          Legacy です。
-        </span>
-        <span v-else>
-          Distribution availability: Provider {{ status.providerPublished }} is
-          the current Registry-readback retained distribution; Provider 2.0.0 is the
-          published compatibility predecessor and Provider 1.0.3 is published
-          Legacy.
-        </span>
-      </p>
-      <p class="site-status-footer__data">
-        <span v-if="lang === 'ja'">同じ事実を機械可読で</span>
-        <span v-else>The same facts as data</span>
-        <a :href="status.route">takoform-site.json</a>
+        <strong>Takoform</strong> · Host API <code>{{ HOST_API_LANE }}</code> ·
+        Core <code>{{ CORE_LIBRARY_VERSION }}</code> · Provider
+        <code>{{ status.providerPublished }}</code> ·
+        {{ status.currentFormCount }} Forms
+        <a :href="VERSION_MODEL_ROUTE">Version model</a>
       </p>
     </div>
   </footer>
@@ -87,7 +42,7 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
 <style scoped>
 .site-status-footer {
   border-top: 1px solid var(--vp-c-divider);
-  padding: 16px 24px 32px;
+  padding: var(--space-md) var(--space-lg) var(--space-xl);
 }
 
 .site-status-footer__inner {
@@ -97,18 +52,13 @@ const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
 
 .site-status-footer p {
   color: var(--vp-c-text-2);
-  font-size: 13px;
+  font-size: var(--text-xs);
   line-height: 1.7;
   margin: 0;
 }
 
-.site-status-footer__distribution,
-.site-status-footer__data {
-  margin-top: 4px;
-}
-
 .site-status-footer a {
   color: var(--vp-c-brand-1);
-  margin-left: 6px;
+  margin-inline-start: var(--space-2xs);
 }
 </style>

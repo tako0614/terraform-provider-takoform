@@ -1,65 +1,45 @@
-# 仕様
+---
+title: 仕様資料（履歴）
+description: Specification 1.1 receipt と旧 contract を読むための履歴入口。
+---
 
-## Identity
+# 仕様資料（履歴）
 
-exact な **FormRef** は、API group・kind・definition version・schema digest の
-組み合わせです。互換性は kind 名だけから推測しません — epoch が違えば別の契約です。
-Form group は [Form Families](/spec/form-families.html) で namespace 化され、
-Host API group はどの Form group からも独立した protocol 互換性 identity です。
+この URL は、番号付き Specification の receipt と旧 contract を参照するために
+保持しています。現行の version stream ではありません。現行の互換性は[バージョンモデル](/ja/docs/versions.html)、
+現行の概念は[概念](/ja/docs/concepts.html)を参照してください。
 
-| Surface | Identity |
-| --- | --- |
-| Specification | Takoform 1.1。first numbered release identity。publication state は append-only numbered ledger から導出し、authority は normative `spec/` tree の exact committed snapshot 1つだけ（1.0 は公開前に撤回され再利用しない） |
-| 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
-| Host API candidate | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、Specification とは separate and unpublished) |
-| 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
-| Provider distribution | independent。Provider 3.0.0 は current Registry-published non-normative reference implementation、`v2.1.1` は retained history |
+## 保持される証拠
 
-Specification 1.1 は separate Host API v1 candidate を publish / promote せず、
-current Form を `1.0.0` に昇格させず、Package や Provider を publish せず、
-`/v1.1` / v2 lane も mint しません。
+**Specification 1.1** は normative source の一回限りの immutable receipt です。
+公開前に撤回された **Specification 1.0** identity とともに履歴として残り、
+Host API、Form、Core、Provider の現行 version を決めません。`/v1.1` lane を
+作るものでもありません。
 
-W09 は C1（normative freeze）、C2（source evidence のみ）、C3（authoritative
-receipt のみ）、その direct child である C4（bounded deterministic public
-refresh）を squash しない linear boundary として保持します。C4 は normative
-source、evidence、ledger、release tooling、Provider/Form/Host source、unrelated
-file を変更できません。
+## 旧 contract の入口（英語）
 
-pre-Beta の epoch（`forms.takoform.com/v1alpha1` と `/v1alpha2`）は撤回されました
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-identity は公開台帳に retired として記録され、バイト列はリポジトリ履歴に残ります。
-provider の SemVer はどの API identity からも独立しています。
+- [Form Families](/spec/form-families.html) — namespace 化された family group
+- [Host API v1](/spec/host-api/v1.html) — UID / generation / revision と fencing
+- [Interface contracts](/spec/interface-contract/) — capability の contract
+- [Binding contracts](/spec/binding-contract/) — revision が保持する typed binding
+- [Artifact transport](/spec/artifact-transport/) — content-addressed artifact
 
-## 現在レーンの契約 (英語のみ)
+これらの projection は、当時の決定と receipt を調べるためのものです。新しい
+Form や host capability をこのページから導入することはできません。
 
-- [Form Families](/spec/form-families.html) — namespace 化された Form group と
-  Edge Platform Family
-- [Host API v1](/spec/host-api/v1.html) — uid/generation/revision
-  識別・long-running operation・fencing
-- [Interface contracts](/spec/interface-contract/) — Form のサービスが公開する
-  exact な capability 契約
-- [Binding contracts](/spec/binding-contract/) — revision が保持する typed な
-  capability 利用
-- [Artifact transport](/spec/artifact-transport/) — content-addressed な
-  artifact upload と manifest
+## schema identity
 
-## Normative schemas
-
-stable Host/API schema identity は append-only local contract lock に記録します:
+旧 epoch の schema identity は retired として保持され、再利用されません。
 
 - [form-ref v1](/schemas/v1/form-ref.schema.json)
 - [form-definition v1](/schemas/v1/form-definition.schema.json)
 - [host-api-wire v1](/schemas/v1/host-api-wire.schema.json)
 - [package-index v1alpha5](/schemas/v1alpha5/package-index.schema.json)
 
-撤回された epoch の schema identity は
-[`release/public-schema-identities.json`](/release/public-schema-identities.json)
-に retired として記録され、再利用されません。
+## Form の lifecycle（履歴上の説明）
 
-## ライフサイクル
-
-Form は Proposal → Experimental → Stable → Legacy の順に、Specification とは
-独立して進みます。future stable Form は explicit per-Form decision により
-`1.0.0` から始まります。
+Form は Proposal → Experimental → Stable → Legacy と進みますが、これは
+Specification receipt から独立しています。Stable へ進む場合も Form ごとの
+明示的な判断が必要です。
 
 <StatusNote />
