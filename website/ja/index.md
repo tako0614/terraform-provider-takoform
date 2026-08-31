@@ -18,19 +18,19 @@ hero:
 
 Takoform の Host API `forms.takoform.com/v1` は、discovery、exact Form
 availability、lifecycle operation、fence、error を定める stable な wire
-contract です。番号付きの Specification 1.0 / 1.1 文書は immutable な履歴
-receipt であり、現在の version stream ではありません。API v1.1、Form の昇格、
-Provider release を作るものでもありません。
+contract です。履歴上の番号付き文書は current product model の外にあり、
+API v1.1、Form の昇格、Provider release を作るものではありません。
 
-Provider release、Host protocol、Form definition、package envelope は、それぞれ
-独立した identity として扱います。
+current product の version 軸は Host API、各 Form definition、Core/library
+software、Provider software の4つです。Form Package API identifier は wire format
+の identity であり、5つ目の release stream ではありません。
 
-| 軸                    | 現在の identity                        | 意味と利用可能性                                                                                              |
-| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Host API              | **`forms.takoform.com/v1`**            | discovery、exact Form availability、operation、fence、error の stable protocol。                             |
-| Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRef。すべて Experimental で、Form ごとに version されます。                          |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | data-only package の distribution envelope。Host API や Provider release とは独立します。                   |
-| Provider              | **3.0.0、Registry 公開済み**           | official Form の typed mapping を提供する software tooling。Provider SemVer は独立した軸です。              |
+| 軸           | 現在の identity                  | 意味と利用可能性                                                                                     |
+| ------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Host API     | **`forms.takoform.com/v1`**       | discovery、exact Form availability、operation、fence、error の stable protocol。                   |
+| Form         | 各 Form の **definitionVersion** | 独立して version される exact contract。official catalog は8 family / 31 Experimental Forms。      |
+| Core/library | 独立した software SemVer         | SDK、verifier、compiler、CLI の release。Host API や Form identity は変更しません。                 |
+| Provider     | **3.0.0、Registry 公開済み**     | official Form の typed mapping を提供する software tooling。Provider SemVer は独立した軸です。     |
 
 canonical Registry address
 `registry.terraform.io/tako0614/takoform` は official Form の mapping だけを

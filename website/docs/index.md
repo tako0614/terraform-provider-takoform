@@ -1,9 +1,9 @@
 # Documentation
 
 This page starts with the stable Host API v1 and the exact 8-family, 31-Form
-current corpus. Numbered Specification 1.0/1.1 documents are retained as
-historical receipts only; they are not a current version stream. Provider
-release, Form publication, and host availability remain independent facts.
+current corpus. The current version axes are the Host API, each Form, Core
+library software, and Provider software. Provider release, Form publication,
+and host availability remain independent facts.
 
 ## Stable Host API v1 and provider composition
 
@@ -11,12 +11,15 @@ The Host API at `forms.takoform.com/v1` is a stable wire contract for
 discovery, exact Form availability, lifecycle operations, fencing, and errors.
 There is no `/v1.1` Host API route. The current identity set is:
 
-| Axis                  | Current identity                       | Meaning and availability                                                                                         |
-| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Host API              | **`forms.takoform.com/v1`**            | Stable protocol; it is independent from every Form and Provider release.                                       |
-| Form corpus           | **8 versionless families / 31 Forms** | Exact current `0.x` FormRefs; every Form remains Experimental and independently versioned.                       |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | Data-only distribution envelope; publication is separate from the Host API and Provider release.                |
-| Provider              | **3.0.0, Registry-published**          | Software tooling with typed mappings for official Forms only; Provider SemVer is its own stream.                |
+| Axis         | Current identity                  | Meaning and availability                                                                                    |
+| ------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Host API     | **`forms.takoform.com/v1`**       | Stable protocol; it is independent from every Form and Provider release.                                  |
+| Form         | each Form's **definitionVersion** | Exact independently versioned contract; the official catalog has 31 Experimental Forms in eight families. |
+| Core/library | independent software SemVer       | SDK, verifier, compiler, and CLI releases; they do not version the Host API or Forms.                      |
+| Provider     | **3.0.0, Registry-published**     | Software tooling with typed mappings for official Forms only; Provider SemVer is its own stream.          |
+
+`packages.forms.takoform.com/v1alpha5` identifies the current data-only Form
+Package wire format. It is not an additional product release axis.
 
 The canonical `registry.terraform.io/tako0614/takoform` distribution publishes
 official Form mappings only. Independent third parties may distribute Forms

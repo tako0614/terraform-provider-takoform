@@ -7,9 +7,9 @@ description: "Stable Takoform Host API v1, official Form mappings, and retained 
 
 The Host API at `forms.takoform.com/v1` is the stable Takoform wire contract
 for discovery, exact Form availability, lifecycle operations, fencing, and
-errors. Numbered Specification 1.0/1.1 documents are immutable historical
-receipts, not a current version stream; they do not create an API v1.1, promote
-a Form, or release a Provider. The current corpus has eight versionless
+errors. Historical numbered documents sit outside the current product model;
+they do not create an API v1.1, promote a Form, or release a Provider. The
+current corpus has eight versionless
 families and 31 Experimental `0.x` Forms, using package envelope
 `packages.forms.takoform.com/v1alpha5`.
 

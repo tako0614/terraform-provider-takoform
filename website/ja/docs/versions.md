@@ -1,18 +1,22 @@
 # バージョンと互換性
 
-Takoform では、Host API、Form definition、Form Package envelope、Provider software
+Takoform では、Host API、各 Form definition、Core/library software、Provider software
 を現在の独立した version stream として扱います。一つの軸の version は、別の軸の
-preview や成熟度を意味しません。番号付き Specification 1.0 / 1.1 は履歴 receipt
-であり、現在の version stream ではありません。
+preview や成熟度を意味しません。履歴上の番号付き文書は、5つ目の current stream
+ではありません。
 
 ## Current design target
 
-| 軸                    | 現在の identity                            | 意味と利用可能性                                                                                              |
-| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| Host API              | **`forms.takoform.com/v1`**                | discovery、exact Form availability、operation、fence、error の stable wire contract。                       |
-| Form corpus           | **8 families / 31 Forms**                  | exact current `0.x` Form。すべて Experimental で、Form ごとに version されます。                            |
-| Form Package envelope | **`packages.forms.takoform.com/v1alpha5`** | data-only distribution envelope。publication は Host API / Provider と独立します。                          |
-| Provider              | **3.0.0、Registry 公開済み**               | official Form の typed mapping を持つ software tooling。Provider SemVer は独立した軸です。                   |
+| 軸           | 現在の identity                       | 意味と利用可能性                                                                                       |
+| ------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Host API     | **`forms.takoform.com/v1`**          | discovery、exact Form availability、operation、fence、error の stable wire contract。                |
+| Form         | 各 Form の **definitionVersion**      | 独立して version される exact contract。official catalog は8 family / 31 Experimental Forms。        |
+| Core/library | 独立した software SemVer              | SDK、verifier、compiler、CLI の release。Host API や Form identity は変更しません。                   |
+| Provider     | **3.0.0、Registry 公開済み**         | official Form の typed mapping を持つ software tooling。Provider SemVer は独立した軸です。            |
+
+現在の Form Package format identifier は
+`packages.forms.takoform.com/v1alpha5` です。これは data envelope の format であり、
+Takoform product や Host API の version stream ではありません。
 
 canonical Registry address `registry.terraform.io/tako0614/takoform` は official
 Form の mapping だけを公開します。第三者は同じ package / verification path を使い、
