@@ -61,6 +61,35 @@ func StringToken() validator.String {
 	return stringTokenValidator{}
 }
 
+// stringIdempotencyKeyValidator validates the provider-only apply override
+// against the stable Host API header grammar. Unlike StringToken, an
+// idempotency key may contain any visible ASCII byte (0x21-0x7e), including
+// punctuation, and its limit is measured in bytes.
+type stringIdempotencyKeyValidator struct{}
+
+// StringIdempotencyKey returns a validator.String enforcing the Host API
+// Idempotency-Key grammar without rewriting the configured value.
+func StringIdempotencyKey() validator.String {
+	return stringIdempotencyKeyValidator{}
+}
+
+func (stringIdempotencyKeyValidator) Description(_ context.Context) string {
+	return "value must contain 1..255 visible ASCII bytes (0x21-0x7E)"
+}
+
+func (v stringIdempotencyKeyValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (stringIdempotencyKeyValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if err := clientv3.ValidateIdempotencyKey(req.ConfigValue.ValueString()); err != nil {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid Idempotency-Key", err.Error())
+	}
+}
+
 type stringPatternValidator struct {
 	pattern     string
 	description string

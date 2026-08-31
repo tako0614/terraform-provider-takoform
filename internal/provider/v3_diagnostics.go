@@ -42,25 +42,27 @@ import (
 // no reader can mistake one for a host code, and they are constants so a
 // diagnostic's code is greppable in this repository and in a user's logs.
 const (
-	v3CodeNotConfigured             = "takoform.provider/not-configured"
-	v3CodeLaneUnavailable           = "takoform.provider/lane-unavailable"
-	v3CodeImmutableRevisionSameName = providerdiagnostics.ImmutableRevisionSameName
-	v3CodeNameUnresolved            = "takoform.provider/revision-name-unresolved"
-	v3CodeRevisionOwnerMissing      = "takoform.provider/revision-owner-missing"
-	v3CodeRevisionOwnerIgnored      = "takoform.provider/revision-owner-ignored"
-	v3CodeStateRefUnsupported       = "takoform.provider/state-form-ref-unsupported"
-	v3CodeStateRefMissing           = "takoform.provider/state-form-ref-missing"
-	v3CodeImportIDInvalid           = "takoform.provider/import-id-invalid"
-	v3CodeUIDMismatch               = "takoform.provider/uid-mismatch"
-	v3CodeRelationTargetChanged     = "takoform.provider/relation-target-changed"
-	v3CodeHostResponseInvalid       = "takoform.provider/host-response-invalid"
-	v3CodeHostSupportUnknown        = "takoform.provider/host-support-unreadable"
-	v3CodeFormUnsupported           = "takoform.provider/host-does-not-support-form"
-	v3CodeInterfaceUnsupported      = "takoform.provider/host-does-not-support-interface"
-	v3CodeBindingUnsupported        = "takoform.provider/host-does-not-support-binding"
-	v3CodeCapabilityUnsupported     = providerdiagnostics.HostDoesNotSupportValue
-	v3CodeLimitExceeded             = "takoform.provider/host-limit-exceeded"
-	v3CodeProviderBug               = "takoform.provider/internal"
+	v3CodeNotConfigured              = "takoform.provider/not-configured"
+	v3CodeLaneUnavailable            = "takoform.provider/lane-unavailable"
+	v3CodeImmutableRevisionSameName  = providerdiagnostics.ImmutableRevisionSameName
+	v3CodeNameUnresolved             = "takoform.provider/revision-name-unresolved"
+	v3CodeRevisionOwnerMissing       = "takoform.provider/revision-owner-missing"
+	v3CodeRevisionOwnerIgnored       = "takoform.provider/revision-owner-ignored"
+	v3CodeApplyIdempotencyKeyReuse   = "takoform.provider/apply-idempotency-key-reuse"
+	v3CodeApplyIdempotencyKeyUnknown = "takoform.provider/apply-idempotency-key-unknown"
+	v3CodeStateRefUnsupported        = "takoform.provider/state-form-ref-unsupported"
+	v3CodeStateRefMissing            = "takoform.provider/state-form-ref-missing"
+	v3CodeImportIDInvalid            = "takoform.provider/import-id-invalid"
+	v3CodeUIDMismatch                = "takoform.provider/uid-mismatch"
+	v3CodeRelationTargetChanged      = "takoform.provider/relation-target-changed"
+	v3CodeHostResponseInvalid        = "takoform.provider/host-response-invalid"
+	v3CodeHostSupportUnknown         = "takoform.provider/host-support-unreadable"
+	v3CodeFormUnsupported            = "takoform.provider/host-does-not-support-form"
+	v3CodeInterfaceUnsupported       = "takoform.provider/host-does-not-support-interface"
+	v3CodeBindingUnsupported         = "takoform.provider/host-does-not-support-binding"
+	v3CodeCapabilityUnsupported      = providerdiagnostics.HostDoesNotSupportValue
+	v3CodeLimitExceeded              = "takoform.provider/host-limit-exceeded"
+	v3CodeProviderBug                = "takoform.provider/internal"
 )
 
 // v3HostFault is everything the host said about one failure.

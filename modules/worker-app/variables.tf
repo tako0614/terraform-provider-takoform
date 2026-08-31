@@ -48,6 +48,12 @@ variable "handlers" {
   description = "Handlers the main module exports and this worker activates. The vocabulary is the worker.runtime contract's, and a host refuses a handler the module does not export."
 }
 
+variable "apply_idempotency_key" {
+  type        = string
+  default     = null
+  description = "Optional provider-only opaque Host API Idempotency-Key for the immutable Worker Version apply. The value is sent byte-for-byte as a request header, preserved in provider state, and never enters the portable desired spec. Changing it replaces the Worker Version."
+}
+
 variable "vars" {
   # `any`, not `map(any)`. A collection type infers ONE element type for the
   # whole collection, so `{ enabled = true, retries = 3 }` is coerced to a

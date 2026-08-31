@@ -37,10 +37,53 @@ func TestV3Provider3ProtocolSchemaMatchesPublishedBinary(t *testing.T) {
 		t.Fatalf("GetProviderSchema diagnostics = %#v", response.Diagnostics)
 	}
 	v3AssertProvider3ProtocolOptionalSurfaces(t, response)
-	current := v3Provider3TofuSchemaDocument(t, response)
-	if !bytes.Equal(current, published) {
+	historical := v3Provider3HistoricalProtocolSchemaDocument(t, response)
+	if !bytes.Equal(historical, published) {
 		t.Fatalf("current protocol schema differs from immutable Provider 3.0.0 (`%s`); current digest %s",
-			v3Provider3TofuSchemaDigest, formpackage.DigestBytes(current))
+			v3Provider3TofuSchemaDigest, formpackage.DigestBytes(historical))
+	}
+}
+
+// TestV3Provider31ProtocolSchemaOwnsApplyIdempotencyKey keeps the additive
+// provider-only WorkerVersion surface in a current lane. The historical
+// comparison above deliberately projects that one known additive member out
+// through v3Provider3HistoricalProtocolSchemaDocument; this test proves the
+// current source still exposes it exactly where intended.
+func TestV3Provider31ProtocolSchemaOwnsApplyIdempotencyKey(t *testing.T) {
+	server := providerserver.NewProtocol6(New("3.1.0")())()
+	response, err := server.GetProviderSchema(context.Background(), &tfprotov6.GetProviderSchemaRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Diagnostics) != 0 {
+		t.Fatalf("GetProviderSchema diagnostics = %#v", response.Diagnostics)
+	}
+	worker, ok := response.ResourceSchemas["takoform_worker_version"]
+	if !ok || worker == nil || worker.Block == nil {
+		t.Fatal("current Provider 3.1 schema has no WorkerVersion resource")
+	}
+	var key *tfprotov6.SchemaAttribute
+	for _, attribute := range worker.Block.Attributes {
+		if attribute != nil && attribute.Name == "apply_idempotency_key" {
+			key = attribute
+			break
+		}
+	}
+	if key == nil {
+		t.Fatal("current Provider 3.1 WorkerVersion schema has no apply_idempotency_key")
+	}
+	if !key.Optional || key.Required || key.Computed {
+		t.Fatalf("current apply_idempotency_key flags = optional=%t required=%t computed=%t", key.Optional, key.Required, key.Computed)
+	}
+	for name, schema := range response.ResourceSchemas {
+		if name == "takoform_worker_version" || schema == nil || schema.Block == nil {
+			continue
+		}
+		for _, attribute := range schema.Block.Attributes {
+			if attribute != nil && attribute.Name == "apply_idempotency_key" {
+				t.Fatalf("current Provider 3.1 resource %q unexpectedly exposes apply_idempotency_key", name)
+			}
+		}
 	}
 }
 
@@ -108,6 +151,60 @@ func v3Provider3TofuSchemaDocument(t *testing.T, response *tfprotov6.GetProvider
 	}
 	providerSchema := map[string]any{
 		"provider":         v3Provider3ProtocolSchema(t, response.Provider),
+		"resource_schemas": resources,
+	}
+	document := map[string]any{
+		"format_version": "1.0",
+		"provider_schemas": map[string]any{
+			"registry.terraform.io/tako0614/takoform": providerSchema,
+		},
+	}
+	raw, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canonical
+}
+
+// v3Provider3HistoricalProtocolSchemaDocument is an explicit projection of
+// the current protocol response to the immutable v3.0.0 public surface. The
+// Provider 3.0.0 binary predates this one provider-only WorkerVersion member;
+// no Form/Host shape is removed here, and any unexpected additive member still
+// remains visible to the byte comparison. The current lane is asserted by
+// TestV3Provider31ProtocolSchemaOwnsApplyIdempotencyKey.
+func v3Provider3HistoricalProtocolSchemaDocument(t *testing.T, response *tfprotov6.GetProviderSchemaResponse) []byte {
+	t.Helper()
+	resources := make(map[string]any, len(response.ResourceSchemas))
+	for name, schema := range response.ResourceSchemas {
+		resources[name] = v3Provider3ProtocolSchema(t, schema)
+	}
+	worker, ok := resources["takoform_worker_version"].(map[string]any)
+	if !ok {
+		t.Fatal("historical protocol projection has no WorkerVersion schema")
+	}
+	block, ok := worker["block"].(map[string]any)
+	if !ok {
+		t.Fatal("historical protocol projection has no WorkerVersion block")
+	}
+	attributes, ok := block["attributes"].(map[string]any)
+	if !ok {
+		t.Fatal("historical protocol projection has no WorkerVersion attributes")
+	}
+	if _, ok := attributes["apply_idempotency_key"]; !ok {
+		t.Fatal("current WorkerVersion schema has no apply_idempotency_key to project from v3.0.0 history")
+	}
+	delete(attributes, "apply_idempotency_key")
+	return v3Provider3ProtocolSchemaDocument(t, response.Provider, resources)
+}
+
+func v3Provider3ProtocolSchemaDocument(t *testing.T, provider *tfprotov6.Schema, resources map[string]any) []byte {
+	t.Helper()
+	providerSchema := map[string]any{
+		"provider":         v3Provider3ProtocolSchema(t, provider),
 		"resource_schemas": resources,
 	}
 	document := map[string]any{

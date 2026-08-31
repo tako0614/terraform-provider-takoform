@@ -166,6 +166,24 @@ func ValidateResourceName(value string) error {
 	return nil
 }
 
+// ValidateIdempotencyKey enforces the Host API idempotency-key grammar. The
+// wire contract measures this value in bytes, not Unicode code points: every
+// byte must be visible ASCII (0x21-0x7e), and the complete key must be between
+// one and 255 bytes. Callers must pass the exact value they intend to send;
+// this validator deliberately does not trim, normalize, or otherwise rewrite
+// it.
+func ValidateIdempotencyKey(value string) error {
+	if len(value) < 1 || len(value) > 255 {
+		return errors.New("takoform: Idempotency-Key must contain 1..255 visible ASCII bytes")
+	}
+	for index := 0; index < len(value); index++ {
+		if value[index] < 0x21 || value[index] > 0x7e {
+			return errors.New("takoform: Idempotency-Key must contain only visible ASCII bytes (0x21-0x7e)")
+		}
+	}
+	return nil
+}
+
 // spaceIDMaxLength is measured in Unicode code points, matching JSON
 // Schema's maxLength semantics for the normative host wire contract.
 const spaceIDMaxLength = 255

@@ -137,13 +137,45 @@ func v3ContentDigest(artifactBacked bool, spec map[string]any) (string, bool) {
 	return "sha256:" + hex.EncodeToString(sum[:]), true
 }
 
+// v3ContentDigestWithApplyKey extends the provider-side identity of a
+// WorkerVersion revision when an explicit apply idempotency key is present.
+// The key represents sealed runtime material that is not part of the portable
+// desired spec, so it is bound only into this derived host NAME. Keeping the
+// empty-key path on v3ContentDigest is important: existing configurations with
+// the option unset retain byte-identical derived names.
+func v3ContentDigestWithApplyKey(artifactBacked bool, spec map[string]any, applyKey string) (string, bool) {
+	digest, ok := v3ContentDigest(artifactBacked, spec)
+	if !ok || applyKey == "" {
+		return digest, ok
+	}
+	identity := struct {
+		ContentDigest    string `json:"contentDigest"`
+		ApplyIdempotency string `json:"applyIdempotencyKey"`
+	}{
+		ContentDigest:    digest,
+		ApplyIdempotency: applyKey,
+	}
+	raw, err := json.Marshal(identity)
+	if err != nil {
+		return "", false
+	}
+	sum := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(sum[:]), true
+}
+
 // v3RevisionNameFromSpec derives the host name of one revision from its
-// resolved desired spec and its declared owner.
-func (r *v3FormResource) v3RevisionNameFromSpec(spec map[string]any, owner string) (string, bool) {
+// resolved desired spec and its declared owner. The optional apply key is a
+// provider-only WorkerVersion identity input; a missing key preserves the
+// historical derivation exactly.
+func (r *v3FormResource) v3RevisionNameFromSpec(spec map[string]any, owner string, applyKeys ...string) (string, bool) {
 	if v3FormRequiresArtifactRule(r.form) && r.artifact == nil {
 		return "", false
 	}
-	digest, ok := v3ContentDigest(r.v3ArtifactBackedRevision(), spec)
+	applyKey := ""
+	if r.supportsApplyIdempotencyKey() && len(applyKeys) > 0 {
+		applyKey = applyKeys[0]
+	}
+	digest, ok := v3ContentDigestWithApplyKey(r.v3ArtifactBackedRevision(), spec, applyKey)
 	if !ok {
 		return "", false
 	}
@@ -167,12 +199,24 @@ func (r *v3FormResource) v3EnsureRevisionName(values *v3Values, spec map[string]
 		}.error())
 		return false
 	}
+	applyKey := ""
+	if r.supportsApplyIdempotencyKey() {
+		if values.ApplyIdempotencyKey.IsUnknown() {
+			diags.AddAttributeError(
+				path.Root(v3ApplyIdempotencyKeyAttribute),
+				"Unknown WorkerVersion apply idempotency key",
+				"The provider-only `apply_idempotency_key` must be known before an immutable WorkerVersion revision name can be derived.",
+			)
+			return false
+		}
+		applyKey = v3StateStringValue(values.ApplyIdempotencyKey)
+	}
 	owner, owned := v3PlanKnownString(values.RevisionOwner)
 	if !owned {
 		diags.Append(r.v3RevisionOwnerMissing())
 		return false
 	}
-	derived, ok := r.v3RevisionNameFromSpec(spec, owner)
+	derived, ok := r.v3RevisionNameFromSpec(spec, owner, applyKey)
 	if !ok {
 		diags.Append(v3Diagnostic{
 			Summary:      "Cannot derive the " + r.form.Kind + " revision name",
@@ -260,6 +304,13 @@ func (r *v3FormResource) v3PlanRevisionName(
 		resp.Diagnostics.Append(r.v3RevisionOwnerMissing())
 		return
 	}
+	var plannedApplyKey types.String
+	if r.supportsApplyIdempotencyKey() {
+		resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(v3ApplyIdempotencyKeyAttribute), &plannedApplyKey)...)
+		if resp.Diagnostics.HasError() || plannedApplyKey.IsUnknown() {
+			return
+		}
+	}
 	spec, resolved := r.v3PlannedSpec(ctx, resp)
 	if resp.Diagnostics.HasError() {
 		return
@@ -267,17 +318,33 @@ func (r *v3FormResource) v3PlanRevisionName(
 	owner, owned := v3PlanKnownString(configuredOwner)
 	var derived types.String
 	if resolved && owned {
-		name, ok := r.v3RevisionNameFromSpec(spec, owner)
+		name, ok := r.v3RevisionNameFromSpec(spec, owner, v3StateStringValue(plannedApplyKey))
 		if !ok {
 			return
 		}
 		derived = types.StringValue(name)
 	} else if !req.State.Raw.IsNull() {
-		// A replacement whose content did not resolve keeps the recorded name.
-		// Marking it unknown here would propose a replacement on every plan for
-		// a resource that may not have changed at all; leaving it alone hands
-		// the case to v3PlanImmutableRevisionSafety, which states the problem.
-		return
+		if r.supportsApplyIdempotencyKey() {
+			var priorApplyKey types.String
+			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(v3ApplyIdempotencyKeyAttribute), &priorApplyKey)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			if !priorApplyKey.Equal(plannedApplyKey) {
+				// A fresh, plan-known key necessarily derives a fresh revision
+				// identity even when another desired input is not known until apply.
+				// Do not carry the consumed prior key's name into Create.
+				derived = types.StringUnknown()
+			} else {
+				return
+			}
+		} else {
+			// A replacement whose content did not resolve keeps the recorded name.
+			// Marking it unknown here would propose a replacement on every plan for
+			// a resource that may not have changed at all; leaving it alone hands
+			// the case to v3PlanImmutableRevisionSafety, which states the problem.
+			return
+		}
 	} else {
 		derived = types.StringUnknown()
 	}
@@ -292,6 +359,251 @@ func (r *v3FormResource) v3PlanRevisionName(
 	}
 	if !resp.RequiresReplace.Contains(path.Root("name")) {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("name"))
+	}
+}
+
+// v3ApplyIdentity is the complete Host apply identity/body projection for a
+// WorkerVersion. The provider-only key is deliberately not part of this value:
+// callers compare it separately so a changed key can be recognized as the
+// supported new-runtime-input path. Every other member is either in the Host
+// resource address or in the exact apply body.
+type v3ApplyIdentity struct {
+	Ref   v3FormRefValue
+	Name  string
+	Space string
+	Spec  map[string]any
+}
+
+func (identity v3ApplyIdentity) equal(other v3ApplyIdentity) bool {
+	if identity.Ref != other.Ref || identity.Name != other.Name || identity.Space != other.Space {
+		return false
+	}
+	equal, err := v3CanonicalJSONEqual(identity.Spec, other.Spec)
+	return err == nil && equal
+}
+
+// v3ApplyIdentityFrom projects one existing or planned WorkerVersion onto the
+// inputs the provider would send to Host ApplyResource. It returns known=false
+// when any identity/body member is unknown or cannot be encoded, allowing the
+// caller to fail closed without manufacturing a replacement signal from an
+// unrelated timeout or computed output.
+func (r *v3FormResource) v3ApplyIdentityFrom(ctx context.Context, getter v3AttributeGetter) (v3ApplyIdentity, bool) {
+	values, diags := r.v3ValuesFrom(ctx, getter)
+	if diags.HasError() {
+		return v3ApplyIdentity{}, false
+	}
+	ref, complete := values.Identity.formRef()
+	if !complete {
+		return v3ApplyIdentity{}, false
+	}
+	codec, supported := r.codecTable().forStateKey(ref.exactKey())
+	if !supported {
+		return v3ApplyIdentity{}, false
+	}
+	name, known := v3PlanKnownString(values.Name)
+	if !known {
+		return v3ApplyIdentity{}, false
+	}
+	for _, field := range codec.Form.Fields {
+		value, carried := values.Fields[v3AttributeName(field)]
+		if !carried || value == nil || value.IsUnknown() {
+			return v3ApplyIdentity{}, false
+		}
+	}
+	spec, specDiags := r.v3SpecFromValues(ctx, codec, values)
+	if specDiags.HasError() {
+		return v3ApplyIdentity{}, false
+	}
+	fallback := ""
+	if r.data != nil {
+		fallback = r.data.defaultSpace
+	}
+	space, err := validatedEffectiveSpace(values.Space, fallback)
+	if err != nil {
+		return v3ApplyIdentity{}, false
+	}
+	return v3ApplyIdentity{Ref: ref, Name: name, Space: space, Spec: spec}, true
+}
+
+func (r *v3FormResource) v3ApplyIdempotencyKeyDiagnostic(
+	ctx context.Context,
+	req resource.ModifyPlanRequest,
+	code, summary, detail, repair string,
+) diag.Diagnostic {
+	var name, space types.String
+	_ = req.State.GetAttribute(ctx, path.Root("name"), &name)
+	_ = req.State.GetAttribute(ctx, path.Root("space"), &space)
+	return v3Diagnostic{
+		Summary:      summary,
+		ResourceType: r.resourceTypeName(),
+		Space:        space.ValueString(),
+		Name:         name.ValueString(),
+		Pointer:      "/apply_idempotency_key",
+		Code:         code,
+		Detail:       detail,
+		Repair:       repair,
+	}.error()
+}
+
+func (r *v3FormResource) v3ConfiguredNameIsDerived(ctx context.Context, req resource.ModifyPlanRequest) bool {
+	if req.Config.Schema == nil || req.Config.Raw.IsNull() {
+		return false
+	}
+	var configured types.String
+	return !req.Config.GetAttribute(ctx, path.Root("name"), &configured).HasError() && configured.IsNull()
+}
+
+func (r *v3FormResource) v3HostAddressFrom(
+	ctx context.Context, getter v3AttributeGetter,
+) (name string, space string, known bool) {
+	var resourceName, resourceSpace types.String
+	if getter.GetAttribute(ctx, path.Root("name"), &resourceName).HasError() ||
+		getter.GetAttribute(ctx, path.Root("space"), &resourceSpace).HasError() {
+		return "", "", false
+	}
+	name, known = v3PlanKnownString(resourceName)
+	if !known {
+		return "", "", false
+	}
+	fallback := ""
+	if r.data != nil {
+		fallback = r.data.defaultSpace
+	}
+	space, err := validatedEffectiveSpace(resourceSpace, fallback)
+	return name, space, err == nil
+}
+
+func (r *v3FormResource) v3ImmutableSameNameDiagnostic(
+	ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse,
+) diag.Diagnostic {
+	var prior types.String
+	_ = req.State.GetAttribute(ctx, path.Root("name"), &prior)
+	codec, _ := r.v3PlanCodec(ctx, resp)
+	return v3Diagnostic{
+		Summary:      "This immutable revision cannot be safely replaced under the same host name.",
+		ResourceType: r.resourceTypeName(),
+		Name:         prior.ValueString(),
+		Ref:          codec.Ref,
+		Pointer:      "/metadata/name",
+		Code:         v3CodeImmutableRevisionSameName,
+		Detail: fmt.Sprintf(
+			"%s is a %s-role Form, so a host refuses every update to it and this change is a replacement. "+
+				"Replacing it under %q completes in neither order: destroy-then-create fails the destroy with "+
+				"dependency_in_use (409) while a live relation still holds this revision, and "+
+				"create_before_destroy fails the create with invalid_argument (400) because the name is still "+
+				"occupied. Nothing is mutated either way, and no later plan repairs it.",
+			r.form.Kind, r.form.Role, prior.ValueString(),
+		),
+		Repair: "Use a new revision name or the official worker-app module.",
+	}.error()
+}
+
+// v3PlanApplyIdempotencyKeySafety refuses to reuse a non-null WorkerVersion
+// operation key for a second apply or recovery. An explicit runtime-input
+// reference is provider policy with single-consumption semantics: once that
+// key has been used, it cannot be replayed for another immutable revision or
+// recovery. Host v1 also binds the request to its resource address and exact
+// desired fingerprint; a changed fingerprint with a replayed key is invalid.
+// A changed key (including setting or unsetting it) is the supported new
+// runtime-input path, and no-op plans remain untouched.
+func (r *v3FormResource) v3PlanApplyIdempotencyKeySafety(
+	ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse,
+) {
+	if !r.supportsApplyIdempotencyKey() || req.State.Raw.IsNull() || resp.Plan.Raw.IsNull() {
+		return
+	}
+	var prior, planned types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(v3ApplyIdempotencyKeyAttribute), &prior)...)
+	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(v3ApplyIdempotencyKeyAttribute), &planned)...)
+	if resp.Diagnostics.HasError() || prior.IsUnknown() {
+		return
+	}
+	if planned.IsUnknown() {
+		detail := "The existing WorkerVersion has a consumed explicit runtime-input reference, but the planned key is unknown. The provider cannot prove whether a replacement or recovery would replay that reference, so it refuses the plan before any Host mutation."
+		if prior.IsNull() {
+			detail = "The existing legacy or imported WorkerVersion has no recorded apply idempotency key, while the planned key is unknown. The provider cannot prove that the replacement derives a new immutable Host identity or avoids an occupied address, so it refuses the plan before any Host mutation."
+		}
+		resp.Diagnostics.Append(r.v3ApplyIdempotencyKeyDiagnostic(
+			ctx, req,
+			v3CodeApplyIdempotencyKeyUnknown,
+			"This WorkerVersion plan cannot resolve its apply idempotency key.",
+			detail,
+			"Make `apply_idempotency_key` wholly known, or change it to a new value before planning the replacement.",
+		))
+		return
+	}
+	if prior.IsNull() && planned.IsNull() {
+		return
+	}
+	if planned.IsNull() || !prior.Equal(planned) {
+		priorName, priorSpace, priorKnown := r.v3HostAddressFrom(ctx, req.State)
+		plannedName, plannedSpace, plannedKnown := r.v3HostAddressFrom(ctx, resp.Plan)
+		if !priorKnown || !plannedKnown {
+			if r.v3ConfiguredNameIsDerived(ctx, req) {
+				var derivedName types.String
+				if !resp.Plan.GetAttribute(ctx, path.Root("name"), &derivedName).HasError() && derivedName.IsUnknown() {
+					return
+				}
+			}
+			resp.Diagnostics.Append(r.v3ApplyIdempotencyKeyDiagnostic(
+				ctx, req,
+				v3CodeApplyIdempotencyKeyUnknown,
+				"This WorkerVersion plan cannot prove that its replacement has a new Host address.",
+				"The apply idempotency key changes, but the configured WorkerVersion name or space is not wholly known. The provider cannot prove that replacement avoids the occupied immutable Host address, so it refuses the plan before any Host mutation.",
+				"Make `name` and `space` wholly known and choose a new Host address, or remove `name` and use the provider-derived immutable revision name.",
+			))
+			return
+		}
+		if priorName == plannedName && priorSpace == plannedSpace {
+			resp.Diagnostics.Append(r.v3ImmutableSameNameDiagnostic(ctx, req, resp))
+		}
+		return
+	}
+	var relation types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(v3RelationDriftAttribute), &relation)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if relation.IsUnknown() {
+		resp.Diagnostics.Append(r.v3ApplyIdempotencyKeyDiagnostic(
+			ctx, req,
+			v3CodeApplyIdempotencyKeyUnknown,
+			"This WorkerVersion plan cannot prove its relation state.",
+			"The existing WorkerVersion has a consumed explicit runtime-input reference, but relation recovery state is unknown. The provider cannot prove that this plan is not a recovery apply that would replay that reference, so it refuses the plan before any Host mutation.",
+			"Refresh until relation recovery state is known, or change `apply_idempotency_key` before applying.",
+		))
+		return
+	}
+	if !relation.IsNull() {
+		resp.Diagnostics.Append(r.v3ApplyIdempotencyKeyDiagnostic(
+			ctx, req,
+			v3CodeApplyIdempotencyKeyReuse,
+			"This WorkerVersion recovery cannot reuse its apply idempotency key.",
+			"The existing WorkerVersion carries a consumed explicit runtime-input reference and relation recovery would issue another apply. Provider policy treats that reference as single-consumption and will not replay it for recovery. The provider refuses this plan before any Host mutation.",
+			"Change `apply_idempotency_key` so the provider derives a new revision name, or remove it to use a new deterministic operation key.",
+		))
+		return
+	}
+	priorIdentity, priorKnown := r.v3ApplyIdentityFrom(ctx, req.State)
+	plannedIdentity, plannedKnown := r.v3ApplyIdentityFrom(ctx, resp.Plan)
+	if !priorKnown || !plannedKnown {
+		resp.Diagnostics.Append(r.v3ApplyIdempotencyKeyDiagnostic(
+			ctx, req,
+			v3CodeApplyIdempotencyKeyReuse,
+			"This WorkerVersion replacement cannot reuse its apply idempotency key.",
+			"The existing WorkerVersion has a consumed explicit runtime-input reference, but the provider cannot prove that the planned Host address, exact Form identity, or desired fingerprint is unchanged. It refuses to risk a second apply with that reference before any Host mutation.",
+			"Change `apply_idempotency_key` so the provider derives a new revision name, or remove it to use a new deterministic operation key.",
+		))
+		return
+	}
+	if !priorIdentity.equal(plannedIdentity) {
+		resp.Diagnostics.Append(r.v3ApplyIdempotencyKeyDiagnostic(
+			ctx, req,
+			v3CodeApplyIdempotencyKeyReuse,
+			"This WorkerVersion replacement cannot reuse its apply idempotency key.",
+			"The existing WorkerVersion has a consumed explicit runtime-input reference, but this plan changes the Host resource address, exact Form identity, or desired fingerprint. Provider policy treats the explicit reference as single-consumption and will not replay it for the second apply. The provider refuses this plan before any Host mutation.",
+			"Change `apply_idempotency_key` so the provider derives a new revision name, or remove it to use a new deterministic operation key.",
+		))
 	}
 }
 
@@ -398,22 +710,5 @@ func (r *v3FormResource) v3PlanImmutableRevisionSafety(
 	if resp.Diagnostics.HasError() || planned.IsUnknown() || !planned.Equal(prior) {
 		return
 	}
-	codec, _ := r.v3PlanCodec(ctx, resp)
-	resp.Diagnostics.Append(v3Diagnostic{
-		Summary:      "This immutable revision cannot be safely replaced under the same host name.",
-		ResourceType: r.resourceTypeName(),
-		Name:         prior.ValueString(),
-		Ref:          codec.Ref,
-		Pointer:      "/metadata/name",
-		Code:         v3CodeImmutableRevisionSameName,
-		Detail: fmt.Sprintf(
-			"%s is a %s-role Form, so a host refuses every update to it and this change is a replacement. "+
-				"Replacing it under %q completes in neither order: destroy-then-create fails the destroy with "+
-				"dependency_in_use (409) while a live relation still holds this revision, and "+
-				"create_before_destroy fails the create with invalid_argument (400) because the name is still "+
-				"occupied. Nothing is mutated either way, and no later plan repairs it.",
-			r.form.Kind, r.form.Role, prior.ValueString(),
-		),
-		Repair: "Use a new revision name or the official worker-app module.",
-	}.error())
+	resp.Diagnostics.Append(r.v3ImmutableSameNameDiagnostic(ctx, req, resp))
 }

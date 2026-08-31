@@ -55,11 +55,12 @@ import (
 )
 
 const (
-	workerBundleKind       = "WorkerBundle"
-	workerVersionKind      = "WorkerVersion"
-	staticAssetBundleKind  = "StaticAssetBundle"
-	sqliteMigrationSetKind = "SQLiteMigrationSet"
-	workerDeploymentKind   = "WorkerDeployment"
+	workerBundleKind               = "WorkerBundle"
+	workerVersionKind              = "WorkerVersion"
+	v3ApplyIdempotencyKeyAttribute = "apply_idempotency_key"
+	staticAssetBundleKind          = "StaticAssetBundle"
+	sqliteMigrationSetKind         = "SQLiteMigrationSet"
+	workerDeploymentKind           = "WorkerDeployment"
 
 	// workerDeploymentWeightSum is the exact basis-point total every
 	// WorkerDeployment versions list must reach.
@@ -74,7 +75,7 @@ const (
 func v3AttributeName(field model.Field) string { return field.AttributeName() }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attrs := v3CommonAttributes(r.form)
+	attrs := v3CommonAttributesForSurface(r.form, r.supportsApplyIdempotencyKey())
 	artifact, artifactInjected := r.v3ArtifactRule()
 	requiresArtifact := v3FormRequiresArtifactRule(r.form)
 	if requiresArtifact && !artifactInjected {
@@ -179,6 +180,10 @@ func v3RetainedBucketBindingsStateAttribute() schema.ListNestedAttribute {
 // The packageDigest is deliberately NOT part of state identity; it is an
 // audit-only computed attribute (spec/decisions/0011).
 func v3CommonAttributes(form model.Form) map[string]schema.Attribute {
+	return v3CommonAttributesForSurface(form, form.Kind == workerVersionKind)
+}
+
+func v3CommonAttributesForSurface(form model.Form, includeApplyIdempotencyKey bool) map[string]schema.Attribute {
 	hasUpdate := form.DeclaresUpdate()
 	attrs := map[string]schema.Attribute{
 		"name": v3NameAttribute(form),
@@ -261,6 +266,19 @@ func v3CommonAttributes(form model.Form) map[string]schema.Attribute {
 	// a knob that decides nothing.
 	if form.Role == model.RoleRevision {
 		attrs[v3RevisionOwnerAttribute] = v3RevisionOwnerSchemaAttribute(form)
+	}
+	// WorkerVersion alone accepts a provider-only operation-key override. It is
+	// deliberately absent from every other resource and never participates in
+	// the portable Form schema or wire spec.
+	if includeApplyIdempotencyKey && form.Kind == workerVersionKind {
+		attrs[v3ApplyIdempotencyKeyAttribute] = schema.StringAttribute{
+			Optional: true,
+			Description: "Optional provider-only Host API Idempotency-Key for this WorkerVersion apply. " +
+				"The exact visible-ASCII value is sent as a request header, preserved in state, " +
+				"and never included in the portable desired spec. Changing it replaces this immutable version.",
+			Validators:    []validator.String{StringIdempotencyKey()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+		}
 	}
 	// A Form that declares no update capability has no update to bound: the
 	// attribute is not declared at all, so a configuration that sets it fails

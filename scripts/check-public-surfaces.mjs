@@ -627,9 +627,14 @@ function checkCurrentProviderSample(filePath) {
     fail(`${relative(filePath)}: missing canonical provider source`);
     return;
   }
-  if (!hasProviderFloor(source, "3.0.0")) {
+  // WorkerVersion's provider-only apply_idempotency_key is a 3.1 surface;
+  // every other current Form sample remains valid on the published 3.0 line.
+  const requiredFloor = source.includes("apply_idempotency_key")
+    ? "3.1.0"
+    : "3.0.0";
+  if (!hasProviderFloor(source, requiredFloor)) {
     fail(
-      `${relative(filePath)}: current Form sample must contain version = ">= 3.0.0"`,
+      `${relative(filePath)}: current Form sample must contain version = ">= ${requiredFloor}"`,
     );
   }
 }

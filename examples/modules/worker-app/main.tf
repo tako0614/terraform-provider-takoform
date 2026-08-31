@@ -2,8 +2,8 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # This example targets the stable Host API v1 Provider 3 line.
-      version = ">= 3.0.0"
+      # This example uses apply_idempotency_key, which requires Provider 3.1.0+.
+      version = ">= 3.1.0"
     }
   }
 }
@@ -26,11 +26,12 @@ resource "takoform_edge_kv_namespace" "counter" {
 module "worker_app" {
   source = "../../../modules/worker-app"
 
-  name        = "counter"
-  main_module = "index.js"
-  content_dir = "${path.module}/dist"
-  kv_bindings = { COUNTER = takoform_edge_kv_namespace.counter.name }
-  endpoint    = true
+  name                  = "counter"
+  main_module           = "index.js"
+  content_dir           = "${path.module}/dist"
+  apply_idempotency_key = "counter-release-v1"
+  kv_bindings           = { COUNTER = takoform_edge_kv_namespace.counter.name }
+  endpoint              = true
 }
 
 output "worker_app_url" {

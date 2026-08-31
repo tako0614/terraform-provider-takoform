@@ -79,6 +79,8 @@ resource "takoform_worker_version" "this" {
   bundle         = takoform_worker_bundle.this.name
   handlers       = var.handlers
 
+  apply_idempotency_key = var.apply_idempotency_key
+
   vars_json               = length(var.vars) > 0 ? jsonencode(var.vars) : null
   required_sensitive_vars = var.required_sensitive_vars
 

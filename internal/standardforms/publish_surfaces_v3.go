@@ -321,6 +321,9 @@ description: |-
 			builder.WriteString(v3FieldDocLine(form, field))
 		}
 	}
+	if form.Kind == "WorkerVersion" {
+		builder.WriteString("- `apply_idempotency_key` (Provider 3.1+, String, optional, forces replacement) — Provider-only opaque Host API `Idempotency-Key` for this immutable version's apply. The value must contain 1..255 visible ASCII bytes (`0x21`–`0x7E`); it is sent byte-for-byte as the request header, reused only while resuming the same accepted Host mutation, and preserved in Terraform state. Relation recovery or a new immutable version requires a fresh value. It is never included in the portable desired spec or read back from the Host. Omitting it keeps the provider's deterministic operation key.\n")
+	}
 	builder.WriteString("- `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.\n")
 	if form.DeclaresUpdate() {
 		builder.WriteString("- `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).\n")
@@ -481,6 +484,10 @@ func v3ImportIdentitySection(resourceType string, form model.Form) string {
 func v3ExampleHCL(form model.Form) string {
 	var builder strings.Builder
 	resourceType := mustProviderReferenceTerraformType(form)
+	providerConstraint := ">= 3.0.0"
+	if form.Kind == "WorkerVersion" {
+		providerConstraint = ">= 3.1.0"
+	}
 	builder.WriteString(`terraform {
   required_providers {
     takoform = {
@@ -489,7 +496,9 @@ func v3ExampleHCL(form model.Form) string {
       # current versionless Form and its digest do not contain this name.
       # Provider 2.1.1 carries only retained versioned history; use a provider
       # release whose exact-Form registry includes this current identity.
-      version = ">= 3.0.0"
+      version = "`)
+	builder.WriteString(providerConstraint)
+	builder.WriteString(`"
     }
   }
 }
@@ -507,6 +516,9 @@ provider "takoform" {
 	scalars := [][2]string{{"name", fmt.Sprintf("%q", form.FixtureName())}}
 	if form.Role == model.RoleRevision {
 		scalars = [][2]string{{"revision_owner", fmt.Sprintf("%q", v3RevisionOwnerExample(form))}}
+	}
+	if form.Kind == "WorkerVersion" {
+		scalars = append(scalars, [2]string{"apply_idempotency_key", `"worker-version-example-v1"`})
 	}
 	var blocks []string
 	if form.Kind == "WorkerBundle" {
@@ -545,6 +557,9 @@ provider "takoform" {
 		if len(line[0]) > width {
 			width = len(line[0])
 		}
+	}
+	if form.Kind == "WorkerVersion" {
+		builder.WriteString("  # Provider 3.1+: `apply_idempotency_key` is an opaque apply operation identity.\n")
 	}
 	for _, line := range scalars {
 		fmt.Fprintf(&builder, "  %-*s = %s\n", width, line[0], line[1])

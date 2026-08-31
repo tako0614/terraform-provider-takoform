@@ -1,6 +1,7 @@
 package clientv3
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -146,6 +147,87 @@ func TestApplyResourceCreateHappyPath(t *testing.T) {
 	}
 	if !ResourceReady(out) {
 		t.Fatalf("Ready condition not surfaced")
+	}
+}
+
+func TestApplyResourceWithOptionsUsesExactKeyAcrossStableRetries(t *testing.T) {
+	spec := map[string]any{"image": "example"}
+	const wantKey = "runtime-input/reference-v1"
+	var putBodies [][]byte
+	var putKeys []string
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == APIRootPath+"/forms":
+			writeJSON(t, w, http.StatusOK, wireAvailability("create"))
+			return true
+		case r.Method == http.MethodPost && r.URL.Path == APIRootPath+"/resources/prepare":
+			raw, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+			if bytes.Contains(raw, []byte(wantKey)) || bytes.Contains(raw, []byte("apply_idempotency_key")) {
+				t.Errorf("prepare JSON leaked provider-only apply key: %s", raw)
+			}
+			handlePrepare(t, w, r)
+			return true
+		case r.Method == http.MethodPut:
+			raw, _ := io.ReadAll(r.Body)
+			putBodies = append(putBodies, raw)
+			putKeys = append(putKeys, r.Header.Get("Idempotency-Key"))
+			if bytes.Contains(raw, []byte(wantKey)) || bytes.Contains(raw, []byte("apply_idempotency_key")) {
+				t.Errorf("apply JSON leaked provider-only apply key: %s", raw)
+			}
+			if len(putBodies) == 1 {
+				writeStableError(t, w, http.StatusServiceUnavailable, "backend_unavailable", true)
+				return true
+			}
+			w.Header().Set("ETag", `"7"`)
+			writeJSON(t, w, http.StatusCreated, wireResource("app", "uid-1", "1", "7", spec))
+			return true
+		}
+		return false
+	})
+
+	if _, err := client.ApplyResourceWithOptions(
+		context.Background(), testResourceRequest(spec), Fence{}, ApplyResourceOptions{IdempotencyKey: wantKey},
+	); err != nil {
+		t.Fatalf("apply with explicit key: %v", err)
+	}
+	if len(putKeys) != 2 {
+		t.Fatalf("stable retry PUT count = %d, want 2", len(putKeys))
+	}
+	for attempt, key := range putKeys {
+		if key != wantKey {
+			t.Errorf("PUT attempt %d Idempotency-Key = %q, want exact %q", attempt+1, key, wantKey)
+		}
+	}
+}
+
+func TestApplyResourceUnsetKeyUsesDeterministicFallback(t *testing.T) {
+	spec := map[string]any{"image": "example"}
+	var body []byte
+	var key string
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.URL.Path == APIRootPath+"/forms":
+			writeJSON(t, w, http.StatusOK, wireAvailability("create"))
+			return true
+		case r.URL.Path == APIRootPath+"/resources/prepare":
+			handlePrepare(t, w, r)
+			return true
+		case r.Method == http.MethodPut:
+			body, _ = io.ReadAll(r.Body)
+			key = r.Header.Get("Idempotency-Key")
+			w.Header().Set("ETag", `"7"`)
+			writeJSON(t, w, http.StatusCreated, wireResource("app", "uid-1", "1", "7", spec))
+			return true
+		}
+		return false
+	})
+	if _, err := client.ApplyResource(context.Background(), testResourceRequest(spec), Fence{}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	want := incarnationKey("apply", testRef, "app", testSpace, "", "", bodyDigest(body))
+	if key == "" || key != want {
+		t.Fatalf("unset Idempotency-Key = %q, want deterministic %q", key, want)
 	}
 }
 

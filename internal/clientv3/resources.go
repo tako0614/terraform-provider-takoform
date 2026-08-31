@@ -264,6 +264,15 @@ type applyReview struct {
 	PrepareDigest string `json:"prepareDigest"`
 }
 
+// ApplyResourceOptions controls the provider-only parts of one reviewed
+// apply. An empty IdempotencyKey keeps the established deterministic
+// incarnationKey fallback. A non-empty value is sent byte-for-byte as the
+// Host API Idempotency-Key header; it is never added to the resource JSON or
+// Form desired spec.
+type ApplyResourceOptions struct {
+	IdempotencyKey string
+}
+
 // ApplyResource orchestrates the reviewed lifecycle: it requires the exact
 // FormRef available for create or update, prepares the exact spec, and PUTs
 // the applyRequest carrying the prepareDigest under the fence's
@@ -279,11 +288,31 @@ type applyReview struct {
 // its prepare binds the create markers, which are the same for every
 // incarnation. See incarnationKey.
 func (c *Client) ApplyResource(ctx context.Context, resource *Resource, fence Fence) (*Resource, error) {
+	return c.ApplyResourceWithOptions(ctx, resource, fence, ApplyResourceOptions{})
+}
+
+// ApplyResourceWithOptions is ApplyResource with an optional provider-only
+// idempotency-key override. The override applies to the one PUT request and is
+// reused by every stable transport retry because it is installed in the same
+// request headers passed to do. A 202 response is handed to the existing
+// operation polling path; no key is put into that operation or its resource
+// result envelope.
+func (c *Client) ApplyResourceWithOptions(
+	ctx context.Context,
+	resource *Resource,
+	fence Fence,
+	options ApplyResourceOptions,
+) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
 	}
 	if err := validateRequestResource(resource); err != nil {
 		return nil, err
+	}
+	if options.IdempotencyKey != "" {
+		if err := ValidateIdempotencyKey(options.IdempotencyKey); err != nil {
+			return nil, err
+		}
 	}
 	operation := "create"
 	if fence.ExpectedGeneration != "" {
@@ -313,12 +342,14 @@ func (c *Client) ApplyResource(ctx context.Context, resource *Resource, fence Fe
 	if err != nil {
 		return nil, fmt.Errorf("takoform: encoding apply request: %w", err)
 	}
-	headers := map[string]string{
-		"Idempotency-Key": incarnationKey(
+	idempotencyKey := options.IdempotencyKey
+	if idempotencyKey == "" {
+		idempotencyKey = incarnationKey(
 			"apply", ref, resource.Metadata.Name, resource.Metadata.Space,
 			fence.ExpectedUID, fence.ExpectedGeneration, bodyDigest(raw),
-		),
+		)
 	}
+	headers := map[string]string{"Idempotency-Key": idempotencyKey}
 	if operation == "create" {
 		headers["If-None-Match"] = "*"
 	} else {
