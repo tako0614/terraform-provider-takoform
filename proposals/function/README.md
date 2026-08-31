@@ -1,7 +1,16 @@
 # Regional Function Family proposals
 
-The Regional Function Family, `function.forms.takoform.com`, is one
-of the eight families of the v1 lineup
+::: warning Historical / deferred candidate family
+
+`function.forms.takoform.com` is retained source from the earlier Provider
+projection. It is not part of the current official corpus (the single Edge
+family with 16 Forms), and this family is outside Current navigation. These
+pages are English-only historical/deferred proposals.
+
+:::
+
+The Regional Function Family, `function.forms.takoform.com`, was one of the
+families in the earlier Provider 3.0 projection
 ([decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md)).
 Its members fix, completely, the application-visible semantics of the
 regional function-as-a-service model — an uploaded artifact, one declared
@@ -31,9 +40,9 @@ through sealed slots with opaque reverse-DNS protocol identifiers, never through
 credentials in portable state.
 
 These prose documents accompany four generated Experimental `0.x` candidates
-under `forms/candidates/function.forms.takoform.com`. The exact candidate set,
-Definitions, Interface digest, and packages — not proposal prose — own their
-current identities. Editing this directory reserves or changes no identity.
+under `forms/candidates/function.forms.takoform.com`. The candidate bytes are
+retained historical/deferred source, not the current publisher identity.
+Editing this directory reserves or changes no identity.
 
 ## The function aggregate
 
@@ -50,11 +59,11 @@ that invokes a function from a queue, topic, a future source-specific object
 event contract, or a schedule is declared
 in the family that owns the SOURCE, exactly as the Edge family's
 `QueueConsumer` stays worker-targeted; scheduled invocation belongs to the
-separate current `schedule.forms.takoform.com` family. There is no current
-`ObjectBucket` Form or `edge.objects` Interface. The current Function family
+separate deferred `schedule.forms.takoform.com` candidate family. There is no current
+`ObjectBucket` Form or `edge.objects` Interface. This retained Function candidate
 gives the function its own HTTP activation and nothing else.
 
-## Current members
+## Retained candidate members (historical/deferred)
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

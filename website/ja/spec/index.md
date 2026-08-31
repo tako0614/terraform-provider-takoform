@@ -1,70 +1,37 @@
 # 仕様の履歴資料
 
-> このページは、過去の Specification 1.0 / 1.1 receipt と撤回された互換性
-> evidence を参照するために保持しています。番号付き Specification は現在の
-> version stream ではありません。現行の契約は stable な Host API
-> `forms.takoform.com/v1` です。現在の境界は
-> [バージョンモデル](/ja/docs/versions.html) を参照してください。
+このページは Specification 1.0 / 1.1 receipt と撤回された互換性 evidence の
+archive です。番号付き Specification は現在の version stream ではありません。
+現行の normative contract は stable な Host API `forms.takoform.com/v1` と、
+Form/Core contract です。
 
-## Identity
-
-exact な **FormRef** は、API group・kind・definition version・schema digest の
-組み合わせです。互換性は kind 名だけから推測しません — epoch が違えば別の契約です。
-Form group は [Form Families](/spec/form-families.html) で namespace 化され、
-Host API group はどの Form group からも独立した protocol 互換性 identity です。
+## Current identity（詳細は英語のみ）
 
 | Surface | Identity |
 | --- | --- |
-| Historical Specification receipt | Takoform 1.1。first numbered release identity。publication state は append-only numbered ledger に記録される履歴であり、現在の API / Form / Provider の version stream ではありません（1.0 は公開前に撤回され再利用しない） |
-| 現在の Form corpus | 8 versionless families / 31 exact Experimental `0.x` Forms |
-| Current Host API | `forms.takoform.com/v1` (discovery は `/.well-known/takoform/v1`、stable wire contract) |
-| 現在の package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
-| Provider distribution | independent。Provider 3.0.0 は current Registry-published non-normative reference implementation、`v2.1.1` は retained history |
+| Current Form corpus | `edge.forms.takoform.com` 一つ、exact な Experimental `0.x` Form 16個（Interface 7個、Binding 6個） |
+| Source roster | [`takoform-forms` commit `3a395e4`（英語のみ）](https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e) |
+| Current Host API | `forms.takoform.com/v1`（discovery は `/.well-known/takoform/v1`、stable wire contract） |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5`（wire/envelope format、product version 軸ではない） |
+| Provider distribution | Provider 3.0.0 は Registry 公開済みだが 8 family / 31 resource projection は履歴。Edge16 official-only mapping は次 major candidate（未公開） |
+| Historical receipt | Specification 1.0 / 1.1。archive evidence であり、API v1.1 / Form 1.0.0 / Provider release を mint しない |
 
-Specification receipt は Host API v1 を変更せず、current Form を `1.0.0` に昇格
-させず、Package や Provider を publish せず、`/v1.1` / v2 lane も mint しません。
+## 現在の normative lane（英語のみ）
 
-W09 は C1（normative freeze）、C2（source evidence のみ）、C3（authoritative
-receipt のみ）、その direct child である C4（bounded deterministic public
-refresh）を squash しない linear boundary として保持します。C4 は normative
-source、evidence、ledger、release tooling、Provider/Form/Host source、unrelated
-file を変更できません。
+- [Host API v1（英語のみ）](/spec/host-api/v1.html)
+- [Form Definition（英語のみ）](/spec/form-definition/)
+- [Form Package（英語のみ）](/spec/form-package/)
+- [Interface contracts（英語のみ）](/spec/interface-contract/)
+- [Binding contracts（英語のみ）](/spec/binding-contract/)
+- [Artifact transport（英語のみ）](/spec/artifact-transport/)
+- [Core contracts（英語のみ）](/spec/core/)
 
-pre-Beta の epoch（`forms.takoform.com/v1alpha1` と `/v1alpha2`）は撤回されました
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-identity は公開台帳に retired として記録され、バイト列はリポジトリ履歴に残ります。
-provider の SemVer はどの API identity からも独立しています。
+Form は Proposal → Experimental → Stable → Legacy の順に、Specification receipt
+とは独立して進みます。current Edge16 の詳細 inventory は
+[バージョンと互換性](/ja/docs/versions.html) と [Form inventory（英語のみ）](/forms/)
+を参照してください。
 
-## 現在レーンの契約 (英語のみ)
-
-- [Form Families](/spec/form-families.html) — namespace 化された Form group と
-  Edge Platform Family
-- [Host API v1](/spec/host-api/v1.html) — uid/generation/revision
-  識別・long-running operation・fencing
-- [Interface contracts](/spec/interface-contract/) — Form のサービスが公開する
-  exact な capability 契約
-- [Binding contracts](/spec/binding-contract/) — revision が保持する typed な
-  capability 利用
-- [Artifact transport](/spec/artifact-transport/) — content-addressed な
-  artifact upload と manifest
-
-## Normative schemas
-
-stable Host/API schema identity は append-only local contract lock に記録します:
-
-- [form-ref v1](/schemas/v1/form-ref.schema.json)
-- [form-definition v1](/schemas/v1/form-definition.schema.json)
-- [host-api-wire v1](/schemas/v1/host-api-wire.schema.json)
-- [package-index v1alpha5](/schemas/v1alpha5/package-index.schema.json)
-
-撤回された epoch の schema identity は
-[`release/public-schema-identities.json`](/release/public-schema-identities.json)
-に retired として記録され、再利用されません。
-
-## ライフサイクル
-
-Form は Proposal → Experimental → Stable → Legacy の順に、Specification とは
-独立して進みます。future stable Form は explicit per-Form decision により
-`1.0.0` から始まります。
+撤回された pre-Beta epoch の schema と release は、公開台帳および git history に
+retired として保持されます。履歴を current として再利用しません。
 
 <StatusNote />

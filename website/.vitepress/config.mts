@@ -47,12 +47,24 @@ const siteStatusForTheme = Object.fromEntries(
 
 const projectNavItems = [
   { text: "Proposals", link: "/proposals/" },
-  { text: "Form inventory", link: "/forms/" },
+  {
+    text: "Provider 3.0 inventory (historical)",
+    link: "/forms/",
+  },
   { text: "Conformance evidence", link: "/conformance/" },
   { text: "Release", link: "/release/" },
 ];
 
 // Current design target comes before withdrawn history in every sidebar.
+const currentContractItems = [
+  { text: "Host API v1", link: "/spec/host-api/v1.html" },
+  { text: "Form Definition", link: "/spec/form-definition/" },
+  { text: "Form Package (wire envelope)", link: "/spec/form-package/" },
+  { text: "Interface contracts", link: "/spec/interface-contract/" },
+  { text: "Binding contracts", link: "/spec/binding-contract/" },
+  { text: "Core contracts", link: "/spec/core/" },
+];
+
 const compatibilityNavItems = [
   { text: "Versions & compatibility", link: "/docs/versions.html" },
   {
@@ -77,9 +89,27 @@ const englishNav = [
 // convention used inside the Japanese pages.
 const japaneseProjectNavItems = [
   { text: "Proposals (英語のみ)", link: "/proposals/" },
-  { text: "Form inventory (英語のみ)", link: "/forms/" },
+  {
+    text: "Provider 3.0 inventory (英語のみ・履歴)",
+    link: "/forms/",
+  },
   { text: "Conformance evidence (英語のみ)", link: "/conformance/" },
   { text: "Release (英語のみ)", link: "/release/" },
+];
+
+const japaneseCurrentContractItems = [
+  { text: "Host API v1 (英語のみ)", link: "/spec/host-api/v1.html" },
+  { text: "Form Definition (英語のみ)", link: "/spec/form-definition/" },
+  {
+    text: "Form Package (wire envelope / 英語のみ)",
+    link: "/spec/form-package/",
+  },
+  {
+    text: "Interface contracts (英語のみ)",
+    link: "/spec/interface-contract/",
+  },
+  { text: "Binding contracts (英語のみ)", link: "/spec/binding-contract/" },
+  { text: "Core contracts (英語のみ)", link: "/spec/core/" },
 ];
 
 const japaneseCompatibilityNavItems = [
@@ -91,13 +121,13 @@ const japaneseCompatibilityNavItems = [
 ];
 
 const japaneseNav = [
-  { text: "Current", link: "/ja/docs/" },
+  { text: "現在", link: "/ja/docs/" },
   { text: "履歴資料", link: "/ja/spec/" },
   {
-    text: "Compatibility",
+    text: "互換性",
     items: japaneseCompatibilityNavItems,
   },
-  { text: "Project", items: japaneseProjectNavItems },
+  { text: "プロジェクト", items: japaneseProjectNavItems },
   { text: "GitHub", link: github },
 ];
 
@@ -140,6 +170,9 @@ const edgeResourceItems = [
 
 const currentStackResourceItems = [
   ...edgeResourceItems,
+];
+
+const deferredResourceItems = [
   { text: "Function", link: "/docs/resources/function.html" },
   { text: "Function version", link: "/docs/resources/function_version.html" },
   {
@@ -169,9 +202,19 @@ const currentStackResourceItems = [
   { text: "Vector index", link: "/docs/resources/dense_vector_index.html" },
 ];
 
+const japaneseEdgeResourceItems = edgeResourceItems.map(({ text, link }) => ({
+  text: `${text} (英語のみ)`,
+  link,
+}));
+
+const japaneseDeferredResourceItems = deferredResourceItems.map(({ text, link }) => ({
+  text: `${text} (英語のみ・保留)`,
+  link,
+}));
+
 const specSidebar = [
   {
-    text: "Historical specification source",
+    text: "Historical specification receipts and source",
     items: [
       { text: "Contract map", link: "/spec/" },
       { text: "Overview", link: "/spec/overview.html" },
@@ -264,8 +307,17 @@ const englishSidebar = {
       ],
     },
     {
+      text: "Current normative contracts",
+      items: currentContractItems,
+    },
+    {
       text: "Provider typed reference (official Forms)",
       items: currentStackResourceItems,
+    },
+    {
+      text: "Deferred / historical candidate resources",
+      collapsed: true,
+      items: deferredResourceItems,
     },
     {
       text: "Historical compatibility",
@@ -282,11 +334,11 @@ const englishSidebar = {
   "/spec/": specSidebar,
   "/proposals/": [
     {
-      text: "Current 8-family / 31-Form candidate corpus",
+      text: "Current Edge16 candidate notes",
       items: [{ text: "Overview", link: "/proposals/" }, ...edgeProposalItems],
     },
     {
-      text: "Additional current families (decision 0043)",
+      text: "Deferred / historical candidate families",
       collapsed: true,
       items: [
         { text: "Function family", link: "/proposals/function/" },
@@ -300,7 +352,10 @@ const englishSidebar = {
     },
   ],
   "/forms/": [
-    { text: "Forms", items: [{ text: "Current inventory", link: "/forms/" }] },
+    {
+      text: "Provider 3.0 inventory (historical)",
+      items: [{ text: "Retained resource inventory", link: "/forms/" }],
+    },
   ],
   "/conformance/": [
     {
@@ -319,7 +374,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Stable Host API v1 と current Form",
+      text: "Stable Host API v1 と current Edge16 Forms",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -330,8 +385,17 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Provider typed reference (official Form)",
-      items: currentStackResourceItems,
+      text: "Current normative contracts (英語のみ)",
+      items: japaneseCurrentContractItems,
+    },
+    {
+      text: "Provider typed reference (official Forms / 英語のみ)",
+      items: japaneseEdgeResourceItems,
+    },
+    {
+      text: "Deferred / historical candidate resources (英語のみ・保留)",
+      collapsed: true,
+      items: japaneseDeferredResourceItems,
     },
     {
       text: "履歴互換性",

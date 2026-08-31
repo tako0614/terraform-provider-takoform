@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_function_endpoint Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Function Endpoint (function.forms.takoform.com, role attachment).
 ---
 
 # takoform_function_endpoint
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Host-assigned HTTPS reachability for the active Function Deployment. The address is output, not desired state, and remains stable for the attachment UID.
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/FunctionEndpoint`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `function.forms.takoform.com/FunctionEndpoint`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

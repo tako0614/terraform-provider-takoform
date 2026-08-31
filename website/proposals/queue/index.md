@@ -1,5 +1,14 @@
 # Pull Queue Family proposals
 
+::: warning Historical / deferred candidate family
+
+`queue.forms.takoform.com` is retained source from the earlier Provider
+projection. It is not part of the current official corpus (the single Edge
+family with 16 Forms), and this family is outside Current navigation. These
+pages are English-only historical/deferred proposals.
+
+:::
+
 The Pull Queue Family, `queue.forms.takoform.com`, is minted under
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md):
 the pull queue is popularly offered as a managed service by every major
@@ -24,10 +33,10 @@ owns identity and status
 
 This prose accompanies the generated Experimental `PullQueue` candidate under
 `forms/candidates/queue.forms.takoform.com` and its exact `queue.pull`
-Interface. The generated candidate bytes, not this proposal, own the current
-identity; these documents reserve nothing.
+Interface. The generated candidate bytes are retained historical/deferred
+source, not the current publisher identity; these documents reserve nothing.
 
-## Current members
+## Retained candidate member (historical/deferred)
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

@@ -5,7 +5,8 @@ terraform {
       # This resource type is non-normative official-provider metadata. The
       # current versionless Form and its digest do not contain this name.
       # Provider 2.1.1 carries only retained versioned history; use a provider
-      # release whose exact-Form registry includes this current identity.
+      # release whose exact-Form registry includes this current identity. This
+      # example is candidate/unpublished until Provider >=3.1.0 is released.
       version = ">= 3.1.0"
     }
   }
@@ -17,7 +18,8 @@ provider "takoform" {
 }
 
 resource "takoform_worker_version" "example" {
-  # Provider 3.1+: `apply_idempotency_key` is an opaque apply operation identity.
+  # Candidate/unpublished Provider >=3.1.0 only: released Provider 3.0.0 does
+  # not expose `apply_idempotency_key`.
   revision_owner          = "module-worker"
   apply_idempotency_key   = "worker-version-example-v1"
   worker                  = "module-worker"

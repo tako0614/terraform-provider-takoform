@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_message_schedule Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Schedule (schedule.forms.takoform.com, role identity).
 ---
 
 # takoform_message_schedule
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 UTC five-field cron schedule that delivers one declared message at each matched window to either a PullQueue or Topic. Delivery is at least once; failed attempts use the declared bounded retry policy and missed windows are never replayed.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `schedule.forms.takoform.com/Schedule`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `schedule.forms.takoform.com/Schedule`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

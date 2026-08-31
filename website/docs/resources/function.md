@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_function Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Function (function.forms.takoform.com, role identity).
 ---
 
 # takoform_function
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Logical identity of one regional JavaScript function. Code, configuration, resource bounds, and traffic are represented by the surrounding revision and deployment Forms; this identity carries no desired fields.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/Function`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `function.forms.takoform.com/Function`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

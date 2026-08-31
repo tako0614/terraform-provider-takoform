@@ -1,63 +1,54 @@
 # Documentation
 
-This page starts with the stable Host API v1 and the exact 8-family, 31-Form
-current corpus. The current version axes are the Host API, each Form, Core
-library software, and Provider software. Provider release, Form publication,
-and host availability remain independent facts.
+This is the current documentation entry point for the stable Host API v1 and
+the publisher's official Form corpus: one versionless family,
+`edge.forms.takoform.com`, with 16 exact Experimental Forms. The source roster
+is pinned to [`takoform-forms` commit
+`3a395e4`](https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e)
+and records 7 Interfaces and 6 Bindings.
 
-## Stable Host API v1 and provider composition
+## Current normative contracts
 
-The Host API at `forms.takoform.com/v1` is a stable wire contract for
-discovery, exact Form availability, lifecycle operations, fencing, and errors.
-There is no `/v1.1` Host API route. The current identity set is:
+The current contract surface is organized by the Host API and the Form/Core
+contracts, not by numbered Specification receipts:
 
-| Axis         | Current identity                  | Meaning and availability                                                                                    |
-| ------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Host API     | **`forms.takoform.com/v1`**       | Stable protocol; it is independent from every Form and Provider release.                                  |
-| Form         | each Form's **definitionVersion** | Exact independently versioned contract; the official catalog has 31 Experimental Forms in eight families. |
-| Core/library | independent software SemVer       | SDK, verifier, compiler, and CLI releases; they do not version the Host API or Forms.                      |
-| Provider     | **3.0.0, Registry-published**     | Software tooling with typed mappings for official Forms only; Provider SemVer is its own stream.          |
+- [Host API v1](/spec/host-api/v1.html) — discovery, exact Form availability,
+  operations, identity, fencing, and errors.
+- [Form Definition](/spec/form-definition/) — the data-only contract for one
+  exact Form.
+- [Form Package](/spec/form-package/) — the data envelope used to distribute
+  Form Definitions and fixtures.
+- [Interface contracts](/spec/interface-contract/) — exact capabilities a
+  Form exposes.
+- [Binding contracts](/spec/binding-contract/) — typed capability use held by
+  a revision.
+- [Core contracts](/spec/core/) — shared validation, canonicalization, and
+  conformance behavior.
 
-`packages.forms.takoform.com/v1alpha5` identifies the current data-only Form
-Package wire format. It is not an additional product release axis.
+Specification 1.0/1.1 receipts are retained archive evidence. They do not make
+an API v1.1, a new Form version, or a current release lane.
 
-The canonical `registry.terraform.io/tako0614/takoform` distribution publishes
-official Form mappings only. Independent third parties may distribute Forms
-under their own namespaces using the same package and verification path. A
-Provider must be built against each Form it exposes; it is not a generic
-carrier or a universal infrastructure provider.
+## Provider boundary and independent version streams
 
-Terraform/OpenTofu modules can combine multiple Takoform and industry-standard
-providers in one configuration:
+Takoform has four independent version streams: Host API, each Form definition,
+Core/library software, and Provider software. The Form Package API identifier
+(`packages.forms.takoform.com/v1alpha5`) names a wire/envelope format; it is not
+an additional product version axis.
 
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
-    }
-    aws = {
-      source = "hashicorp/aws"
-    }
-  }
-}
-```
+The canonical `registry.terraform.io/tako0614/takoform` Provider is an
+official-Forms-only tool. It has typed mappings only for Forms it explicitly
+supports; it is not a generic carrier or a universal infrastructure provider.
+Third-party Form packages use the same Host API path and package/verification
+contracts under their own namespaces, with their own explicit Provider
+mappings. A Terraform/OpenTofu module may combine the official Takoform
+Provider with other Takoform or industry-standard Providers.
 
-## Edge reference family (16 of 31 current Experimental Forms) {#beta-edge-platform-family}
-
-The versionless Edge family targets Host API v1, discovered at
-`/.well-known/takoform/v1`, with UID/generation/revision identity,
-long-running operations, and content-addressed artifact upload.
-
-A worker becomes reachable through a chain, not a single resource: an identity,
-an immutable bundle of module bytes, an immutable version that names the
-handlers those bytes export, a deployment that sends traffic to it, and an
-attachment that gives it an address. An endpoint whose worker has no active
-deployment never becomes Ready, so the whole chain is one configuration:
-
-This shape uses the independent Registry-published Provider 3 reference
-implementation for official Forms. It is non-normative and does not claim
-Form Package publication or host availability.
+Provider `3.0.0` is the released Registry implementation. Its immutable
+8-family/31-resource projection is historical Provider metadata, not the
+publisher's current Form corpus. The official-only Edge16 Provider direction
+is a next-major candidate and is not published; this page makes no install
+claim for that future version. Examples that require `>=3.1.0` are likewise
+candidate/unpublished until a release record says otherwise.
 
 ```hcl
 terraform {
@@ -66,140 +57,71 @@ terraform {
       source  = "registry.terraform.io/tako0614/takoform"
       version = ">= 3.0.0"
     }
+    aws = {
+      source = "hashicorp/aws"
+    }
   }
-}
-
-provider "takoform" {
-  endpoint = "https://host.example.com"
-  space    = "prod"
-}
-
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
-
-resource "takoform_worker_bundle" "api" {
-  name        = "api-bundle"
-  main_module = "worker.mjs"
-
-  modules = [
-    {
-      name         = "worker.mjs"
-      content_type = "application/javascript+module"
-      content_file = "${path.module}/dist/worker.mjs"
-    },
-  ]
-}
-
-resource "takoform_worker_version" "api" {
-  name      = "api-v1"
-  worker    = takoform_module_worker.api.name
-  bundle    = takoform_worker_bundle.api.name
-  handlers  = ["fetch"]
-  vars_json = jsonencode({ "LOG_LEVEL" = "info" })
-}
-
-resource "takoform_worker_deployment" "api" {
-  name   = "api"
-  worker = takoform_module_worker.api.name
-
-  versions = [
-    {
-      worker_version = takoform_worker_version.api.name
-      weight         = 10000
-    },
-  ]
-}
-
-resource "takoform_worker_endpoint" "api" {
-  name   = "api"
-  worker = takoform_module_worker.api.name
 }
 ```
 
-Each resource's own page carries the same source-candidate pin and boundary.
-Capability is added to a version through typed bindings; inward activation — a
-custom domain, a cron trigger, or a queue consumer — is always a separate
-attachment resource.
+## Current Edge reference family (16 Experimental Forms)
 
-## Current Provider 3 resource reference {#resource-reference}
+Host API v1 carries versionless Form Families. The current Edge family has
+exactly these 16 Forms:
 
-The official Registry-published Provider 3 maps the current official
-Experimental `0.x` Forms. These names are non-normative Provider metadata and
-do not change Form maturity. Third-party Form distributions require explicit
-Provider mappings and are not silently included here.
+- [`takoform_module_worker`](/docs/resources/module_worker.html)
+- [`takoform_worker_bundle`](/docs/resources/worker_bundle.html)
+- [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html)
+- [`takoform_worker_version`](/docs/resources/worker_version.html)
+- [`takoform_worker_deployment`](/docs/resources/worker_deployment.html)
+- [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html)
+- [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)
+- [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)
+- [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)
+- [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)
+- [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)
+- [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html)
+- [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)
+- [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)
+- [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)
+- [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
 
-### Edge family
+The worker shape is a chain of immutable identity, bundle, version,
+deployment, and attachment resources. Capability use is through typed
+Interface and Binding contracts; inward activation remains a separate
+attachment.
 
-- [module_worker](/docs/resources/module_worker.html)
-- [worker_bundle](/docs/resources/worker_bundle.html)
-- [static_asset_bundle](/docs/resources/static_asset_bundle.html)
-- [worker_version](/docs/resources/worker_version.html)
-- [worker_deployment](/docs/resources/worker_deployment.html)
-- [worker_custom_domain](/docs/resources/worker_custom_domain.html)
-- [worker_endpoint](/docs/resources/worker_endpoint.html)
-- [worker_cron_trigger](/docs/resources/worker_cron_trigger.html)
-- [edge_kv_namespace](/docs/resources/edge_kv_namespace.html)
-- [sqlite_database](/docs/resources/sqlite_database.html)
-- [sqlite_migration_set](/docs/resources/sqlite_migration_set.html)
-- [sqlite_migration_application](/docs/resources/sqlite_migration_application.html)
-- [at_least_once_queue](/docs/resources/at_least_once_queue.html)
-- [queue_consumer](/docs/resources/queue_consumer.html)
-- [durable_workflow](/docs/resources/durable_workflow.html)
-- [actor_namespace](/docs/resources/actor_namespace.html)
+## Deferred candidate resource source
 
-### Function family
+The repository retains these non-Edge candidate resource pages as historical
+source. They are **deferred**, not current Forms or current Host support, and
+they stay out of the Current navigation:
 
-- [function](/docs/resources/function.html)
-- [function_version](/docs/resources/function_version.html)
-- [function_deployment](/docs/resources/function_deployment.html)
-- [function_endpoint](/docs/resources/function_endpoint.html)
+- Function: [`takoform_function`](/docs/resources/function.html),
+  [`takoform_function_version`](/docs/resources/function_version.html),
+  [`takoform_function_deployment`](/docs/resources/function_deployment.html),
+  [`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
+- Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html),
+  [`takoform_container_revision`](/docs/resources/container_revision.html),
+  [`takoform_container_traffic`](/docs/resources/container_traffic.html),
+  [`takoform_container_endpoint`](/docs/resources/container_endpoint.html),
+  [`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
+- Table and pull queue: [`takoform_table`](/docs/resources/table.html),
+  [`takoform_pull_queue`](/docs/resources/pull_queue.html)
+- Topic: [`takoform_topic`](/docs/resources/topic.html),
+  [`takoform_topic_subscription`](/docs/resources/topic_subscription.html)
+- Schedule and vector: [`takoform_message_schedule`](/docs/resources/message_schedule.html),
+  [`takoform_dense_vector_index`](/docs/resources/dense_vector_index.html)
 
-### Container family
+Keeping these links preserves immutable historical source without presenting
+Function, Container, Table, Queue, Topic, Schedule, or Vector as current.
 
-- [serverless_container_service](/docs/resources/serverless_container_service.html)
-- [container_revision](/docs/resources/container_revision.html)
-- [container_traffic](/docs/resources/container_traffic.html)
-- [container_endpoint](/docs/resources/container_endpoint.html)
-- [container_custom_domain](/docs/resources/container_custom_domain.html)
+## Historical compatibility
 
-### Table, queue, topic, schedule, and vector families
-
-- [table](/docs/resources/table.html)
-- [pull_queue](/docs/resources/pull_queue.html)
-- [topic](/docs/resources/topic.html)
-- [topic_subscription](/docs/resources/topic_subscription.html)
-- [message_schedule](/docs/resources/message_schedule.html)
-- [dense_vector_index](/docs/resources/dense_vector_index.html)
-
-There is no generic carrier for a Form the provider was not built against: the
-typed surface gives a client a way to verify only the exact FormRefs it
-compiled in ([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html)).
-
-## Withdrawn epochs {#lanes}
-
-The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and
-`forms.takoform.com/v1alpha2`) were withdrawn
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
-The provider releases that carried them, **Provider 2.0.0** and
-**Provider 1.0.3**, remain immutable Registry history under exact pins, but
-their resources have no successors and this site no longer documents them.
-Existing state follows the
-[v2 to v3 migration boundary](/release/migrations/v2-to-v3.html).
-
-## More project surfaces
-
-- [Form Proposals](/proposals/) — design material for Forms that have not earned a public FormRef
-- [Form inventory](/forms/) — the current 31 Forms and retained compatibility identities
-- [Conformance evidence](/conformance/) — how compatibility is proven
-- [Release](/release/) — provider publication boundary, Form Packages, and migrations
-- [Glossary](/docs/glossary.html) — terms used across this documentation
-
-## Host boundary
-
-Takoform owns workload semantics, schemas, exact identities, packages, and
-conformance. Hosts own capability support, placement, routing, scaling,
-credentials, recovery, and any managed service's live catalog, billing, quota,
-and SLA.
+Withdrawn Host API epochs, Specification receipts, and Provider 1/2 releases
+remain available under exact pins for recovery and migration. Read the
+[historical release records](/release/) and the
+[v2 to v3 migration boundary](/release/migrations/v2-to-v3.html) for those
+identities; neither is a current version lane.
 
 <StatusNote />

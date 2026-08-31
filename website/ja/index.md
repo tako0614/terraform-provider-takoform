@@ -18,117 +18,79 @@ hero:
 
 Takoform の Host API `forms.takoform.com/v1` は、discovery、exact Form
 availability、lifecycle operation、fence、error を定める stable な wire
-contract です。履歴上の番号付き文書は current product model の外にあり、
-API v1.1、Form の昇格、Provider release を作るものではありません。
+contract です。Specification 1.0/1.1 の receipt は履歴資料であり、API
+v1.1、Form の昇格、Provider release を作るものではありません。
 
-current product の version 軸は Host API、各 Form definition、Core/library
-software、Provider software の4つです。Form Package API identifier は wire format
-の identity であり、5つ目の release stream ではありません。
+現在の official Form corpus は versionless な一つの family、
+`edge.forms.takoform.com` です。exact な Experimental `0.x` Form は16個、
+Interface は7個、Binding は6個です。正本は [`takoform-forms` commit
+`3a395e4`（英語のみ）](https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e)
+に固定されています。
 
-| 軸           | 現在の identity                  | 意味と利用可能性                                                                                     |
-| ------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Host API     | **`forms.takoform.com/v1`**       | discovery、exact Form availability、operation、fence、error の stable protocol。                   |
-| Form         | 各 Form の **definitionVersion** | 独立して version される exact contract。official catalog は8 family / 31 Experimental Forms。      |
-| Core/library | 独立した software SemVer         | SDK、verifier、compiler、CLI の release。Host API や Form identity は変更しません。                 |
-| Provider     | **3.0.0、Registry 公開済み**     | official Form の typed mapping を提供する software tooling。Provider SemVer は独立した軸です。     |
+Takoform の current version stream は Host API、各 Form definition、Core/library
+software、Provider software の4つです。Form Package API identifier
+(`packages.forms.takoform.com/v1alpha5`) は wire/envelope format であり、5つ目の
+product version 軸ではありません。
 
-canonical Registry address
-`registry.terraform.io/tako0614/takoform` は official Form の mapping だけを
-公開します。第三者も同じ package / verification path を使い、自分の namespace
-で Form を配布できます。Provider は対応する Form を build 時に明示するため、
-generic carrier や universal infrastructure provider ではありません。
+| 軸 | 現在の identity | 意味 |
+| --- | --- | --- |
+| Host API | **`forms.takoform.com/v1`** | stable wire contract。 |
+| Form | 各 Form の **`definitionVersion`** | 独立した exact contract。公式 corpus は Edge 16 Forms。 |
+| Core/library | 独立した software SemVer | SDK、verifier、compiler、CLI の release。 |
+| Provider | 独立した software SemVer | 明示的に対応する official Form の typed tooling。 |
 
-一つの Terraform / OpenTofu module で、複数の Takoform Provider と industry-standard
-provider を組み合わせられます。
+canonical Registry の Takoform Provider は official-Forms-only の tool です。第三者
+の Form package は同じ Host API path と package/verification contract を使い、自分の
+namespace と明示的な Provider mapping で配布します。generic carrier や universal
+infrastructure provider ではありません。一つの Terraform / OpenTofu module で official
+Takoform Provider と、他の Takoform または industry-standard Provider を組み合わせられます。
 
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = ">= 3.0.0"
-    }
-  }
-}
-```
+Provider `3.0.0` は Registry 公開済みの実装ですが、その不変の 8 family / 31 resource
+projection は Provider release の履歴です。current publisher corpus ではありません。
+Edge16 の official-only Provider mapping は次 major の candidate で未公開です。このページ
+は将来 version の install 可否を主張しません。`>=3.1.0` を要求する例も release record
+が公開を示すまでは candidate / unpublished です。
 
-## Edge reference family (current 31 Forms のうち 16)
+## Current Edge family（16 Experimental Forms）
 
-Host API v1 の上で versionless Form Families が動きます。Edge family の
-16 個の exact `0.x` Form はすべて Experimental です。worker は identity、module
-bytes、handler を宣言する version、traffic deployment、host が割り当てる address
-への attachment という不変 resource の連鎖で到達可能になります。
+詳細ページは現時点ではすべて英語です。リンク名に **（英語のみ）** と明記します。
 
-※ 各リソースの詳細ページは英語のみです。
+- [`takoform_module_worker`（英語のみ）](/docs/resources/module_worker.html)
+- [`takoform_worker_bundle`（英語のみ）](/docs/resources/worker_bundle.html)
+- [`takoform_static_asset_bundle`（英語のみ）](/docs/resources/static_asset_bundle.html)
+- [`takoform_worker_version`（英語のみ）](/docs/resources/worker_version.html)
+- [`takoform_worker_deployment`（英語のみ）](/docs/resources/worker_deployment.html)
+- [`takoform_worker_custom_domain`（英語のみ）](/docs/resources/worker_custom_domain.html)
+- [`takoform_worker_endpoint`（英語のみ）](/docs/resources/worker_endpoint.html)
+- [`takoform_worker_cron_trigger`（英語のみ）](/docs/resources/worker_cron_trigger.html)
+- [`takoform_edge_kv_namespace`（英語のみ）](/docs/resources/edge_kv_namespace.html)
+- [`takoform_sqlite_database`（英語のみ）](/docs/resources/sqlite_database.html)
+- [`takoform_sqlite_migration_set`（英語のみ）](/docs/resources/sqlite_migration_set.html)
+- [`takoform_sqlite_migration_application`（英語のみ）](/docs/resources/sqlite_migration_application.html)
+- [`takoform_at_least_once_queue`（英語のみ）](/docs/resources/at_least_once_queue.html)
+- [`takoform_queue_consumer`（英語のみ）](/docs/resources/queue_consumer.html)
+- [`takoform_durable_workflow`（英語のみ）](/docs/resources/durable_workflow.html)
+- [`takoform_actor_namespace`（英語のみ）](/docs/resources/actor_namespace.html)
 
-| Resource                                                                                     | Role       | 宣言するもの                                                            |
-| -------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
-| [`takoform_module_worker`](/docs/resources/module_worker.html)                               | identity   | JavaScript module worker アプリの論理 identity                          |
-| [`takoform_worker_bundle`](/docs/resources/worker_bundle.html)                               | revision   | アップロード済みの不変コードバンドル                                    |
-| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html)                   | revision   | アップロード済みの不変 static file inventory                            |
-| [`takoform_worker_version`](/docs/resources/worker_version.html)                             | revision   | bundle・handlers・vars・sensitive slots・typed bindings の不変 snapshot |
-| [`takoform_worker_deployment`](/docs/resources/worker_deployment.html)                       | deployment | どの version へどれだけ配信するか (basis points)                        |
-| [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html)                 | attachment | worker 自身を origin とする hostname                                    |
-| [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)                           | attachment | host が割り当てるアドレスでの HTTPS 到達性                              |
-| [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)                   | attachment | scheduled handler を起動する UTC cron                                   |
-| [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)                       | identity   | eventually consistent な edge KV namespace                              |
-| [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)                           | identity   | SQLite 意味論の serverless database                                     |
-| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)                 | revision   | 順序と checksum を固定した SQL migration set                            |
-| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | 1つの database へ未適用 suffix だけを適用                               |
-| [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)                   | identity   | acknowledgement と retry を持つ at-least-once 配信                      |
-| [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)                             | attachment | batch・retry・dead-letter policy を1つの worker へ向ける                |
-| [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | deployment が供給する class として多段の durable 実行を持つ            |
-| [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | 実行文脈1つ・専用ストレージ・alarm 1つを持つ addressable actor         |
+## Deferred candidate source（履歴・保留、英語のみ）
 
-Registry 公開済み Provider 3 は、ほかの current Forms 15 個も mapping します。
+Function、Container、Table、Pull Queue、Topic、Schedule、Vector の candidate は
+current ではありません。旧 Provider projection としての source を残していますが、
+Current navigation から外し、履歴・保留として扱います。
 
-- Function: [`takoform_function`](/docs/resources/function.html)、[`takoform_function_version`](/docs/resources/function_version.html)、[`takoform_function_deployment`](/docs/resources/function_deployment.html)、[`takoform_function_endpoint`](/docs/resources/function_endpoint.html)
-- Container: [`takoform_serverless_container_service`](/docs/resources/serverless_container_service.html)、[`takoform_container_revision`](/docs/resources/container_revision.html)、[`takoform_container_traffic`](/docs/resources/container_traffic.html)、[`takoform_container_endpoint`](/docs/resources/container_endpoint.html)、[`takoform_container_custom_domain`](/docs/resources/container_custom_domain.html)
-- Table / queue: [`takoform_table`](/docs/resources/table.html)、[`takoform_pull_queue`](/docs/resources/pull_queue.html)
-- Topic: [`takoform_topic`](/docs/resources/topic.html)、[`takoform_topic_subscription`](/docs/resources/topic_subscription.html)
-- Schedule / vector: [`takoform_message_schedule`](/docs/resources/message_schedule.html)、[`takoform_dense_vector_index`](/docs/resources/dense_vector_index.html)
+- Function: `takoform_function`, `takoform_function_version`, `takoform_function_deployment`, `takoform_function_endpoint`
+- Container: `takoform_serverless_container_service`, `takoform_container_revision`, `takoform_container_traffic`, `takoform_container_endpoint`, `takoform_container_custom_domain`
+- Table / Pull Queue: `takoform_table`, `takoform_pull_queue`
+- Topic: `takoform_topic`, `takoform_topic_subscription`
+- Schedule / Vector: `takoform_message_schedule`, `takoform_dense_vector_index`
 
-::: warning Provider distribution boundary
-この resource 名は independent Provider 3 implementation の metadata で、normative
-ではありません。Provider 3.0.0 は Registry 公開済みですが、31 Form Package は
-unpublished のままです。
-:::
+これらのページは英語のみの履歴資料であり、削除せず source history として保持します。
 
-worker の capability は exact な
-[Interface contracts](/spec/interface-contract/) と
-[Binding contracts](/spec/binding-contract/) に裏付けられた typed binding で利用します。
-外からの activation は別の attachment resource です
-([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
+## 履歴資料
 
-## 形状を保存する Form
-
-Takoform は複数クラウドの最小公倍数へ薄めた汎用リソースを定義しません。
-各 Form は実績あるサービスプリミティブのアプリケーションから見える意味論 —
-実行 ABI・整合性・配信保証・更新単位 — を完全に固定し、ベンダーの名前・
-アカウント・配置・商務だけを契約の外に置きます。意味論が異なる実装は別の
-Form であり、交換可能なのはホストであって意味ではありません
-([decision 0008](/spec/decisions/0008-forms-preserve-service-shape.html))。
-
-## 撤回された epoch と公開済み履歴
-
-現在のスタックの前に 2 つの pre-Beta epoch があり、撤回されました
-([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
-それらを載せて公開された provider release は不変の Registry 履歴として残ります。
-**Provider 2.0.0**（`forms.takoform.com/v1alpha2` compatibility client）と
-**Provider 1.0.3**（`forms.takoform.com/v1alpha1` Legacy client）は既存 state の
-維持・recovery・移行のために exact pin で今もインストールできますが、その
-resource に後継はなく、このサイトはもう文書化しません。このリポジトリから
-current release は major の `3.0.0` です。撤回された resource の利用者は
-[v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) に従ってください。
-
-## どう動くか
-
-1. **宣言する** — 必要なサービス形状のポータブルなフィールドだけを書きます。
-   bundle、handlers、vars、sensitive slots、typed bindings、retention。
-2. **ホストが実装する** — provider は versioned な経路でホストを探し、
-   validate/prepare/apply、observe、delete を UID・generation・revision の fence
-   付きで実行します。実装・配置・容量・資格情報・ルーティングはホストが決めます。
-3. **束ねる** — revision が typed binding で能力を持ち、attachment が外界を
-   routing します。ホストは対応範囲を Host Support Profile で公開します。
+撤回された Host API epoch、Specification receipt、Provider 1/2 release は exact pin
+による recovery / migration のための履歴です。現在の version lane ではありません。
+[履歴 release](/release/) と
+[v2 から v3 への移行境界](/release/migrations/v2-to-v3.html)（英語のみ）を参照してください。
 
 <StatusNote />

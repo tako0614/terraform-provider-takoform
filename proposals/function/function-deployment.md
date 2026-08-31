@@ -1,5 +1,8 @@
 # FunctionDeployment — `takoform_function_deployment`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 An operator moves traffic between Function Versions of one Function: shift a

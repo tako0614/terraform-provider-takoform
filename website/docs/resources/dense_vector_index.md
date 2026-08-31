@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_dense_vector_index Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Vector Index (vector.forms.takoform.com, role identity).
 ---
 
 # takoform_dense_vector_index
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Fixed-dimension dense vector index with a creation-time distance metric. The vector.index Interface fixes namespaced whole-record upsert, read-after-write fetch, approximate top-k query, closed metadata filtering, and deletion; this identity carries only the embedding dimension and metric.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `vector.forms.takoform.com/VectorIndex`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `vector.forms.takoform.com/VectorIndex`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

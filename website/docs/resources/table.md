@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_table Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Table (table.forms.takoform.com, role identity).
 ---
 
 # takoform_table
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Key-addressed document table with a declared partition key, optional sort key, mutable secondary indexes, and optional lazy TTL. The table.document Interface fixes document values, conditional writes, consistent single-item reads, and key-ordered partition queries; this identity carries only the table's addressing declaration.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `table.forms.takoform.com/Table`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `table.forms.takoform.com/Table`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

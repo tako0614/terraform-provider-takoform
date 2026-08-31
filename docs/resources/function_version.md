@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_function_version Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Function Version (function.forms.takoform.com, role revision).
 ---
 
 # takoform_function_version
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Immutable content-addressed executable snapshot of one Function: artifact manifest, handler, environment declarations, sealed slots, and invocation bounds.
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/FunctionVersion`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `function.forms.takoform.com/FunctionVersion`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

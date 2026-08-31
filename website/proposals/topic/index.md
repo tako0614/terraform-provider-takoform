@@ -1,5 +1,14 @@
 # Fanout Topic Family proposals
 
+::: warning Historical / deferred candidate family
+
+`topic.forms.takoform.com` is retained source from the earlier Provider
+projection. It is not part of the current official corpus (the single Edge
+family with 16 Forms), and this family is outside Current navigation. These
+pages are English-only historical/deferred proposals.
+
+:::
+
 The Fanout Topic Family, `topic.forms.takoform.com`, is minted under
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md):
 pub/sub fanout is popularly offered as a managed service by every major
@@ -24,10 +33,10 @@ owns identity and status
 
 This prose accompanies the two generated Experimental candidates under
 `forms/candidates/topic.forms.takoform.com` and the exact `topic.publish`
-Interface. The generated candidate bytes, not this proposal, own their current
-identities; these documents reserve nothing.
+Interface. The generated candidate bytes are retained historical/deferred
+source, not the current publisher identities; these documents reserve nothing.
 
-## Current members
+## Retained candidate members (historical/deferred)
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

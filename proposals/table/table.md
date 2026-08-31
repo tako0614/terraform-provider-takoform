@@ -1,5 +1,8 @@
 # Table — `takoform_table`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 An application keeps key-addressed records — profiles, orders, sessions,

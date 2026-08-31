@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_container_traffic Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Container Traffic (container.forms.takoform.com, role deployment).
 ---
 
 # takoform_container_traffic
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 The one active basis-point traffic selection for a Container Service. One to eight immutable revisions carry positive weights totaling exactly 10000.
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerTraffic`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `container.forms.takoform.com/ContainerTraffic`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

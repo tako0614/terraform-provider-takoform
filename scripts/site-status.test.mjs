@@ -150,11 +150,31 @@ describe("the committed status document", () => {
     );
     expect(config).toContain("Stable Host API v1 and current Forms");
     expect(config).toContain("Provider typed reference (official Forms)");
+    expect(config).toContain("Current normative contracts");
+    expect(config).toContain("Current Edge16 candidate notes");
+    expect(config).toContain("Deferred / historical candidate resources");
+    expect(config).toContain("Deferred / historical candidate families");
+    expect(config).toContain("Form Package (wire envelope)");
+    expect(config).toContain("Core contracts");
     expect(config).toContain("Historical source");
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
     expect(config).not.toContain("Specification 1.1 / separate Host API v1 candidate");
     expect(config).not.toContain("One provider. Dependent on none.");
     expect(config).not.toContain("Provider 3 candidate reference");
+  });
+
+  test("keeps status components on one stable-wire wording and localized Japanese labels", () => {
+    for (const relativePath of [
+      "website/.vitepress/theme/components/StatusNote.vue",
+      "website/.vitepress/theme/components/SiteFooter.vue",
+    ]) {
+      const source = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
+      expect(source).not.toContain("stable stable");
+      expect(source).not.toContain("currentFamilyCount");
+      expect(source).not.toContain("currentFormCount");
+      expect(source).toContain("<strong>現在の契約</strong>");
+      expect(source).toContain("<strong>配布境界</strong>");
+    }
   });
 
   test("keeps every live status owner on the independent current identities", () => {

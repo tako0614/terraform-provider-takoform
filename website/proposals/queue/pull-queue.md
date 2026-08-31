@@ -1,5 +1,8 @@
 # PullQueue — `takoform_pull_queue`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 A team decouples producers from consumers with a queue the consumers DRAIN:

@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_container_custom_domain Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Container Custom Domain (container.forms.takoform.com, role attachment).
 ---
 
 # takoform_container_custom_domain
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 HTTPS attachment that serves one canonical customer-owned hostname from the active Container Traffic. ACME certificate issuance and TLS termination are host duties.
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerCustomDomain`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `container.forms.takoform.com/ContainerCustomDomain`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

@@ -1,7 +1,16 @@
 # Serverless Container Family proposals
 
-The Serverless Container Family, `container.forms.takoform.com`, is
-one of the eight families of the v1 lineup
+::: warning Historical / deferred candidate family
+
+`container.forms.takoform.com` is retained source from the earlier Provider
+projection. It is not part of the current official corpus (the single Edge
+family with 16 Forms), and this family is outside Current navigation. These
+pages are English-only historical/deferred proposals.
+
+:::
+
+The Serverless Container Family, `container.forms.takoform.com`, was one of the
+families in the earlier Provider 3.0 projection
 ([decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md)).
 Its members fix, completely, the application-visible semantics of the
 request-driven serverless container model — immutable revisions minted from
@@ -34,9 +43,9 @@ credentials in portable state — which is also how the family serves stateful
 applications without growing the database Forms decision 0043 swore off.
 
 These prose documents accompany five generated Experimental `0.x` candidates
-under `forms/candidates/container.forms.takoform.com`. The exact candidate set,
-Definitions, Interface digest, and packages — not proposal prose — own their
-current identities. Editing this directory reserves or changes no identity.
+under `forms/candidates/container.forms.takoform.com`. The candidate bytes are
+retained historical/deferred source, not the current publisher identity.
+Editing this directory reserves or changes no identity.
 
 ## The service aggregate
 
@@ -48,7 +57,7 @@ its traffic resource actually serves — the same aggregate statement the Edge
 family makes in
 [decision 0016](../../spec/decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
 
-## Current members
+## Retained candidate members (historical/deferred)
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

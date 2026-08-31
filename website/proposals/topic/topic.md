@@ -1,5 +1,8 @@
 # Topic — `takoform_topic`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 A producer publishes one event — an order placed, a file arrived — and

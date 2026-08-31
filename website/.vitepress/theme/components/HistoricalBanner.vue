@@ -6,6 +6,17 @@ const { lang, page } = useData();
 
 const historicalKind = computed(() => {
   const relativePath = page.value.relativePath.replaceAll("\\", "/");
+  // The `/spec/` path contains both current contract leaves and retained
+  // numbered/withdrawn source. Current Host API, Form, Core, Interface,
+  // Binding, artifact, trust, and conformance contracts are linked directly
+  // from Current navigation and should not be presented as archive pages.
+  const currentContract =
+    /^spec\/(?:host-api\/v1\.md|form-definition\/|form-package\/|core\/|interface-contract\/|binding-contract\/|artifact-transport\/|trust\/|conformance\.md$|form-families\.md$|portability-boundary\.md$|project-lifecycle\.md$|versioning\.md$)/u.test(
+      relativePath,
+    );
+  if (currentContract) {
+    return null;
+  }
   if (
     relativePath.startsWith("spec/") ||
     relativePath.startsWith("ja/spec/") ||

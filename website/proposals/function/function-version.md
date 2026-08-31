@@ -1,5 +1,8 @@
 # FunctionVersion — `takoform_function_version`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 A team ships one executable snapshot of a function: which artifact runs,
@@ -87,7 +90,7 @@ None. The runtime contract belongs to the [Function](function.md) identity.
 
 ## Accepted Bindings
 
-None in the MVP, and the absence is honest rather than an oversight. Current
+None in the retained candidate MVP, and the absence is intentional. Current
 Edge Interfaces such as `edge.kv`, `edge.sql`, and `edge.queue` state the
 JavaScript surface their `module-worker.*` bindings project into
 `worker.runtime`'s environment. The retained v1beta1 `edge.objects` Interface

@@ -14,8 +14,6 @@ type SiteStatus = {
   hostApiCurrent: string;
   hostApiMaturity: string;
   formPackageApiCurrent: string;
-  currentFormCount: number;
-  currentFamilyCount: number;
   formMaturity: string;
   formPackagePublicationStatus: string;
   route: string;
@@ -38,40 +36,40 @@ const hostApiMaturity = computed(() =>
   <div class="status-note">
     <template v-if="lang === 'ja'">
       <p>
-        <strong>Current contract</strong>:
-        Host API <code>{{ hostApiVersion }}</code> は {{ hostApiMaturity }} の stable wire contract です。
-        current corpus の {{ status.currentFamilyCount }} 個の versionless family /
-        {{ status.currentFormCount }} 個の exact <code>0.x</code> Form は
-        {{ maturityLabel(status.formMaturity) }} で、Form ごとに独立して version されます。Form Package envelope は
-        <code>{{ status.formPackageApiCurrent }}</code> で、artifact は
-        <code>{{ status.formPackagePublicationStatus }}</code> です。
-        番号付き Specification receipt は履歴資料であり、現在の version stream ではありません。
+        <strong>現在の契約</strong>:
+        Host API <code>{{ hostApiVersion }}</code> は安定した wire contract です。
+        現在の publisher Form corpus は versionless な Edge family 一つ（exact な Experimental Form 16個）で、
+        Form roster は <a href="https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e">publisher roster（英語のみ）</a> を参照してください。Form は
+        {{ maturityLabel(status.formMaturity) }} で、Form ごとに独立して version されます。
+        Form Package envelope は <code>{{ status.formPackageApiCurrent }}</code> で、artifact は
+        <code>{{ status.formPackagePublicationStatus }}</code> です。番号付き Specification
+        receipt は履歴資料であり、現在の version stream ではありません。
       </p>
       <p>
-        <strong>Distribution boundary</strong>: `tako0614/takoform` Provider
-        <code>{{ status.providerPublished }}</code> は official Form の typed mapping だけを提供する software tooling です。
-        Form は第三者も同じ package / verification path で配布でき、module では複数の Takoform
-        Provider と industry-standard provider を組み合わせられます。
+        <strong>配布境界</strong>: `tako0614/takoform` Provider
+        <code>{{ status.providerPublished }}</code> は明示的に対応する official Form だけを扱う typed tooling です。
+        公開済み Provider の旧 projection は履歴であり、Edge16 の official-only mapping は次 major candidate（未公開）です。
+        第三者も同じ package / verification path で Form を配布でき、module では複数の Takoform Provider と
+        業界標準 provider を組み合わせられます。
       </p>
     </template>
     <template v-else>
       <p>
         <strong>Current contract</strong>: Host API
-        <code>{{ hostApiVersion }}</code> is a {{ hostApiMaturity.toLowerCase() }} stable wire contract.
-        The current corpus's {{ status.currentFamilyCount }} versionless
-        families and {{ status.currentFormCount }} exact <code>0.x</code> Forms
-        remain {{ maturityLabel(status.formMaturity) }} and are independently versioned. The Form Package envelope is
-        <code>{{ status.formPackageApiCurrent }}</code
-        >, and its artifacts are
-        <code>{{ status.formPackagePublicationStatus }}</code
-        >.
+        <code>{{ hostApiVersion }}</code> is the {{ hostApiMaturity.toLowerCase() }} wire contract.
+        The publisher's current corpus is one versionless Edge family with 16 exact Experimental Forms; see the
+        <a href="https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e">publisher roster</a> for its exact Forms. Those Forms remain
+        {{ maturityLabel(status.formMaturity) }} and are independently versioned. The Form Package envelope is
+        <code>{{ status.formPackageApiCurrent }}</code>, and its artifacts are
+        <code>{{ status.formPackagePublicationStatus }}</code>.
         Numbered Specification receipts are historical records, not a current version stream.
       </p>
       <p>
         <strong>Distribution boundary</strong>: the `tako0614/takoform` Provider
-        <code>{{ status.providerPublished }}</code> is software tooling with typed mappings for official Forms only,
-        not a universal infrastructure provider. Third parties may distribute Forms through the same package and
-        verification path, and a module may combine multiple Takoform and industry-standard providers.
+        <code>{{ status.providerPublished }}</code> is official-Forms-only software tooling, not a universal infrastructure provider.
+        Its released aggregate is historical Provider metadata; the official-only Edge16 mapping is a next-major candidate and
+        remains unpublished. Third parties may distribute Forms through the same package and verification path, and a module
+        may combine multiple Takoform and industry-standard providers.
       </p>
     </template>
   </div>

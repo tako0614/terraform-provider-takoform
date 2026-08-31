@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_serverless_container_service Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Container Service (container.forms.takoform.com, role identity).
 ---
 
 # takoform_serverless_container_service
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Logical identity of one request-driven serverless container service. Image, process configuration, resources, scaling, and traffic are represented by immutable revisions and the active traffic Form around this identity.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerService`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `container.forms.takoform.com/ContainerService`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

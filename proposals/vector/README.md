@@ -1,5 +1,14 @@
 # Vector Family proposals
 
+::: warning Historical / deferred candidate family
+
+`vector.forms.takoform.com` is retained source from the earlier Provider
+projection. It is not part of the current official corpus (the single Edge
+family with 16 Forms), and this family is outside Current navigation. These
+pages are English-only historical/deferred proposals.
+
+:::
+
 The Vector Family, `vector.forms.takoform.com`, fixes the
 fixed-dimension dense vector index shape — namespaced records queried by
 top-k similarity — selected by
@@ -36,10 +45,11 @@ owns identity and status
 
 This prose accompanies the generated Experimental `VectorIndex` candidate
 under `forms/candidates/vector.forms.takoform.com` and its exact
-`vector.index` Interface. The generated candidate bytes, not this proposal,
-own the current identity. Family membership grants no maturity.
+`vector.index` Interface. The generated candidate bytes are retained
+historical/deferred source, not the current publisher identity. Family
+membership grants no maturity.
 
-## Current members
+## Retained candidate member (historical/deferred)
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

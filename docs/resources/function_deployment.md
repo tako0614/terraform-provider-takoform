@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_function_deployment Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Function Deployment (function.forms.takoform.com, role deployment).
 ---
 
 # takoform_function_deployment
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 The one active traffic selection for a Function. One or two immutable versions carry positive basis-point weights totaling exactly 10000.
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `function.forms.takoform.com/FunctionDeployment`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `function.forms.takoform.com/FunctionDeployment`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

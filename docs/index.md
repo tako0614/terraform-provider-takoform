@@ -7,34 +7,42 @@ description: "Stable Takoform Host API v1, official Form mappings, and retained 
 
 The Host API at `forms.takoform.com/v1` is the stable Takoform wire contract
 for discovery, exact Form availability, lifecycle operations, fencing, and
-errors. Historical numbered documents sit outside the current product model;
-they do not create an API v1.1, promote a Form, or release a Provider. The
-current corpus has eight versionless
-families and 31 Experimental `0.x` Forms, using package envelope
-`packages.forms.takoform.com/v1alpha5`.
+errors. Specification 1.0/1.1 receipts are archive evidence: they do not
+create an API v1.1, promote a Form, or release a Provider.
+
+The current official publisher corpus is one versionless family,
+`edge.forms.takoform.com`, with 16 exact Experimental `0.x` Forms, 7
+Interfaces, and 6 Bindings. Its source roster is pinned to [`takoform-forms`
+commit `3a395e4`](https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e).
+The Form Package identifier `packages.forms.takoform.com/v1alpha5` is a
+wire/envelope format, not an additional product version axis.
+
+The canonical `registry.terraform.io/tako0614/takoform` Provider is an
+official-Forms-only typed tool. Independent third parties may distribute Forms
+under their own namespaces using the same Host API path and package/verification
+contracts; each Provider build must explicitly map the Forms it supports. A
+module may combine the official Takoform Provider with other Takoform or
+industry-standard Providers. It is not a universal infrastructure provider.
+
+Provider `3.0.0` is the released Registry implementation. Its immutable
+8-family/31-resource projection is Provider release history, not the current
+publisher corpus. The official-only Edge16 Provider mapping is a next-major
+candidate and is not published; examples requiring `>=3.1.0` are likewise
+candidate/unpublished until a release record says otherwise.
 
 The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and the
 `forms.takoform.com/v1alpha2` provider-v2 epoch) were withdrawn
 ([decision 0042](../spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
-Published provider releases that carried them remain immutable Registry
+Published Provider releases that carried them remain immutable Registry
 history; the withdrawn resources have no successors in this documentation, and
 [the migration boundary](../release/migrations/v2-to-v3.md) says what existing
 state does.
 
-Provider `v3.0.0` is the current Registry-published software tooling with typed
-mappings for official Forms only. The canonical
-`registry.terraform.io/tako0614/takoform` distribution does not publish a
-universal infrastructure provider. Independent third parties may distribute
-Forms under their own namespaces through the same package and verification
-path; each Provider build must explicitly map the Forms it supports. Provider
-`v2.1.1` remains immutable Registry history for the exact `v1beta1` identities
-it shipped. Using any Provider requires a compatible host; publication does
-not assert a hosted service's live availability.
+## Install the released Provider 3.0.0
 
-## Install the provider
-
-Terraform and OpenTofu can install this exact pin from the canonical Registry
-address:
+Terraform and OpenTofu can install this exact historical Provider pin from the
+canonical Registry address. It exposes the immutable Provider 3 projection;
+that release does not redefine the current publisher roster.
 
 ```hcl
 terraform {
@@ -55,34 +63,10 @@ provider "takoform" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-Terraform/OpenTofu modules can declare multiple Takoform and industry-standard
-providers together. This Provider is typed software tooling for the Forms it
-supports, not a universal infrastructure provider.
+## Current Edge Form reference
 
-## Verify the published current provider
-
-Availability is verified, not declared by this immutable documentation.
-
-```console
-curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
-git clone https://github.com/tako0614/terraform-provider-takoform.git
-cd terraform-provider-takoform
-git checkout --detach v3.0.0
-```
-
-A source tag, documentation page, or local build alone is not Registry publication or installation evidence.
-
-## Current Provider 3 Form reference
-
-The official Registry-published Provider 3 maps the current official
-Experimental Forms. These resource type names are non-normative Provider
-metadata; Form maturity and Form Package publication remain separate.
-
-### Edge family
-
-The versionless `edge.forms.takoform.com` family contains 16 exact
-Experimental `0.x` Forms and intentionally has no current `ObjectBucket`. It
-is one of the eight current families:
+The current publisher family contains these 16 exact Forms. The corresponding
+Provider names are non-normative mapping metadata:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)
@@ -101,14 +85,20 @@ is one of the eight current families:
 - [DurableWorkflow](resources/durable_workflow.md)
 - [ActorNamespace](resources/actor_namespace.md)
 
-### Function family
+## Deferred candidate resource source
+
+The following non-Edge pages are retained as historical/deferred Provider
+source. They are not current Forms or current Host support and are kept out of
+Current navigation:
+
+### Function
 
 - [Function](resources/function.md)
 - [FunctionVersion](resources/function_version.md)
 - [FunctionDeployment](resources/function_deployment.md)
 - [FunctionEndpoint](resources/function_endpoint.md)
 
-### Container family
+### Container
 
 - [ContainerService](resources/serverless_container_service.md)
 - [ContainerRevision](resources/container_revision.md)
@@ -116,7 +106,7 @@ is one of the eight current families:
 - [ContainerEndpoint](resources/container_endpoint.md)
 - [ContainerCustomDomain](resources/container_custom_domain.md)
 
-### Table, queue, topic, schedule, and vector families
+### Table, queue, topic, schedule, and vector
 
 - [Table](resources/table.md)
 - [PullQueue](resources/pull_queue.md)
@@ -125,13 +115,23 @@ is one of the eight current families:
 - [Schedule](resources/message_schedule.md)
 - [VectorIndex](resources/dense_vector_index.md)
 
-The provider exposes no generic carrier
-for a Form it was not built against: a resource whose Form identity comes from
-the configuration cannot verify that identity, because the lane's Form
-Definition response carries neither the canonical definition bytes the
-`schemaDigest` pins nor the Form's role
-([decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md)).
-Supporting a third-party Form is a provider build, not a configuration value.
+The old Provider projection of these pages is an immutable 8-family/31-resource
+release record. Keeping links here preserves source history without presenting
+those families as current.
+
+## Verify the published Provider artifact
+
+Availability is verified, not declared by this immutable documentation.
+
+```console
+curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
+git clone https://github.com/tako0614/terraform-provider-takoform.git
+cd terraform-provider-takoform
+git checkout --detach v3.0.0
+```
+
+A source tag, documentation page, or local build alone is not Registry
+publication or installation evidence.
 
 ## Authority boundary
 

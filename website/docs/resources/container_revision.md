@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_container_revision Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Container Revision (container.forms.takoform.com, role revision).
 ---
 
 # takoform_container_revision
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Immutable serving snapshot of one Container Service: a digest-pinned OCI image, process arguments, environment declarations, sealed slots, and resource and scaling bounds.
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `container.forms.takoform.com/ContainerRevision`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `container.forms.takoform.com/ContainerRevision`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

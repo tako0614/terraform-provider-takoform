@@ -19,10 +19,11 @@ Desired schemas carry no `name` or envelope plumbing: the Host API v1 resource
 envelope owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
-The catalog source of truth is `internal/edgeformcatalog`; the generated
-candidates live in `forms/candidates/edge.forms.takoform.com`, the exact Interface and
-Binding candidates in `interfaces/candidates/v1alpha1` and
-`bindings/candidates/v1alpha2`.
+The current publisher source of truth is [`takoform-forms` commit `3a395e4`](https://github.com/tako0614/takoform-forms/tree/3a395e4d7f9f652a942da52905857fccc41b467e).
+This Provider repository retains generated candidate projections under
+`forms/candidates/edge.forms.takoform.com`, plus exact Interface and Binding
+projections, for reproducibility and history; those projections do not widen
+the publisher's current corpus.
 
 ## Current roster: 16 Forms
 
@@ -52,8 +53,8 @@ is represented, when appropriate, as a sealed `standards.takoform.com/v1` slot
 with an opaque reverse-DNS protocol identifier. That slot creates no bucket
 Resource and Takoform maintains no protocol enum.
 
-Container, Function, Pull Queue, Schedule, Table, Topic, and Vector semantics
-now live in their own versionless current family groups, per
-[spec/form-families.md](../../spec/form-families.md). A prose proposal list is
-not an identity registry; the generated current-family index closes the exact
-candidate corpus.
+Container, Function, Pull Queue, Schedule, Table, Topic, and Vector documents
+are retained as historical/deferred candidate source. They are not members of
+the current official corpus and are kept out of Current navigation. A prose
+proposal list is not an identity registry; exact current identity comes from
+the pinned publisher source.

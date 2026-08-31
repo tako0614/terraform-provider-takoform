@@ -1,5 +1,8 @@
 # VectorIndex — `takoform_dense_vector_index`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 The shipped resource type is `takoform_dense_vector_index`: the withdrawn
 v1alpha2 lane published `takoform_vector_index`, and a Terraform resource
 type is never reoccupied with a different contract

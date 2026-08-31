@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_topic_subscription Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Topic Subscription (topic.forms.takoform.com, role attachment).
 ---
 
 # takoform_topic_subscription
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Attachment that delivers each matching Topic publish into one PullQueue. Delivery is independent and at least once per subscription; retry and dead-letter behavior belong to this attachment.
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `topic.forms.takoform.com/TopicSubscription`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `topic.forms.takoform.com/TopicSubscription`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

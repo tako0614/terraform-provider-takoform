@@ -1,5 +1,8 @@
 # Function — `takoform_function`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 An application team runs event-invoked code as one regional function on a
@@ -71,7 +74,7 @@ A different language runtime is a different Form line. Cross-family event
 sources — queue-, topic-, or schedule-driven invocation — are attachments
 declared in the source's own family, never members here; the Edge family's
 `QueueConsumer` stays worker-targeted, and scheduled invocation belongs to the
-separate current Schedule family. A source-specific object event would require
+separate deferred Schedule candidate family. A source-specific object event would require
 its own future contract; there is no current `ObjectBucket` Form.
 Function-to-function
 invocation would be its own `function.invoke` Interface and binding

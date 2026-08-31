@@ -206,39 +206,31 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: the Host API `forms.takoform.com/v1`
-is the stable wire contract; Provider `v3.0.0` is the published,
-Registry readback-verified typed tooling for the 31 exact current official
-Forms; Provider `v2.1.1` remains immutable retained Host API v1beta1 history;
-Provider `v2.0.0` is the published compatibility predecessor; Provider
-`v1.0.3` is the published Legacy client; and numbered Specification 1.0/1.1
-documents are immutable historical receipts, not a current version stream.
-The canonical `tako0614/takoform` Provider maps official Forms only. Third
-parties may distribute Forms under their own namespaces through the same
+repository. The current public truth is: the Host API
+`forms.takoform.com/v1` is the stable wire contract; the publisher's current
+corpus is one versionless `edge.forms.takoform.com` family with 16 exact
+Experimental Forms, 7 Interfaces, and 6 Bindings (source pinned in the current
+inventory); Provider `v3.0.0` is the released Registry tooling whose immutable
+8-family/31-resource projection is historical Provider metadata; and Provider
+`v2.1.1`, `v2.0.0`, and `v1.0.3` remain immutable retained history. Numbered
+Specification 1.0/1.1 documents are historical receipts, not a current version
+stream. The canonical `tako0614/takoform` Provider maps official Forms only.
+Third parties may distribute Forms under their own namespaces through the same
 package and verification path, and modules may combine multiple Takoform and
 industry-standard providers. Specification 1.0 was withdrawn before
-publication and may not be reused; and the 34
-published Form Package identities are immutable Legacy evidence. There is no
-current central Takoform approval or admission. The current generated corpus
-contains eight versionless families and 31 exact Experimental `0.x` FormRefs;
-Edge contains 16 and has no current `ObjectBucket`, `edge.objects`, or
-`module-worker.object-bucket`. This repository does not assert any host's live
-catalog. The last published
-historical admission identity is `forms/admissions/v1.0.7`; its exact Git and
-set identities remain pinned as Legacy evidence.
-The frozen Legacy FormRef group is `forms.takoform.com/v1alpha1`. Retained
-provider-v2 Form Package indexes use `packages.forms.takoform.com/v1alpha3`;
-retained Provider 2.1.1/v1beta1 candidate packages use
-`packages.forms.takoform.com/v1alpha4`; current versionless-group candidates use
-`packages.forms.takoform.com/v1alpha5` and remain unpublished as Form Package
-artifacts. Published v1alpha1/v1alpha2 package indexes remain immutable Legacy
-evidence.
+publication and may not be reused. There is no current central Takoform
+approval or admission, and this repository does not assert any host's live
+catalog. The 16 current Forms intentionally have no current ObjectBucket,
+`edge.objects`, or `module-worker.object-bucket`. A future official-only
+Edge16 Provider mapping and examples requiring `>=3.1.0` are candidate,
+unpublished direction until a release record says otherwise. Retained package
+envelopes and historical admission identities remain immutable evidence.
 
 `release/version.json` names Provider `v3.0.0` and keeps
 `publicationStatus: candidate-only` as source descriptor metadata after the
 release owner publishes it; the descriptor must not be presented as live
 publication state. The append-only release identity ledger independently
-establishes `v3.0.0` as the current Registry-published provider and retains
+establishes `v3.0.0` as the released Registry Provider artifact and retains
 `v2.1.1` history. Provider 3 remains non-normative and cannot close or block
 Specification 1.1. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),

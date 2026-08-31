@@ -1,18 +1,22 @@
 ---
 page_title: "takoform_pull_queue Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "Historical / deferred candidate Forms"
 description: |-
   Pull Queue (queue.forms.takoform.com, role identity).
 ---
 
 # takoform_pull_queue
 
+> Historical/deferred candidate. This non-Edge Form is retained for source
+> inspection and exact historical state only; it is not in the current
+> official Edge16 corpus or Current navigation.
+
 Unordered at-least-once pull queue with visibility timeout, receive counting, optional dead-lettering, and bounded long polling. The queue.pull Interface fixes the send, receive, delete, and changeVisibility behavior; these fields are the queue's retention and delivery-policy declaration.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents a non-normative official Terraform Provider mapping for the
-current Experimental Form `queue.forms.takoform.com/PullQueue`.
+This page documents a non-normative historical Provider mapping for the
+deferred Experimental candidate `queue.forms.takoform.com/PullQueue`.
 The mapping name is provider metadata: it is absent from the Form Definition and cannot change
 the Form's canonical bytes or digest. Provider publication and support are versioned separately.
 The configured host selects and

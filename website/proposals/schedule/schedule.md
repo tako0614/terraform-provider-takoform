@@ -1,5 +1,8 @@
 # Schedule — `takoform_message_schedule`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 The Provider 3 resource type is `takoform_message_schedule`. The withdrawn
 v1alpha2 lane used `takoform_schedule`; that name is never reoccupied by this
 different message-delivery contract (decision 0030).

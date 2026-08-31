@@ -1,5 +1,8 @@
 # ContainerService — `takoform_serverless_container_service`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 The Provider 3 resource type is `takoform_serverless_container_service`.
 The withdrawn v1alpha2 lane used `takoform_container_service`; that name is
 never reoccupied by this different lifecycle contract (decision 0030).

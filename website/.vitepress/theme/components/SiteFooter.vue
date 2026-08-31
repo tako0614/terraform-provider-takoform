@@ -13,8 +13,6 @@ type SiteStatus = {
   hostApiCurrent: string;
   hostApiMaturity: string;
   formPackageApiCurrent: string;
-  currentFormCount: number;
-  currentFamilyCount: number;
   formMaturity: string;
   formPackagePublicationStatus: string;
   route: string;
@@ -36,36 +34,35 @@ const hostApiMaturity = computed(() =>
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>Current contract</strong>:
-        Host API {{ hostApiVersion }} は {{ hostApiMaturity }} の stable wire contract です。
-        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ maturityLabel(status.formMaturity) }}、Form ごとに独立して version)。
-        Form Package {{ status.formPackageApiCurrent }} is
-        {{ status.formPackagePublicationStatus }} です。番号付き Specification receipt は履歴資料であり、
-        現在の version stream ではありません。
+        <strong>現在の契約</strong>:
+        Host API {{ hostApiVersion }} は安定した wire contract です。現在の publisher Form corpus は
+        versionless な Edge family 一つ（exact な Experimental Form 16個）です。Form は {{ maturityLabel(status.formMaturity) }} で、Form ごとに独立して version されます。
+        Form Package {{ status.formPackageApiCurrent }} は wire/envelope format で、artifact は
+        {{ status.formPackagePublicationStatus }} です。番号付き Specification receipt は履歴資料であり、現在の version stream ではありません。
       </p>
       <p v-else>
         <strong>Current contract</strong>:
-        Host API {{ hostApiVersion }} is a {{ hostApiMaturity.toLowerCase() }} stable wire contract.
-        {{ status.currentFamilyCount }} families / {{ status.currentFormCount }}
-        exact 0.x Forms ({{ maturityLabel(status.formMaturity) }}, independently versioned).
-        Form Package {{ status.formPackageApiCurrent }} is
+        Host API {{ hostApiVersion }} is the {{ hostApiMaturity.toLowerCase() }} wire contract.
+        The publisher's current corpus is one versionless Edge family with 16 exact Experimental Forms; those Forms are
+        {{ maturityLabel(status.formMaturity) }} and independently versioned. Form Package
+        {{ status.formPackageApiCurrent }} is a wire/envelope format and is
         {{ status.formPackagePublicationStatus }}. Numbered Specification receipts are historical
         records, not a current version stream.
       </p>
       <p class="site-status-footer__distribution">
         <span v-if="lang === 'ja'">
-          <strong>Distribution boundary</strong>: `tako0614/takoform` Provider
-          {{ status.providerPublished }} は official Form の typed mapping だけを提供する software tooling です。
-          Form は第三者も同じ package / verification path で配布でき、module では複数の Takoform
-          Provider と industry-standard provider を組み合わせられます。
+          <strong>配布境界</strong>: `tako0614/takoform` Provider
+          {{ status.providerPublished }} は明示的に対応する official Form だけを扱う typed tooling です。
+          公開済み Provider の旧 projection は履歴であり、Edge16 の official-only mapping は次 major candidate（未公開）です。
+          第三者も同じ package / verification path で Form を配布でき、module では複数の Takoform Provider と
+          業界標準 provider を組み合わせられます。
         </span>
         <span v-else>
           <strong>Distribution boundary</strong>: the `tako0614/takoform` Provider
-          {{ status.providerPublished }} is software tooling with typed mappings for official Forms only,
-          not a universal infrastructure provider. Third parties may distribute Forms through the same
-          package and verification path, and a module may combine multiple Takoform and industry-standard
-          providers.
+          {{ status.providerPublished }} is official-Forms-only software tooling, not a universal infrastructure provider.
+          Its released aggregate is historical Provider metadata; the official-only Edge16 mapping is a next-major candidate and
+          remains unpublished. Third parties may distribute Forms through the same package and verification path, and a module may
+          combine multiple Takoform and industry-standard providers.
         </span>
       </p>
       <p class="site-status-footer__data">

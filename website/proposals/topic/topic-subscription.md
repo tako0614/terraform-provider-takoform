@@ -1,5 +1,8 @@
 # TopicSubscription — `takoform_topic_subscription`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 A team wires its queue to a topic: every message published to the topic
@@ -16,7 +19,7 @@ subscription detaches it and never deletes the topic or the target queue.
 `topic` and `target` are immutable; changing either replaces the
 attachment. `topic` references a [Topic](topic.md). `target` is the closed
 exact `{apiVersion, kind, name}` reference to a resource providing
-`queue.pull@1.0.0` — in the current candidate a `PullQueue` of
+`queue.pull@1.0.0` — in this retained candidate a `PullQueue` of
 `queue.forms.takoform.com`. The reference carries its group
 explicitly, so the cross-family edge is representable as-is
 ([binding contract](../../spec/binding-contract/index.md)); the relation

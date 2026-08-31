@@ -1,5 +1,14 @@
 # Scheduler Family proposals
 
+::: warning Historical / deferred candidate family
+
+`schedule.forms.takoform.com` is retained source from the earlier Provider
+projection. It is not part of the current official corpus (the single Edge
+family with 16 Forms), and this family is outside Current navigation. These
+pages are English-only historical/deferred proposals.
+
+:::
+
 The Scheduler Family, `schedule.forms.takoform.com`, is minted under
 [decision 0043](../../spec/decisions/0043-forms-target-popular-vendor-locked-primitives.md):
 the standalone scheduler is popularly offered as a managed service by every
@@ -24,10 +33,11 @@ owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
 This prose accompanies the generated Experimental `Schedule` candidate under
-`forms/candidates/schedule.forms.takoform.com`. The generated candidate bytes,
-not this proposal, own the current identity; these documents reserve nothing.
+`forms/candidates/schedule.forms.takoform.com`. The generated candidate bytes
+are retained historical/deferred source, not the current publisher identity;
+these documents reserve nothing.
 
-## Current members
+## Retained candidate member (historical/deferred)
 
 | Form | Role | One-line semantics | Separate-Form boundary |
 | --- | --- | --- | --- |

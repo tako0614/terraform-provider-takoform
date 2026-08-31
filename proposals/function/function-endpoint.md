@@ -1,5 +1,8 @@
 # FunctionEndpoint — `takoform_function_endpoint`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 A team wants their function callable over plain HTTPS, now, without owning a

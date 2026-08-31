@@ -1,5 +1,8 @@
 # ContainerCustomDomain — `takoform_container_custom_domain`
 
+> Historical/deferred candidate (English-only). This non-Edge Form is not in
+> the current official Edge16 corpus or Current navigation.
+
 ## Workload and consumer
 
 A team serves its container service on its own DNS hostname over HTTPS.
