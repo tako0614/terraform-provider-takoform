@@ -143,19 +143,17 @@ describe("the committed status document", () => {
     ]);
   });
 
-  test("keeps current website navigation off withdrawn and candidate Provider labels", () => {
+  test("keeps current website navigation on the stable API and official Provider labels", () => {
     const config = readFileSync(
       path.join(repositoryRoot, "website/.vitepress/config.mts"),
       "utf8",
     );
-    expect(config).toContain(
-      "Specification 1.1 / separate Host API v1 candidate",
-    );
-    expect(config).toContain(
-      "Provider 3 typed reference (31 current Experimental Forms)",
-    );
+    expect(config).toContain("Stable Host API v1 and current Forms");
+    expect(config).toContain("Provider typed reference (official Forms)");
+    expect(config).toContain("Historical source");
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
-    expect(config).not.toContain("Specification 1.1 candidate");
+    expect(config).not.toContain("Specification 1.1 / separate Host API v1 candidate");
+    expect(config).not.toContain("One provider. Dependent on none.");
     expect(config).not.toContain("Provider 3 candidate reference");
   });
 
@@ -187,9 +185,10 @@ describe("the committed status document", () => {
       "website/ja/docs/index.md",
     ]) {
       const page = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
-      expect(page).toContain("separate");
-      expect(page).toContain("unpublished");
-      expect(page).not.toContain("Specification 1.1 candidate / Host API v1");
+      expect(page).toContain("Host API v1");
+      expect(page).toContain("official");
+      expect(page).not.toContain("unpublished Host API v1");
+      expect(page).not.toContain("Specification 1.1 / separate Host API v1 candidate");
     }
 
     const decision = readFileSync(

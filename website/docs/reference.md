@@ -1,19 +1,17 @@
 ---
 page_title: "Takoform provider"
-description: "Takoform Specification 1.1, current Form corpus, and retained Provider history"
+description: "Stable Takoform Host API v1, official Form mappings, and retained Provider history"
 ---
 
 # Takoform provider
 
-Takoform Specification 1.1 is the current numbered specification identity. Its
-release status is derived from the append-only
-`release/specification-releases.json` ledger and
-reflected in the generated `takoform-site.json` status document. The separate
-Host API v1 contract at `forms.takoform.com/v1` remains `unpublished-candidate`.
-Its exact current corpus has eight versionless families and 31 Experimental
-`0.x` Forms, using package envelope `packages.forms.takoform.com/v1alpha5`; package
-artifacts remain unpublished. A Specification release does not promote any Form
-to `1.0.0`, publish a Form Package, or release a Provider.
+The Host API at `forms.takoform.com/v1` is the stable Takoform wire contract
+for discovery, exact Form availability, lifecycle operations, fencing, and
+errors. Numbered Specification 1.0/1.1 documents are immutable historical
+receipts, not a current version stream; they do not create an API v1.1, promote
+a Form, or release a Provider. The current corpus has eight versionless
+families and 31 Experimental `0.x` Forms, using package envelope
+`packages.forms.takoform.com/v1alpha5`.
 
 The two pre-Beta epochs (`forms.takoform.com/v1alpha1` Legacy and the
 `forms.takoform.com/v1alpha2` provider-v2 epoch) were withdrawn
@@ -23,12 +21,15 @@ history; the withdrawn resources have no successors in this documentation, and
 [the migration boundary](../release/migrations/v2-to-v3.md) says what existing
 state does.
 
-Provider `v3.0.0` is the current Registry-published implementation of all 31
-current Experimental Forms. It is independent and non-normative, so it cannot
-block or release Specification 1.1. Provider `v2.1.1` remains immutable
-Registry history for the exact `v1beta1` identities it shipped. Using either
-requires a compatible host; Provider publication does not assert a hosted
-service's live availability.
+Provider `v3.0.0` is the current Registry-published software tooling with typed
+mappings for official Forms only. The canonical
+`registry.terraform.io/tako0614/takoform` distribution does not publish a
+universal infrastructure provider. Independent third parties may distribute
+Forms under their own namespaces through the same package and verification
+path; each Provider build must explicitly map the Forms it supports. Provider
+`v2.1.1` remains immutable Registry history for the exact `v1beta1` identities
+it shipped. Using any Provider requires a compatible host; publication does
+not assert a hosted service's live availability.
 
 ## Install the provider
 
@@ -54,6 +55,10 @@ provider "takoform" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
+Terraform/OpenTofu modules can declare multiple Takoform and industry-standard
+providers together. This Provider is typed software tooling for the Forms it
+supports, not a universal infrastructure provider.
+
 ## Verify the published current provider
 
 Availability is verified, not declared by this immutable documentation.
@@ -69,15 +74,15 @@ A source tag, documentation page, or local build alone is not Registry publicati
 
 ## Current Provider 3 Form reference
 
-The independent Registry-published Provider 3 maps all 31 current Experimental
-Forms. These resource type names are non-normative Provider metadata; Form
-maturity and Form Package publication remain separate.
+The official Registry-published Provider 3 maps the current official
+Experimental Forms. These resource type names are non-normative Provider
+metadata; Form maturity and Form Package publication remain separate.
 
 ### Edge family
 
 The versionless `edge.forms.takoform.com` family contains 16 exact
 Experimental `0.x` Forms and intentionally has no current `ObjectBucket`. It
-is one of the eight families in Specification 1.1:
+is one of the eight current families:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)

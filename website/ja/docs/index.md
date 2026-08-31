@@ -1,25 +1,28 @@
 # ドキュメント
 
-このページは Specification 1.1 と、別の unpublished Host API v1 candidate、
-および exact 8-family / 31-Form corpus から始まります。Provider と historical
-lane も独立です。
+このページは stable な Host API v1 と、exact 8-family / 31-Form corpus から
+始まります。番号付き Specification 1.0 / 1.1 文書は履歴 receipt として保持
+されますが、現在の version stream ではありません。Provider release、Form
+publication、host availability は独立した事実です。
 
-## Specification 1.1 / separate unpublished Host API v1 candidate
+## Stable Host API v1 と provider の組み合わせ
 
-| Axis                  | Current identity                       | 意味と利用可能性                                                                                                       |
-| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Specification         | **Takoform Specification 1.1**         | release status は append-only の `release/specification-releases.json` ledger と生成された `takoform-site.json` status document から導出されます。normative `spec/` source snapshot が release authority です。1.0 は公開前に撤回され再利用しない。 |
-| Host API              | **`forms.takoform.com/v1`**            | separate unpublished protocol candidate。                                                                                |
-| Form corpus           | **8 families / 31 Forms**              | exact `0.x` FormRefs。すべて Experimental。                                                                             |
-| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package artifact は unpublished。                                                                                       |
-| Provider              | **3.0.0、Registry 公開済み**           | independent non-normative reference implementation。Provider 2.1.1 は retained history。                               |
+Host API `forms.takoform.com/v1` は、discovery、exact Form availability、lifecycle
+operation、fence、error の stable な wire contract です。`/v1.1` route はありません。
 
-Specification release、Form maturity、package publication、Provider release は
-別の事実です。Specification 1.1 は Host API v1 を publish / promote せず、
-current Form を `1.0.0` に昇格させず、`/v1.1` / v2 lane や package を mint
-しません。
-Provider 2.1.1 の Registry history と Provider 3.0.0 implementation は
-Specification authority ではありません。
+| Axis                  | Current identity                       | 意味と利用可能性                                                                                       |
+| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Host API              | **`forms.takoform.com/v1`**            | stable protocol。Form や Provider release とは独立します。                                             |
+| Form corpus           | **8 families / 31 Forms**              | exact current `0.x` FormRef。すべて Experimental で、Form ごとに version されます。                    |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha5` | data-only distribution envelope。publication は Host API / Provider と独立します。                      |
+| Provider              | **3.0.0、Registry 公開済み**           | official Form の typed mapping を持つ software tooling。                                               |
+
+canonical Registry address `registry.terraform.io/tako0614/takoform` は
+official Form の mapping だけを公開します。第三者は同じ package / verification
+path を使い、自分の namespace で Form を配布できます。Provider は build 時に
+対応 Form を明示するため、generic carrier や universal infrastructure provider
+ではありません。Terraform / OpenTofu module では複数の Takoform Provider と
+industry-standard provider を組み合わせられます。
 
 ## Edge reference family (16 Experimental Forms) {#beta-edge-platform-family}
 
@@ -33,7 +36,7 @@ worker が到達可能になるまでは 1 resource ではなく連鎖です。i
 のない endpoint は Ready になりません。
 
 ```hcl
-# Provider 3.0.0 is Registry-published but remains non-normative.
+# Provider 3.0.0 は Registry 公開済みですが、official Form 向けの non-normative tooling です。
 
 terraform {
   required_providers {
@@ -98,10 +101,11 @@ consumer など外からの activation は別の attachment resource にしま�
 
 ## Current Provider 3 resource reference {#resource-reference}
 
-独立した Registry 公開済み Provider 3 は current Experimental `0.x` Forms 31 個すべてを
+独立した Registry 公開済み Provider 3 は current official Experimental `0.x` Forms を
 mapping します。resource 名は非 normative な Provider metadata であり、Provider
 の公開によって Form Package や Form maturity が公開・昇格したという主張では
-ありません（詳細ページは英語のみ）。
+ありません。第三者 Form の配布は明示的な Provider mapping が必要です（詳細ページは
+英語のみ）。
 
 ### Edge family
 

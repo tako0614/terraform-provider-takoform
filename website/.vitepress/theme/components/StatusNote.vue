@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Locale-aware status note shared by every hand-authored page. The facts come
-// from the build-time status document, while the labels make the independent
-// Provider, Host API, Form Family, Form definition, and package axes readable.
+// from the build-time status document, while the labels make the current
+// Host API, Form, package, and Provider boundaries readable. Specification
+// receipts are historical and are not rendered as a current version stream.
 import { computed } from "vue";
 import { useData } from "vitepress";
 
@@ -12,14 +13,11 @@ type SiteStatus = {
   providerTargetStatus: string;
   hostApiCurrent: string;
   hostApiMaturity: string;
-  hostApiPublicationStatus: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
   currentFamilyCount: number;
   formMaturity: string;
   formPackagePublicationStatus: string;
-  specificationVersion: string;
-  specificationReleaseStatus: string;
   route: string;
 };
 
@@ -34,59 +32,46 @@ const hostApiVersion = computed(() => apiVersion(status.value.hostApiCurrent));
 const hostApiMaturity = computed(() =>
   maturityLabel(status.value.hostApiMaturity),
 );
-const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
 </script>
 
 <template>
   <div class="status-note">
     <template v-if="lang === 'ja'">
       <p>
-        <strong>Specification</strong>:
-        Takoform Specification <code>{{ status.specificationVersion }}</code> は
-        <code>{{ status.specificationReleaseStatus }}</code> です。この release status は
-        append-only の Specification release ledger/status document から導出されます。Host API
-        <code>{{ hostApiVersion }}</code> は Specification とは別の {{ hostApiMaturity }} contract で、
-        <code>{{ status.hostApiPublicationStatus }}</code> です。
+        <strong>Current contract</strong>:
+        Host API <code>{{ hostApiVersion }}</code> は {{ hostApiMaturity }} の stable wire contract です。
         current corpus の {{ status.currentFamilyCount }} 個の versionless family /
         {{ status.currentFormCount }} 個の exact <code>0.x</code> Form は
-        {{ formMaturity }} のままです。Specification release は Form を
-        <code>1.0.0</code> に昇格させません。Form Package envelope は
+        {{ maturityLabel(status.formMaturity) }} で、Form ごとに独立して version されます。Form Package envelope は
         <code>{{ status.formPackageApiCurrent }}</code> で、artifact は
         <code>{{ status.formPackagePublicationStatus }}</code> です。
+        番号付き Specification receipt は履歴資料であり、現在の version stream ではありません。
       </p>
       <p>
-        <strong>Distribution availability</strong>: Provider
-        <code>{{ status.providerPublished }}</code> は Registry readback 済みの
-        current retained distribution、Provider <code>2.0.0</code> は公開済みの
-        compatibility predecessor、Provider <code>1.0.3</code> は公開済み
-        Legacy client です。Provider 3 は独立した non-normative implementation
-        track で、Specification release を block しません。
+        <strong>Distribution boundary</strong>: `tako0614/takoform` Provider
+        <code>{{ status.providerPublished }}</code> は official Form の typed mapping だけを提供する software tooling です。
+        Form は第三者も同じ package / verification path で配布でき、module では複数の Takoform
+        Provider と industry-standard provider を組み合わせられます。
       </p>
     </template>
     <template v-else>
       <p>
-        <strong>Specification</strong>: Takoform Specification
-        <code>{{ status.specificationVersion }}</code> is
-        <code>{{ status.specificationReleaseStatus }}</code>. Its release status is
-        derived from the append-only Specification release ledger/status document.
-        Host API <code>{{ hostApiVersion }}</code> is a separate {{ hostApiMaturity }} contract and
-        remains <code>{{ status.hostApiPublicationStatus }}</code>,
-        while the current corpus's {{ status.currentFamilyCount }} versionless
+        <strong>Current contract</strong>: Host API
+        <code>{{ hostApiVersion }}</code> is a {{ hostApiMaturity.toLowerCase() }} stable wire contract.
+        The current corpus's {{ status.currentFamilyCount }} versionless
         families and {{ status.currentFormCount }} exact <code>0.x</code> Forms
-        remain {{ formMaturity }}. Releasing the Specification does not promote
-        those Forms to <code>1.0.0</code>. The Form Package envelope is
+        remain {{ maturityLabel(status.formMaturity) }} and are independently versioned. The Form Package envelope is
         <code>{{ status.formPackageApiCurrent }}</code
         >, and its artifacts are
         <code>{{ status.formPackagePublicationStatus }}</code
         >.
+        Numbered Specification receipts are historical records, not a current version stream.
       </p>
       <p>
-        <strong>Distribution availability</strong>: Provider
-        <code>{{ status.providerPublished }}</code> is the current
-        Registry-readback retained distribution; Provider <code>2.0.0</code> is the
-        published compatibility predecessor and Provider <code>1.0.3</code>
-        remains the published Legacy client. Provider 3 is an independent,
-        non-normative implementation track and cannot block the Specification.
+        <strong>Distribution boundary</strong>: the `tako0614/takoform` Provider
+        <code>{{ status.providerPublished }}</code> is software tooling with typed mappings for official Forms only,
+        not a universal infrastructure provider. Third parties may distribute Forms through the same package and
+        verification path, and a module may combine multiple Takoform and industry-standard providers.
       </p>
     </template>
   </div>

@@ -206,14 +206,18 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: Provider `v3.0.0` is the published,
-Registry readback-verified current typed distribution for the 31 exact current
+repository. The current public truth is: the Host API `forms.takoform.com/v1`
+is the stable wire contract; Provider `v3.0.0` is the published,
+Registry readback-verified typed tooling for the 31 exact current official
 Forms; Provider `v2.1.1` remains immutable retained Host API v1beta1 history;
 Provider `v2.0.0` is the published compatibility predecessor; Provider
-`v1.0.3` is the published Legacy client; Takoform Specification 1.1 publication
-state is derived from the append-only numbered ledger, while literal Host API
-v1 is a separate unpublished protocol candidate (Specification 1.0 was
-withdrawn before publication and may not be reused); and the 34
+`v1.0.3` is the published Legacy client; and numbered Specification 1.0/1.1
+documents are immutable historical receipts, not a current version stream.
+The canonical `tako0614/takoform` Provider maps official Forms only. Third
+parties may distribute Forms under their own namespaces through the same
+package and verification path, and modules may combine multiple Takoform and
+industry-standard providers. Specification 1.0 was withdrawn before
+publication and may not be reused; and the 34
 published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The current generated corpus
 contains eight versionless families and 31 exact Experimental `0.x` FormRefs;
