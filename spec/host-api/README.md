@@ -1,22 +1,18 @@
 # Portable Form Host APIs
 
-## Current Specification contract: Host API v1
+## Current stable contract: Host API v1
 
-Takoform Specification 1.1 defines the unchanged literal
-`forms.takoform.com/v1` Host API ([`v1.md`](v1.md)):
+The stable `forms.takoform.com/v1` Host API contract ([`v1.md`](v1.md)) defines:
 
 - discovery: `GET /.well-known/takoform/v1`;
 - API root: `/apis/forms.takoform.com/v1`;
 - wire schema: [`host-api-wire-v1.schema.json`](../schemas/host-api-wire-v1.schema.json);
 - operation table: [`operations-v1.json`](operations-v1.json).
 
-Specification 1.1 readiness is derived from one exact committed snapshot of the
-normative `spec/` tree, and publication state is derived from its numbered
-ledger. Candidate Forms, packages,
-reference conformance, Providers, Hosts, products, deployments, and adoption
-evidence cannot block or authorize that release. The lane's stable name does
-not promote any current `0.x` Form to Form `1.0.0` and does not release Provider
-3 ([decision 0057](../decisions/0057-specification-1-1-compatibility-and-independent-identities.md)).
+The Host API lane is independent from Form definitions, package publication,
+Provider releases, Hosts, products, deployments, and adoption evidence. Its
+stable name does not promote any current `0.x` Form to Form `1.0.0` and does
+not release Provider 3 ([decision 0057](../decisions/0057-specification-1-1-compatibility-and-independent-identities.md)).
 
 ## Retained pre-v1 design snapshot: Host API v1beta4
 
@@ -54,7 +50,7 @@ The nested `interfaces.takoform.com/v1alpha1` and
 `bindings.takoform.com/v1alpha1` identifiers are independent contracts, not
 Host API maturity labels.
 
-For the current Specification contract, read [`v1.md`](v1.md). For the
+For the current stable Host API contract, read [`v1.md`](v1.md). For the
 retained Provider contract, read [`v1beta1.md`](v1beta1.md). Requirement
 keywords are used as described in
 [`../conformance.md`](../conformance.md), and the digest-pinned conformance

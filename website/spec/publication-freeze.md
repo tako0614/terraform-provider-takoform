@@ -1,27 +1,26 @@
-# Specification, Provider, and publication evidence policy
+# Historical Specification, Provider, and publication evidence policy
 
 Takoform has independent release and publication axes. Evidence from one axis
 MUST NOT be treated as authority for another.
 
-## Specification 1.1
+## Historical Specification 1.1 evidence
 
-The normative Specification 1.1 track freezes the portable specification
-source. The repository also carries the unchanged literal Host API v1 source
-candidate at `forms.takoform.com/v1`, but that is a separate unpublished
-protocol identity. Publishing Specification 1.1 does not publish or promote
-Host API v1. One complete, exact committed snapshot of the normative `spec/`
-tree satisfies Specification release readiness; the append-only numbered
-ledger is the authority for publication state. Candidate Forms, packages,
-conformance corpora, and reference implementations remain quality and adoption
-evidence; they are not Specification release prerequisites.
+The Specification 1.1 track freezes the portable specification source and is
+retained as historical evidence. The current Host API `forms.takoform.com/v1`
+is a stable protocol identity independent of this receipt. One complete, exact
+committed snapshot of the normative `spec/` tree satisfied the historical
+receipt's readiness; the append-only numbered ledger records that publication
+state. Candidate Forms, packages, conformance corpora, and reference
+implementations remain quality and adoption evidence; they are not current
+Host API or Provider authority.
 
 Identity `1.0` was never published, is withdrawn, and is never reused. The
 separately generated five-class [compatibility report](../release/specification-compatibility.json)
 records raw source digests, owning ledgers, migration dispositions, and the
-byte pin for the Host API v1 candidate. It is compatibility evidence only, not
-publication evidence, a release asset, or a prerequisite. Specification 1.1
-has no Host API, Form publication, or Provider effect and does not mint a
-`/v1.1` or v2 lane/schema/tag/receipt.
+historical Host API source pin. It is compatibility evidence only, not
+publication evidence, a release asset, or a prerequisite. The historical
+Specification receipt has no Host API, Form publication, or Provider effect and
+does not mint a `/v1.1` or v2 lane/schema/tag/receipt.
 
 The canonical machine policy is
 [`publication-evidence.json`](publication-evidence.json), and the numbered

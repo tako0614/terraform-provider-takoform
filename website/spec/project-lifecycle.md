@@ -66,9 +66,8 @@ maturity. Each member still has an explicit maturity classification. The
 current versionless family index contains exactly eight families and 31
 Experimental Forms; Edge contains 16 and no `ObjectBucket`. Current packages
 use `packages.forms.takoform.com/v1alpha5`, and package publication is a
-separate fact. Adding a Form to a family, publishing Specification 1.1, or
-publishing the separate Host API v1 candidate or one family member promotes
-nothing else. The retained Provider
+separate fact. Adding a Form to a family, the stable Host API v1, or a
+historical Specification receipt promotes nothing else. The retained Provider
 2.1.1 projection remains the versioned v1beta1 Edge family, 15 exact FormRefs,
 and `packages.forms.takoform.com/v1alpha4`. The
 `forms.takoform.com/v1alpha2` candidates are superseded provider-v2 preview
@@ -182,10 +181,9 @@ Stable commits Takoform to the stable SemVer rules in
 [`versioning.md`](versioning.md). It does not guarantee that every host supports
 the Form or that a commercial platform offers it.
 
-No Takosumi or other product GA milestone triggers a transition. Publishing
-Specification 1.1 likewise leaves every current `0.x` Form
-Experimental; publishing the separate Host API v1 candidate has the same
-non-effect. The machine record requires the exact transition history
+No Takosumi or other product GA milestone triggers a transition. A historical
+Specification receipt likewise leaves every current `0.x` Form Experimental;
+the stable Host API v1 has the same non-effect. The machine record requires the exact transition history
 `proposal → experimental → stable`, the per-Form decision and bound contract
 evidence above, and an explicit `1.0.0` FormRef. A direct Proposal-to-Stable
 record is invalid even if adoption evidence is present.

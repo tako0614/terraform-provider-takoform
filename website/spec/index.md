@@ -1,4 +1,10 @@
-# Specification
+# Specification history
+
+> Historical source: this page is retained for the immutable Specification
+> 1.0/1.1 receipts and withdrawn compatibility evidence. Numbered
+> Specification is not a current version stream. The current contract is the
+> stable Host API `forms.takoform.com/v1`; see the
+> [current version model](/docs/versions.html) for today’s boundary.
 
 ## Identity
 
@@ -10,14 +16,14 @@ is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Specification | Takoform 1.1; first numbered release identity; publication state is derived from the append-only numbered ledger and authority is one exact committed snapshot of the normative `spec/` tree (identity 1.0 was never published, is withdrawn, and may not be reused) |
+| Historical Specification receipt | Takoform 1.1; first numbered release identity recorded by the append-only numbered ledger. It is historical evidence, not a current API, Form, or Provider version stream (identity 1.0 was never published, is withdrawn, and may not be reused) |
 | Current Form corpus | `forms/candidates/current-family-index.json` (8 versionless families; 31 exact Experimental `0.x` Forms) |
-| Host API candidate | `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` (separate and unpublished) |
+| Current Host API | `forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` (stable wire contract) |
 | Current package envelope | `packages.forms.takoform.com/v1alpha5` (unpublished) |
 | Provider distribution | Independent: **Provider 3.0.0** is the current Registry-published non-normative reference implementation; Provider 2.1.1 is retained history |
 
-Specification 1.1 does not publish or promote the separate Host API v1
-candidate, relabel any current Form as `1.0.0`, publish a Form Package, mint a
+The historical Specification receipt does not alter or promote the stable Host
+API v1, relabel any current Form as `1.0.0`, publish a Form Package, mint a
 `/v1.1` or v2 lane, or release Provider 3. External Hosts, products,
 deployments, signers, and operators are optional adoption evidence rather than
 release authority.

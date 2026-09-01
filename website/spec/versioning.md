@@ -9,7 +9,7 @@ defined in [`project-lifecycle.md`](project-lifecycle.md).
 
 | Concern      | Identifier                                      | Meaning                                                                                    |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Host API     | API group carried by the separate Host API v1 candidate, `forms.takoform.com/v1` | Protocol envelope, discovery, and lifecycle compatibility                              |
+| Host API     | Stable API group `forms.takoform.com/v1` | Protocol envelope, discovery, and lifecycle compatibility                              |
 | Form group   | Versionless reverse-DNS API group inside an exact `FormRef` | Namespace boundary between current Form Families; occupied older groups remain exact history |
 | Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its group                      |
 | Form Package | Exact package identity plus content digest      | Immutable distribution of one exact Form and its fixtures                                  |
@@ -52,10 +52,10 @@ retained history and stay as they are — the rule binds what is minted next.
 
 ### Current source and retained release history
 
-The current Specification 1.1 source references the separate, unpublished
-Host API v1 candidate at `forms.takoform.com/v1`, eight versionless Form Family
-groups, 31 exact current FormRefs, and the `packages.forms.takoform.com/v1alpha5`
-package envelope. The current FormRefs keep their independent `0.x` Definition
+The historical Specification 1.1 source references the stable Host API v1
+contract at `forms.takoform.com/v1`, eight versionless Form Family groups, 31
+exact current FormRefs, and the `packages.forms.takoform.com/v1alpha5` package
+envelope. The current FormRefs keep their independent `0.x` Definition
 versions and Experimental maturity. Publishing Specification 1.1 does not
 publish or promote Host API v1 and does not rewrite the Forms as `1.0.0`;
 publishing Host API v1 separately would not rewrite them either.
@@ -227,8 +227,8 @@ The current generator index names 31 exact Experimental Forms across eight
 versionless families; Edge contains 16 and has no `ObjectBucket`. Each Form
 keeps its own `0.x` Definition version. A breaking correction advances only
 that Form's SemVer and digest. It does not mint a family generation, and
-publishing Specification 1.1 or the separate Host API v1 candidate does not
-promote it. The occupied
+publishing a historical Specification receipt or using the stable Host API v1
+does not promote it. The occupied
 v1beta1/Provider 2.1.1 FormRefs and published-schema bytes remain immutable
 history.
 
@@ -350,8 +350,8 @@ new Form SemVer unless the Form contract itself changed.
 
 ## Host API group
 
-The repository carries the literal Host API v1 candidate wire
-`forms.takoform.com/v1`, discovered at `/.well-known/takoform/v1` with API base
+The repository carries the stable Host API v1 wire `forms.takoform.com/v1`,
+discovered at `/.well-known/takoform/v1` with API base
 `/apis/forms.takoform.com/v1`. It carries versionless family groups, exact
 FormRefs, UID/generation/revision identity, long-running Operations,
 content-addressed artifact upload, declared constraints, standard-service

@@ -1,22 +1,23 @@
 # Release boundaries
 
-## Specification release
+## Historical Specification receipts
 
 [`specification-releases.json`](specification-releases.json) is the append-only
-numbered Takoform Specification ledger. Its 1.1 candidate descriptor remains
-the immutable release input; the append-only `releases` array is the authority
-for whether that identity has been published. Identity 1.0 was never published,
-is withdrawn, and is never reused. A numbered entry may be recorded only after
+ledger for historical numbered Specification receipts. Its 1.1 descriptor is a
+retained release input; the append-only `releases` array records whether that
+identity has a receipt. Identity 1.0 was never published, is withdrawn, and is
+never reused. These records are not a current version stream. A numbered entry may be recorded only after
 [`../spec/publication-evidence.json`](../spec/publication-evidence.json) closes
 one exact committed snapshot of the normative `spec/` tree. Candidate Forms,
 packages, reference conformance, and Provider behavior are independent evidence
 and do not block the numbered Specification. The separately generated
 compatibility report is not release evidence, an asset, or a prerequisite.
 
-Specification 1.1 references the unchanged Host API v1 candidate
-`forms.takoform.com/v1` but does not publish or promote that separate protocol
-identity, promote the 31 current Experimental `0.x` FormRefs, publish their
-packages, or advance the official Provider. Provider 3 is an independent non-normative sample;
+The current Host API `forms.takoform.com/v1` is stable and independent from
+these receipts. The historical Specification 1.1 source did not alter or
+promote that protocol identity, promote the 31 current Experimental `0.x`
+FormRefs, publish their packages, or advance the official Provider. Provider 3
+is an independent non-normative tool;
 Provider 2.1.1 and its Host v1beta1/15-Form identities remain immutable
 Registry history. `bun run check:specification-releases` validates the ledger,
 while `bun run check:specification-1-1-release` derives readiness solely from

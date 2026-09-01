@@ -1,11 +1,10 @@
 # Takoform portable specification
 
-This directory is the portable specification surface for Takoform. It defines
-**Specification 1.1** and carries the literal Host API v1 source candidate.
-Host API v1 is a separate, unpublished protocol identity; publishing
-Specification 1.1 does not publish or promote it. The append-only numbered
-release ledger is the authority for whether Specification 1.1 has a publication
-receipt. Takoform defines a small desired-state
+This directory is retained historical specification source for Takoform. It
+records the **Specification 1.1** receipt and the contract material from that
+epoch. Numbered Specification is not a current version stream. The current
+Host API `forms.takoform.com/v1` is the stable protocol identity, independent
+of this history, Form packages, and Provider releases. Takoform defines a small desired-state
 boundary between infrastructure-as-code clients and resource hosts. It is not
 an industry standards body, certification authority, or guarantee of backend
 portability.
@@ -67,18 +66,18 @@ product interfaces. The generated current inventory is
 and the local evidence map is
 [`../conformance/README.md`](../conformance/index.md).
 
-## Current status
+## Historical status
 
-Specification 1.1 is the first numbered release identity. Its release state is
-derived from the append-only numbered ledger; this normative document does not
-hard-code a transient candidate or publication state. Identity 1.0 was never
-published, is withdrawn, and is never reused. The separately generated
+Specification 1.1 is the first numbered receipt retained in the append-only
+ledger; this historical document does not define a current version stream.
+Identity 1.0 was never published, is withdrawn, and is never reused. The separately generated
 five-class compatibility report at
 [`../release/specification-compatibility.json`](../release/specification-compatibility.json)
 binds raw source bytes to owning ledgers and migration dispositions and
-byte-pins the literal Host API v1 candidate. It is compatibility evidence only,
-not publication evidence, a release asset, or a prerequisite. Current Forms,
-packages, and Host API v1 remain unpublished candidates; no `/v1.1` or v2
+byte-pins the historical source and compatibility dispositions. It is
+compatibility evidence only, not publication evidence, a release asset, or a
+prerequisite. The current Host API v1 contract is stable; Form package
+publication and Provider release remain independent. No `/v1.1` or v2 Host API
 lane/schema/tag/receipt is created.
 
 ## C1, C2, C3, and C4 release boundaries
@@ -143,14 +142,13 @@ schema for that purpose. Historical `standard` and `portable-standard` fields
 in those immutable bytes do not define a current approved subset, and nothing
 derives current approval or admission from that history.
 
-The literal Host API v1 candidate uses wire `forms.takoform.com/v1`, reached
-through `/.well-known/takoform/v1` with API root
+The current Host API v1 uses wire `forms.takoform.com/v1`, reached through
+`/.well-known/takoform/v1` with API root
 `/apis/forms.takoform.com/v1`. The Specification readiness assertion derives
 `open` from null source evidence and `ready` from one exact committed source
 snapshot; the numbered ledger independently derives publication state. The
 Host API group is a protocol compatibility identity independent of every Form
-group and Form maturity; Specification 1.1 publication does not publish or
-promote this Host API candidate. The current package envelope is
+group and Form maturity. The current package envelope is
 `packages.forms.takoform.com/v1alpha5`; Interface and Binding refs remain
 `interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha2`. The
 Terraform provider identity is `registry.terraform.io/tako0614/takoform`;
@@ -160,12 +158,12 @@ Both are independent from all of these current API identities. The
 `release/version.json` descriptor remains `candidate-only` metadata by design
 after owner publication.
 
-Provider 3 is a separate Registry-published, non-normative reference
-implementation. It may implement the exact current `0.x` Forms without
-defining their semantics or blocking Specification 1.1. Publishing
-Specification 1.1 does not promote those Forms to `1.0.0`; publishing the
-separate Host API v1 candidate would not do so either. A future Stable Form
-requires an explicit per-Form decision.
+Provider 3 is separate Registry-published, non-normative software tooling. The
+canonical `tako0614/takoform` distribution maps official Forms only; third-party
+Form distributions require their own explicit Provider mappings. Provider
+publication does not define Form semantics or alter the stable Host API v1, and
+historical Specification receipts do not promote Forms to `1.0.0`. A future
+Stable Form requires an explicit per-Form decision.
 
 ## Normative consistency audit
 
