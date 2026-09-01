@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_worker_bundle Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "tako0614 Forms"
 description: |-
   Worker Bundle (edge.forms.takoform.com, role revision).
 ---
@@ -11,8 +11,8 @@ Immutable content-addressed module bundle of one worker build, named by the dige
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/WorkerBundle` is recorded below.
-The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/worker-bundle/definition.json).
+This page documents the publisher-set next-major Provider mapping; its exact FormRef `edge.forms.takoform.com/WorkerBundle` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/worker-bundle/definition.json).
 See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_worker_bundle/resource.tf).
 
 ## Exact FormRef
@@ -33,7 +33,7 @@ This Provider mapping carries the following exact four-field FormRef:
 ## Arguments
 
 - `name` (String, optional, computed, forces replacement) — Portable resource name (`metadata.name`). Omit it and set `revision_owner` instead: this Form is an immutable revision, so the provider derives `bundle-<content digest prefix>-<owner digest prefix>` from this revision's own content and its declared owner. Changed content is then a NEW revision created beside the old one, which is the only way a code change applies at all — a host refuses every update to a revision, and replacing one under a name it still holds completes in neither apply order. Setting it pins the name, which an imported revision needs; the provider then refuses at plan time any change that would replace this revision under it.
-- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. Two independent resources built from identical content derive identical content digests, so without an owner they would derive one name and two Terraform resources would manage one host address — where a destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the host never sees it, and it enters only the derived name. The official [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you.
+- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. Two independent resources built from identical content derive identical content digests, so without an owner they would derive one name and two Terraform resources would manage one host address — where a destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the host never sees it, and it enters only the derived name. The repository [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you.
 - `manifest_digest` (String, optional, computed, forces replacement) — Immutable digest of the committed artifact manifest this bundle is. It is the whole portable desired state: the manifest, not this resource, describes the modules. Declare exactly one of the two authoring modes — reference a manifest already committed to the host by setting this digest, or leave it unset and author the bundle locally with the two arguments below. Writing it alongside local authoring is accepted only when the authored bytes commit exactly that manifest; a disagreement is refused before any host call.
 - `main_module` (String, optional, forces replacement) — Local authoring only: relative path of the ES module the runtime instantiates first; it must name one declared module. It is not portable desired state; it describes the artifact manifest the provider commits.
 - `modules` (List of Object, optional, forces replacement) — Local authoring only: every module of the bundle. Each entry declares `name`, `content_type` (one of the five closed media types), and `content_file` (a local file path). The provider reads each file, computes its exact `size` and sha256 `digest` (both computed attributes), commits the artifact manifest through the content-addressed artifact API, and records the returned `manifest_digest`. File paths stay in state; file bytes never do. At every plan against existing state the provider re-reads and re-hashes each `content_file`: changed bytes at an unchanged path change the planned manifest digest and force replacement.

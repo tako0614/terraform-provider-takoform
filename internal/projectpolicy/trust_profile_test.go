@@ -136,12 +136,15 @@ type trustProfile struct {
 }
 
 type releaseDescriptor struct {
-	SchemaVersion    int    `json:"schemaVersion"`
-	Version          string `json:"version"`
-	Tag              string `json:"tag"`
-	SourceRepository string `json:"sourceRepository"`
-	ProviderAddress  string `json:"providerAddress"`
-	CLIMatrix        []struct {
+	SchemaVersion           int    `json:"schemaVersion"`
+	Version                 string `json:"version"`
+	Tag                     string `json:"tag"`
+	SourceRepository        string `json:"sourceRepository"`
+	FormPublisherRepository string `json:"formPublisherRepository"`
+	FormPublisherCommit     string `json:"formPublisherCommit"`
+	FormSetTag              string `json:"formSetTag"`
+	ProviderAddress         string `json:"providerAddress"`
+	CLIMatrix               []struct {
 		Product         string `json:"product"`
 		Version         string `json:"version"`
 		ProviderAddress string `json:"providerAddress"`

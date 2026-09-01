@@ -75,22 +75,22 @@ func TestOfficialArtifactsCompileThroughNeutralCore(t *testing.T) {
 	input, expected, repositoryRoot := loadOfficialInput(t)
 	forward, diagnostics := currentformsnapshot.Compile(input)
 	if len(diagnostics) != 0 || forward == nil {
-		t.Fatalf("official artifacts did not compile: snapshot=%v diagnostics=%#v", forward != nil, diagnostics)
+		t.Fatalf("publisher artifacts did not compile: snapshot=%v diagnostics=%#v", forward != nil, diagnostics)
 	}
 	if got := forward.Forms(); len(got) != 31 || len(got) != len(expected) {
-		t.Fatalf("compiled official Form count = %d, inventory = %d, want 31", len(got), len(expected))
+		t.Fatalf("compiled publisher Form count = %d, inventory = %d, want 31", len(got), len(expected))
 	} else {
 		for _, form := range got {
 			if _, ok := expected[form.Ref]; !ok {
-				t.Fatalf("compiled Snapshot added unknown official Form %#v", form.Ref)
+				t.Fatalf("compiled Snapshot added unknown publisher Form %#v", form.Ref)
 			}
 		}
 	}
 	if got := len(forward.Interfaces()); got != 13 {
-		t.Fatalf("compiled official Interface count = %d, want 13", got)
+		t.Fatalf("compiled retained aggregate Interface count = %d, want 13", got)
 	}
 	if got := len(forward.Bindings()); got != 6 {
-		t.Fatalf("compiled official Binding count = %d, want 6", got)
+		t.Fatalf("compiled retained aggregate Binding count = %d, want 6", got)
 	}
 
 	reversed := input
@@ -100,11 +100,11 @@ func TestOfficialArtifactsCompileThroughNeutralCore(t *testing.T) {
 	reversed.DefaultCreates = reverseCopy(input.DefaultCreates)
 	backward, reversedDiagnostics := currentformsnapshot.Compile(reversed)
 	if len(reversedDiagnostics) != 0 || backward == nil {
-		t.Fatalf("reversed official artifacts did not compile: snapshot=%v diagnostics=%#v", backward != nil, reversedDiagnostics)
+		t.Fatalf("reversed publisher artifacts did not compile: snapshot=%v diagnostics=%#v", backward != nil, reversedDiagnostics)
 	}
 	if forward.Digest() != backward.Digest() || !reflect.DeepEqual(forward.Forms(), backward.Forms()) ||
 		!reflect.DeepEqual(forward.Interfaces(), backward.Interfaces()) || !reflect.DeepEqual(forward.Bindings(), backward.Bindings()) {
-		t.Fatalf("official artifact order changed Snapshot: %s != %s", forward.Digest(), backward.Digest())
+		t.Fatalf("publisher artifact order changed Snapshot: %s != %s", forward.Digest(), backward.Digest())
 	}
 
 	for ref, path := range expected {
@@ -120,7 +120,7 @@ func TestOfficialArtifactsCompileThroughNeutralCore(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("official inventory contains no Table Form")
+	t.Fatal("retained aggregate inventory contains no Table Form")
 }
 
 func TestExternalPublisherUsesTheSameVerifiedPackagePath(t *testing.T) {
@@ -133,10 +133,10 @@ func TestExternalPublisherUsesTheSameVerifiedPackagePath(t *testing.T) {
 
 	snapshot, diagnostics := currentformsnapshot.Compile(input)
 	if len(diagnostics) != 0 || snapshot == nil {
-		t.Fatalf("official plus external artifacts did not compile: snapshot=%v diagnostics=%#v", snapshot != nil, diagnostics)
+		t.Fatalf("retained aggregate plus external artifacts did not compile: snapshot=%v diagnostics=%#v", snapshot != nil, diagnostics)
 	}
 	if got := len(snapshot.Forms()); got != 32 {
-		t.Fatalf("official plus external Form count = %d, want 32", got)
+		t.Fatalf("retained aggregate plus external Form count = %d, want 32", got)
 	}
 	if _, ok := snapshot.Definition(externalRef); !ok {
 		t.Fatal("external exact FormRef is absent from the common Snapshot")

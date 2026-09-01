@@ -162,7 +162,7 @@ func TestProviderV3SnapshotPathImportsNoOfficialCatalog(t *testing.T) {
 				t.Fatal(err)
 			}
 			if strings.Contains(pathValue, "formcatalog") {
-				t.Errorf("official catalog import %q appears in production source %s", pathValue, name)
+				t.Errorf("publisher catalog import %q appears in production source %s", pathValue, name)
 			}
 		}
 

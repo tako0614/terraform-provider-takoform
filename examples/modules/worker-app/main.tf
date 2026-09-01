@@ -2,8 +2,8 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # This example targets the stable Host API v1 Provider 3 line.
-      version = "= 3.0.0"
+      # This example uses the Provider 4 publisher-set mapping.
+      version = "~> 4.0"
     }
   }
 }
@@ -17,7 +17,7 @@ resource "takoform_edge_kv_namespace" "counter" {
   name = "counter-state"
 }
 
-# The official module. It assembles the Module Worker identity, the immutable
+# The repository module. It assembles the Module Worker identity, the immutable
 # Worker Bundle and Worker Version revisions, the Worker Deployment that selects
 # traffic, and the Worker Endpoint that makes the worker reachable.
 #
@@ -26,11 +26,12 @@ resource "takoform_edge_kv_namespace" "counter" {
 module "worker_app" {
   source = "../../../modules/worker-app"
 
-  name        = "counter"
-  main_module = "index.js"
-  content_dir = "${path.module}/dist"
-  kv_bindings = { COUNTER = takoform_edge_kv_namespace.counter.name }
-  endpoint    = true
+  name                  = "counter"
+  main_module           = "index.js"
+  content_dir           = "${path.module}/dist"
+  apply_idempotency_key = "counter-release-v1"
+  kv_bindings           = { COUNTER = takoform_edge_kv_namespace.counter.name }
+  endpoint              = true
 }
 
 output "worker_app_url" {

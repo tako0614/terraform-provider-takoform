@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_worker_deployment Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "tako0614 Forms"
 description: |-
   Worker Deployment (edge.forms.takoform.com, role deployment).
 ---
@@ -11,8 +11,8 @@ Selects which Worker Versions of one Module Worker serve traffic and in what pro
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/WorkerDeployment` is recorded below.
-The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/worker-deployment/definition.json).
+This page documents the publisher-set next-major Provider mapping; its exact FormRef `edge.forms.takoform.com/WorkerDeployment` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/worker-deployment/definition.json).
 See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_worker_deployment/resource.tf).
 
 ## Exact FormRef
@@ -23,12 +23,12 @@ This Provider mapping carries the following exact four-field FormRef:
 {
   "apiVersion": "edge.forms.takoform.com",
   "kind": "WorkerDeployment",
-  "definitionVersion": "0.1.0",
-  "schemaDigest": "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769"
+  "definitionVersion": "0.2.0",
+  "schemaDigest": "sha256:3d5174bf2c3f351cf1468607689019e9eaa503a353eceb3095cf3d31bad62081"
 }
 ```
 
-`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:535133f0a79c2091162f2dc237d177702e5e5db5c558c6c2e5bf5bcd76d6ff17`.
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:a752244c9f90caf18f9b5cec1b6b850fc318e6ec937d5b23eec33169f638c281`.
 
 ## Arguments
 
@@ -98,7 +98,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_deployment.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"WorkerDeployment","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"WorkerDeployment","definitionVersion":"0.2.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

@@ -9,7 +9,9 @@ import (
 	"sort"
 	"testing"
 
+	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
@@ -28,7 +30,9 @@ const (
 // OpenTofu/Terraform tooling.
 func TestV3Provider3ProtocolSchemaMatchesPublishedBinary(t *testing.T) {
 	published := readV3Provider3TofuSchema(t)
-	server := providerserver.NewProtocol6(New("3.0.0")())()
+	server := providerserver.NewProtocol6(&v3Provider3GoldenProvider{
+		takoformProvider: &takoformProvider{version: "3.0.0"},
+	})()
 	response, err := server.GetProviderSchema(context.Background(), &tfprotov6.GetProviderSchemaRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +45,89 @@ func TestV3Provider3ProtocolSchemaMatchesPublishedBinary(t *testing.T) {
 	if !bytes.Equal(current, published) {
 		t.Fatalf("current protocol schema differs from immutable Provider 3.0.0 (`%s`); current digest %s",
 			v3Provider3TofuSchemaDigest, formpackage.DigestBytes(current))
+	}
+}
+
+// v3Provider3GoldenProvider reconstructs the immutable Provider 3 aggregate
+// solely for its release-golden test. New() intentionally exposes the current
+// publisher-set surface, so historical compatibility evidence must not depend
+// on the current registration set.
+type v3Provider3GoldenProvider struct {
+	*takoformProvider
+}
+
+func (provider *v3Provider3GoldenProvider) Schema(ctx context.Context, req frameworkprovider.SchemaRequest, resp *frameworkprovider.SchemaResponse) {
+	provider.takoformProvider.Schema(ctx, req, resp)
+	delete(resp.Schema.Attributes, "runtime_input_nonce")
+	delete(resp.Schema.Attributes, "runtime_inputs")
+}
+
+func (*v3Provider3GoldenProvider) Resources(context.Context) []func() resource.Resource {
+	current := newV3FormResources()
+	historical := make([]func() resource.Resource, 0, len(current))
+	for _, factory := range current {
+		factory := factory
+		historical = append(historical, func() resource.Resource {
+			candidate, ok := factory().(*v3FormResource)
+			if !ok {
+				panic("Provider 3 historical resource factory returned an unexpected implementation")
+			}
+			candidate.providerSurface = v3ProviderSurfaceV30
+			return candidate
+		})
+	}
+	return historical
+}
+
+// TestCurrentPublisherProviderProtocolSchemaOwnsApplyOnlyInputs keeps the
+// additive Provider-owned WorkerVersion surface on the current publisher-set
+// lane without changing the immutable Provider 3 aggregate golden above.
+func TestCurrentPublisherProviderProtocolSchemaOwnsApplyOnlyInputs(t *testing.T) {
+	server := providerserver.NewProtocol6(New("4.0.0")())()
+	response, err := server.GetProviderSchema(context.Background(), &tfprotov6.GetProviderSchemaRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Diagnostics) != 0 {
+		t.Fatalf("GetProviderSchema diagnostics = %#v", response.Diagnostics)
+	}
+	worker, ok := response.ResourceSchemas["takoform_worker_version"]
+	if !ok || worker == nil || worker.Block == nil {
+		t.Fatal("current publisher-set schema has no WorkerVersion resource")
+	}
+	var key *tfprotov6.SchemaAttribute
+	for _, attribute := range worker.Block.Attributes {
+		if attribute != nil && attribute.Name == "apply_idempotency_key" {
+			key = attribute
+			break
+		}
+	}
+	if key == nil || !key.Optional || key.Required || !key.Computed {
+		t.Fatalf("current apply_idempotency_key schema = %#v", key)
+	}
+	providerAttributes := map[string]*tfprotov6.SchemaAttribute{}
+	for _, attribute := range response.Provider.Block.Attributes {
+		if attribute != nil {
+			providerAttributes[attribute.Name] = attribute
+		}
+	}
+	nonce := providerAttributes["runtime_input_nonce"]
+	values := providerAttributes["runtime_inputs"]
+	if nonce == nil || !nonce.Optional || nonce.Required || nonce.Sensitive {
+		t.Fatalf("current runtime_input_nonce schema = %#v", nonce)
+	}
+	if values == nil || !values.Optional || values.Required || !values.Sensitive {
+		t.Fatalf("current runtime_inputs schema = %#v", values)
+	}
+	for name, schema := range response.ResourceSchemas {
+		if name == "takoform_worker_version" || schema == nil || schema.Block == nil {
+			continue
+		}
+		for _, attribute := range schema.Block.Attributes {
+			if attribute != nil && attribute.Name == "apply_idempotency_key" {
+				t.Fatalf("current publisher-set resource %q unexpectedly exposes apply_idempotency_key", name)
+			}
+		}
 	}
 }
 

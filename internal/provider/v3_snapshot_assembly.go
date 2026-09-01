@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -16,10 +19,33 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformsnapshot"
 )
 
-const providerV3ArtifactClosureFormat = "takoform.provider-v3-artifact-closure@v1"
+const (
+	providerV3ArtifactClosureFormat        = "takoform.provider-v3-artifact-closure@v1"
+	providerPublisherArtifactClosureFormat = "takoform.provider-publisher-set-artifact-closure@v1"
+)
 
-//go:embed artifacts/v3/**
-var providerV3EmbeddedArtifacts embed.FS
+//go:embed artifacts/publisher/**
+var providerPublisherEmbeddedArtifacts embed.FS
+
+type v3ArtifactContract struct {
+	closureFormat string
+	packages      int
+	interfaces    int
+	bindings      int
+	origin        string
+	decode        func([]byte) (*v3ProjectionIndex, error)
+}
+
+var (
+	providerV3ArtifactContract = v3ArtifactContract{
+		closureFormat: providerV3ArtifactClosureFormat, packages: providerV3CurrentFormCount,
+		interfaces: 13, bindings: 6, origin: "embedded://provider-v3/", decode: decodeProviderV3Projection,
+	}
+	providerPublisherArtifactContract = v3ArtifactContract{
+		closureFormat: providerPublisherArtifactClosureFormat, packages: publisherProviderFormCount,
+		interfaces: 8, bindings: 7, origin: "embedded://provider-publisher-set/", decode: decodePublisherProviderProjection,
+	}
+)
 
 type v3ArtifactClosure struct {
 	Format     string                       `json:"format"`
@@ -59,10 +85,13 @@ type v3ProviderAssembly struct {
 	codecs        *v3CodecTable
 }
 
-var cachedEmbeddedProviderV3Assembly = sync.OnceValues(loadEmbeddedProviderV3Assembly)
+var (
+	cachedProviderV3Assembly        = sync.OnceValues(loadSourceProviderV3Assembly)
+	cachedPublisherProviderAssembly = sync.OnceValues(loadEmbeddedPublisherProviderAssembly)
+)
 
 func providerV3SnapshotAssembly() (*v3ProviderAssembly, error) {
-	return cachedEmbeddedProviderV3Assembly()
+	return cachedProviderV3Assembly()
 }
 
 func mustProviderV3SnapshotAssembly() *v3ProviderAssembly {
@@ -73,10 +102,23 @@ func mustProviderV3SnapshotAssembly() *v3ProviderAssembly {
 	return assembly
 }
 
-// providerV3CurrentForms, v3TerraformResourceTypes, and v3Codecs are the
-// production dependency seams used by Provider 3 behavior and its immutable
-// goldens. They all resolve through the same once-verified embedded assembly.
-// W08 deleted the former catalog-backed comparison implementations.
+func publisherProviderSnapshotAssembly() (*v3ProviderAssembly, error) {
+	return cachedPublisherProviderAssembly()
+}
+
+func mustPublisherProviderSnapshotAssembly() *v3ProviderAssembly {
+	assembly, err := publisherProviderSnapshotAssembly()
+	if err != nil {
+		panic(err)
+	}
+	return assembly
+}
+
+// providerV3CurrentForms, v3TerraformResourceTypes, and v3Codecs are retained
+// Provider 3 source-history seams used by immutable goldens. Current provider
+// registration uses publisherProviderSnapshotAssembly, whose closure alone is
+// embedded in production. W08 deleted the former catalog-backed comparison
+// implementations.
 func providerV3CurrentForms() []model.Form {
 	forms := mustProviderV3SnapshotAssembly().currentForms
 	return append([]model.Form(nil), forms...)
@@ -90,12 +132,32 @@ func v3Codecs() *v3CodecTable {
 	return mustProviderV3SnapshotAssembly().codecs
 }
 
-func loadEmbeddedProviderV3Assembly() (*v3ProviderAssembly, error) {
-	source, err := fs.Sub(providerV3EmbeddedArtifacts, "artifacts/v3")
+func loadEmbeddedPublisherProviderAssembly() (*v3ProviderAssembly, error) {
+	source, err := fs.Sub(providerPublisherEmbeddedArtifacts, "artifacts/publisher")
 	if err != nil {
-		return nil, fmt.Errorf("takoform provider: open embedded Provider 3 artifacts: %w", err)
+		return nil, fmt.Errorf("takoform provider: open embedded publisher artifacts: %w", err)
+	}
+	return loadProviderAssembly(source, ".", providerPublisherArtifactContract)
+}
+
+// loadSourceProviderV3Assembly keeps the immutable Provider 3 projection
+// readable for release goldens and source documentation without embedding its
+// withdrawn aggregate packages into the next provider binary.
+func loadSourceProviderV3Assembly() (*v3ProviderAssembly, error) {
+	source, err := retainedProviderV3ArtifactFS()
+	if err != nil {
+		return nil, err
 	}
 	return loadProviderV3Assembly(source, ".")
+}
+
+func retainedProviderV3ArtifactFS() (fs.FS, error) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return nil, fmt.Errorf("takoform provider: locate retained Provider 3 source artifacts")
+	}
+	root := filepath.Join(filepath.Dir(sourceFile), "artifacts", "v3")
+	return os.DirFS(root), nil
 }
 
 // loadProviderV3Assembly is the bounded artifact seam used by production and
@@ -103,6 +165,10 @@ func loadEmbeddedProviderV3Assembly() (*v3ProviderAssembly, error) {
 // immutable embedded closure in production and a fully in-memory fs.FS in
 // negative tests.
 func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, error) {
+	return loadProviderAssembly(source, root, providerV3ArtifactContract)
+}
+
+func loadProviderAssembly(source fs.FS, root string, contract v3ArtifactContract) (*v3ProviderAssembly, error) {
 	if source == nil || root == "" || !fs.ValidPath(root) {
 		return nil, fmt.Errorf("takoform provider: invalid Provider 3 artifact root %q", root)
 	}
@@ -118,7 +184,7 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 	if err := formpackage.DecodeStrictIJSON(closureRaw, &closure); err != nil {
 		return nil, fmt.Errorf("takoform provider: decode embedded Provider 3 closure: %w", err)
 	}
-	if err := validateV3ArtifactClosure(closure); err != nil {
+	if err := validateV3ArtifactClosure(closure, contract); err != nil {
 		return nil, err
 	}
 	actualFiles, actualDirectories, err := inventoryV3ArtifactFS(artifactFS)
@@ -137,7 +203,7 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 	if projectionDigest != closure.Projection.Digest {
 		return nil, fmt.Errorf("takoform provider: Provider 3 projection digest is %s, closure pins %s", projectionDigest, closure.Projection.Digest)
 	}
-	projection, err := decodeProviderV3Projection(projectionRaw)
+	projection, err := contract.decode(projectionRaw)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +227,7 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 			declaredFiles[path.Join(entry.Root, packageFile.Path)] = struct{}{}
 		}
 		input.Packages = append(input.Packages, currentformsnapshot.PackageArtifact{
-			Origin: "embedded://provider-v3/" + entry.Root, ExpectedDigest: entry.PackageDigest, Package: verified,
+			Origin: contract.origin + entry.Root, ExpectedDigest: entry.PackageDigest, Package: verified,
 		})
 	}
 	for _, entry := range closure.Interfaces {
@@ -171,7 +237,7 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 			return nil, fmt.Errorf("takoform provider: read embedded Interface %q: %w", entry.Path, err)
 		}
 		input.Interfaces = append(input.Interfaces, currentformsnapshot.InterfaceArtifact{
-			Origin: "embedded://provider-v3/" + entry.Path, ExpectedDigest: entry.Ref.SchemaDigest, Definition: raw,
+			Origin: contract.origin + entry.Path, ExpectedDigest: entry.Ref.SchemaDigest, Definition: raw,
 		})
 	}
 	for _, entry := range closure.Bindings {
@@ -181,7 +247,7 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 			return nil, fmt.Errorf("takoform provider: read embedded Binding %q: %w", entry.Path, err)
 		}
 		input.Bindings = append(input.Bindings, currentformsnapshot.BindingArtifact{
-			Origin: "embedded://provider-v3/" + entry.Path, ExpectedDigest: entry.Ref.SchemaDigest, Definition: raw,
+			Origin: contract.origin + entry.Path, ExpectedDigest: entry.Ref.SchemaDigest, Definition: raw,
 		})
 	}
 	if err := validateV3ArtifactInventory(actualFiles, actualDirectories, declaredFiles); err != nil {
@@ -242,9 +308,9 @@ func loadProviderV3Assembly(source fs.FS, root string) (*v3ProviderAssembly, err
 	}, nil
 }
 
-func validateV3ArtifactClosure(closure v3ArtifactClosure) error {
-	if closure.Format != providerV3ArtifactClosureFormat {
-		return fmt.Errorf("takoform provider: artifact closure format %q, want %q", closure.Format, providerV3ArtifactClosureFormat)
+func validateV3ArtifactClosure(closure v3ArtifactClosure, contract v3ArtifactContract) error {
+	if closure.Format != contract.closureFormat {
+		return fmt.Errorf("takoform provider: artifact closure format %q, want %q", closure.Format, contract.closureFormat)
 	}
 	if err := validateV3ArtifactPath(closure.Projection.Path, "projection"); err != nil {
 		return err
@@ -256,9 +322,9 @@ func validateV3ArtifactClosure(closure v3ArtifactClosure) error {
 	if err := claimV3ArtifactPath(occupiedPaths, closure.Projection.Path, "projection"); err != nil {
 		return err
 	}
-	if len(closure.Packages) != 31 || len(closure.Interfaces) != 13 || len(closure.Bindings) != 6 {
-		return fmt.Errorf("takoform provider: artifact closure contains %d packages/%d Interfaces/%d Bindings, want 31/13/6",
-			len(closure.Packages), len(closure.Interfaces), len(closure.Bindings))
+	if len(closure.Packages) != contract.packages || len(closure.Interfaces) != contract.interfaces || len(closure.Bindings) != contract.bindings {
+		return fmt.Errorf("takoform provider: artifact closure contains %d packages/%d Interfaces/%d Bindings, want %d/%d/%d",
+			len(closure.Packages), len(closure.Interfaces), len(closure.Bindings), contract.packages, contract.interfaces, contract.bindings)
 	}
 	packageRoots := make(map[string]struct{}, len(closure.Packages))
 	packageRefs := make(map[formpackage.FormRef]struct{}, len(closure.Packages))

@@ -18,7 +18,7 @@ import (
 
 const (
 	edgeFamilyGroup            = "edge.forms.takoform.com"
-	edgeFormsPublisherBaseURL  = "https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/"
+	edgeFormsPublisherBaseURL  = "https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/"
 	workerRuntimeInterfaceName = "worker.runtime"
 )
 
@@ -253,7 +253,7 @@ func v3NameArgumentDoc(form model.Form) string {
 		"destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the " +
 		"host never sees it, and it enters only the derived name."
 	if form.Family.APIVersion() == edgeFamilyGroup {
-		doc += " The official [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you."
+		doc += " The repository [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you."
 	}
 	return doc + "\n"
 }
@@ -292,9 +292,9 @@ func v3RevisionOwnerExample(form model.Form) string {
 // model.Form intentionally has no digest fields: those are resolved from the
 // same exact Provider projection used by runtime registration.
 func providerReferenceSurfaceForForm(form model.Form) provider.ProviderV3ReferenceSurface {
-	surfaces, err := provider.CurrentProviderV3ReferenceSurfaces()
+	surfaces, err := provider.CurrentPublisherProviderReferenceSurfaces()
 	if err != nil {
-		panic(fmt.Errorf("load Provider 3 reference surface for %s/%s: %w", form.Family.APIVersion(), form.Kind, err))
+		panic(fmt.Errorf("load publisher-selected Provider reference surface for %s/%s: %w", form.Family.APIVersion(), form.Kind, err))
 	}
 	for _, surface := range surfaces {
 		if surface.Form.Family.APIVersion() == form.Family.APIVersion() &&
@@ -303,19 +303,18 @@ func providerReferenceSurfaceForForm(form model.Form) provider.ProviderV3Referen
 			return surface
 		}
 	}
-	panic(fmt.Errorf("Provider 3 reference surface has no exact identity for %s/%s@%s", form.Family.APIVersion(), form.Kind, form.DefinitionVersion))
+	panic(fmt.Errorf("publisher-selected Provider reference surface has no exact identity for %s/%s@%s", form.Family.APIVersion(), form.Kind, form.DefinitionVersion))
 }
 
 // formDefinitionReference points readers at the authority that owns the
-// current Form Definition. Published Edge definitions live in the standalone
-// takoform-forms repository at an immutable commit; other current mappings
-// are explicitly embedded Provider projections, not public package claims.
+// current Form Definition. Every current Provider mapping is selected from
+// the standalone tako0614/takoform-forms publication at an immutable commit.
 func formDefinitionReference(form model.Form) string {
 	definitionPath := "forms/candidates/" + form.Family.Group + "/" + form.Slug + "/definition.json"
 	if form.Family.Group == edgeFamilyGroup {
 		return "The published Edge Form Definition is maintained in the [takoform-forms source](" + edgeFormsPublisherBaseURL + form.Family.Group + "/" + form.Slug + "/definition.json)."
 	}
-	return "The exact current mapping is an embedded Provider projection, not a public Form Package: [`" + definitionPath + "`](../../" + definitionPath + ")."
+	panic(fmt.Errorf("publisher-selected Provider surface unexpectedly references non-publisher Form %s", definitionPath))
 }
 
 // v3ExactFormIdentitySection renders the complete immutable FormRef instead
@@ -340,7 +339,7 @@ func v3ResourceDoc(form model.Form) string {
 	resourceType := mustProviderReferenceTerraformType(form)
 	fmt.Fprintf(&builder, `---
 page_title: "%s Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "tako0614 Forms"
 description: |-
   %s
 ---
@@ -351,7 +350,7 @@ description: |-
 
 `, resourceType, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This page documents the current Provider 3 mapping; its current exact FormRef `" +
+	builder.WriteString("This page documents the publisher-set next-major Provider mapping; its exact FormRef `" +
 		form.Family.APIVersion() + "/" + form.Kind + "` is recorded below.\n" +
 		"The resource type is Provider metadata. " + formDefinitionReference(form) + "\n" +
 		"See the complete exact identity and the [complete example](https://takoform.com/examples/resources/" + resourceType + "/resource.tf).\n")
@@ -367,11 +366,29 @@ description: |-
 			builder.WriteString(v3FieldDocLine(form, field))
 		}
 	}
+	if form.Kind == "WorkerVersion" {
+		builder.WriteString("- `apply_idempotency_key` (candidate Provider 4.0.0, String, optional, computed, forces replacement) — Provider-only Host operation identity for this immutable version's apply. Released Provider 3.0.0 does not expose this attribute. On an ordinary run with no `runtime_input_nonce`, omitting it keeps the Provider's established deterministic operation key; an explicitly configured 1..255-byte visible-ASCII value retains the caller-selected behavior. When `runtime_input_nonce` is configured on this exact Provider instance, this argument must be omitted: the Provider computes it from that nonce and the exact value-free logical WorkerVersion apply identity and records only the opaque result in plan and state. Rotating a sensitive value under the same nonce does not change the key; rotating the nonce does, producing a new immutable WorkerVersion identity. The key is never included in the portable desired spec or read back from the Host.\n")
+	}
 	builder.WriteString("- `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.\n")
 	if form.DeclaresUpdate() {
 		builder.WriteString("- `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).\n")
 	} else {
 		builder.WriteString("- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.\n")
+	}
+	if form.Kind == "WorkerVersion" {
+		builder.WriteString(`
+## Run-scoped sensitive inputs
+
+` + "`required_sensitive_vars`" + ` declares names only. When it is non-empty, the exact Provider instance must receive a 22..128 character unpadded-base64url ` + "`runtime_input_nonce`" + ` during Plan while its sensitive ` + "`runtime_inputs`" + ` map remains empty. Apply must reuse that nonce and supply a map whose names exactly equal the declaration. Missing or extra names, a changed nonce, a value supplied during Plan, or a value supplied to a different Provider instance is refused before any Host mutation.
+
+The runner supplies the Apply-only map through an ephemeral root variable and the selected Provider block. It writes the transient variable file to the OpenTofu process's standard input; it does not put values in command arguments, process environment, ordinary credential files, plan, or state. This Provider ignores ` + "`TAKOFORM_RUNTIME_INPUTS_FILE`" + ` and ambient environment variables named by the declaration. One module may use other Takoform or industry-standard Provider instances; none receives this map unless the root explicitly targets it.
+
+The map is limited to 1..64 bindings, each value to 1..32768 bytes of UTF-8 text without NUL, and the runner dispatch to 1 MiB total. These limits are separate from the value-free public apply envelope: ` + "`publicApply.path`" + ` is limited to 8,192 UTF-8 bytes and ` + "`publicApply.body`" + ` is limited to 1,048,576 UTF-8 bytes. An overlong path, body, binding, or dispatch is refused before a commitment, private preparation, or public Host mutation.
+
+Every run first reads the value-free private preparation by the deterministic operation key. Only an absent record permits one same-origin private PUT of the plaintext bindings over TLS. A prepared record continues with one ordinary public PUT; an accepted, dispatched, or consumed record polls its exact ordinary Host operation without resending bindings or replaying the public PUT. After any PUT acknowledgement failure, recovery uses a fresh bounded context and value-free private readback.
+
+Values never enter the public apply body, Terraform plan or state, Provider logs or diagnostics, or the computed operation key. The Provider keeps accepted values in mutable buffers where practical, wipes those buffers and transport response buffers promptly on a best-effort basis, and drops references after the private PUT. This is not a guarantee of Go process-memory erasure: the runtime, compiler, HTTP/TLS stack, operating system, or a crash dump may retain copies outside those buffers. Runner operators must protect or disable crash dumps and process inspection as appropriate. The durable guarantee is absence from plan, state, logs, diagnostics, and public Host requests.
+`)
 	}
 	generationDoc := "increments only when the portable desired spec changes. Updates fence on it."
 	recoveryDoc := "an in-place re-apply of the same desired state, which is all a host needs to re-resolve and re-pin every reference"
@@ -533,8 +550,9 @@ func v3ExampleHCL(form model.Form) string {
       source = "registry.terraform.io/tako0614/takoform"
       # This resource type is non-normative Provider metadata. The current
       # exact FormRef and digest do not contain this name.
-      # Provider 2.1.1's 15 versioned identities remain retained history.
-      version = "= 3.0.0"
+      # Provider 3's broader aggregate remains retained history. The next
+      # major registers only the tako0614 Edge Form set.
+      version = "~> 4.0"
     }
   }
 }
@@ -566,6 +584,13 @@ provider "takoform" {
 `)
 	} else {
 		for _, field := range form.Fields {
+			// The standalone WorkerVersion example stays on the ordinary lane.
+			// A sensitive declaration is inseparable from runner-owned Apply-only
+			// provider input; emitting the name alone would create a configuration
+			// that the Provider must reject before Host mutation.
+			if form.Kind == "WorkerVersion" && field.HCL == "required_sensitive_vars" {
+				continue
+			}
 			if field.Example == nil {
 				continue
 			}
@@ -783,8 +808,9 @@ func v3JSONEncodeHCL(example any) string {
 	return "jsonencode({ " + strings.Join(parts, ", ") + " })"
 }
 
-// v3FormInventorySection renders the selected Forms carried by Provider 3's
-// exact projection. It intentionally has no Terraform resource column.
+// v3FormInventorySection renders the publisher-selected Forms selected from Provider
+// 3's immutable exact projection. It intentionally has no Terraform resource
+// column.
 func v3FormInventorySection() string {
 	var builder strings.Builder
 	families := currentFamilies()
@@ -804,18 +830,18 @@ func v3FormInventorySection() string {
 		}
 	}
 	fmt.Fprintf(&builder, `
-Current Provider 3 mapping has exactly %d typed resources in %d versionless families. Edge has
-exactly %d members in that mapping and intentionally has no ObjectBucket Form,
-`+"`edge.objects`"+` Interface, or ObjectBucket Binding. Retained versioned
-Provider 2.1.1 packages remain immutable history and are not members of this
-mapping.
+The current publisher-selected Provider mapping has exactly %d typed resources in %d versionless family. Edge has
+exactly %d members, including the ObjectBucket Form, `+"`edge.objects`"+`
+Interface, and `+"`module-worker.object-bucket`"+` Binding. Retained versioned
+Provider 2.1.1 and aggregate Provider 3 releases remain immutable history and
+are not the current roster.
 
-The Terraform Provider reference docs and examples under
+The `+"`tako0614/takoform`"+` Provider reference docs and examples under
 `+"`docs/resources`"+` and `+"`examples/resources`"+` cover only mappings that
 the provider explicitly owns. Their `+"`takoform_*`"+` names are non-normative
-and cannot affect a Form Definition or digest. Missing mappings for other
-families are provider-registration work, not a reason to omit or alter those
-families here.
+and cannot affect a Form Definition or digest. Resources owned by other
+providers are used through ordinary `+"`required_providers`"+` declarations and
+the native OpenTofu dependency graph; they are not recreated as Takoform Forms.
 `, total, len(families), edgeCount)
 	return builder.String()
 }

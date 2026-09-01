@@ -410,7 +410,7 @@ function checkResourceInventory(expectedFormNames) {
   ]) {
     const text = visibleHtmlText(read(path.join(publicRoot, page)));
     if (!text.includes("Provider 3") || !text.includes("31")) {
-      fail(`${label}: missing the current Provider 3 mapping count`);
+      fail(`${label}: missing the retained Provider 3 aggregate count`);
     }
     for (const [group, count] of familyCounts) {
       const family = familyLabels.get(group) ?? group;
@@ -658,9 +658,9 @@ function checkCurrentProviderSample(filePath) {
     fail(`${relative(filePath)}: missing canonical provider source`);
     return;
   }
-  if (!hasExactProviderPin(source, "3.0.0")) {
+  if (!/\bversion\s*=\s*"~> 4\.0"/.test(source)) {
     fail(
-      `${relative(filePath)}: current Provider sample must contain version = "= 3.0.0"`,
+      `${relative(filePath)}: publisher-specific next-major Provider sample must contain version = "~> 4.0"`,
     );
   }
 }
@@ -1145,7 +1145,7 @@ function checkHandWrittenInventories(familyRoster) {
       label: "the English landing inventory",
       required: [
         { needle: "**`3.0.0`**", subject: "current Provider" },
-        { needle: "| Edge | 16 |", subject: "Edge count" },
+        { needle: "| Edge | 17 |", subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
     },
@@ -1154,7 +1154,7 @@ function checkHandWrittenInventories(familyRoster) {
       label: "the Japanese landing inventory",
       required: [
         { needle: "**`3.0.0`**", subject: "current Provider" },
-        { needle: "| Edge | 16 |", subject: "Edge count" },
+        { needle: "| Edge | 17 |", subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
     },
@@ -1742,11 +1742,21 @@ function checkPublicSchemas() {
   }
 }
 
-const releaseVersion = readJson(
+const retiredReleaseVersion = readJson(
   path.join(repositoryRoot, "release", "version.json"),
 );
+if (
+  retiredReleaseVersion.version !== "3.0.0" ||
+  retiredReleaseVersion.tag !== "v3.0.0" ||
+  retiredReleaseVersion.publicationStatus !== "candidate-only"
+) {
+  fail("release/version.json: tombstoned Provider 3 writer input drifted");
+}
+const releaseVersion = readJson(
+  path.join(repositoryRoot, "release", "candidates", "provider-v4.0.0.json"),
+);
 if (releaseVersion.publicationStatus !== "candidate-only") {
-  fail("release/version.json: publicationStatus must be candidate-only");
+  fail("release/candidates/provider-v4.0.0.json: publicationStatus must be candidate-only");
 }
 if (
   typeof releaseVersion.version !== "string" ||
@@ -1760,34 +1770,67 @@ if (releaseVersion.tag !== `v${releaseVersion.version}`) {
   fail("release/version.json: tag must match version");
 }
 
-// The publisher-selected family index is the roster authority. Provider 3's
-// independent projection contributes only Terraform names for those exact
-// FormRefs; the public-surface check must not carry another family list.
+// Provider 3's eight-family index and identity projection are immutable
+// aggregate history. The current Provider source selects only the publisher
+// Edge publication from that exact verified projection; the public-surface
+// check derives Terraform names from the retained ledger instead of carrying
+// another name map.
 const currentFamilyIndex = readJson(
   path.join(repositoryRoot, "forms", "candidates", "current-family-index.json"),
 );
 const providerIdentityLedger = readJson(
   path.join(repositoryRoot, "release", "provider-form-identities.json"),
 );
-const currentProviderIdentity = (providerIdentityLedger.releases ?? []).find(
-  (entry) => entry?.providerVersion === releaseVersion.version,
+const currentProviderIdentity = readJson(
+  path.join(
+    repositoryRoot,
+    "release",
+    "candidates",
+    "provider-v4.0.0-form-identities.json",
+  ),
 );
-if (!currentProviderIdentity) {
+const publisherClosure = readJson(
+  path.join(
+    repositoryRoot,
+    "internal",
+    "provider",
+    "artifacts",
+    "publisher",
+    "closure.json",
+  ),
+);
+const publisherSlugByForm = new Map(
+  (publisherClosure.packages ?? []).map((entry) => [
+    `${entry?.formRef?.apiVersion ?? ""}\u0000${entry?.formRef?.kind ?? ""}`,
+    path.posix.basename(typeof entry?.root === "string" ? entry.root : ""),
+  ]),
+);
+if (
+  currentProviderIdentity.format !==
+    "takoform.provider-candidate-form-identities@v1" ||
+  currentProviderIdentity.providerVersion !== releaseVersion.version
+) {
   fail(
-    `release/provider-form-identities.json: missing Provider ${releaseVersion.version} identity projection`,
+    `release/candidates/provider-v4.0.0-form-identities.json: missing Provider ${releaseVersion.version} identity projection`,
   );
 }
-const currentProviderResourceTypes = new Map(
-  (currentProviderIdentity?.forms ?? []).map((entry) => [
+const retainedProvider3Identity = (providerIdentityLedger.releases ?? []).find(
+  (entry) => entry?.providerVersion === "3.0.0",
+);
+if (!retainedProvider3Identity) {
+  fail("release/provider-form-identities.json: missing retained Provider 3 identity projection");
+}
+const retainedProvider3ResourceTypes = new Map(
+  (retainedProvider3Identity.forms ?? []).map((entry) => [
     `${entry?.formRef?.apiVersion ?? ""}\u0000${entry?.formRef?.kind ?? ""}`,
     entry?.resourceType ?? "",
   ]),
 );
-const currentFormRoster = (currentFamilyIndex.families ?? []).flatMap((family) => {
+const retainedAggregateRoster = (currentFamilyIndex.families ?? []).flatMap((family) => {
   const candidateSet = readJson(path.join(repositoryRoot, family.candidateSet ?? ""));
   return (candidateSet.forms ?? []).map((entry) => {
     const slug = path.posix.basename(typeof entry?.path === "string" ? entry.path : "");
-    const resourceType = currentProviderResourceTypes.get(
+    const resourceType = retainedProvider3ResourceTypes.get(
       `${candidateSet.family ?? ""}\u0000${entry?.kind ?? ""}`,
     );
     if (typeof resourceType !== "string" || !resourceType.startsWith("takoform_")) {
@@ -1803,28 +1846,49 @@ const currentFormRoster = (currentFamilyIndex.families ?? []).flatMap((family) =
     };
   });
 });
-if (currentFamilyIndex.families?.length !== 8 || currentFormRoster.length !== 31) {
+if (currentFamilyIndex.families?.length !== 8 || retainedAggregateRoster.length !== 31) {
   fail(
     "forms/candidates/current-family-index.json: expected the exact 8-family, 31-Form current corpus",
   );
 }
-if (currentProviderResourceTypes.size !== 31) {
+if (retainedProvider3ResourceTypes.size !== 31) {
   fail(
-    `release/provider-form-identities.json: expected 31 exact Provider resource mappings, got ${currentProviderResourceTypes.size}`,
+    `release/provider-form-identities.json: expected 31 retained Provider 3 resource mappings, got ${retainedProvider3ResourceTypes.size}`,
   );
 }
 
-const familySet = readJson(path.join(repositoryRoot, FAMILY_CANDIDATE_SET));
-const familyEntries = Array.isArray(familySet.forms) ? familySet.forms : [];
-const edgeFamilyRoster = currentFormRoster.filter(
-  ({ group }) => group === familySet.family,
-);
-if (edgeFamilyRoster.length !== familyEntries.length) {
+const currentFormRoster = (currentProviderIdentity.forms ?? []).map((entry) => {
+  const group = entry?.formRef?.apiVersion ?? "";
+  const kind = entry?.formRef?.kind ?? "";
+  const resourceType = entry?.resourceType ?? "";
+  const slug = publisherSlugByForm.get(`${group}\u0000${kind}`) ?? "";
+  if (
+    group !== "edge.forms.takoform.com" ||
+    kind === "" ||
+    slug === "" ||
+    typeof resourceType !== "string" ||
+    !resourceType.startsWith("takoform_")
+  ) {
+    fail(
+      `release/candidates/provider-v4.0.0-form-identities.json: malformed publisher mapping ${group}/${kind} -> ${resourceType}`,
+    );
+  }
+  return {
+    group,
+    kind,
+    slug,
+    docName: resourceType.slice("takoform_".length),
+  };
+});
+if (currentFormRoster.length !== 17) {
   fail(
-    `${FAMILY_CANDIDATE_SET}: selected Forms and exact Provider projection disagree ` +
-      `(candidate=${familyEntries.length}, projected=${edgeFamilyRoster.length})`,
+    `publisher-selected Provider source: expected 17 exact Edge mappings, got ${currentFormRoster.length}`,
   );
 }
+
+const edgeFamilyRoster = currentFormRoster.filter(
+  ({ group }) => group === "edge.forms.takoform.com",
+);
 
 const formDocNames = currentFormRoster.map(({ docName }) => docName);
 const expectedResourceDocs = formDocNames.map((name) => `${name}.md`);
@@ -1916,7 +1980,7 @@ if (failures.length > 0) {
   const siteStatus = deriveSiteStatusFacts(repositoryRoot);
   console.log(
     `Public surfaces OK: Specification 1.1 is ${siteStatus.specificationReleaseStatus}, ` +
-      `the 8-family/31-Form corpus remains Experimental, Provider v${releaseVersion.version} ` +
-      "is Registry-published, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
+      `the Provider v${releaseVersion.version} candidate selects 17 tako0614 Edge Forms, Provider v3.0.0 ` +
+      "retains the 31-Form Registry history, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );
 }

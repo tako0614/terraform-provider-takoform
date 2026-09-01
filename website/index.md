@@ -15,8 +15,11 @@ hero:
 ---
 
 Takoform Provider maps typed Terraform/OpenTofu resources to exact Form
-contracts exposed by a compatible Host. The current release is Provider
-**`3.0.0`** with API/Core **`v1.0.1`** on `forms.takoform.com/v1`.
+contracts exposed by a compatible Host. The Provider `4.0.0` candidate keeps the
+`tako0614/takoform` address and contains only 17 Forms selected from
+`tako0614/takoform-forms`. Registry
+Provider **`3.0.0`** remains immutable 31-resource aggregate history. API/Core
+**`v1.0.1`** stays on `forms.takoform.com/v1`.
 
 ## Install and use
 
@@ -25,7 +28,8 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 3.0.0"
+      # Use after the publisher-set Provider 4 release is published.
+      version = "~> 4.0"
     }
   }
 }
@@ -42,18 +46,12 @@ resource "takoform_module_worker" "api" {
 
 ## Resource reference
 
-| Family | Current Provider 3 mappings |
+| Publisher family | Provider 4 mappings |
 | --- | ---: |
-| Edge | 16 |
-| Function | 4 |
-| Container | 5 |
-| Queue | 1 |
-| Schedule | 1 |
-| Table | 1 |
-| Topic | 2 |
-| Vector | 1 |
+| Edge | 17 |
 
 Read the [Provider reference](/docs/), [Provider mapping inventory](/forms/), and
 [conformance evidence](/conformance/) for generated contracts and executable
 checks. See [Versions and compatibility](/docs/versions.html) for retained
-releases and migration.
+releases and migration. AWS, Cloudflare, Kubernetes, and other providers are
+declared natively beside Takoform in the same OpenTofu module.

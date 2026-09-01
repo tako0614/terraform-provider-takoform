@@ -91,7 +91,7 @@ func (r *v3ResourceTypeRegistry) Artifact(key v3ExactFormKey) (*v3ArtifactProjec
 
 // compileV3FormResources is provider registration. Missing or duplicate
 // Terraform mappings fail here only; Form validation and canonical rendering
-// remain completely independent of the official provider.
+// remain completely independent of the tako0614 Provider mapping.
 func compileV3FormResources(
 	forms []model.Form,
 	formRegistry v3FormRegistry,

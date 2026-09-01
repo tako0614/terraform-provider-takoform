@@ -1,6 +1,6 @@
 ---
 page_title: "Takoform provider"
-description: "Terraform/OpenTofu Provider 3 resource reference"
+description: "Publisher-specific Takoform Terraform/OpenTofu Provider resource reference"
 ---
 
 # Takoform Provider
@@ -11,16 +11,24 @@ resulting identity and desired state in Terraform state; the Host runs the
 service. API/Core checkpoint **`v1.0.1`** uses the existing
 `forms.takoform.com/v1` wire and discovery lane.
 
-## Install and configure
+## Publisher-specific next major
 
-Install the current Registry release and point it at a compatible Host:
+This checkout implements the next Provider major at the existing
+`registry.terraform.io/tako0614/takoform` source address. It registers only the
+17 exact Forms selected from `github.com/tako0614/takoform-forms`. Provider `3.0.0`
+remains immutable 31-Form aggregate history and is not silently rewritten.
+
+This relationship is identified by publisher repository and exact FormRefs;
+Takoform assigns it no privileged classification.
+
+After the next major is published, point it at a compatible Host:
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 3.0.0"
+      version = "~> 4.0"
     }
   }
 }
@@ -38,30 +46,18 @@ resource "takoform_module_worker" "api" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-Provider 3 contains 31 mappings across eight families. Resource names are
-Provider metadata; contract meaning comes from the linked Form Definitions and
-the [Core v1.0.1 specification](https://github.com/tako0614/takoform/tree/v1.0.1/spec).
+No `4.0.0` publication or Registry availability is claimed here. The exact
+removal and state boundary is documented in the
+[v3-to-v4 migration guide](../release/migrations/v3-to-v4.md).
 
 ## Resource reference
 
-### Edge (16)
+### Edge (17)
 
 - [ModuleWorker](resources/module_worker.md), [WorkerBundle](resources/worker_bundle.md), [StaticAssetBundle](resources/static_asset_bundle.md), [WorkerVersion](resources/worker_version.md)
 - [WorkerDeployment](resources/worker_deployment.md), [WorkerCustomDomain](resources/worker_custom_domain.md), [WorkerEndpoint](resources/worker_endpoint.md), [WorkerCronTrigger](resources/worker_cron_trigger.md)
-- [EdgeKVNamespace](resources/edge_kv_namespace.md), [SQLiteDatabase](resources/sqlite_database.md), [SQLiteMigrationSet](resources/sqlite_migration_set.md), [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
+- [EdgeKVNamespace](resources/edge_kv_namespace.md), [ObjectBucket](resources/edge_object_bucket.md), [SQLiteDatabase](resources/sqlite_database.md), [SQLiteMigrationSet](resources/sqlite_migration_set.md), [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
 - [AtLeastOnceQueue](resources/at_least_once_queue.md), [QueueConsumer](resources/queue_consumer.md), [DurableWorkflow](resources/durable_workflow.md), [ActorNamespace](resources/actor_namespace.md)
-
-### Function (4)
-
-- [Function](resources/function.md), [FunctionVersion](resources/function_version.md), [FunctionDeployment](resources/function_deployment.md), [FunctionEndpoint](resources/function_endpoint.md)
-
-### Container (5)
-
-- [ContainerService](resources/serverless_container_service.md), [ContainerRevision](resources/container_revision.md), [ContainerTraffic](resources/container_traffic.md), [ContainerEndpoint](resources/container_endpoint.md), [ContainerCustomDomain](resources/container_custom_domain.md)
-
-### Queue, schedule, table, topic, and vector (6)
-
-- [PullQueue](resources/pull_queue.md), [Schedule](resources/message_schedule.md), [Table](resources/table.md), [Topic](resources/topic.md), [TopicSubscription](resources/topic_subscription.md), [VectorIndex](resources/dense_vector_index.md)
 
 Each generated resource page shows the full four-field FormRef, its separate
 package digest, typed arguments, state behavior, import contract, and source
@@ -78,8 +74,18 @@ cd terraform-provider-takoform
 git checkout --detach v3.0.0
 ```
 
-Version and migration history are kept in `website/docs/versions.md` and the
-[v2-to-v3 migration guide](../release/migrations/v2-to-v3.md).
+Version and migration history are kept in `website/docs/versions.md`, the
+[v2-to-v3 guide](../release/migrations/v2-to-v3.md), and the
+[publisher-set v3-to-v4 guide](../release/migrations/v3-to-v4.md).
+
+## Native composition with other providers
+
+AWS, Cloudflare, Kubernetes, PostgreSQL, and other providers are peers, not
+Takoform implementation details. A module declares any number of provider
+sources in `required_providers` and connects their resources through the native
+OpenTofu graph. Takoform does not create wrapper Forms, proxy their credentials,
+or maintain a central provider catalog. See the
+[composition example](../examples/native-provider-composition/main.tf).
 
 ## Host requirements
 

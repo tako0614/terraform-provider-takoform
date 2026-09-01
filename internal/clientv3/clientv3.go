@@ -344,19 +344,13 @@ func SplitGroupPath(parts []string) (string, []string, bool) {
 	return "", nil, false
 }
 
-// exactFormQuery carries the exact FormRef and Space on read/lifecycle URLs.
-// The group travels under the query key "group"; the packageDigest is
-// deliberately absent because it is audit evidence, never identity.
-// exactFormQuery is the exact-identity query, used both as the /forms
-// availability probe and as the exact-ref qualifier on resource routes.
-//
-// The group travels as ONE value here because that is what a resource route
-// qualifies on. The availability route splits it; see formsAvailabilityQuery.
+// exactFormQuery carries the part of an exact FormRef that is not already in
+// the definition/resource path. packageDigest is audit evidence, never
+// identity. The separately named formsAvailabilityQuery carries all five
+// filters because /forms has no Form identity in its path.
 func exactFormQuery(space string, ref FormRef) url.Values {
 	query := url.Values{}
 	query.Set("space", space)
-	query.Set("group", ref.APIVersion)
-	query.Set("kind", ref.Kind)
 	query.Set("definitionVersion", ref.DefinitionVersion)
 	query.Set("schemaDigest", ref.SchemaDigest)
 	return query
@@ -461,14 +455,20 @@ func (c *Client) do(
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
 		_ = resp.Body.Close()
 		if readErr != nil {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf("takoform: reading response body: %w", readErr)
 		}
 		if len(data) > maxResponseBodyBytes {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes)
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			apiErr := parseAPIError(resp.StatusCode, data, resp.Header.Get("Retry-After"))
+			// The parsed error owns any fields it needs. Promptly wipe the mutable
+			// transport buffer; callers on the runtime-input path additionally
+			// replace the parsed error with a closed value-free error.
+			clearRuntimeInputBytes(data)
 			if retryStable && attempt+1 < attempts && isPortableRetryable(apiErr) {
 				if err := waitForRetry(ctx, attempt, apiErr.RetryAfter); err != nil {
 					return 0, nil, nil, err
@@ -478,6 +478,7 @@ func (c *Client) do(
 			return 0, nil, nil, apiErr
 		}
 		if !containsStatus(successStatuses, resp.StatusCode) {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf(
 				"takoform: response from %s returned unexpected success status %d",
 				fullURL,
@@ -485,6 +486,7 @@ func (c *Client) do(
 			)
 		}
 		if resp.StatusCode == http.StatusNoContent && len(data) != 0 {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf(
 				"takoform: response from %s returned a non-empty response body for HTTP 204",
 				fullURL,

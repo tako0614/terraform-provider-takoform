@@ -3,7 +3,6 @@ package standardforms
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -11,17 +10,8 @@ import (
 func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 	t.Parallel()
 
-	wantGroups := []string{
-		"edge.forms.takoform.com",
-		"function.forms.takoform.com",
-		"container.forms.takoform.com",
-		"table.forms.takoform.com",
-		"queue.forms.takoform.com",
-		"topic.forms.takoform.com",
-		"schedule.forms.takoform.com",
-		"vector.forms.takoform.com",
-	}
-	wantCounts := []int{16, 4, 5, 1, 1, 2, 1, 1}
+	wantGroups := []string{"edge.forms.takoform.com"}
+	wantCounts := []int{17}
 	families := currentFamilies()
 	if len(families) != len(wantGroups) {
 		t.Fatalf("family count = %d, want %d", len(families), len(wantGroups))
@@ -34,15 +24,10 @@ func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 		if len(family.Forms) != wantCounts[index] {
 			t.Fatalf("%s Form count = %d, want %d", family.Group, len(family.Forms), wantCounts[index])
 		}
-		for _, form := range family.Forms {
-			if strings.Contains(form.Kind, "ObjectBucket") {
-				t.Fatalf("current Provider 3 mapping includes withdrawn Form %s/%s", family.Group, form.Kind)
-			}
-		}
 		total += len(family.Forms)
 	}
-	if total != 31 {
-		t.Fatalf("current Form count = %d, want 31", total)
+	if total != 17 {
+		t.Fatalf("current Form count = %d, want 17", total)
 	}
 
 	seenTypes := map[string]string{}
@@ -61,8 +46,11 @@ func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 			seenTypes[resourceType] = family.Group + "/" + form.Kind
 		}
 	}
-	if len(seenTypes) != 31 {
-		t.Fatalf("provider reference type count = %d, want 31", len(seenTypes))
+	if len(seenTypes) != 17 {
+		t.Fatalf("provider reference type count = %d, want 17", len(seenTypes))
+	}
+	if _, ok := seenTypes["takoform_edge_object_bucket"]; !ok {
+		t.Fatal("provider reference projection omits the publisher's Edge ObjectBucket Form")
 	}
 }
 
@@ -70,8 +58,8 @@ func TestPublishedSurfaceInventoryCoversEveryCurrentProviderMapping(t *testing.T
 	t.Parallel()
 
 	surfaces := renderPublishedSurfaces()
-	if len(surfaces) != 63 {
-		t.Fatalf("published surface count = %d, want 63 (31 docs, 31 examples, inventory)", len(surfaces))
+	if len(surfaces) != 35 {
+		t.Fatalf("published surface count = %d, want 35 (17 docs, 17 examples, inventory)", len(surfaces))
 	}
 	paths := map[string]bool{}
 	for _, surface := range surfaces {
@@ -103,19 +91,13 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 
 	forms := map[string]map[string]bool{
 		"edge.forms.takoform.com/ModuleWorker": {
-			"current exact FormRef `edge.forms.takoform.com/ModuleWorker`":                                                                        true,
-			"takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/module-worker/definition.json": true,
+			"exact FormRef `edge.forms.takoform.com/ModuleWorker`":                                                                                true,
+			"takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/module-worker/definition.json": true,
 		},
-		"container.forms.takoform.com/ContainerCustomDomain": {
-			"current exact FormRef `container.forms.takoform.com/ContainerCustomDomain`": true,
-			"embedded Provider projection":                true,
-			"target `ContainerService` resource":          true,
-			`"apiVersion":"container.forms.takoform.com"`: true,
+		"edge.forms.takoform.com/SQLiteDatabase": {
+			"exact FormRef `edge.forms.takoform.com/SQLiteDatabase`": true,
 		},
-		"function.forms.takoform.com/FunctionVersion": {
-			"current exact FormRef `function.forms.takoform.com/FunctionVersion`": true,
-		},
-		"container.forms.takoform.com/ContainerRevision": {},
+		"edge.forms.takoform.com/WorkerVersion": {},
 	}
 	for _, family := range currentFamilies() {
 		for _, form := range family.Forms {
@@ -147,15 +129,6 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 					t.Errorf("%s generated surface is missing package provenance %q", key, needle)
 				}
 			}
-			if owner := map[string]string{
-				"function.forms.takoform.com/FunctionVersion":    "function",
-				"container.forms.takoform.com/ContainerRevision": "container-service",
-			}[key]; owner != "" {
-				pattern := regexp.MustCompile(`revision_owner\s*=\s*"` + regexp.QuoteMeta(owner) + `"`)
-				if !pattern.MatchString(content) {
-					t.Errorf("%s generated example does not use revision owner %q", key, owner)
-				}
-			}
 			delete(forms, key)
 		}
 	}
@@ -164,33 +137,51 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 	}
 }
 
-func TestScheduleExampleProjectsNestedResourceRefsToProviderNames(t *testing.T) {
+func TestWorkerVersionRuntimeInputDocumentationPinsProviderScopedApplyOnlyTransport(t *testing.T) {
 	t.Parallel()
 
-	var scheduleExample string
-	for _, family := range currentFamilies() {
-		if family.Group != "schedule.forms.takoform.com" {
-			continue
-		}
-		for _, form := range family.Forms {
-			if form.Kind == "Schedule" {
-				scheduleExample = v3ExampleHCL(form)
-			}
+	var document string
+	for _, surface := range renderPublishedSurfaces() {
+		if surface.path == "docs/resources/worker_version.md" {
+			document = string(surface.content)
+			break
 		}
 	}
-	if scheduleExample == "" {
-		t.Fatal("current family inventory is missing Schedule")
+	if document == "" {
+		t.Fatal("current Form inventory is missing WorkerVersion")
 	}
-	if !strings.Contains(scheduleExample, `"queue" = "scheduled-work"`) {
-		t.Fatalf("Schedule example does not project target.queue to the provider's resource-name attribute:\n%s", scheduleExample)
+	const limitContract = "The map is limited to 1..64 bindings, each value to 1..32768 bytes of UTF-8 text without NUL, and the runner dispatch to 1 MiB total. These limits are separate from the value-free public apply envelope: `publicApply.path` is limited to 8,192 UTF-8 bytes and `publicApply.body` is limited to 1,048,576 UTF-8 bytes. An overlong path, body, binding, or dispatch is refused before a commitment, private preparation, or public Host mutation."
+	if !strings.Contains(document, limitContract) {
+		t.Fatalf("WorkerVersion runtime-input documentation does not pin the provider-scoped Apply-only limits:\n%s", document)
+	}
+	for _, required := range []string{"runtime_input_nonce", "runtime_inputs", "ephemeral root variable", "different Provider instance"} {
+		if !strings.Contains(document, required) {
+			t.Errorf("WorkerVersion runtime-input documentation is missing %q", required)
+		}
+	}
+}
+
+func TestCurrentPublishedSurfacesExcludeProvider3AggregateForms(t *testing.T) {
+	t.Parallel()
+
+	content := ""
+	for _, surface := range renderPublishedSurfaces() {
+		content += surface.path + "\n" + string(surface.content) + "\n"
 	}
 	for _, forbidden := range []string{
-		`"queue" = {`,
-		`"apiVersion" = "queue.forms.takoform.com"`,
-		`"kind" = "PullQueue"`,
+		"function.forms.takoform.com",
+		"container.forms.takoform.com",
+		"table.forms.takoform.com",
+		"queue.forms.takoform.com",
+		"topic.forms.takoform.com",
+		"schedule.forms.takoform.com",
+		"vector.forms.takoform.com",
+		"takoform_function",
+		"takoform_serverless_container_service",
+		"takoform_table",
 	} {
-		if strings.Contains(scheduleExample, forbidden) {
-			t.Errorf("Schedule example leaks wire-only ResourceRef member %q:\n%s", forbidden, scheduleExample)
+		if strings.Contains(content, forbidden) {
+			t.Errorf("current publisher-selected Provider surface still contains withdrawn Provider 3 aggregate identity %q", forbidden)
 		}
 	}
 }

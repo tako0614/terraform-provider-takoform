@@ -1,6 +1,6 @@
 # `worker-app`
 
-The official Takoform module for one running ES Module Worker. It is the
+The repository module for one running ES Module Worker. It is the
 surface an ordinary author should use; the raw Forms stay available and stay
 the low-level surface.
 
@@ -15,13 +15,33 @@ module "worker_app" {
 }
 ```
 
+For an explicit Provider-side operation identity, pass the optional
+`apply_idempotency_key`. It is forwarded only to the immutable
+`takoform_worker_version` resource; the Provider validates and sends it as the
+Host API `Idempotency-Key` header, keeps it in Terraform state, and never puts
+it in the portable Form spec. This optional argument requires Provider 4.0.0 or
+later:
+
+```hcl
+module "worker_app" {
+  source = "takoform/worker-app/takoform"
+
+  name                  = "counter"
+  content_dir           = "${path.module}/dist"
+  apply_idempotency_key = "counter-release-v1"
+}
+```
+
+Changing the key replaces the immutable Worker Version. Omitting it preserves
+the Provider's deterministic operation key and existing derived revision name.
+
 ## What it assembles
 
 | Resource                     | Role       | Named by                                   |
 | ---------------------------- | ---------- | ------------------------------------------ |
 | `takoform_module_worker`     | identity   | `var.name` — stable across every deploy    |
 | `takoform_worker_bundle`     | revision   | derived `bundle-<manifest digest prefix>-<owner digest prefix>` |
-| `takoform_worker_version`    | revision   | derived `version-<spec digest prefix>-<owner digest prefix>` |
+| `takoform_worker_version`    | revision   | derived from spec, owner, and optional apply key |
 | `takoform_worker_deployment` | deployment | `<name>-deployment` — updated, never replaced |
 | `takoform_worker_endpoint`   | attachment | `<name>-endpoint`, when `endpoint = true`  |
 

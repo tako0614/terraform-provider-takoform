@@ -5,9 +5,9 @@ package provider
 //
 //   - No resource or data-source attribute is declared Sensitive. The provider
 //     carries no credential, no token, and no secret material in state, so
-//     there is nothing for Terraform to mask. The single Sensitive attribute in
-//     the whole provider is the provider-block token, which is configuration
-//     input and is never persisted into resource state.
+//     there is nothing for Terraform to mask. Sensitive provider-block token
+//     and ephemeral runtime_inputs are configuration inputs and are never
+//     persisted into resource state.
 //   - A worker_bundle apply pins module bytes by digest and uploads them
 //     through the content-addressed artifact API. The bytes themselves must
 //     never appear anywhere in the resulting state object.
@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -142,8 +143,9 @@ func TestNoResourceOrDataSourceAttributeIsSensitive(t *testing.T) {
 			sensitive = append(sensitive, name)
 		}
 	}
-	if len(sensitive) != 1 || sensitive[0] != "token" {
-		t.Fatalf("provider configuration Sensitive attributes = %v, want exactly [token]", sensitive)
+	sort.Strings(sensitive)
+	if len(sensitive) != 2 || sensitive[0] != "runtime_inputs" || sensitive[1] != "token" {
+		t.Fatalf("provider configuration Sensitive attributes = %v, want exactly [runtime_inputs token]", sensitive)
 	}
 }
 

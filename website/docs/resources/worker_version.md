@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_worker_version Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "tako0614 Forms"
 description: |-
   Worker Version (edge.forms.takoform.com, role revision).
 ---
@@ -11,8 +11,8 @@ Immutable executable snapshot of one Module Worker: a bundle, the handlers its m
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/WorkerVersion` is recorded below.
-The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/worker-version/definition.json).
+This page documents the publisher-set next-major Provider mapping; its exact FormRef `edge.forms.takoform.com/WorkerVersion` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/worker-version/definition.json).
 See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_worker_version/resource.tf).
 
 ## Exact FormRef
@@ -23,23 +23,24 @@ This Provider mapping carries the following exact four-field FormRef:
 {
   "apiVersion": "edge.forms.takoform.com",
   "kind": "WorkerVersion",
-  "definitionVersion": "0.2.0",
-  "schemaDigest": "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed"
+  "definitionVersion": "0.3.0",
+  "schemaDigest": "sha256:65870343bfab512fe5e7ae6faea8b3dbc48f9c9de0d4d9349dcbfd819f06d365"
 }
 ```
 
-`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:63cf4dd3e96f575d1d1631c87d2e0ff0410ca820e142b8d4fa73e30aaa651025`.
+`packageDigest` — Form Package digest (separate from FormRef; embedded Provider provenance): `sha256:21adc2e4e677cd31e905483d38eff60c9eb61112f6c234a01d6a487154980891`.
 
 ## Arguments
 
 - `name` (String, optional, computed, forces replacement) — Portable resource name (`metadata.name`). Omit it and set `revision_owner` instead: this Form is an immutable revision, so the provider derives `version-<content digest prefix>-<owner digest prefix>` from this revision's own content and its declared owner. Changed content is then a NEW revision created beside the old one, which is the only way a code change applies at all — a host refuses every update to a revision, and replacing one under a name it still holds completes in neither apply order. Setting it pins the name, which an imported revision needs; the provider then refuses at plan time any change that would replace this revision under it.
-- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. Two independent resources built from identical content derive identical content digests, so without an owner they would derive one name and two Terraform resources would manage one host address — where a destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the host never sees it, and it enters only the derived name. The official [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you.
+- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. Two independent resources built from identical content derive identical content digests, so without an owner they would derive one name and two Terraform resources would manage one host address — where a destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the host never sees it, and it enters only the derived name. The repository [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you.
 - `worker` (String, required, forces replacement) — Module Worker identity this version belongs to. Set the name of the target `ModuleWorker` resource.
 - `bundle` (String, required, forces replacement) — Worker Bundle carrying the exact module bytes this version executes. Set the name of the target `WorkerBundle` resource.
 - `assets` (Object, optional, forces replacement) — Optional static-asset attachment for this immutable version. Without it the host performs no asset lookup. When present, every member is required and the request order is closed: with runWorkerFirst=false the host tries the asset lookup before invoking fetch; with true it invokes fetch first and tries the asset lookup only when that invocation returns 404. An asset result wins; if both stages miss, the worker's 404 is preserved. The attachment never grants a hidden runtime binding and never mutates the referenced bundle. The object declares `bundle`, `run_worker_first`, `not_found_handling`; when the object is present, every member is required.
 - `handlers` (Set of String, required, forces replacement) — Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.1.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here. One of `fetch`, `scheduled`, `queue`.
 - `vars_json` (String, optional, forces replacement) — Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. Omitting it projects no variable. Authored as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object. Defaults to the empty object `{}`.
 - `kv_bindings` (List of Object, optional, forces replacement) — Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `EdgeKVNamespace` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
+- `bucket_bindings` (List of Object, optional, forces replacement) — Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ObjectBucket` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `sqlite_bindings` (List of Object, optional, forces replacement) — Typed module-worker.sqlite bindings projecting the edge.sql API. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `SQLiteDatabase` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `queue_producer_bindings` (List of Object, optional, forces replacement) — Typed module-worker.queue-producer bindings projecting only send and sendBatch. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `AtLeastOnceQueue` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `service_bindings` (List of Object, optional, forces replacement) — Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ModuleWorker` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
@@ -47,8 +48,21 @@ This Provider mapping carries the following exact four-field FormRef:
 - `actor_bindings` (List of Object, optional, forces replacement) — Typed module-worker.actor bindings projecting addressing and invocation — idFromName, newUniqueId, get. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ActorNamespace` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `required_sensitive_vars` (Set of String, optional, forces replacement) — Names of sensitive values this version requires the host to supply out-of-band. Only the names are portable state; values travel through each host's own sealed path. Omitting it requires no sensitive value. Defaults to the empty list `[]`.
 - `external_services` (List of Object, optional, forces replacement) — External standard services this version speaks, each a sealed slot naming only a runtime binding NAME and an opaque namespaced protocol. The host resolves the integration out-of-band and supplies one sealed runtime-native binding under NAME; neither its entries nor the credential is portable state. A required slot the host cannot satisfy keeps the version from becoming Ready. Omitting it declares no external service. Each entry declares `name` (SCREAMING_SNAKE, the sealed binding slot), an opaque normalized reverse-DNS `protocol` identifier such as `com.amazonaws.s3`, and optional `required` (default true). Takoform carries no central protocol enum or protocol-specific members. The Host must fail closed unless its support profile exactly supports the identifier, then projects one sealed runtime-native binding under the slot name. Defaults to the empty list `[]`.
+- `apply_idempotency_key` (candidate Provider 4.0.0, String, optional, computed, forces replacement) — Provider-only Host operation identity for this immutable version's apply. Released Provider 3.0.0 does not expose this attribute. On an ordinary run with no `runtime_input_nonce`, omitting it keeps the Provider's established deterministic operation key; an explicitly configured 1..255-byte visible-ASCII value retains the caller-selected behavior. When `runtime_input_nonce` is configured on this exact Provider instance, this argument must be omitted: the Provider computes it from that nonce and the exact value-free logical WorkerVersion apply identity and records only the opaque result in plan and state. Rotating a sensitive value under the same nonce does not change the key; rotating the nonce does, producing a new immutable WorkerVersion identity. The key is never included in the portable desired spec or read back from the Host.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.
+
+## Run-scoped sensitive inputs
+
+`required_sensitive_vars` declares names only. When it is non-empty, the exact Provider instance must receive a 22..128 character unpadded-base64url `runtime_input_nonce` during Plan while its sensitive `runtime_inputs` map remains empty. Apply must reuse that nonce and supply a map whose names exactly equal the declaration. Missing or extra names, a changed nonce, a value supplied during Plan, or a value supplied to a different Provider instance is refused before any Host mutation.
+
+The runner supplies the Apply-only map through an ephemeral root variable and the selected Provider block. It writes the transient variable file to the OpenTofu process's standard input; it does not put values in command arguments, process environment, ordinary credential files, plan, or state. This Provider ignores `TAKOFORM_RUNTIME_INPUTS_FILE` and ambient environment variables named by the declaration. One module may use other Takoform or industry-standard Provider instances; none receives this map unless the root explicitly targets it.
+
+The map is limited to 1..64 bindings, each value to 1..32768 bytes of UTF-8 text without NUL, and the runner dispatch to 1 MiB total. These limits are separate from the value-free public apply envelope: `publicApply.path` is limited to 8,192 UTF-8 bytes and `publicApply.body` is limited to 1,048,576 UTF-8 bytes. An overlong path, body, binding, or dispatch is refused before a commitment, private preparation, or public Host mutation.
+
+Every run first reads the value-free private preparation by the deterministic operation key. Only an absent record permits one same-origin private PUT of the plaintext bindings over TLS. A prepared record continues with one ordinary public PUT; an accepted, dispatched, or consumed record polls its exact ordinary Host operation without resending bindings or replaying the public PUT. After any PUT acknowledgement failure, recovery uses a fresh bounded context and value-free private readback.
+
+Values never enter the public apply body, Terraform plan or state, Provider logs or diagnostics, or the computed operation key. The Provider keeps accepted values in mutable buffers where practical, wipes those buffers and transport response buffers promptly on a best-effort basis, and drops references after the private PUT. This is not a guarantee of Go process-memory erasure: the runtime, compiler, HTTP/TLS stack, operating system, or a crash dump may retain copies outside those buffers. Runner operators must protect or disable crash dumps and process inspection as appropriate. The durable guarantee is absence from plan, state, logs, diagnostics, and public Host requests.
 
 ## Read-only attributes
 
@@ -98,6 +112,7 @@ This Provider mapping carries the following exact four-field FormRef:
 ## Accepted bindings
 
 - `module-worker.edge-kv@1.0.0`
+- `module-worker.object-bucket@1.1.0`
 - `module-worker.sqlite@1.0.0`
 - `module-worker.queue-producer@1.0.0`
 - `module-worker.service@1.0.0`
@@ -123,7 +138,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_version.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"WorkerVersion","definitionVersion":"0.2.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"WorkerVersion","definitionVersion":"0.3.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

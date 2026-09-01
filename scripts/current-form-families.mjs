@@ -33,7 +33,7 @@ const INTERFACE_CANDIDATE_SET_PATH =
 const BINDING_CANDIDATE_SET_PATH =
   "bindings/candidates/v1alpha2/candidate-set.json";
 const DNS_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
-const OFFICIAL_FAMILY_GROUP = new RegExp(
+const PUBLISHER_FAMILY_GROUP = new RegExp(
   `^(?:${DNS_LABEL}\\.)+forms\\.takoform\\.com$`,
   "u",
 );
@@ -423,7 +423,7 @@ function renderFamilySources() {
 }
 
 // validatePublisherPathMetadata closes every publisher-provided value that is
-// later used as a filesystem component. The official publisher source is an
+// later used as a filesystem component. The tako0614 publisher source is an
 // authority for artifact identity, not authority to address arbitrary paths
 // in the repository or staging tree.
 export function validatePublisherPathMetadata(source) {
@@ -434,10 +434,10 @@ export function validatePublisherPathMetadata(source) {
     if (
       typeof family?.group !== "string" ||
       family.group.length > 253 ||
-      !OFFICIAL_FAMILY_GROUP.test(family.group) ||
+      !PUBLISHER_FAMILY_GROUP.test(family.group) ||
       !Array.isArray(family.forms)
     ) {
-      throw new Error(`unsafe official family group ${JSON.stringify(family?.group)}`);
+      throw new Error(`unsafe publisher family group ${JSON.stringify(family?.group)}`);
     }
     for (const form of family.forms) {
       if (

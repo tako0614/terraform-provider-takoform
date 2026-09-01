@@ -4,8 +4,9 @@ terraform {
       source = "registry.terraform.io/tako0614/takoform"
       # This resource type is non-normative Provider metadata. The current
       # exact FormRef and digest do not contain this name.
-      # Provider 2.1.1's 15 versioned identities remain retained history.
-      version = "= 3.0.0"
+      # Provider 3's broader aggregate remains retained history. The next
+      # major registers only the tako0614 Edge Form set.
+      version = "~> 4.0"
     }
   }
 }
@@ -16,12 +17,11 @@ provider "takoform" {
 }
 
 resource "takoform_worker_version" "example" {
-  revision_owner          = "module-worker"
-  worker                  = "module-worker"
-  bundle                  = "worker-bundle"
-  handlers                = ["fetch"]
-  vars_json               = jsonencode({ "LOG_LEVEL" = "info" })
-  required_sensitive_vars = ["API_SIGNING_TOKEN_NAME"]
+  revision_owner = "module-worker"
+  worker         = "module-worker"
+  bundle         = "worker-bundle"
+  handlers       = ["fetch"]
+  vars_json      = jsonencode({ "LOG_LEVEL" = "info" })
 
   assets = {
     bundle             = "static-asset-bundle"
@@ -33,6 +33,13 @@ resource "takoform_worker_version" "example" {
     {
       name        = "CACHE"
       target_name = "edge-kv-namespace"
+    },
+  ]
+
+  bucket_bindings = [
+    {
+      name        = "OBJECTS"
+      target_name = "object-bucket"
     },
   ]
 
@@ -75,10 +82,6 @@ resource "takoform_worker_version" "example" {
     {
       name     = "PRIMARY_DB"
       protocol = "org.postgresql.wire"
-    },
-    {
-      name     = "MEDIA"
-      protocol = "com.amazonaws.s3"
     },
   ]
 }

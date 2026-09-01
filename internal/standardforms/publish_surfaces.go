@@ -306,15 +306,14 @@ func sortedStringKeys(value map[string]any) []string {
 func formInventoryDoc() string {
 	return `# Provider mapping inventory
 
-This inventory records the current Provider 3 projection. Provider resource
-type names and schema choices are adapter metadata. Published Edge definitions
-are maintained in the standalone [takoform-forms source](https://github.com/tako0614/takoform-forms);
-other entries are exact embedded Provider projections. Each current FormRef
-carries an exact ` + "`definitionVersion`" + ` within its versionless family group.
-
-The generated candidate index is ` + "`forms/candidates/current-family-index.json`" + `.
-It binds the eight family candidate sets plus shared Interface and Binding
-sets by SHA-256, so this inventory and the checked-in contracts stay aligned.
+This inventory records the current ` + "`tako0614/takoform`" + ` Provider
+projection. Provider resource type names and schema choices are adapter
+metadata. Every current mapping selects an exact published Edge definition
+maintained by the standalone [takoform-forms source](https://github.com/tako0614/takoform-forms).
+The Provider does not aggregate withdrawn Form families and does not wrap
+resources owned by AWS, Cloudflare, Kubernetes, or any other OpenTofu provider.
+Each current FormRef carries an exact ` + "`definitionVersion`" + ` within the
+versionless ` + "`edge.forms.takoform.com`" + ` family group.
 ` + v3FormInventorySection()
 }
 

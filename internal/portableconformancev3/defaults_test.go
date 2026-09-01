@@ -15,8 +15,6 @@ import (
 func exactQueryValues(space string, ref FormRef) url.Values {
 	query := url.Values{}
 	query.Set("space", space)
-	query.Set("group", ref.APIVersion)
-	query.Set("kind", ref.Kind)
 	query.Set("definitionVersion", ref.DefinitionVersion)
 	query.Set("schemaDigest", ref.SchemaDigest)
 	return query

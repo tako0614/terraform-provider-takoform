@@ -1,5 +1,5 @@
 // Package standardforms renders and verifies the catalog-derived public
-// surfaces of the official Provider's current Form mappings. The central-epoch machinery that used
+// surfaces of the publisher-selected Provider's current Form mappings. The central-epoch machinery that used
 // to share this package — lifecycle authority, release plans, legacy package
 // and admission verification — was withdrawn with the pre-Beta generations it
 // served (decision 0042); the bytes remain in this repository's history.

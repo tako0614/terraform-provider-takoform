@@ -20,6 +20,7 @@ import {
 import {
   CURRENT_FAMILY_INDEX,
   FAMILY_CANDIDATE_SET,
+  RELEASE_VERSION,
   SITE_STATUS_DEPRECATED_FIELDS,
   SITE_STATUS_FIELDS,
   deriveSiteStatusFacts,
@@ -40,7 +41,7 @@ function fixture(mutate) {
       readFileSync(path.join(repositoryRoot, CURRENT_FAMILY_INDEX), "utf8"),
     );
     for (const relativePath of [
-      "release/version.json",
+      RELEASE_VERSION,
       "release/provider-release-identities.json",
       "release/specification-releases.json",
       "spec/publication-blockers.json",
@@ -124,8 +125,8 @@ describe("the committed status document", () => {
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
     expect(document.providerPublished).toBe("3.0.0");
-    expect(document.providerTarget).toBe("3.0.0");
-    expect(document.providerTargetStatus).toBe("registry-published");
+    expect(document.providerTarget).toBe("4.0.0");
+    expect(document.providerTargetStatus).toBe("candidate-only");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -143,23 +144,25 @@ describe("the committed status document", () => {
     ]);
   });
 
-  test("keeps current website navigation off withdrawn and candidate Provider labels", () => {
+  test("keeps website navigation on the publisher Form surface and off withdrawn labels", () => {
     const config = readFileSync(
       path.join(repositoryRoot, "website/.vitepress/config.mts"),
       "utf8",
     );
     expect(config).toContain("Core v1.0.1 source");
-    expect(config).toContain("Current Provider 3 mapping (31 resources)");
+    expect(config).toContain("Forms from tako0614 (17 resources)");
+    expect(config).toContain("v3 to v4 publisher-set migration");
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
     expect(config).not.toContain("Specification 1.1 candidate");
-    expect(config).not.toContain("Provider 3 candidate reference");
+    expect(config).not.toContain("Function endpoint");
+    expect(config).not.toContain("Container service");
     expect(config).not.toContain('link: "/spec/');
     expect(config).not.toContain('link: "/proposals/');
   });
 
   test("separates external Form publication from the embedded candidate snapshot", () => {
     const publicFormsCommit =
-      "026f862975b9adb0e2bfd9c6214a5e6691dfb596";
+      "3231633605b737ce5279d7fc020b4780568e7091";
     const versions = readFileSync(
       path.join(repositoryRoot, "website/docs/versions.md"),
       "utf8",
@@ -342,7 +345,7 @@ describe("Specification release status derivation", () => {
     expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
     expect(status.formMaturity).toBe("experimental");
     expect(status.formPackagePublicationStatus).toBe("unpublished");
-    expect(status.providerTargetStatus).toBe("registry-published");
+    expect(status.providerTargetStatus).toBe("candidate-only");
   });
 });
 
@@ -357,7 +360,7 @@ describe("the gate refuses", () => {
     });
     expect(
       failures.some((failure) =>
-        failure.includes("Registry schema count differs from the current Form count"),
+        failure.includes("Registry schema count differs from the retained aggregate Form count"),
       ),
     ).toBe(true);
   });

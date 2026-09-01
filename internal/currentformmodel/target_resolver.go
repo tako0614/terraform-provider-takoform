@@ -23,7 +23,7 @@ type RequiredInterfaceSource interface {
 }
 
 // TargetResolver is the publisher-private union of explicitly injected family
-// authoring sources. It has no built-in official-family roster.
+// authoring sources. It has no built-in publisher-family roster.
 type TargetResolver struct {
 	families        map[string]ExactFamilySource
 	interfaceSource RequiredInterfaceSource

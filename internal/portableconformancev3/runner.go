@@ -534,13 +534,13 @@ func (r *v3Runner) resourceURL(ref FormRef, name, action string, query url.Value
 func (r *v3Runner) exactQuery(space string, ref FormRef) url.Values {
 	query := url.Values{}
 	query.Set("space", space)
-	// `group` here is the WHOLE apiVersion. This is the exact-Form query of a
-	// resource route, whose vocabulary is the four FormRef members, and it is
-	// not the /forms filter vocabulary — that one splits group from version
-	// and takes six keys. The two are separate grammars on separate routes;
-	// formsExactQuery builds the other one.
-	query.Set("group", ref.APIVersion)
-	query.Set("kind", ref.Kind)
+	// The retained beta1 path query duplicated group/kind. Current definition
+	// and resource paths already carry those fields, so their exact query is
+	// closed over only space, definitionVersion, and schemaDigest.
+	if !r.contract.lane.FormsFilterGroupIsWhole {
+		query.Set("group", ref.APIVersion)
+		query.Set("kind", ref.Kind)
+	}
 	query.Set("definitionVersion", ref.DefinitionVersion)
 	query.Set("schemaDigest", ref.SchemaDigest)
 	return query

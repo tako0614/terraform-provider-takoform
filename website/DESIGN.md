@@ -82,11 +82,11 @@ card padding is not part of this system.
 
 - The Takoform wordmark, dark aka-red palette, fonts, navigation, footer, focus
   treatment, and status vocabulary.
-- The facts: project `Experimental`; current Provider `3.0.0` is a
-  Registry-published non-normative implementation of Host API
-  `forms.takoform.com/v1`, mapping 31 typed resources across eight
-  versionless families. The standalone Edge source publishes 16
-  content-addressed Form packages. The current package envelope is
+- The facts: project `Experimental`; Provider `3.0.0` is retained immutable
+  Registry history for 31 typed resources across eight versionless families.
+  The next-major source keeps Host API `forms.takoform.com/v1` and selects only
+  the 17 content-addressed Form packages published by the tako0614 Edge source.
+  It makes no Provider 4 publication claim. The current package envelope is
   `packages.forms.takoform.com/v1alpha5`. The `release/version.json`
   descriptor remains `candidate-only` source metadata after owner publication;
   the release identity ledger owns live distribution truth. Provider `2.1.1`

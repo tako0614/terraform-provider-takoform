@@ -127,7 +127,7 @@ func deriveV3Provider3CodecGolden(t *testing.T) v3Provider3CodecGolden {
 
 		host := newV3FakeHost(t)
 		host.assignedOutputs = v3Provider3GoldenOutputs(t, form.Kind, form.Outputs)
-		resource := v3Provider3CurrentResourceHarness(
+		resource := v3Provider3HistoricalResourceHarness(
 			t, form, resourceType, newV3TestProviderData(t, host), codecs,
 		)
 		schemaResponse := v3SchemaOf(t, resource)

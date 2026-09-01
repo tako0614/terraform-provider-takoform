@@ -40,6 +40,10 @@ const projectNavItems = [
 const compatibilityNavItems = [
   { text: "Versions & compatibility", link: "/docs/versions.html" },
   {
+    text: "v3 to v4 publisher-set migration",
+    link: "/release/migrations/v3-to-v4.html",
+  },
+  {
     text: "v2 to v3 migration boundary",
     link: "/release/migrations/v2-to-v3.html",
   },
@@ -66,6 +70,10 @@ const japaneseProjectNavItems = [
 
 const japaneseCompatibilityNavItems = [
   { text: "Versions & compatibility (英語のみ)", link: "/docs/versions.html" },
+  {
+    text: "v3 to v4 publisher-set migration (英語のみ)",
+    link: "/release/migrations/v3-to-v4.html",
+  },
   {
     text: "v2 to v3 migration boundary (英語のみ)",
     link: "/release/migrations/v2-to-v3.html",
@@ -102,6 +110,10 @@ const edgeResourceItems = [
     link: "/docs/resources/worker_cron_trigger.html",
   },
   { text: "Edge KV namespace", link: "/docs/resources/edge_kv_namespace.html" },
+  {
+    text: "Edge object bucket",
+    link: "/docs/resources/edge_object_bucket.html",
+  },
   { text: "SQLite database", link: "/docs/resources/sqlite_database.html" },
   {
     text: "SQLite migration set",
@@ -120,41 +132,10 @@ const edgeResourceItems = [
   { text: "Actor namespace", link: "/docs/resources/actor_namespace.html" },
 ];
 
-const currentStackResourceItems = [
-  ...edgeResourceItems,
-  { text: "Function", link: "/docs/resources/function.html" },
-  { text: "Function version", link: "/docs/resources/function_version.html" },
-  {
-    text: "Function deployment",
-    link: "/docs/resources/function_deployment.html",
-  },
-  { text: "Function endpoint", link: "/docs/resources/function_endpoint.html" },
-  {
-    text: "Container service",
-    link: "/docs/resources/serverless_container_service.html",
-  },
-  { text: "Container revision", link: "/docs/resources/container_revision.html" },
-  { text: "Container traffic", link: "/docs/resources/container_traffic.html" },
-  { text: "Container endpoint", link: "/docs/resources/container_endpoint.html" },
-  {
-    text: "Container custom domain",
-    link: "/docs/resources/container_custom_domain.html",
-  },
-  { text: "Table", link: "/docs/resources/table.html" },
-  { text: "Pull queue", link: "/docs/resources/pull_queue.html" },
-  { text: "Topic", link: "/docs/resources/topic.html" },
-  {
-    text: "Topic subscription",
-    link: "/docs/resources/topic_subscription.html",
-  },
-  { text: "Schedule", link: "/docs/resources/message_schedule.html" },
-  { text: "Vector index", link: "/docs/resources/dense_vector_index.html" },
-];
-
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Provider 3 quick start",
+      text: "Provider quick start",
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
@@ -163,8 +144,8 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Current Provider 3 mapping (31 resources)",
-      items: currentStackResourceItems,
+            text: "Forms from tako0614 (17 resources)",
+      items: edgeResourceItems,
     },
     {
       text: "Withdrawn epochs / Migration",
@@ -172,6 +153,10 @@ const englishSidebar = {
       items: [
         { text: "Versions & compatibility", link: "/docs/versions.html" },
         { text: "Host API history (Core source)", link: `${coreSpec}/host-api` },
+        {
+          text: "v3 to v4 publisher-set migration",
+          link: "/release/migrations/v3-to-v4.html",
+        },
         {
           text: "v2 to v3 migration boundary",
           link: "/release/migrations/v2-to-v3.html",
@@ -202,7 +187,7 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Provider 3 quick start",
+      text: "Provider quick start",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
         {
@@ -213,13 +198,17 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Current Provider 3 mapping (31 resources)",
-      items: currentStackResourceItems,
+      text: "Forms from tako0614 (17 resources)",
+      items: edgeResourceItems,
     },
     {
       text: "Withdrawn epochs / Migration",
       collapsed: true,
       items: [
+        {
+          text: "v3 to v4 publisher-set migration (英語のみ)",
+          link: "/release/migrations/v3-to-v4.html",
+        },
         {
           text: "Versions & compatibility (英語のみ)",
           link: "/ja/docs/versions.html",

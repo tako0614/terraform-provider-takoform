@@ -376,7 +376,8 @@ describe("Specification 1.1 owner ledger", () => {
     const readme = readFileSync(path.join(ROOT, "README.md"), "utf8");
     expect(readme).toContain("# Takoform Provider");
     expect(readme).toContain("## Quick start");
-    expect(readme).toContain('version = "= 3.0.0"');
+    expect(readme).toContain('version = "~> 4.0"');
+    expect(readme).toContain("No `4.0.0` publication");
     expect(readme).toContain("These commands are read-only.");
     expect(readme).not.toContain("four explicit boundaries");
     expect(readme).not.toContain("C1 freezes the normative tree");
@@ -394,8 +395,9 @@ describe("Specification 1.1 owner ledger", () => {
     );
     expect(releaseGuide).toContain("Provider release identity ledger");
     expect(releaseGuide).toMatch(
-      /31 typed resources across eight versionless families/,
+      /31 typed resources across eight\s+versionless families/,
     );
+    expect(releaseGuide).toMatch(/selects only the\s+16 exact Edge Forms/);
     expect(releaseGuide).toMatch(
       /signed release-tag commit must be an ancestor of the reviewed\s+protected-main\/readback commit/,
     );

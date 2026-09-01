@@ -32,7 +32,7 @@ function render(facts) {
   return [
     BEGIN,
     "",
-    `Current releases: Provider \`${facts.providerPublished}\` and API/Core \`${CORE_API_RELEASE_VERSION}\` on \`${CORE_API_LANE}\`. See [Versions and compatibility](website/docs/versions.md) for retained releases and migration.`,
+    `Registry Provider \`${facts.providerPublished}\` is retained aggregate history. Provider \`${facts.providerTarget}\` is the candidate at the same \`tako0614/takoform\` source address and registers only the 17 Forms selected from \`tako0614/takoform-forms\`. Core \`${CORE_API_RELEASE_VERSION}\` implements \`${CORE_API_LANE}\`; neither Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).`,
     "",
     END,
   ].join("\n");

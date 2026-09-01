@@ -43,12 +43,29 @@ type v3FormResource struct {
 	resourceType string
 	artifact     *v3ArtifactProjection
 	data         *providerData
+	// providerSurface selects the provider-only authoring additions carried by
+	// this in-process resource. Production registration uses the current
+	// surface. Historical golden tests construct the explicit v3.0.0 surface so
+	// release evidence remains a projection of that immutable source rather
+	// than a comparison against today's additive schema.
+	providerSurface v3ProviderSurface
 	// codecs is the exact-FormRef dispatch table: the registry of identities
 	// this resource can serve together with the per-ref codec that decodes
 	// state written under each one. Production constructions carry the build's
 	// own table (v3Codecs); it is a real dependency, not an override, so the
 	// same code path serves one definition version and several.
 	codecs *v3CodecTable
+}
+
+type v3ProviderSurface uint8
+
+const (
+	v3ProviderSurfaceCurrent v3ProviderSurface = iota
+	v3ProviderSurfaceV30
+)
+
+func (r *v3FormResource) supportsApplyIdempotencyKey() bool {
+	return r.providerSurface == v3ProviderSurfaceCurrent && r.form.Kind == workerVersionKind
 }
 
 var (
@@ -74,7 +91,7 @@ func NewV3FormResource(form model.Form) func() resource.Resource {
 // typed family members, one per catalog Form.
 //
 // There is deliberately no generic exact-FormRef carrier. A resource that
-// accepts an arbitrary third-party FormRef and an opaque JSON spec can back
+// accepts an arbitrary publisher FormRef and an opaque JSON spec can back
 // none of what an exact reference promises: the v1beta1 Form Definition
 // response is a closed envelope carrying only identity, display name,
 // description, and desiredSchema, so a client can neither recompute the
@@ -263,6 +280,35 @@ func v3RequestResource(ref v3FormRef, name, space string, spec map[string]any) *
 	}
 }
 
+// v3ApplyOptions carries the one provider-only apply input. WorkerVersion is
+// the sole resource that can set it; every other Form uses the existing client
+// fallback. Unknown values are refused before any artifact upload or host
+// mutation so a plan cannot accidentally fall back to a different operation
+// identity.
+func (r *v3FormResource) v3ApplyOptions(values v3Values, diags *diag.Diagnostics) (clientv3.ApplyResourceOptions, bool) {
+	if !r.supportsApplyIdempotencyKey() || values.ApplyIdempotencyKey.IsNull() {
+		return clientv3.ApplyResourceOptions{}, true
+	}
+	if values.ApplyIdempotencyKey.IsUnknown() {
+		diags.AddAttributeError(
+			path.Root(v3ApplyIdempotencyKeyAttribute),
+			"Unknown WorkerVersion apply idempotency key",
+			"The provider-only `apply_idempotency_key` must be known before apply so retries and recovery reuse the same Host operation identity.",
+		)
+		return clientv3.ApplyResourceOptions{}, false
+	}
+	key := values.ApplyIdempotencyKey.ValueString()
+	if err := clientv3.ValidateIdempotencyKey(key); err != nil {
+		diags.AddAttributeError(
+			path.Root(v3ApplyIdempotencyKeyAttribute),
+			"Invalid WorkerVersion apply idempotency key",
+			err.Error(),
+		)
+		return clientv3.ApplyResourceOptions{}, false
+	}
+	return clientv3.ApplyResourceOptions{IdempotencyKey: key}, true
+}
+
 func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.assertV3Configured(&resp.Diagnostics) {
 		return
@@ -311,6 +357,17 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		}
 	}
+	runtimeInputs, ok := r.v3RuntimeInputsForApply(values, codec.Ref, space, spec, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+	if runtimeInputs != nil {
+		defer runtimeInputs.release()
+	}
+	applyOptions, ok := r.v3ApplyOptions(values, &resp.Diagnostics)
+	if !ok {
+		return
+	}
 	// An immutable revision is named by its content, and the content is only
 	// wholly resolved here. A plan that already derived the name derives the
 	// same one from the same spec, so state and plan cannot disagree.
@@ -341,7 +398,26 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		spec = map[string]any{"manifestDigest": committed}
 		values.Fields["manifest_digest"] = types.StringValue(committed)
 	}
-	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec), clientv3.Fence{})
+	requestResource := v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec)
+	var res *clientv3.Resource
+	var err error
+	if runtimeInputs != nil {
+		res, err = r.data.clientV3.ApplyResourceWithRuntimeInputs(
+			opCtx,
+			requestResource,
+			clientv3.Fence{},
+			applyOptions.IdempotencyKey,
+			runtimeInputs.CanonicalPublicOrigin,
+			runtimeInputs.Bindings,
+		)
+	} else {
+		res, err = r.data.clientV3.ApplyResourceWithOptions(
+			opCtx,
+			requestResource,
+			clientv3.Fence{},
+			applyOptions,
+		)
+	}
 	if err != nil {
 		// A create the host ACCEPTED can still fail here — most visibly when its
 		// long-running Operation outlives create_timeout. Terraform commits the
@@ -571,7 +647,9 @@ func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	} else if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		r.modifyFileBundlePlan(ctx, req, resp)
 	}
+	r.v3PlanRuntimeInputs(ctx, req, resp)
 	r.v3PlanRevisionName(ctx, req, resp)
+	r.v3PlanApplyIdempotencyKeySafety(ctx, req, resp)
 	r.v3PlanImmutableRevisionSafety(ctx, req, resp)
 	r.v3PlanHostSupport(ctx, resp)
 }
@@ -635,6 +713,10 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	applyOptions, ok := r.v3ApplyOptions(values, &resp.Diagnostics)
+	if !ok {
+		return
+	}
 	codec, ok := r.v3StateCodec(stateValues.Identity, &resp.Diagnostics)
 	if !ok {
 		return
@@ -661,7 +743,12 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec), fence)
+	res, err := r.data.clientV3.ApplyResourceWithOptions(
+		opCtx,
+		v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec),
+		fence,
+		applyOptions,
+	)
 	if err != nil {
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to update "+r.form.Kind, err, v3Diagnostic{
 			ResourceType:       r.resourceTypeName(),

@@ -4,8 +4,8 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # The current module targets the stable Host API v1 Provider 3 line.
-      version = ">= 3.0.0"
+      # The apply_idempotency_key passthrough is part of the Provider 4 mapping.
+      version = ">= 4.0.0"
     }
   }
 }

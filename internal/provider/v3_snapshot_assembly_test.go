@@ -15,10 +15,10 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-func TestEmbeddedProviderV3SnapshotAssemblyClosesExactArtifacts(t *testing.T) {
+func TestRetainedProviderV3SnapshotAssemblyClosesExactArtifacts(t *testing.T) {
 	t.Parallel()
 
-	assembly, err := loadEmbeddedProviderV3Assembly()
+	assembly, err := loadSourceProviderV3Assembly()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestProviderV3AssemblyIsInputOrderDeterministic(t *testing.T) {
 
 func embeddedProviderV3MapFS(t *testing.T) fstest.MapFS {
 	t.Helper()
-	source, err := fs.Sub(providerV3EmbeddedArtifacts, "artifacts/v3")
+	source, err := retainedProviderV3ArtifactFS()
 	if err != nil {
 		t.Fatal(err)
 	}

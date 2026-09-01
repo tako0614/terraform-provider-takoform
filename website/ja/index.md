@@ -15,8 +15,11 @@ hero:
 ---
 
 Takoform Provider は、Terraform / OpenTofu の型付きリソースを、互換 Host が
-公開する Form contract に対応させます。現在のリリースは Provider **`3.0.0`**、
-API/Core **`v1.0.1`** で、`forms.takoform.com/v1` を使います。
+公開する Form contract に対応させます。Provider `4.0.0` candidateは既存の
+`tako0614/takoform` addressで、`tako0614/takoform-forms` から選んだ
+exact Edge Form 17種だけを登録します。Registryの
+Provider **`3.0.0`** は31 resource aggregateのimmutable historyです。
+API/Core **`v1.0.1`** は `forms.takoform.com/v1` のままです。
 
 ## Install と configure
 
@@ -25,7 +28,8 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 3.0.0"
+      # Publisher-specific Provider 4公開後に使用します。
+      version = "~> 4.0"
     }
   }
 }
@@ -47,21 +51,16 @@ resource "takoform_module_worker" "api" {
 
 全 mapping の生成済み reference:
 
-| Family | Provider 3 mapping |
+| Publisher family | Provider 4 mapping |
 | --- | ---: |
-| Edge | 16 |
-| Function | 4 |
-| Container | 5 |
-| Queue | 1 |
-| Schedule | 1 |
-| Table | 1 |
-| Topic | 2 |
-| Vector | 1 |
+| Edge | 17 |
 
 各リソースの FormRef、引数、state、import は [Provider reference](/ja/docs/)、
 一覧は [mapping inventory](/forms/)、実行可能な検証は [conformance](/conformance/)
 を参照してください。過去のリリースと移行方法は
 [バージョンと互換性](/ja/docs/versions.html) にまとめています。
+AWS、Cloudflare、Kubernetesなどは同じOpenTofu moduleでTakoformと並ぶ
+native providerとして宣言します。
 
 ## 必要なもの
 
