@@ -17,6 +17,7 @@ import (
 const testWorkerVersionApplyKey = "runtime-input/reference-v1"
 
 func TestV3WorkerVersionApplyIdempotencyKeyLifecycle(t *testing.T) {
+	unsetV3RuntimeInputsTestEnvironment(t)
 	host := newV3FakeHost(t)
 	resource := v3TestFormResource(t, "WorkerVersion", newV3TestProviderData(t, host))
 	ctx := context.Background()
@@ -37,6 +38,9 @@ func TestV3WorkerVersionApplyIdempotencyKeyLifecycle(t *testing.T) {
 	}
 	if len(host.applyHeaders) != 1 || host.applyHeaders[0].Get("Idempotency-Key") != testWorkerVersionApplyKey {
 		t.Fatalf("WorkerVersion apply headers = %#v, want exact Idempotency-Key %q", host.applyHeaders, testWorkerVersionApplyKey)
+	}
+	if host.runtimeInputPuts != 0 {
+		t.Fatalf("ordinary no-file WorkerVersion made %d private runtime-input calls", host.runtimeInputPuts)
 	}
 	rawBody, err := json.Marshal(host.applyBodies[0])
 	if err != nil {
@@ -153,7 +157,7 @@ func TestV3WorkerVersionApplyIdempotencyKeyChangesDerivedName(t *testing.T) {
 	if !ok || attribute.GetType().String() != types.StringType.String() {
 		t.Fatal("WorkerVersion schema has no typed apply_idempotency_key attribute")
 	}
-	if !attribute.IsOptional() || attribute.IsRequired() || attribute.IsComputed() {
+	if !attribute.IsOptional() || attribute.IsRequired() || !attribute.IsComputed() {
 		t.Fatalf("apply_idempotency_key schema flags optional=%t required=%t computed=%t", attribute.IsOptional(), attribute.IsRequired(), attribute.IsComputed())
 	}
 	stringAttribute, ok := attribute.(frameworkschema.StringAttribute)

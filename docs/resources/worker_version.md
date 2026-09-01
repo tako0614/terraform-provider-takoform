@@ -36,9 +36,34 @@ price, or implementation. See the [complete example](https://takoform.com/exampl
 - `actor_bindings` (List of Object, optional, forces replacement) — Typed module-worker.actor bindings projecting addressing and invocation — idFromName, newUniqueId, get. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ActorNamespace` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `required_sensitive_vars` (Set of String, optional, forces replacement) — Names of sensitive values this version requires the host to supply out-of-band. Only the names are portable state; values travel through each host's own sealed path. Omitting it requires no sensitive value. Defaults to the empty list `[]`.
 - `external_services` (List of Object, optional, forces replacement) — External standard services this version speaks, each a sealed slot naming only a runtime binding NAME and an opaque namespaced protocol. The host resolves the integration out-of-band and supplies one sealed runtime-native binding under NAME; neither its entries nor the credential is portable state. A required slot the host cannot satisfy keeps the version from becoming Ready. Omitting it declares no external service. Each entry declares `name` (SCREAMING_SNAKE, the sealed binding slot), an opaque normalized reverse-DNS `protocol` identifier such as `com.amazonaws.s3`, and optional `required` (default true). Takoform carries no central protocol enum or protocol-specific members. The Host must fail closed unless its support profile exactly supports the identifier, then projects one sealed runtime-native binding under the slot name. Defaults to the empty list `[]`.
-- `apply_idempotency_key` (candidate/unpublished Provider `>=3.1.0`, String, optional, forces replacement) — Provider-only opaque Host API `Idempotency-Key` for this immutable version's apply. The `>=3.1.0` Provider example is not installable until a release record publishes that version; released Provider 3.0.0 does not expose this argument. The value must contain 1..255 visible ASCII bytes (`0x21`–`0x7E`); it is sent byte-for-byte as the request header, reused only while resuming the same accepted Host mutation, and preserved in Terraform state. Relation recovery or a new immutable version requires a fresh value. It is never included in the portable desired spec or read back from the Host. Omitting it keeps the provider's deterministic operation key.
+- `apply_idempotency_key` (candidate/unpublished Provider `>=3.1.0`, String, optional, computed, forces replacement) — Provider-only Host operation identity for this immutable version's apply. The `>=3.1.0` Provider mapping is not installable until a release record publishes that version; released Provider 3.0.0 does not expose this attribute. On an ordinary run with no runtime-input file, omitting it keeps the provider's established deterministic operation key; an explicitly configured 1..255-byte visible-ASCII value retains the existing caller-selected behavior. When `TAKOFORM_RUNTIME_INPUTS_FILE` is set, this argument must be omitted: the provider computes it from the file's material-generation nonce and the exact value-free logical WorkerVersion apply identity and records only that opaque result in plan and state. Rotating a secret value under the same nonce does not change the key; rotating the nonce does, producing a new immutable WorkerVersion identity. The key is never included in the portable desired spec or read back from the Host.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.
+
+## Run-scoped sensitive inputs
+
+`required_sensitive_vars` declares names only. When it is non-empty, the runner must expose exactly one provider-owned file path through `TAKOFORM_RUNTIME_INPUTS_FILE` for both plan and apply. The provider never reads ambient environment variables named by the declaration. A file with no declaration, a declaration with no file, or a file whose binding-name set differs from the declaration is refused before any Host mutation.
+
+The file is one closed I-JSON object:
+
+```json
+{
+  "format": "takoform.worker-runtime-inputs@v1",
+  "materialGenerationNonce": "<22..128 character unpadded base64url nonce>",
+  "canonicalPublicOrigin": "https://takoform.example.com",
+  "bindings": {
+    "API_TOKEN": "<run-scoped value>"
+  }
+}
+```
+
+On supported Unix runner systems the path must be absolute and clean; no path component may be a symlink, and the final regular file must be owned by the provider process effective UID, have exactly one hard link, and have mode exactly `0600`. The file is limited to 1 MiB and 1..64 bindings. Each value is 1..32768 bytes of UTF-8 text without NUL. The origin must exactly equal the configured canonical HTTPS Host origin. Setting the file on an unsupported operating system fails closed; ordinary no-file use remains portable.
+
+The runtime-input file's 1 MiB cap is separate from the value-free public apply envelope: `publicApply.path` is limited to 8,192 UTF-8 bytes and `publicApply.body` is limited to 1,048,576 UTF-8 bytes. An overlong path or body is refused before a commitment, private preparation, or public Host mutation.
+
+Every run first reads the value-free private preparation by the deterministic operation key. Only an absent record permits one same-origin private PUT of the plaintext bindings over TLS. A prepared record continues with one ordinary public PUT; an accepted, dispatched, or consumed record polls its exact ordinary Host operation without resending bindings or replaying the public PUT. After any PUT acknowledgement failure, recovery uses a fresh bounded context and value-free private readback.
+
+Values never enter the public apply body, Terraform plan or state, provider logs or diagnostics, or the computed operation key. The provider keeps accepted values in mutable buffers where practical, wipes those buffers and transport response buffers promptly on a best-effort basis, and drops references after the private PUT. This is not a guarantee of Go process-memory erasure: the runtime, compiler, HTTP/TLS stack, operating system, or a crash dump may retain copies outside those buffers. Runner operators must protect or disable crash dumps and process inspection as appropriate. The durable guarantee is absence from plan, state, logs, diagnostics, and public Host requests.
 
 ## Read-only attributes
 

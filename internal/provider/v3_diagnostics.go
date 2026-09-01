@@ -50,6 +50,7 @@ const (
 	v3CodeRevisionOwnerIgnored       = "takoform.provider/revision-owner-ignored"
 	v3CodeApplyIdempotencyKeyReuse   = "takoform.provider/apply-idempotency-key-reuse"
 	v3CodeApplyIdempotencyKeyUnknown = "takoform.provider/apply-idempotency-key-unknown"
+	v3CodeRuntimeInputsInvalid       = "takoform.provider/runtime-inputs-invalid"
 	v3CodeStateRefUnsupported        = "takoform.provider/state-form-ref-unsupported"
 	v3CodeStateRefMissing            = "takoform.provider/state-form-ref-missing"
 	v3CodeImportIDInvalid            = "takoform.provider/import-id-invalid"

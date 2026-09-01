@@ -651,7 +651,12 @@ func (r *v3FormResource) v3PlannedSpec(
 			spec[field.Wire] = wire
 		}
 	}
-	return spec, true
+	// Apply always materializes the exact Form defaults before deriving a name
+	// or sending desired state. Plan must canonicalize the same logical spec;
+	// otherwise a provider-computed operation key (and the derived revision
+	// name that includes it) would drift solely because framework defaults were
+	// not run by a direct or older planner.
+	return model.MaterializeDefaults(codec.DesiredSchema, spec), true
 }
 
 // v3PlanCodec resolves the codec a plan should encode under: the identity

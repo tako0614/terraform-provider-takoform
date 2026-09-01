@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,12 @@ type v3HostRecord struct {
 	outputs    map[string]any
 }
 
+type v3RuntimeInputPreparationRecord struct {
+	canonicalPublicOrigin string
+	bindingNames          []string
+	applyCommitment       string
+}
+
 type v3FakeHost struct {
 	t      *testing.T
 	mu     sync.Mutex
@@ -67,6 +74,16 @@ type v3FakeHost struct {
 	applyBodies  []map[string]any
 	applyHeaders []http.Header
 	getRequests  int
+	// runtimeInputPuts/runtimeInputGets record the private v2 preparation
+	// seam separately from the stable public Host API.
+	runtimeInputPuts int
+	runtimeInputGets int
+	runtimeInputRaw  [][]byte
+	runtimeInputs    map[string]v3RuntimeInputPreparationRecord
+	// runtimeInputPutReflection makes the private PUT reject with every
+	// Host-controlled error field reflecting the submitted value. It drives the
+	// provider-level recursive diagnostic absence regression.
+	runtimeInputPutReflection string
 
 	manifestRaw []byte
 	blobs       map[string][]byte
@@ -137,6 +154,7 @@ func newV3FakeHost(t *testing.T) *v3FakeHost {
 		operationErrors:     map[string]string{},
 		pendingOperations:   map[string]string{},
 		forgottenOperations: map[string]bool{},
+		runtimeInputs:       map[string]v3RuntimeInputPreparationRecord{},
 	}
 	host.server = httptest.NewServer(http.HandlerFunc(host.serve))
 	t.Cleanup(host.server.Close)
@@ -242,6 +260,8 @@ func (h *v3FakeHost) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case escaped == clientv3.DiscoveryPath:
 		h.writeJSON(w, http.StatusOK, h.discoveryDoc())
+	case strings.HasPrefix(escaped, "/v1/takoform/worker-runtime-input-preparations/"):
+		h.serveRuntimeInputPreparation(w, r, strings.TrimPrefix(escaped, "/v1/takoform/worker-runtime-input-preparations/"))
 	case escaped == v3TestAPIRoot+"/forms" && r.Method == http.MethodGet:
 		h.serveForms(w, r)
 	case escaped == v3TestAPIRoot+"/resources/validate" && r.Method == http.MethodPost:
@@ -271,6 +291,90 @@ func (h *v3FakeHost) serve(w http.ResponseWriter, r *http.Request) {
 		h.t.Errorf("unexpected fake host request %s %s", r.Method, escaped)
 		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}
+}
+
+func (h *v3FakeHost) serveRuntimeInputPreparation(w http.ResponseWriter, r *http.Request, escapedOperationKey string) {
+	operationKey, err := url.PathUnescape(escapedOperationKey)
+	if err != nil || operationKey == "" {
+		h.t.Errorf("invalid runtime input operation key path %q", escapedOperationKey)
+		h.writeStableError(w, http.StatusBadRequest, "invalid_argument")
+		return
+	}
+	if r.Header.Get("Idempotency-Key") != operationKey {
+		h.t.Errorf("runtime input operation key header/path mismatch: %q / %q", r.Header.Get("Idempotency-Key"), operationKey)
+	}
+	var record v3RuntimeInputPreparationRecord
+	switch r.Method {
+	case http.MethodPut:
+		h.runtimeInputPuts++
+		raw, _ := io.ReadAll(r.Body)
+		h.runtimeInputRaw = append(h.runtimeInputRaw, append([]byte(nil), raw...))
+		var body struct {
+			CanonicalPublicOrigin string            `json:"canonicalPublicOrigin"`
+			Bindings              map[string]string `json:"bindings"`
+			PublicApply           struct {
+				Method string `json:"method"`
+				Path   string `json:"path"`
+				Fences struct {
+					IfNoneMatch string `json:"ifNoneMatch"`
+				} `json:"fences"`
+				Body string `json:"body"`
+			} `json:"publicApply"`
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			h.t.Errorf("runtime input preparation body: %v", err)
+		}
+		record.canonicalPublicOrigin = body.CanonicalPublicOrigin
+		for name := range body.Bindings {
+			record.bindingNames = append(record.bindingNames, name)
+		}
+		sort.Strings(record.bindingNames)
+		record.applyCommitment, err = clientv3.RuntimeInputPublicApplyCommitment(
+			body.PublicApply.Method,
+			body.PublicApply.Path,
+			body.PublicApply.Fences.IfNoneMatch,
+			[]byte(body.PublicApply.Body),
+		)
+		if err != nil {
+			h.t.Errorf("runtime input public apply commitment: %v", err)
+			h.writeStableError(w, http.StatusBadRequest, "invalid_argument")
+			return
+		}
+		if h.runtimeInputPutReflection != "" {
+			reflected := h.runtimeInputPutReflection
+			h.writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]any{
+					"code": "invalid_argument", "retryable": false,
+					"message":   "reflected-message " + reflected,
+					"requestId": "reflected-request-id-" + reflected,
+					"hostCode":  "reflected-host-code-" + reflected,
+					"details":   map[string]any{"value": "reflected-details-" + reflected},
+				},
+			})
+			return
+		}
+		h.runtimeInputs[operationKey] = record
+	case http.MethodGet:
+		h.runtimeInputGets++
+		var ok bool
+		record, ok = h.runtimeInputs[operationKey]
+		if !ok {
+			h.writeStableError(w, http.StatusNotFound, "operation_not_found")
+			return
+		}
+	default:
+		h.t.Errorf("unexpected runtime input method %s", r.Method)
+		h.writeStableError(w, http.StatusMethodNotAllowed, "invalid_argument")
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"format":                "takoserver.worker-runtime-input-preparation@v2",
+		"status":                "prepared",
+		"operationKey":          operationKey,
+		"applyCommitment":       record.applyCommitment,
+		"canonicalPublicOrigin": record.canonicalPublicOrigin,
+		"bindingNames":          record.bindingNames,
+	})
 }
 
 func (h *v3FakeHost) serveOperation(w http.ResponseWriter, id string) {

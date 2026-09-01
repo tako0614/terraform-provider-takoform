@@ -273,9 +273,13 @@ func v3CommonAttributesForSurface(form model.Form, includeApplyIdempotencyKey bo
 	if includeApplyIdempotencyKey && form.Kind == workerVersionKind {
 		attrs[v3ApplyIdempotencyKeyAttribute] = schema.StringAttribute{
 			Optional: true,
-			Description: "Optional provider-only Host API Idempotency-Key for this WorkerVersion apply. " +
-				"The exact visible-ASCII value is sent as a request header, preserved in state, " +
-				"and never included in the portable desired spec. Changing it replaces this immutable version.",
+			Computed: true,
+			Description: "Provider-only Host API Idempotency-Key for this WorkerVersion apply. " +
+				"Without TAKOFORM_RUNTIME_INPUTS_FILE an explicit visible-ASCII value is preserved in state, " +
+				"while omission keeps the established deterministic Host key. With a declared sensitive input " +
+				"file the provider computes this value from the file's generation nonce and the value-free logical " +
+				"apply identity. It never includes a secret value or enters the portable desired spec. Changing it " +
+				"replaces this immutable version.",
 			Validators:    []validator.String{StringIdempotencyKey()},
 			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 		}

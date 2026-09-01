@@ -455,14 +455,20 @@ func (c *Client) do(
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
 		_ = resp.Body.Close()
 		if readErr != nil {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf("takoform: reading response body: %w", readErr)
 		}
 		if len(data) > maxResponseBodyBytes {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes)
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			apiErr := parseAPIError(resp.StatusCode, data, resp.Header.Get("Retry-After"))
+			// The parsed error owns any fields it needs. Promptly wipe the mutable
+			// transport buffer; callers on the runtime-input path additionally
+			// replace the parsed error with a closed value-free error.
+			clearRuntimeInputBytes(data)
 			if retryStable && attempt+1 < attempts && isPortableRetryable(apiErr) {
 				if err := waitForRetry(ctx, attempt, apiErr.RetryAfter); err != nil {
 					return 0, nil, nil, err
@@ -472,6 +478,7 @@ func (c *Client) do(
 			return 0, nil, nil, apiErr
 		}
 		if !containsStatus(successStatuses, resp.StatusCode) {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf(
 				"takoform: response from %s returned unexpected success status %d",
 				fullURL,
@@ -479,6 +486,7 @@ func (c *Client) do(
 			)
 		}
 		if resp.StatusCode == http.StatusNoContent && len(data) != 0 {
+			clearRuntimeInputBytes(data)
 			return 0, nil, nil, fmt.Errorf(
 				"takoform: response from %s returned a non-empty response body for HTTP 204",
 				fullURL,

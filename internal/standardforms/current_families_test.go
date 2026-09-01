@@ -102,12 +102,12 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 
 	forms := map[string]map[string]bool{
 		"container.forms.takoform.com/ContainerCustomDomain": {
-			"current Experimental Form `container.forms.takoform.com/ContainerCustomDomain`": true,
-			"target `ContainerService` resource":                                             true,
-			`"apiVersion":"container.forms.takoform.com"`:                                    true,
+			"deferred Experimental candidate `container.forms.takoform.com/ContainerCustomDomain`": true,
+			"target `ContainerService` resource":                                                   true,
+			`"apiVersion":"container.forms.takoform.com"`:                                          true,
 		},
 		"function.forms.takoform.com/FunctionVersion": {
-			"current Experimental Form `function.forms.takoform.com/FunctionVersion`": true,
+			"deferred Experimental candidate `function.forms.takoform.com/FunctionVersion`": true,
 		},
 		"container.forms.takoform.com/ContainerRevision": {},
 	}
@@ -138,6 +138,26 @@ func TestAllFamilyPublishedSurfacesUseTheirOwnExactIdentity(t *testing.T) {
 	}
 	for key := range forms {
 		t.Errorf("current Form inventory is missing test subject %s", key)
+	}
+}
+
+func TestWorkerVersionRuntimeInputDocumentationPinsIndependentByteLimits(t *testing.T) {
+	t.Parallel()
+
+	var document string
+	for _, family := range currentFamilies() {
+		for _, form := range family.Forms {
+			if form.Kind == "WorkerVersion" {
+				document = v3ResourceDoc(form)
+			}
+		}
+	}
+	if document == "" {
+		t.Fatal("current Form inventory is missing WorkerVersion")
+	}
+	const limitContract = "The runtime-input file's 1 MiB cap is separate from the value-free public apply envelope: `publicApply.path` is limited to 8,192 UTF-8 bytes and `publicApply.body` is limited to 1,048,576 UTF-8 bytes. An overlong path or body is refused before a commitment, private preparation, or public Host mutation."
+	if !strings.Contains(document, limitContract) {
+		t.Fatalf("WorkerVersion runtime-input documentation does not pin the independent byte limits:\n%s", document)
 	}
 }
 

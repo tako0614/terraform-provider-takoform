@@ -318,10 +318,6 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	applyOptions, ok := r.v3ApplyOptions(values, &resp.Diagnostics)
-	if !ok {
-		return
-	}
 	codec, ok := r.v3DefaultCodec(&resp.Diagnostics)
 	if !ok {
 		return
@@ -361,6 +357,17 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		}
 	}
+	runtimeInputs, ok := r.v3RuntimeInputsForApply(values, codec.Ref, space, spec, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+	if runtimeInputs != nil {
+		defer runtimeInputs.release()
+	}
+	applyOptions, ok := r.v3ApplyOptions(values, &resp.Diagnostics)
+	if !ok {
+		return
+	}
 	// An immutable revision is named by its content, and the content is only
 	// wholly resolved here. A plan that already derived the name derives the
 	// same one from the same spec, so state and plan cannot disagree.
@@ -391,12 +398,26 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		spec = map[string]any{"manifestDigest": committed}
 		values.Fields["manifest_digest"] = types.StringValue(committed)
 	}
-	res, err := r.data.clientV3.ApplyResourceWithOptions(
-		opCtx,
-		v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec),
-		clientv3.Fence{},
-		applyOptions,
-	)
+	requestResource := v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec)
+	var res *clientv3.Resource
+	var err error
+	if runtimeInputs != nil {
+		res, err = r.data.clientV3.ApplyResourceWithRuntimeInputs(
+			opCtx,
+			requestResource,
+			clientv3.Fence{},
+			applyOptions.IdempotencyKey,
+			runtimeInputs.CanonicalPublicOrigin,
+			runtimeInputs.Bindings,
+		)
+	} else {
+		res, err = r.data.clientV3.ApplyResourceWithOptions(
+			opCtx,
+			requestResource,
+			clientv3.Fence{},
+			applyOptions,
+		)
+	}
 	if err != nil {
 		// A create the host ACCEPTED can still fail here — most visibly when its
 		// long-running Operation outlives create_timeout. Terraform commits the
@@ -626,6 +647,7 @@ func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	} else if _, fileArtifact := r.v3FileBundleArtifact(); fileArtifact {
 		r.modifyFileBundlePlan(ctx, req, resp)
 	}
+	r.v3PlanRuntimeInputs(ctx, req, resp)
 	r.v3PlanRevisionName(ctx, req, resp)
 	r.v3PlanApplyIdempotencyKeySafety(ctx, req, resp)
 	r.v3PlanImmutableRevisionSafety(ctx, req, resp)

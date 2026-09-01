@@ -5,9 +5,8 @@ terraform {
       # This resource type is non-normative official-provider metadata. The
       # current versionless Form and its digest do not contain this name.
       # Provider 2.1.1 carries only retained versioned history; use a provider
-      # release whose exact-Form registry includes this current identity. This
-      # example is candidate/unpublished until Provider >=3.1.0 is released.
-      version = ">= 3.1.0"
+      # release whose exact-Form registry includes this current identity.
+      version = ">= 3.0.0"
     }
   }
 }
@@ -18,15 +17,11 @@ provider "takoform" {
 }
 
 resource "takoform_worker_version" "example" {
-  # Candidate/unpublished Provider >=3.1.0 only: released Provider 3.0.0 does
-  # not expose `apply_idempotency_key`.
-  revision_owner          = "module-worker"
-  apply_idempotency_key   = "worker-version-example-v1"
-  worker                  = "module-worker"
-  bundle                  = "worker-bundle"
-  handlers                = ["fetch"]
-  vars_json               = jsonencode({ "LOG_LEVEL" = "info" })
-  required_sensitive_vars = ["API_SIGNING_TOKEN_NAME"]
+  revision_owner = "module-worker"
+  worker         = "module-worker"
+  bundle         = "worker-bundle"
+  handlers       = ["fetch"]
+  vars_json      = jsonencode({ "LOG_LEVEL" = "info" })
 
   assets = {
     bundle             = "static-asset-bundle"

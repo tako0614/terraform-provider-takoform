@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -303,6 +304,44 @@ func (c *Client) ApplyResourceWithOptions(
 	fence Fence,
 	options ApplyResourceOptions,
 ) (*Resource, error) {
+	return c.applyResource(ctx, resource, fence, options, nil)
+}
+
+// ApplyResourceWithRuntimeInputs applies one immutable WorkerVersion through
+// the Takoserver-owned private v2 preparation seam. Values exist only in this
+// call; they never enter Resource, ApplyResourceOptions, an Operation, or a
+// public Host API request. Mutable binding buffers are wiped on a best-effort
+// basis and the map is consumed on every return; callers must not reuse it.
+// This shortens ordinary process-memory lifetime but cannot guarantee erasure
+// of copies made by Go, net/http, TLS, the compiler, or crash dumps.
+func (c *Client) ApplyResourceWithRuntimeInputs(
+	ctx context.Context,
+	resource *Resource,
+	fence Fence,
+	operationKey string,
+	canonicalPublicOrigin string,
+	bindings map[string][]byte,
+) (*Resource, error) {
+	return c.applyResource(ctx, resource, fence, ApplyResourceOptions{IdempotencyKey: operationKey}, &runtimeInputMaterial{
+		CanonicalPublicOrigin: canonicalPublicOrigin,
+		Bindings:              bindings,
+	})
+}
+
+func (c *Client) applyResource(
+	ctx context.Context,
+	resource *Resource,
+	fence Fence,
+	options ApplyResourceOptions,
+	runtimeInputs *runtimeInputMaterial,
+) (*Resource, error) {
+	// This call consumes a runtime-input binding map. Clear it on every return,
+	// including validation and read-only prepare failures, and eagerly after the
+	// sole private PUT so values cannot remain reachable during public mutation
+	// or operation polling.
+	if runtimeInputs != nil {
+		defer clearRuntimeInputMaterial(runtimeInputs)
+	}
 	if err := c.requireReady(); err != nil {
 		return nil, err
 	}
@@ -324,12 +363,29 @@ func (c *Client) ApplyResourceWithOptions(
 	if fence.ExpectedUID != "" && !uidPattern.MatchString(fence.ExpectedUID) {
 		return nil, errors.New("takoform: apply fence expectedUid is not a valid UID")
 	}
+	if runtimeInputs != nil && operation != "create" {
+		return nil, errors.New("takoform: runtime inputs are supported only for an immutable create")
+	}
+	var runtimeExpectation *runtimeInputExpectation
+	if runtimeInputs != nil {
+		var err error
+		runtimeExpectation, err = runtimeInputExpectationFor(c.endpoint, options.IdempotencyKey, runtimeInputs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ref := resource.Form.FormRef
 	if err := c.EnsureFormAvailable(ctx, resource.Metadata.Space, ref, operation); err != nil {
+		if runtimeInputs != nil {
+			return nil, runtimeInputApplyError(runtimeInputErrorPrerequisiteUnavailable)
+		}
 		return nil, err
 	}
 	prepared, err := c.PrepareResource(ctx, resource, fence)
 	if err != nil {
+		if runtimeInputs != nil {
+			return nil, runtimeInputApplyError(runtimeInputErrorPrerequisiteUnavailable)
+		}
 		return nil, err
 	}
 	request := applyRequestBody{
@@ -356,14 +412,74 @@ func (c *Client) ApplyResourceWithOptions(
 		headers[expectedGenerationHeader] = fence.ExpectedGeneration
 	}
 	fullURL := c.resourceURL(ref, resource.Metadata.Name, "", nil)
+	if runtimeInputs != nil {
+		publicURL, err := url.Parse(fullURL)
+		if err != nil {
+			return nil, errors.New("takoform: runtime input public apply URL is invalid")
+		}
+		publicPath := publicURL.RequestURI()
+		runtimeExpectation.ApplyCommitment, err = RuntimeInputPublicApplyCommitment(
+			http.MethodPut, publicPath, "*", raw,
+		)
+		if err != nil {
+			return nil, err
+		}
+		preparation, err := c.prepareRuntimeInputs(ctx, idempotencyKey, runtimeInputs, runtimeExpectation, publicPath, raw)
+		if err != nil {
+			return nil, err
+		}
+		clearRuntimeInputMaterial(runtimeInputs)
+		if preparation.HostOperationID != "" {
+			if preparation.recoveredAfterPutError {
+				recoveryCtx, cancel := c.runtimeInputRecoveryContext()
+				defer cancel()
+				return c.finishRuntimeInputOperation(
+					recoveryCtx, preparation, ref, resource.Metadata.Name, resource.Metadata.Space,
+				)
+			}
+			return c.finishRuntimeInputOperation(
+				ctx, preparation, ref, resource.Metadata.Name, resource.Metadata.Space,
+			)
+		}
+		if preparation.recoveredAfterPutError && ctx.Err() != nil {
+			return nil, &RuntimeInputApplyIndeterminateError{OperationKey: idempotencyKey}
+		}
+	}
+	// The sensitive path sends the public PUT exactly once. Any failure is
+	// recovered through a fresh, bounded, value-free private GET. The ordinary
+	// no-runtime-input path retains its established stable-error retry policy.
 	status, responseHeaders, data, err := c.do(
-		ctx, http.MethodPut, fullURL, headers, raw, true,
+		ctx, http.MethodPut, fullURL, headers, raw, runtimeInputs == nil,
 		http.StatusOK, http.StatusCreated, http.StatusAccepted,
 	)
+	if runtimeInputs != nil {
+		defer clearRuntimeInputBytes(data)
+	}
 	if err != nil {
+		if runtimeInputs != nil {
+			var apiErr *APIError
+			publicRejected := errors.As(err, &apiErr)
+			apiErr = nil
+			err = nil
+			return c.recoverRuntimeInputPublicApply(
+				idempotencyKey, runtimeExpectation, ref, resource.Metadata.Name, resource.Metadata.Space,
+				publicRejected,
+			)
+		}
 		return nil, err
 	}
-	return c.finishResourceMutation(ctx, status, responseHeaders, data, fullURL, ref, resource.Metadata.Name, resource.Metadata.Space)
+	out, err := c.finishResourceMutation(
+		ctx, status, responseHeaders, data, fullURL, ref, resource.Metadata.Name, resource.Metadata.Space,
+	)
+	if err != nil && runtimeInputs != nil {
+		// The generic accepted error may contain Host response text. Recovery
+		// keeps only the deterministic operation identity and private expectation.
+		err = nil
+		return c.recoverRuntimeInputPublicApply(
+			idempotencyKey, runtimeExpectation, ref, resource.Metadata.Name, resource.Metadata.Space, false,
+		)
+	}
+	return out, err
 }
 
 // finishResourceMutation resolves the mutationAccepted envelope: a direct

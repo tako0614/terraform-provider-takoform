@@ -289,22 +289,35 @@ func v3RevisionOwnerExample(form model.Form) string {
 func v3ResourceDoc(form model.Form) string {
 	var builder strings.Builder
 	resourceType := mustProviderReferenceTerraformType(form)
+	subcategory := "Current Form Families"
+	if form.Family.APIVersion() != edgeFamilyGroup {
+		subcategory = "Historical / deferred candidate Forms"
+	}
 	fmt.Fprintf(&builder, `---
 page_title: "%s Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "%s"
 description: |-
   %s
 ---
 
 # %s
 
-%s
-
-`, resourceType, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType, form.Description)
+`, resourceType, subcategory, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType)
+	if form.Family.APIVersion() != edgeFamilyGroup {
+		builder.WriteString("> Historical/deferred candidate. This non-Edge Form is retained for source\n" +
+			"> inspection and exact historical state only; it is not in the current\n" +
+			"> official Edge16 corpus or Current navigation.\n\n")
+	}
+	builder.WriteString(form.Description + "\n\n")
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This page documents a non-normative official Terraform Provider mapping for the\n" +
-		"current Experimental Form `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n" +
-		"The mapping name is provider metadata: it is absent from the Form Definition and cannot change\n" +
+	if form.Family.APIVersion() == edgeFamilyGroup {
+		builder.WriteString("This page documents a non-normative official Terraform Provider mapping for the\n" +
+			"current Experimental Form `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n")
+	} else {
+		builder.WriteString("This page documents a non-normative historical Provider mapping for the\n" +
+			"deferred Experimental candidate `" + form.Family.APIVersion() + "/" + form.Kind + "`.\n")
+	}
+	builder.WriteString("The mapping name is provider metadata: it is absent from the Form Definition and cannot change\n" +
 		"the Form's canonical bytes or digest. Provider publication and support are versioned separately.\n" +
 		"The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
@@ -322,13 +335,41 @@ description: |-
 		}
 	}
 	if form.Kind == "WorkerVersion" {
-		builder.WriteString("- `apply_idempotency_key` (Provider 3.1+, String, optional, forces replacement) — Provider-only opaque Host API `Idempotency-Key` for this immutable version's apply. The value must contain 1..255 visible ASCII bytes (`0x21`–`0x7E`); it is sent byte-for-byte as the request header, reused only while resuming the same accepted Host mutation, and preserved in Terraform state. Relation recovery or a new immutable version requires a fresh value. It is never included in the portable desired spec or read back from the Host. Omitting it keeps the provider's deterministic operation key.\n")
+		builder.WriteString("- `apply_idempotency_key` (candidate/unpublished Provider `>=3.1.0`, String, optional, computed, forces replacement) — Provider-only Host operation identity for this immutable version's apply. The `>=3.1.0` Provider mapping is not installable until a release record publishes that version; released Provider 3.0.0 does not expose this attribute. On an ordinary run with no runtime-input file, omitting it keeps the provider's established deterministic operation key; an explicitly configured 1..255-byte visible-ASCII value retains the existing caller-selected behavior. When `TAKOFORM_RUNTIME_INPUTS_FILE` is set, this argument must be omitted: the provider computes it from the file's material-generation nonce and the exact value-free logical WorkerVersion apply identity and records only that opaque result in plan and state. Rotating a secret value under the same nonce does not change the key; rotating the nonce does, producing a new immutable WorkerVersion identity. The key is never included in the portable desired spec or read back from the Host.\n")
 	}
 	builder.WriteString("- `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.\n")
 	if form.DeclaresUpdate() {
 		builder.WriteString("- `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).\n")
 	} else {
 		builder.WriteString("- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.\n")
+	}
+	if form.Kind == "WorkerVersion" {
+		builder.WriteString(`
+## Run-scoped sensitive inputs
+
+` + "`required_sensitive_vars`" + ` declares names only. When it is non-empty, the runner must expose exactly one provider-owned file path through ` + "`TAKOFORM_RUNTIME_INPUTS_FILE`" + ` for both plan and apply. The provider never reads ambient environment variables named by the declaration. A file with no declaration, a declaration with no file, or a file whose binding-name set differs from the declaration is refused before any Host mutation.
+
+The file is one closed I-JSON object:
+
+` + "```json" + `
+{
+  "format": "takoform.worker-runtime-inputs@v1",
+  "materialGenerationNonce": "<22..128 character unpadded base64url nonce>",
+  "canonicalPublicOrigin": "https://takoform.example.com",
+  "bindings": {
+    "API_TOKEN": "<run-scoped value>"
+  }
+}
+` + "```" + `
+
+On supported Unix runner systems the path must be absolute and clean; no path component may be a symlink, and the final regular file must be owned by the provider process effective UID, have exactly one hard link, and have mode exactly ` + "`0600`" + `. The file is limited to 1 MiB and 1..64 bindings. Each value is 1..32768 bytes of UTF-8 text without NUL. The origin must exactly equal the configured canonical HTTPS Host origin. Setting the file on an unsupported operating system fails closed; ordinary no-file use remains portable.
+
+The runtime-input file's 1 MiB cap is separate from the value-free public apply envelope: ` + "`publicApply.path`" + ` is limited to 8,192 UTF-8 bytes and ` + "`publicApply.body`" + ` is limited to 1,048,576 UTF-8 bytes. An overlong path or body is refused before a commitment, private preparation, or public Host mutation.
+
+Every run first reads the value-free private preparation by the deterministic operation key. Only an absent record permits one same-origin private PUT of the plaintext bindings over TLS. A prepared record continues with one ordinary public PUT; an accepted, dispatched, or consumed record polls its exact ordinary Host operation without resending bindings or replaying the public PUT. After any PUT acknowledgement failure, recovery uses a fresh bounded context and value-free private readback.
+
+Values never enter the public apply body, Terraform plan or state, provider logs or diagnostics, or the computed operation key. The provider keeps accepted values in mutable buffers where practical, wipes those buffers and transport response buffers promptly on a best-effort basis, and drops references after the private PUT. This is not a guarantee of Go process-memory erasure: the runtime, compiler, HTTP/TLS stack, operating system, or a crash dump may retain copies outside those buffers. Runner operators must protect or disable crash dumps and process inspection as appropriate. The durable guarantee is absence from plan, state, logs, diagnostics, and public Host requests.
+`)
 	}
 	generationDoc := "increments only when the portable desired spec changes. Updates fence on it."
 	recoveryDoc := "an in-place re-apply of the same desired state, which is all a host needs to re-resolve and re-pin every reference"
@@ -485,9 +526,6 @@ func v3ExampleHCL(form model.Form) string {
 	var builder strings.Builder
 	resourceType := mustProviderReferenceTerraformType(form)
 	providerConstraint := ">= 3.0.0"
-	if form.Kind == "WorkerVersion" {
-		providerConstraint = ">= 3.1.0"
-	}
 	builder.WriteString(`terraform {
   required_providers {
     takoform = {
@@ -517,9 +555,6 @@ provider "takoform" {
 	if form.Role == model.RoleRevision {
 		scalars = [][2]string{{"revision_owner", fmt.Sprintf("%q", v3RevisionOwnerExample(form))}}
 	}
-	if form.Kind == "WorkerVersion" {
-		scalars = append(scalars, [2]string{"apply_idempotency_key", `"worker-version-example-v1"`})
-	}
 	var blocks []string
 	if form.Kind == "WorkerBundle" {
 		scalars = append(scalars, [2]string{"main_module", `"worker.mjs"`})
@@ -533,6 +568,13 @@ provider "takoform" {
 `)
 	} else {
 		for _, field := range form.Fields {
+			// The standalone WorkerVersion example stays on the ordinary no-file
+			// path. A sensitive declaration is intentionally inseparable from the
+			// runner-owned 0600 file documented above; emitting the name alone
+			// would produce a configuration the provider must reject.
+			if form.Kind == "WorkerVersion" && field.HCL == "required_sensitive_vars" {
+				continue
+			}
 			if field.Example == nil {
 				continue
 			}
@@ -557,9 +599,6 @@ provider "takoform" {
 		if len(line[0]) > width {
 			width = len(line[0])
 		}
-	}
-	if form.Kind == "WorkerVersion" {
-		builder.WriteString("  # Provider 3.1+: `apply_idempotency_key` is an opaque apply operation identity.\n")
 	}
 	for _, line := range scalars {
 		fmt.Fprintf(&builder, "  %-*s = %s\n", width, line[0], line[1])

@@ -72,7 +72,7 @@ func TestV3Provider31ProtocolSchemaOwnsApplyIdempotencyKey(t *testing.T) {
 	if key == nil {
 		t.Fatal("current Provider 3.1 WorkerVersion schema has no apply_idempotency_key")
 	}
-	if !key.Optional || key.Required || key.Computed {
+	if !key.Optional || key.Required || !key.Computed {
 		t.Fatalf("current apply_idempotency_key flags = optional=%t required=%t computed=%t", key.Optional, key.Required, key.Computed)
 	}
 	for name, schema := range response.ResourceSchemas {

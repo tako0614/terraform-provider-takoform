@@ -367,6 +367,7 @@ func (c *Client) getOperation(ctx context.Context, id string) (*Operation, time.
 	if err != nil {
 		return nil, 0, err
 	}
+	defer clearRuntimeInputBytes(data)
 	if err := validateOperationWire(data, false); err != nil {
 		return nil, 0, err
 	}
