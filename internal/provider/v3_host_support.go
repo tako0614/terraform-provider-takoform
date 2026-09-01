@@ -61,11 +61,16 @@ import (
 // a static statement about the host, so re-reading it per resource would turn
 // one fact into N round trips inside `terraform plan`.
 type v3SupportCache struct {
-	mu         sync.Mutex
-	forms      map[v3ExactFormKey]v3SupportAnswer
-	interfaces map[string]v3SupportAnswer
-	bindings   map[string]v3SupportAnswer
-	services   map[string]v3SupportAnswer
+	mu sync.Mutex
+
+	forms             map[v3ExactFormKey]v3SupportAnswer
+	formInflight      map[v3ExactFormKey]*v3SupportInflight
+	interfaces        map[string]v3SupportAnswer
+	interfaceInflight map[string]*v3SupportInflight
+	bindings          map[string]v3SupportAnswer
+	bindingInflight   map[string]*v3SupportInflight
+	services          map[string]v3SupportAnswer
+	serviceInflight   map[string]*v3SupportInflight
 }
 
 // v3SupportAnswer is one resolved support question: the profile the host
@@ -78,12 +83,26 @@ type v3SupportAnswer struct {
 	Err error
 }
 
+// v3SupportInflight is the synchronization record for one support key. The
+// leader writes answer before closing done; a waiter receiving from done can
+// therefore read the answer without taking the cache mutex or racing the
+// leader. A waiter's context only controls its own wait and never cancels the
+// leader's request or removes the result from the cache.
+type v3SupportInflight struct {
+	done   chan struct{}
+	answer v3SupportAnswer
+}
+
 func newV3SupportCache() *v3SupportCache {
 	return &v3SupportCache{
-		forms:      map[v3ExactFormKey]v3SupportAnswer{},
-		interfaces: map[string]v3SupportAnswer{},
-		bindings:   map[string]v3SupportAnswer{},
-		services:   map[string]v3SupportAnswer{},
+		forms:             map[v3ExactFormKey]v3SupportAnswer{},
+		formInflight:      map[v3ExactFormKey]*v3SupportInflight{},
+		interfaces:        map[string]v3SupportAnswer{},
+		interfaceInflight: map[string]*v3SupportInflight{},
+		bindings:          map[string]v3SupportAnswer{},
+		bindingInflight:   map[string]*v3SupportInflight{},
+		services:          map[string]v3SupportAnswer{},
+		serviceInflight:   map[string]*v3SupportInflight{},
 	}
 }
 
@@ -101,53 +120,79 @@ func v3SupportRefusal(err error) bool {
 }
 
 func (c *v3SupportCache) formSupport(ctx context.Context, client *clientv3.Client, ref v3FormRef) v3SupportAnswer {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	key := ref.ExactKey()
-	if answer, cached := c.forms[key]; cached {
-		return answer
-	}
-	profile, err := client.GetFormSupport(ctx, clientFormRef(ref))
-	answer := v3SupportAnswer{Profile: profile, Err: err, Refused: v3SupportRefusal(err)}
-	if answer.Refused {
-		answer.Err = nil
-	}
-	c.forms[key] = answer
-	return answer
+	return v3SupportCached(ctx, &c.mu, c.forms, c.formInflight, key, func() (map[string]any, error) {
+		return client.GetFormSupport(ctx, clientFormRef(ref))
+	})
 }
 
 func (c *v3SupportCache) interfaceSupport(ctx context.Context, client *clientv3.Client, name, version string) v3SupportAnswer {
-	return c.contractSupport(ctx, &c.interfaces, name+"@"+version, func() (map[string]any, error) {
+	return c.contractSupport(ctx, c.interfaces, c.interfaceInflight, name+"@"+version, func() (map[string]any, error) {
 		return client.GetInterfaceSupport(ctx, name, version)
 	})
 }
 
 func (c *v3SupportCache) bindingSupport(ctx context.Context, client *clientv3.Client, name, version string) v3SupportAnswer {
-	return c.contractSupport(ctx, &c.bindings, name+"@"+version, func() (map[string]any, error) {
+	return c.contractSupport(ctx, c.bindings, c.bindingInflight, name+"@"+version, func() (map[string]any, error) {
 		return client.GetBindingSupport(ctx, name, version)
 	})
 }
 
 func (c *v3SupportCache) standardServiceSupport(ctx context.Context, client *clientv3.Client, protocol string) v3SupportAnswer {
-	return c.contractSupport(ctx, &c.services, protocol, func() (map[string]any, error) {
+	return c.contractSupport(ctx, c.services, c.serviceInflight, protocol, func() (map[string]any, error) {
 		return client.GetStandardServiceSupport(ctx, protocol)
 	})
 }
 
 func (c *v3SupportCache) contractSupport(
-	_ context.Context, table *map[string]v3SupportAnswer, key string, read func() (map[string]any, error),
+	ctx context.Context, table map[string]v3SupportAnswer, inflight map[string]*v3SupportInflight,
+	key string, read func() (map[string]any, error),
 ) v3SupportAnswer {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if answer, cached := (*table)[key]; cached {
+	return v3SupportCached(ctx, &c.mu, table, inflight, key, read)
+}
+
+// v3SupportCached resolves one key with a tiny per-key singleflight. The
+// cache mutex protects only lookup and result publication; the host read runs
+// without it so unrelated Form, Interface, Binding, and StandardService keys
+// can overlap.
+func v3SupportCached[K comparable](
+	ctx context.Context,
+	mu *sync.Mutex,
+	answers map[K]v3SupportAnswer,
+	inflight map[K]*v3SupportInflight,
+	key K,
+	read func() (map[string]any, error),
+) v3SupportAnswer {
+	mu.Lock()
+	if answer, cached := answers[key]; cached {
+		mu.Unlock()
 		return answer
 	}
+	if call, waiting := inflight[key]; waiting {
+		mu.Unlock()
+		select {
+		case <-call.done:
+			return call.answer
+		case <-ctx.Done():
+			return v3SupportAnswer{Err: ctx.Err()}
+		}
+	}
+	call := &v3SupportInflight{done: make(chan struct{})}
+	inflight[key] = call
+	mu.Unlock()
+
 	profile, err := read()
 	answer := v3SupportAnswer{Profile: profile, Err: err, Refused: v3SupportRefusal(err)}
 	if answer.Refused {
 		answer.Err = nil
 	}
-	(*table)[key] = answer
+
+	mu.Lock()
+	answers[key] = answer
+	call.answer = answer
+	delete(inflight, key)
+	close(call.done)
+	mu.Unlock()
 	return answer
 }
 
