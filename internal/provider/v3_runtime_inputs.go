@@ -116,9 +116,11 @@ func v3RuntimeInputsFromProviderData(data *providerData, declaredNames []string,
 		declared[name] = struct{}{}
 	}
 	if !requireValues {
-		if len(data.runtimeInputs) != 0 {
-			return nil, errors.New("runtime_inputs must be empty during Plan")
-		}
+		// Plan never reads a value. OpenTofu re-plans every resource inside the
+		// apply walk with the same provider configuration that carries the
+		// apply-only map, so presence of values here is not a protocol
+		// violation; the values are simply not consulted, never enter the plan,
+		// and are consumed only by the apply path that requires them.
 		return &v3RuntimeInputs{
 			MaterialGenerationNonce: data.runtimeInputNonce,
 			CanonicalPublicOrigin:   data.clientV3.Endpoint(),
