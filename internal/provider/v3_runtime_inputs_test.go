@@ -124,7 +124,11 @@ func TestV3WorkerVersionPlanUsesNonceWithoutRuntimeValues(t *testing.T) {
 	}
 }
 
-func TestV3WorkerVersionPlanRejectsRuntimeValuesBeforeMutation(t *testing.T) {
+// OpenTofu re-plans every resource inside the apply walk with the apply-time
+// provider configuration, so Plan must tolerate an already-present Apply-only
+// map: it ignores the values, never carries them into the plan, and never lets
+// them reach the Host before Apply.
+func TestV3WorkerVersionPlanIgnoresApplyOnlyRuntimeValues(t *testing.T) {
 	host := newV3RuntimeInputsTLSHost(t)
 	data := v3RuntimeProviderData(t, host, v3RuntimeInputsTestNonce, map[string]string{
 		"API_TOKEN": v3RuntimeInputsTestSecret,
@@ -146,16 +150,19 @@ func TestV3WorkerVersionPlanRejectsRuntimeValuesBeforeMutation(t *testing.T) {
 		Plan:   plan,
 		Config: v3ConfigWith(t, ctx, schemaResponse, configured),
 	}, &response)
-	if !response.Diagnostics.HasError() {
-		t.Fatal("Plan accepted Apply-only runtime values")
+	if response.Diagnostics.HasError() {
+		t.Fatalf("Plan refused an Apply-only runtime map that it must ignore: %v", response.Diagnostics.Errors())
 	}
-	for _, diagnostic := range response.Diagnostics.Errors() {
+	if strings.Contains(response.Plan.Raw.String(), v3RuntimeInputsTestSecret) {
+		t.Fatal("runtime value leaked into the planned state")
+	}
+	for _, diagnostic := range response.Diagnostics.Warnings() {
 		if strings.Contains(diagnostic.Detail(), v3RuntimeInputsTestSecret) {
 			t.Fatalf("runtime value leaked through Plan diagnostic: %s", diagnostic.Detail())
 		}
 	}
 	if host.runtimeInputPuts != 0 || len(host.applyHeaders) != 0 {
-		t.Fatal("invalid Plan input reached Host mutation")
+		t.Fatal("Plan reached Host mutation")
 	}
 }
 

@@ -141,7 +141,7 @@ func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 				Sensitive:   true,
 				ElementType: types.StringType,
 				Description: "Apply-only sensitive WorkerVersion bindings supplied through an ephemeral root variable. " +
-					"The map must be empty during Plan and exactly match required_sensitive_vars during Apply.",
+					"Plan never reads the values; Apply requires a map whose names exactly match required_sensitive_vars.",
 			},
 		},
 	}
