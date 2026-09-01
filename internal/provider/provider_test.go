@@ -155,17 +155,24 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 				&schemaResponse,
 			)
 			configType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-				"endpoint": tftypes.String,
-				"space":    tftypes.String,
-				"token":    tftypes.String,
+				"endpoint":            tftypes.String,
+				"space":               tftypes.String,
+				"token":               tftypes.String,
+				"runtime_input_nonce": tftypes.String,
+				"runtime_inputs":      tftypes.Map{ElementType: tftypes.String},
 			}}
 			request := frameworkprovider.ConfigureRequest{
 				Config: tfsdk.Config{
 					Schema: schemaResponse.Schema,
 					Raw: tftypes.NewValue(configType, map[string]tftypes.Value{
-						"endpoint": tftypes.NewValue(tftypes.String, server.URL),
-						"space":    tftypes.NewValue(tftypes.String, test.space),
-						"token":    tftypes.NewValue(tftypes.String, test.token),
+						"endpoint":            tftypes.NewValue(tftypes.String, server.URL),
+						"space":               tftypes.NewValue(tftypes.String, test.space),
+						"token":               tftypes.NewValue(tftypes.String, test.token),
+						"runtime_input_nonce": tftypes.NewValue(tftypes.String, nil),
+						"runtime_inputs": tftypes.NewValue(
+							tftypes.Map{ElementType: tftypes.String},
+							nil,
+						),
 					}),
 				},
 			}
@@ -295,13 +302,26 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	return v3ProviderResourceTypeNames()
+	assembly := mustPublisherProviderSnapshotAssembly()
+	forms := currentPublisherProviderForms()
+	names := make([]string, 0, len(forms))
+	for _, form := range forms {
+		ref, err := assembly.registry.DefaultCreate(v3GroupKind{APIVersion: form.Family.APIVersion(), Kind: form.Kind})
+		if err != nil {
+			panic(err)
+		}
+		resourceType, ok := assembly.resourceTypes.Lookup(ref.ExactKey())
+		if !ok {
+			panic("publisher-selected provider resource type mapping missing for " + ref.ExactKey().String())
+		}
+		names = append(names, resourceType)
+	}
+	sort.Strings(names)
+	return names
 }
 
-// v3ProviderResourceTypeNames is the Host API v1beta1 lane: exactly the typed
-// Edge Platform Family resources. The lane ships no generic exact-FormRef
-// carrier — `takoform_resource` was withdrawn by spec/decisions/0021 because
-// nothing in the lane lets a client verify a FormRef it did not compile in.
+// v3ProviderResourceTypeNames is retained Provider 3 aggregate history. The
+// current tako0614/takoform surface is currentProviderResourceTypeNames above.
 func v3ProviderResourceTypeNames() []string {
 	forms := providerV3CurrentForms()
 	names := make([]string, 0, len(forms))

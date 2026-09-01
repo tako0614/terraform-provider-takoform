@@ -69,10 +69,10 @@ type providerMigrationAudit struct {
 	} `json:"providerAddressBoundary"`
 }
 
-func TestCurrentV3MigrationGuideTracksReleaseDescriptor(t *testing.T) {
+func TestProviderV3MigrationGuideTracksRetainedHistoryDescriptor(t *testing.T) {
 	root := repositoryRoot(t)
 	var release releaseDescriptor
-	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
+	readStrictJSON(t, filepath.Join(root, "release", "history", "provider-v3.0.0.json"), &release)
 
 	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v2-to-v3.md"))
 	if err != nil {
@@ -84,9 +84,35 @@ func TestCurrentV3MigrationGuideTracksReleaseDescriptor(t *testing.T) {
 	)
 	if !strings.Contains(string(guideRaw), currentTarget) {
 		t.Fatalf(
-			"v2-to-v3 migration guide does not track release/version.json target %s",
+			"v2-to-v3 migration guide does not track retained Provider 3 target %s",
 			release.Version,
 		)
+	}
+}
+
+func TestCurrentV4MigrationGuideStatesPublisherSetBoundary(t *testing.T) {
+	root := repositoryRoot(t)
+	var release releaseDescriptor
+	readStrictJSON(t, filepath.Join(root, "release", "candidates", "provider-v4.0.0.json"), &release)
+	if release.Version != "4.0.0" || release.Tag != "v4.0.0" ||
+		release.FormPublisherRepository != "github.com/tako0614/takoform-forms" ||
+		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1" {
+		t.Fatalf("current descriptor is not the Provider 4 candidate on stable Host API v1: %#v", release)
+	}
+	migration := readText(t, filepath.Join(root, "release", "migrations", "v3-to-v4.md"))
+	for _, required := range []string{
+		"Provider `3.0.0` is immutable Registry history",
+		"16 exact Forms",
+		"edge.forms.takoform.com",
+		"15 withdrawn aggregate",
+		"= 3.0.0",
+		"tofu state rm",
+		"owning OpenTofu provider",
+		"does not register its type",
+	} {
+		if !strings.Contains(migration, required) {
+			t.Errorf("release/migrations/v3-to-v4.md omits publisher-set boundary %q", required)
+		}
 	}
 }
 
@@ -217,7 +243,7 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		!strings.Contains(providerPublish, "Breaking upgrade from Provider v2.1.1") ||
 		!strings.Contains(providerPublish, "release/migrations/v2-to-v3.md") ||
 		!strings.Contains(providerPublish, "release/migrations/v1-to-v2.md") {
-		t.Fatal("owner-local Provider 3 publication does not link both required migration boundaries")
+		t.Fatal("retired owner-local Provider 3 publisher no longer retains both required migration boundaries")
 	}
 
 	resourceDocs, err := filepath.Glob(filepath.Join(root, "docs", "resources", "*.md"))
@@ -235,29 +261,42 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if currentIndex.Format != "takoform.current-family-index@v1" || len(currentIndex.Families) != 8 {
 		t.Fatalf("current family index = %q/%d families, want v1/8", currentIndex.Format, len(currentIndex.Families))
 	}
-	wantResourceDocs := 0
+	retainedAggregateForms := 0
 	edgeForms := 0
 	for _, family := range currentIndex.Families {
-		wantResourceDocs += family.FormCount
+		retainedAggregateForms += family.FormCount
 		if family.Group == "edge.forms.takoform.com" {
 			edgeForms = family.FormCount
 		}
 	}
-	if wantResourceDocs != 31 || edgeForms != 16 {
-		t.Fatalf("current family index = %d total/%d Edge Forms, want 31/16", wantResourceDocs, edgeForms)
+	if retainedAggregateForms != 31 || edgeForms != 16 {
+		t.Fatalf("retained Provider 3 family index = %d total/%d Edge Forms, want 31/16", retainedAggregateForms, edgeForms)
 	}
-	// Every Form in the exact eight-family current Provider 3 projection, and
-	// nothing else. The Edge family contributes sixteen of the thirty-one;
-	// ObjectBucket is retained only in the immutable v1beta1/Provider 2.1.1
-	// history, the generic exact-FormRef carrier was withdrawn (decision 0021),
-	// and the nine retained provider-v2 docs were withdrawn with their epoch
-	// (decision 0042). Every resource document describes a current Form and
+	// Current reference docs expose every exact tako0614 Edge Form and nothing
+	// else. The eight-family/31-Form index remains Provider 3 release history;
+	// the publisher-specific Provider 4 projection adds the current ObjectBucket
+	// without rewriting that index. The generic exact-FormRef carrier was
+	// withdrawn (decision 0021), and the nine retained provider-v2 docs were
+	// withdrawn with their epoch (decision 0042). Every resource document describes a publisher Form and
 	// must state the exact Form identity fields the state boundary fences on.
-	if len(resourceDocs) != wantResourceDocs {
-		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), wantResourceDocs)
+	if len(resourceDocs) != 17 {
+		t.Fatalf("publisher resource docs = %d, want 17", len(resourceDocs))
 	}
-	if _, err := os.Stat(filepath.Join(root, "docs", "resources", "object_bucket.md")); !os.IsNotExist(err) {
-		t.Fatal("current Provider 3 docs must not expose ObjectBucket")
+	if _, err := os.Stat(filepath.Join(root, "docs", "resources", "edge_object_bucket.md")); err != nil {
+		t.Fatalf("current publisher-selected Provider docs omit Edge ObjectBucket: %v", err)
+	}
+	for _, removed := range []string{
+		"function.md",
+		"serverless_container_service.md",
+		"pull_queue.md",
+		"message_schedule.md",
+		"table.md",
+		"topic.md",
+		"dense_vector_index.md",
+	} {
+		if _, err := os.Stat(filepath.Join(root, "docs", "resources", removed)); !os.IsNotExist(err) {
+			t.Errorf("current publisher-selected Provider docs still expose Provider 3 aggregate resource %s", removed)
+		}
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)

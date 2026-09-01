@@ -57,6 +57,13 @@ func CurrentProviderV3ReferenceSurfaces() ([]ProviderV3ReferenceSurface, error) 
 	if err != nil {
 		return nil, err
 	}
+	return referenceSurfacesFromAssembly(assembly)
+}
+
+func referenceSurfacesFromAssembly(assembly *v3ProviderAssembly) ([]ProviderV3ReferenceSurface, error) {
+	if assembly == nil || assembly.projection == nil {
+		return nil, fmt.Errorf("takoform provider: reference assembly is unavailable")
+	}
 	output := make([]ProviderV3ReferenceSurface, 0, len(assembly.projection.currentOrder))
 	for _, key := range assembly.projection.currentOrder {
 		entry := assembly.projection.forms[key]

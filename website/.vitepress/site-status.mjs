@@ -60,7 +60,8 @@ export const SITE_STATUS_PUBLISHED_PATH =
 // This constant pins generated examples to the provider release target. It is
 // deliberately named as a Provider SemVer, not as an API lane: Provider,
 // Host API, Form Family and Form-definition versions are independent axes.
-export const PROVIDER_RELEASE_TARGET_VERSION = "3.0.0";
+export const PROVIDER_RELEASE_TARGET_VERSION = "4.0.0";
+export const PROVIDER_REGISTRY_PUBLISHED_VERSION = "3.0.0";
 // Retain the legacy field name/value for consumers that still describe the
 // Edge preview descriptor. It is metadata only: providerTargetStatus below is
 // the independent Registry availability fact.
@@ -72,7 +73,7 @@ export const FAMILY_CANDIDATE_SET =
 export const CURRENT_FAMILY_INDEX =
   "forms/candidates/current-family-index.json";
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
-const RELEASE_VERSION = "release/version.json";
+export const RELEASE_VERSION = "release/candidates/provider-v4.0.0.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
 const SPECIFICATION_RELEASES = "release/specification-releases.json";
 
@@ -174,8 +175,8 @@ function validateCurrentProviderRegistryReadback(entry) {
     "windows_amd64",
   ];
   const valid =
-    entry?.version === PROVIDER_RELEASE_TARGET_VERSION &&
-    entry?.tag === `v${PROVIDER_RELEASE_TARGET_VERSION}` &&
+    entry?.version === PROVIDER_REGISTRY_PUBLISHED_VERSION &&
+    entry?.tag === `v${PROVIDER_REGISTRY_PUBLISHED_VERSION}` &&
     entry?.status === "assigned" &&
     typeof entry?.tagObject === "string" &&
     /^[0-9a-f]{40}$/.test(entry.tagObject) &&
@@ -185,17 +186,17 @@ function validateCurrentProviderRegistryReadback(entry) {
     readback?.providerAddress === "registry.terraform.io/tako0614/takoform" &&
     readback?.githubRelease?.immutable === true &&
     readback?.githubRelease?.url ===
-      `https://github.com/tako0614/terraform-provider-takoform/releases/tag/v${PROVIDER_RELEASE_TARGET_VERSION}` &&
+      `https://github.com/tako0614/terraform-provider-takoform/releases/tag/v${PROVIDER_REGISTRY_PUBLISHED_VERSION}` &&
     readback?.registry?.versionsUrl ===
       "https://registry.terraform.io/v1/providers/tako0614/takoform/versions" &&
     readback?.registry?.downloadUrl ===
-      `https://registry.terraform.io/v1/providers/tako0614/takoform/${PROVIDER_RELEASE_TARGET_VERSION}/download/linux/amd64` &&
+      `https://registry.terraform.io/v1/providers/tako0614/takoform/${PROVIDER_REGISTRY_PUBLISHED_VERSION}/download/linux/amd64` &&
     readback?.registry?.protocol === "6.0" &&
     JSON.stringify(readback?.registry?.platforms) ===
       JSON.stringify(expectedPlatforms) &&
     /^[0-9a-f]{64}$/.test(readback?.registry?.linuxAmd64Sha256 ?? "") &&
     readback?.installation?.product === "OpenTofu" &&
-    readback?.installation?.providerVersion === PROVIDER_RELEASE_TARGET_VERSION &&
+    readback?.installation?.providerVersion === PROVIDER_REGISTRY_PUBLISHED_VERSION &&
     /^[0-9A-F]{16}$/.test(readback?.installation?.signingKeyId ?? "") &&
     /^[0-9a-f]{64}$/.test(readback?.installation?.lockfileSha256 ?? "") &&
     /^[0-9a-f]{64}$/.test(readback?.installation?.schemaSha256 ?? "") &&
@@ -203,7 +204,7 @@ function validateCurrentProviderRegistryReadback(entry) {
     readback.installation.resourceSchemaCount > 0;
   if (!valid) {
     throw new Error(
-      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${PROVIDER_RELEASE_TARGET_VERSION} Registry readback is incomplete`,
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${PROVIDER_REGISTRY_PUBLISHED_VERSION} Registry readback is incomplete`,
     );
   }
   return entry;
@@ -272,12 +273,6 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseIdentityEntries = Array.isArray(releaseIdentities.entries)
     ? releaseIdentities.entries
     : [];
-  const providerTargetEntry = releaseIdentityEntries.find(
-    (entry) => entry?.version === providerReleaseTarget,
-  );
-  if (providerTargetEntry?.registryReadback) {
-    validateCurrentProviderRegistryReadback(providerTargetEntry);
-  }
   const publishedEntries = Array.isArray(releaseIdentities.entries)
     ? releaseIdentityEntries.filter((entry) => entry?.registryReadback)
     : [];
@@ -287,6 +282,13 @@ export function deriveSiteStatusFacts(repositoryRoot) {
       `${PROVIDER_RELEASE_IDENTITIES}: no retained Registry-readback release`,
     );
   }
+  if (providerPublished !== PROVIDER_REGISTRY_PUBLISHED_VERSION) {
+    throw new Error(
+      `${PROVIDER_RELEASE_IDENTITIES}: latest Registry readback is ${providerPublished}, expected ${PROVIDER_REGISTRY_PUBLISHED_VERSION}`,
+    );
+  }
+  const providerPublishedEntry = publishedEntries.at(-1);
+  validateCurrentProviderRegistryReadback(providerPublishedEntry);
   const providerTargetStatus = publishedEntries.some(
     (entry) => entry?.version === providerReleaseTarget,
   )
@@ -379,12 +381,11 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     0,
   );
   if (
-    providerTargetEntry?.registryReadback &&
-    providerTargetEntry.registryReadback.installation.resourceSchemaCount !==
+    providerPublishedEntry.registryReadback.installation.resourceSchemaCount !==
       currentFormCount
   ) {
     throw new Error(
-      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerReleaseTarget} Registry schema count differs from the current Form count`,
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerPublished} Registry schema count differs from the retained aggregate Form count`,
     );
   }
 

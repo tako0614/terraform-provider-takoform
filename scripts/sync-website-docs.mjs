@@ -40,6 +40,22 @@ const resourceDocs = readdirSync(
   .sort();
 
 const projections = [
+  {
+    canonical: path.join(
+      repositoryRoot,
+      "examples",
+      "native-provider-composition",
+      "main.tf",
+    ),
+    site: path.join(
+      repositoryRoot,
+      "website",
+      "static",
+      "examples",
+      "native-provider-composition",
+      "main.tf",
+    ),
+  },
   ...resourceDocs.map((name) => ({
     canonical: path.join(repositoryRoot, "docs", "resources", name),
     site: path.join(repositoryRoot, "website", "docs", "resources", name),

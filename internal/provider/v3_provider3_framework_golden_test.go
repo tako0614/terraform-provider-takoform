@@ -58,7 +58,7 @@ func deriveV3Provider3FrameworkGolden(t *testing.T) v3Provider3FrameworkGolden {
 		if !ok {
 			t.Fatalf("resource type for %s is absent", ref.ExactKey())
 		}
-		candidate := v3Provider3CurrentResourceHarness(t, form, resourceType, nil, v3Codecs())
+		candidate := v3Provider3HistoricalResourceHarness(t, form, resourceType, nil, v3Codecs())
 		var response frameworkresource.SchemaResponse
 		candidate.Schema(context.Background(), frameworkresource.SchemaRequest{}, &response)
 		if response.Diagnostics.HasError() {

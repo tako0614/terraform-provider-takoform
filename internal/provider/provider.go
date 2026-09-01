@@ -78,13 +78,21 @@ type providerData struct {
 	// statement about one host, and a plan asks the same questions once per
 	// resource (v3_host_support.go).
 	support *v3SupportCache
+	// Apply-only values arrive through ephemeral provider configuration. The
+	// nonce is value-free and available during Plan; runtimeInputs must be empty
+	// during Plan and populated only when OpenTofu re-supplies ephemeral values
+	// for Apply. Neither field is copied into a resource model or state.
+	runtimeInputNonce string
+	runtimeInputs     map[string]string
 }
 
 // takoformProviderModel maps the provider configuration schema.
 type takoformProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
-	Space    types.String `tfsdk:"space"`
-	Token    types.String `tfsdk:"token"`
+	Endpoint          types.String `tfsdk:"endpoint"`
+	Space             types.String `tfsdk:"space"`
+	Token             types.String `tfsdk:"token"`
+	RuntimeInputNonce types.String `tfsdk:"runtime_input_nonce"`
+	RuntimeInputs     types.Map    `tfsdk:"runtime_inputs"`
 }
 
 // New returns a provider factory bound to a build version.
@@ -123,6 +131,18 @@ func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 				Description: "Bearer token sent as `Authorization: Bearer <token>`. " +
 					"May also be set via the " + envToken + " environment variable.",
 			},
+			"runtime_input_nonce": schema.StringAttribute{
+				Optional: true,
+				Description: "Plan-stable nonce for a host-brokered sensitive WorkerVersion apply. " +
+					"It is paired with runtime_inputs by the execution host and is not an application credential.",
+			},
+			"runtime_inputs": schema.MapAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				ElementType: types.StringType,
+				Description: "Apply-only sensitive WorkerVersion bindings supplied through an ephemeral root variable. " +
+					"The map must be empty during Plan and exactly match required_sensitive_vars during Apply.",
+			},
 		},
 	}
 }
@@ -159,6 +179,20 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 				"or omit it to use the "+envSpace+" environment variable.",
 		)
 	}
+	if cfg.RuntimeInputNonce.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("runtime_input_nonce"),
+			"Unknown runtime input nonce",
+			"runtime_input_nonce must be wholly known during provider configuration.",
+		)
+	}
+	if cfg.RuntimeInputs.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("runtime_inputs"),
+			"Unknown runtime inputs",
+			"runtime_inputs must be a wholly known ephemeral map.",
+		)
+	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -174,6 +208,22 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 
 	token := firstNonEmpty(cfg.Token.ValueString(), os.Getenv(envToken))
 	space := firstNonEmpty(cfg.Space.ValueString(), os.Getenv(envSpace))
+	runtimeInputNonce := cfg.RuntimeInputNonce.ValueString()
+	runtimeInputs := map[string]string{}
+	if !cfg.RuntimeInputs.IsNull() {
+		resp.Diagnostics.Append(cfg.RuntimeInputs.ElementsAs(ctx, &runtimeInputs, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	if err := validateV3RuntimeInputProviderConfiguration(runtimeInputNonce, runtimeInputs); err != nil {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("runtime_inputs"),
+			"Invalid runtime input provider configuration",
+			err.Error(),
+		)
+		return
+	}
 	if space != "" {
 		if err := clientv3.ValidateSpaceID(space); err != nil {
 			resp.Diagnostics.AddAttributeError(
@@ -195,10 +245,12 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 	v3Client, v3Err := negotiateLane(ctx, endpoint, token, httpClient, discoveryTimeout)
 
 	data := &providerData{
-		clientV3:     v3Client,
-		v3Err:        v3Err,
-		defaultSpace: space,
-		support:      newV3SupportCache(),
+		clientV3:          v3Client,
+		v3Err:             v3Err,
+		defaultSpace:      space,
+		support:           newV3SupportCache(),
+		runtimeInputNonce: runtimeInputNonce,
+		runtimeInputs:     cloneV3RuntimeInputStrings(runtimeInputs),
 	}
 	resp.ResourceData = data
 	resp.DataSourceData = data
@@ -220,10 +272,12 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	// Exactly the 31 typed current-family resources, one for each Form in the
-	// generated current-family index. There is no generic carrier, and the
-	// retained Provider 2.1.1 identities are not registered in this major line.
-	return newV3FormResources()
+	// The current provider registers only the exact Form set selected from
+	// tako0614/takoform-forms. Provider 3's former 31-Form aggregate remains immutable release
+	// history, not a roster that this source address keeps expanding. Ordinary
+	// AWS, Cloudflare, Kubernetes, and other providers compose beside Takoform
+	// through OpenTofu's native required_providers graph.
+	return newPublisherFormResources()
 }
 
 func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.DataSource {

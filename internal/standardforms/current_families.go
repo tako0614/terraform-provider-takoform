@@ -17,9 +17,9 @@ type currentFamilyInventory struct {
 }
 
 func currentFamilies() []currentFamilyInventory {
-	surfaces, err := provider.CurrentProviderV3ReferenceSurfaces()
+	surfaces, err := provider.CurrentPublisherProviderReferenceSurfaces()
 	if err != nil {
-		panic(fmt.Errorf("load Provider 3 reference projection: %w", err))
+		panic(fmt.Errorf("load publisher-selected Provider reference projection: %w", err))
 	}
 	output := make([]currentFamilyInventory, 0)
 	positions := make(map[string]int)
@@ -45,7 +45,7 @@ func currentFormCount() int {
 }
 
 func providerReferenceTerraformType(form model.Form) (string, error) {
-	surfaces, err := provider.CurrentProviderV3ReferenceSurfaces()
+	surfaces, err := provider.CurrentPublisherProviderReferenceSurfaces()
 	if err != nil {
 		return "", err
 	}

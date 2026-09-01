@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "version": "4.0.0",
+  "tag": "v4.0.0",
+  "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
+  "formPublisherRepository": "github.com/tako0614/takoform-forms",
+  "formPublisherCommit": "3231633605b737ce5279d7fc020b4780568e7091",
+  "formSetTag": "forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c",
+  "providerAddress": "registry.terraform.io/tako0614/takoform",
+  "cliMatrix": [
+    {
+      "product": "OpenTofu",
+      "version": "1.12.3",
+      "providerAddress": "registry.terraform.io/tako0614/takoform"
+    },
+    {
+      "product": "Terraform",
+      "version": "1.15.8",
+      "providerAddress": "registry.terraform.io/tako0614/takoform"
+    }
+  ],
+  "goModule": "github.com/tako0614/terraform-provider-takoform",
+  "goVersion": "go1.26.5",
+  "signingFingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709",
+  "publicKeyPath": "release/keys/provider-signing-key.asc",
+  "platforms": [
+    "darwin_amd64",
+    "darwin_arm64",
+    "linux_amd64",
+    "linux_arm64",
+    "windows_amd64"
+  ],
+  "publicationStatus": "candidate-only",
+  "versioning": {
+    "providerCompatibility": "semver-major",
+    "portableApiVersion": "forms.takoform.com/v1",
+    "formDefinitionVersions": "independent-immutable-semver",
+    "formPackageVersions": "content-addressed-current-retained-legacy-semver"
+  }
+}

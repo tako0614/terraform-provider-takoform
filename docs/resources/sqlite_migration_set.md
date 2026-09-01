@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_sqlite_migration_set Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "tako0614 Forms"
 description: |-
   SQLite Migration Set (edge.forms.takoform.com, role revision).
 ---
@@ -11,8 +11,8 @@ Immutable ordered SQLite migration history backed by one committed artifacts.tak
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/SQLiteMigrationSet` is recorded below.
-The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/sqlite-migration-set/definition.json).
+This page documents the publisher-set next-major Provider mapping; its exact FormRef `edge.forms.takoform.com/SQLiteMigrationSet` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/sqlite-migration-set/definition.json).
 See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_sqlite_migration_set/resource.tf).
 
 ## Exact FormRef
@@ -33,7 +33,7 @@ This Provider mapping carries the following exact four-field FormRef:
 ## Arguments
 
 - `name` (String, optional, computed, forces replacement) — Portable resource name (`metadata.name`). Omit it and set `revision_owner` instead: this Form is an immutable revision, so the provider derives `sqlite-migration-set-<content digest prefix>-<owner digest prefix>` from this revision's own content and its declared owner. Changed content is then a NEW revision created beside the old one, which is the only way a code change applies at all — a host refuses every update to a revision, and replacing one under a name it still holds completes in neither apply order. Setting it pins the name, which an imported revision needs; the provider then refuses at plan time any change that would replace this revision under it.
-- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. Two independent resources built from identical content derive identical content digests, so without an owner they would derive one name and two Terraform resources would manage one host address — where a destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the host never sees it, and it enters only the derived name. The official [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you.
+- `revision_owner` (String, optional, forces replacement) — Stable name of the logical resource that owns this revision. When the Form carries an owner relation, use that target resource's name. Required whenever `name` is omitted. Two independent resources built from identical content derive identical content digests, so without an owner they would derive one name and two Terraform resources would manage one host address — where a destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the host never sees it, and it enters only the derived name. The repository [`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) sets it for you.
 - `manifest_digest` (String, required, forces replacement) — Immutable identity of the committed MigrationBundle artifact manifest. Before mutation a host resolves it within the caller's tenant and verifies its canonical digest, MigrationBundle kind, non-empty ordered files inventory, unique paths, application/sql media type, sizes, and blob digests.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.

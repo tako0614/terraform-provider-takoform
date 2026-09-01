@@ -1,7 +1,7 @@
 # Edge Platform Family proposals
 
-The Edge Platform Family, `edge.forms.takoform.com`, is the first
-official Form Family ([decision 0009](../../spec/decisions/0009-form-families-and-namespaced-api-versions.md)).
+The Edge Platform Family, `edge.forms.takoform.com`, is published by
+`github.com/tako0614/takoform-forms` ([decision 0009](../../spec/decisions/0009-form-families-and-namespaced-api-versions.md)).
 Its members fix, completely, the application-visible semantics of a proven
 edge developer platform without naming its vendor
 ([decision 0008](../../spec/decisions/0008-forms-preserve-service-shape.md)).

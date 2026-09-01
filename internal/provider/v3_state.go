@@ -115,6 +115,9 @@ func (r *v3FormResource) writeV3StateFrom(
 	if r.derivesRevisionName() {
 		diags.Append(state.SetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), values.RevisionOwner)...)
 	}
+	if r.supportsApplyIdempotencyKey() {
+		diags.Append(state.SetAttribute(ctx, path.Root(v3ApplyIdempotencyKeyAttribute), values.ApplyIdempotencyKey)...)
+	}
 	diags.Append(state.SetAttribute(ctx, path.Root("create_timeout"), values.CreateTimeout)...)
 	if r.form.DeclaresUpdate() {
 		diags.Append(state.SetAttribute(ctx, path.Root("update_timeout"), values.UpdateTimeout)...)
@@ -447,9 +450,13 @@ type v3Values struct {
 	// RevisionOwner names who owns a derived revision. It is provider-side
 	// authoring input that decides the derived NAME and never reaches the wire.
 	RevisionOwner types.String
-	CreateTimeout types.String
-	UpdateTimeout types.String
-	DeleteTimeout types.String
+	// ApplyIdempotencyKey is the optional provider-only WorkerVersion apply
+	// header override. It is preserved from configuration/state and never read
+	// from or projected into the Host representation.
+	ApplyIdempotencyKey types.String
+	CreateTimeout       types.String
+	UpdateTimeout       types.String
+	DeleteTimeout       types.String
 	// Fields is keyed by the HCL attribute name (v3AttributeName).
 	Fields map[string]attr.Value
 }
@@ -506,6 +513,9 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 	values, diags := v3CommonValuesFrom(ctx, getter, r.form.DeclaresUpdate())
 	if r.derivesRevisionName() {
 		diags.Append(getter.GetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), &values.RevisionOwner)...)
+	}
+	if r.supportsApplyIdempotencyKey() {
+		diags.Append(getter.GetAttribute(ctx, path.Root(v3ApplyIdempotencyKeyAttribute), &values.ApplyIdempotencyKey)...)
 	}
 	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		var manifestDigest, mainModule types.String

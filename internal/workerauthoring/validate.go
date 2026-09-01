@@ -256,7 +256,7 @@ func Validate(report Report) error {
 		}
 	}
 	if report.ShortestModuleName != shortestPortableName {
-		return fmt.Errorf("the official module did not accept the shortest portable name %q", shortestPortableName)
+		return fmt.Errorf("the repository module did not accept the shortest portable name %q", shortestPortableName)
 	}
 	if len(report.Configurations) == 0 {
 		return errors.New("no configuration was validated")

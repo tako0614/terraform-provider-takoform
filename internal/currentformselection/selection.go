@@ -2,7 +2,7 @@
 // data-only artifacts and compiles it through currentformsnapshot.
 //
 // The package is deliberately an artifact adapter. It has no knowledge of an
-// official Form catalog, provider registry, or authoring implementation. The
+// publisher Form catalog, provider registry, or authoring implementation. The
 // current-family-index.json document and the digest-pinned candidate sets are
 // the only selection authority; authoringSource is retained as provenance
 // metadata and is never opened.

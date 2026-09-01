@@ -14,7 +14,6 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformselection"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerdiagnostics"
 )
@@ -54,7 +53,7 @@ type VarsEvidence struct {
 	WireTypes map[string]string `json:"wireTypes"`
 }
 
-// TeardownEvidence records what a full `destroy` of the official module did.
+// TeardownEvidence records what a full `destroy` of the repository module did.
 //
 // A teardown is an ordering claim and an emptiness claim at once, so both are
 // carried: the deletes the host actually saw, and the store afterwards.
@@ -284,7 +283,7 @@ func runPinnedNamePlanRefusal(ctx context.Context, repoRoot, cliPath, providerBi
 	}
 	for _, want := range []string{
 		"This immutable revision cannot be safely replaced under the same host name.",
-		"Use a new revision name or the official worker-app module.",
+		"Use a new revision name or the repository worker-app module.",
 		providerdiagnostics.ImmutableRevisionSameName,
 		"dependency_in_use",
 		"invalid_argument",
@@ -323,7 +322,7 @@ func runRollForward(ctx context.Context, repoRoot, cliPath, providerBinary strin
 	return h.rollForward(ctx, func() error { return h.writeModuleSource(2) })
 }
 
-// runModuleDeploy drives the official module end to end, including the
+// runModuleDeploy drives the repository module end to end, including the
 // host-assigned endpoint, and proves the same sequence plus the one guarantee
 // the endpoint adds: the address survives a code change.
 func runModuleDeploy(ctx context.Context, repoRoot, cliPath, providerBinary string) (SequenceEvidence, error) {
@@ -375,7 +374,7 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath, providerBinary stri
 	return evidence, nil
 }
 
-// runModuleDestroy proves the official module comes apart again.
+// runModuleDestroy proves the repository module comes apart again.
 //
 // Standing an aggregate up is the half every other scenario measures. Taking it
 // down is the half that broke, and it broke for a reason no single-resource
@@ -383,7 +382,7 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath, providerBinary stri
 // whose readiness follows it (spec/decisions/0016 rule 9), so the worker's
 // revision moves in the middle of the destroy, AFTER the plan read it. While a
 // delete fenced on the representation, that made `terraform destroy` of the
-// official module fail on a change the destroy itself caused — with no repair,
+// repository module fail on a change the destroy itself caused — with no repair,
 // because the next dependent moves the revision again. The fence is the desired
 // generation, and this is what says so end to end, through the real CLI.
 //
@@ -602,7 +601,7 @@ func assertDistinct(kind string, names []string) error {
 
 // runHeterogeneousVars proves that a `vars` map whose values have three
 // different JSON types reaches the host with those three types intact, THROUGH
-// the official module rather than only through the raw resource.
+// the repository module rather than only through the raw resource.
 //
 // The Form admits any bounded JSON value, so `true` must arrive as a JSON
 // boolean and `3` as a JSON number. A module input typed as a collection with
@@ -687,7 +686,7 @@ func jsonTypeName(value any) string {
 	return fmt.Sprintf("%T", value)
 }
 
-// runShortestName proves the official module accepts every name the portable
+// runShortestName proves the repository module accepts every name the portable
 // grammar admits, including the shortest one.
 //
 // `^[a-z][a-z0-9-]{0,62}$` admits a single letter. A module that demands a
@@ -715,7 +714,7 @@ func runShortestName(ctx context.Context, repoRoot, cliPath, providerBinary stri
 	}
 	if output, err := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
 		return "", fmt.Errorf(
-			"%s refused the shortest name the portable grammar admits through the official module: %w\n%s",
+			"%s refused the shortest name the portable grammar admits through the repository module: %w\n%s",
 			h.identity.Product, err, output)
 	}
 	applied, err := h.output(ctx, moduleInstanceLabel(shortestPortableName)+"_worker_name")
@@ -961,7 +960,7 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary
 }
 
 // runConfigurationValidation runs the CLI's own configuration check over the
-// official module and every example, in a scratch copy so the repository tree
+// repository module and every example, in a scratch copy so the repository tree
 // stays clean.
 func runConfigurationValidation(ctx context.Context, repoRoot, cliPath, providerBinary string) ([]string, error) {
 	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
@@ -989,10 +988,21 @@ func runConfigurationValidation(ctx context.Context, repoRoot, cliPath, provider
 	validated := make([]string, 0, len(directories))
 	for _, directory := range directories {
 		// `get` installs local module sources without resolving providers, which
-		// the dev override already supplies. `validate` then type-checks the whole
-		// configuration against the provider's real schema.
+		// the dev override already supplies. A documentation configuration that
+		// intentionally composes an independently installed peer provider is
+		// syntax-checked by the repository format gate and inspected here, but is
+		// not passed to this single-provider offline harness. Every configuration
+		// whose provider closure is Takoform-only is then type-checked against the
+		// provider's real schema.
 		if output, err := h.runIn(ctx, directory, "get", "-no-color"); err != nil {
 			return nil, fmt.Errorf("%s module install in %s: %w\n%s", h.identity.Product, directory, err, output)
+		}
+		providers, err := h.runIn(ctx, directory, "providers", "-no-color")
+		if err != nil {
+			return nil, fmt.Errorf("%s provider inspection in %s: %w\n%s", h.identity.Product, directory, err, providers)
+		}
+		if hasExternalProviderRequirement(providers) {
+			continue
 		}
 		output, err := h.runIn(ctx, directory, "validate", "-no-color")
 		if err != nil {
@@ -1009,6 +1019,29 @@ func runConfigurationValidation(ctx context.Context, repoRoot, cliPath, provider
 		validated = append(validated, filepath.ToSlash(relative))
 	}
 	return validated, nil
+}
+
+// hasExternalProviderRequirement reports whether `providers` output names a
+// registry provider this harness does not install. The OpenTofu/Terraform
+// command parses the complete configuration and local-module closure first,
+// so this is not a path or comment escape hatch.
+func hasExternalProviderRequirement(output string) bool {
+	for remaining := output; ; {
+		start := strings.Index(remaining, "provider[")
+		if start < 0 {
+			return false
+		}
+		remaining = remaining[start+len("provider["):]
+		end := strings.IndexByte(remaining, ']')
+		if end < 0 {
+			return true
+		}
+		address := remaining[:end]
+		if address != ProviderAddress && address != "terraform.io/builtin/terraform" {
+			return true
+		}
+		remaining = remaining[end+1:]
+	}
 }
 
 // terraformDirectories lists every directory under root that holds a root or
@@ -1075,17 +1108,14 @@ func (h *harness) output(ctx context.Context, name string) (string, error) {
 	return strings.TrimSpace(raw), nil
 }
 
-// edgeFormRef is the checked-in selection's create target for one worker Form.
-// The worker corpus deliberately names its family; exact identity and default
-// selection still come only from the verified artifact Snapshot.
+// edgeFormRef is the exact current publisher identity installed in this
+// harness's host. Provider mapping and Host support therefore come from the
+// same verified closure instead of mixing current Provider resources with a
+// retained conformance corpus.
 func (h *harness) edgeFormRef(kind string) (formpackage.FormRef, error) {
-	selection, err := currentformselection.LoadRepository(h.repoRoot)
-	if err != nil {
-		return formpackage.FormRef{}, err
-	}
-	ref, ok := selection.Snapshot().Default("edge.forms.takoform.com", kind)
+	ref, ok := h.formRefs[kind]
 	if !ok {
-		return formpackage.FormRef{}, fmt.Errorf("takoform: worker corpus has no selected default for edge.forms.takoform.com/%s", kind)
+		return formpackage.FormRef{}, fmt.Errorf("takoform: publisher catalog has no selected default for edge.forms.takoform.com/%s", kind)
 	}
 	return ref, nil
 }

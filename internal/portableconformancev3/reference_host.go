@@ -833,6 +833,49 @@ func (h *ReferenceHost) exactQueryForm(query url.Values) (*InstalledForm, string
 	return form, space, nil
 }
 
+// exactPathQueryForm resolves an exact Form whose group and kind already
+// travel in the definition/resource path. The retained beta1 lane duplicated
+// those fields in its query; current lanes close the query over only the three
+// remaining keys.
+func (h *ReferenceHost) exactPathQueryForm(
+	query url.Values,
+	group, kind string,
+) (*InstalledForm, string, *hostError) {
+	if !h.contract.lane.FormsFilterGroupIsWhole {
+		return h.exactQueryForm(query)
+	}
+	allowed := map[string]bool{
+		"space": true, "definitionVersion": true, "schemaDigest": true,
+	}
+	for key, values := range query {
+		if !allowed[key] || len(values) != 1 {
+			return nil, "", stableError("invalid_argument", "exact path Form query vocabulary is closed")
+		}
+	}
+	space := query.Get("space")
+	if !validSpaceID(space) {
+		return nil, "", stableError("invalid_argument", "exactly one valid space is required")
+	}
+	definitionVersion := query.Get("definitionVersion")
+	if !validDefinitionVersion(definitionVersion) {
+		return nil, "", stableError("invalid_argument", "definitionVersion is malformed")
+	}
+	schemaDigest := query.Get("schemaDigest")
+	if !formpackage.ValidDigest(schemaDigest) {
+		return nil, "", stableError("invalid_argument", "schemaDigest is malformed")
+	}
+	form := h.catalog.exact(FormRef{
+		APIVersion:        group,
+		Kind:              kind,
+		DefinitionVersion: definitionVersion,
+		SchemaDigest:      schemaDigest,
+	})
+	if form == nil {
+		return nil, "", stableError("form_unknown", "exact Form is unknown")
+	}
+	return form, space, nil
+}
+
 func (h *ReferenceHost) handleForms(w http.ResponseWriter, request *http.Request) {
 	if h.contract.lane.FormsResponseEnumerates {
 		h.handleFormsEnumerated(w, request)
@@ -953,7 +996,7 @@ func splitAPIVersion(apiVersion string) (string, string, bool) {
 }
 
 func (h *ReferenceHost) handleFormDefinition(w http.ResponseWriter, request *http.Request, group, kind string) {
-	form, _, hostErr := h.exactQueryForm(request.URL.Query())
+	form, _, hostErr := h.exactPathQueryForm(request.URL.Query(), group, kind)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
@@ -2159,7 +2202,7 @@ func (h *ReferenceHost) exactCurrentResource(
 	request *http.Request,
 	group, kind, name string,
 ) (*storedResource, bool) {
-	form, space, hostErr := h.exactQueryForm(request.URL.Query())
+	form, space, hostErr := h.exactPathQueryForm(request.URL.Query(), group, kind)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return nil, false

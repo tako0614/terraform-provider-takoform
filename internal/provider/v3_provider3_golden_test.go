@@ -176,7 +176,7 @@ func deriveV3Provider3Golden(t *testing.T) v3Provider3Golden {
 			t.Fatalf("default codec ref for %s = %#v, want %#v", key, defaultCodec.Ref, ref)
 		}
 
-		candidate := v3Provider3CurrentResourceHarness(t, form, resourceType, nil, codecs)
+		candidate := v3Provider3HistoricalResourceHarness(t, form, resourceType, nil, codecs)
 		var response frameworkresource.SchemaResponse
 		candidate.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		if response.Diagnostics.HasError() {
@@ -268,6 +268,25 @@ func v3Provider3CurrentResourceHarness(
 	}
 	t.Fatalf("production registration has no exact current resource for %s/%s@%s", form.Family.APIVersion(), form.Kind, form.DefinitionVersion)
 	return nil
+}
+
+// v3Provider3HistoricalResourceHarness is the explicit constructor used by
+// immutable Provider 3.0.0 release-evidence tests. It keeps the exact
+// production registration, Form projection, codecs, and artifact rule, while
+// selecting the v3.0.0 provider surface before Schema/Create/Read are driven.
+// Additive provider-only attributes therefore belong to a separate current
+// lane test instead of silently changing the historical comparison.
+func v3Provider3HistoricalResourceHarness(
+	t *testing.T,
+	form model.Form,
+	resourceType string,
+	data *providerData,
+	codecs *v3CodecTable,
+) *v3FormResource {
+	t.Helper()
+	candidate := v3Provider3CurrentResourceHarness(t, form, resourceType, data, codecs)
+	candidate.providerSurface = v3ProviderSurfaceV30
+	return candidate
 }
 
 func deriveV3Provider3GoldenAttributes(attributes map[string]frameworkschema.Attribute) map[string]v3Provider3GoldenAttribute {

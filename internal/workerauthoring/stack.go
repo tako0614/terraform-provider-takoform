@@ -227,7 +227,7 @@ resource "takoform_worker_deployment" "app" {
 	return builder.String()
 }
 
-// moduleStackOptions selects which shape of the official module one scenario
+// moduleStackOptions selects which shape of the repository module one scenario
 // authors.
 type moduleStackOptions struct {
 	// Owners are the Module Worker names, one module instance each. Empty means
@@ -264,7 +264,7 @@ func (options moduleStackOptions) contentDir(owner string) string {
 	return "dist-" + owner
 }
 
-// moduleStack renders the worker through the official module, once per owner.
+// moduleStack renders the worker through the repository module, once per owner.
 //
 // Every instance points at the SAME content directory, so two owners in one
 // stack are two independent Terraform owners of byte-identical build output —

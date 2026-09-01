@@ -1,4 +1,4 @@
-# The official `worker-app` module: one running ES Module Worker, assembled
+# The repository `worker-app` module: one running ES Module Worker, assembled
 # from the five raw Forms the Edge Platform Family splits it across.
 #
 # The raw Forms stay the low-level surface, and the split is deliberate — it is
@@ -78,6 +78,8 @@ resource "takoform_worker_version" "this" {
   worker         = takoform_module_worker.this.name
   bundle         = takoform_worker_bundle.this.name
   handlers       = var.handlers
+
+  apply_idempotency_key = var.apply_idempotency_key
 
   vars_json               = length(var.vars) > 0 ? jsonencode(var.vars) : null
   required_sensitive_vars = var.required_sensitive_vars

@@ -55,11 +55,12 @@ import (
 )
 
 const (
-	workerBundleKind       = "WorkerBundle"
-	workerVersionKind      = "WorkerVersion"
-	staticAssetBundleKind  = "StaticAssetBundle"
-	sqliteMigrationSetKind = "SQLiteMigrationSet"
-	workerDeploymentKind   = "WorkerDeployment"
+	workerBundleKind               = "WorkerBundle"
+	workerVersionKind              = "WorkerVersion"
+	v3ApplyIdempotencyKeyAttribute = "apply_idempotency_key"
+	staticAssetBundleKind          = "StaticAssetBundle"
+	sqliteMigrationSetKind         = "SQLiteMigrationSet"
+	workerDeploymentKind           = "WorkerDeployment"
 
 	// workerDeploymentWeightSum is the exact basis-point total every
 	// WorkerDeployment versions list must reach.
@@ -74,7 +75,7 @@ const (
 func v3AttributeName(field model.Field) string { return field.AttributeName() }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attrs := v3CommonAttributes(r.form)
+	attrs := v3CommonAttributesForSurface(r.form, r.supportsApplyIdempotencyKey())
 	artifact, artifactInjected := r.v3ArtifactRule()
 	requiresArtifact := v3FormRequiresArtifactRule(r.form)
 	if requiresArtifact && !artifactInjected {
@@ -115,13 +116,12 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			attrs[v3AttributeName(field)] = attribute
 		}
 	}
-	// Provider 3 no longer exposes ObjectBucket or bucket bindings as current
-	// desired state. It must nevertheless keep the old attribute TYPE in the
-	// WorkerVersion Terraform state envelope so a retained Provider 2.1.1
-	// WorkerVersion exact codec can decode and refresh the state it wrote. The
-	// attribute is computed-only: configurations cannot author it, current
-	// codecs never send it, and no ObjectBucket resource mapping is restored.
-	if r.form.Kind == workerVersionKind {
+	// A retained Provider 3.0 WorkerVersion codec may need the historical
+	// bucket_bindings state shape even though that surface was never authorable.
+	// The current WorkerVersion Form declares the same attribute as an ordinary
+	// binding list, so never overwrite that current declaration with the
+	// historical computed-only shape.
+	if r.form.Kind == workerVersionKind && (r.providerSurface == v3ProviderSurfaceV30 || !v3FormDeclaresField(r.form, v3RetainedBucketBindingsAttribute)) {
 		attrs[v3RetainedBucketBindingsAttribute] = v3RetainedBucketBindingsStateAttribute()
 	}
 	// The Form's declared outputs become typed computed attributes. They are
@@ -143,8 +143,12 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 		}
 		attrs[name] = v3OutputAttribute(output)
 	}
+	lane := "Host API v1 lane"
+	if r.providerSurface == v3ProviderSurfaceV30 || r.form.RequiresHostAPI == "forms.takoform.com/v1beta1" {
+		lane = "Host API v1beta1 lane"
+	}
 	description := r.form.Description +
-		" Role: " + string(r.form.Role) + " (Host API v1beta1 lane)."
+		" Role: " + string(r.form.Role) + " (" + lane + ")."
 	resp.Schema = schema.Schema{
 		Version:     v3SchemaVersion,
 		Description: description,
@@ -173,12 +177,25 @@ func v3RetainedBucketBindingsStateAttribute() schema.ListNestedAttribute {
 	}
 }
 
+func v3FormDeclaresField(form model.Form, hclName string) bool {
+	for _, field := range form.Fields {
+		if v3AttributeName(field) == hclName {
+			return true
+		}
+	}
+	return false
+}
+
 // v3CommonAttributes is the shared v3 state model: client-owned identity
 // (name, space), host-owned identity and fences (uid, generation, revision),
 // the exact Form identity, readiness, typed outputs, and operation timeouts.
 // The packageDigest is deliberately NOT part of state identity; it is an
 // audit-only computed attribute (spec/decisions/0011).
 func v3CommonAttributes(form model.Form) map[string]schema.Attribute {
+	return v3CommonAttributesForSurface(form, form.Kind == workerVersionKind)
+}
+
+func v3CommonAttributesForSurface(form model.Form, includeApplyIdempotencyKey bool) map[string]schema.Attribute {
 	hasUpdate := form.DeclaresUpdate()
 	attrs := map[string]schema.Attribute{
 		"name": v3NameAttribute(form),
@@ -261,6 +278,23 @@ func v3CommonAttributes(form model.Form) map[string]schema.Attribute {
 	// a knob that decides nothing.
 	if form.Role == model.RoleRevision {
 		attrs[v3RevisionOwnerAttribute] = v3RevisionOwnerSchemaAttribute(form)
+	}
+	// WorkerVersion alone accepts a provider-only operation-key override. It is
+	// deliberately absent from every other resource and never participates in
+	// the portable Form schema or wire spec.
+	if includeApplyIdempotencyKey && form.Kind == workerVersionKind {
+		attrs[v3ApplyIdempotencyKeyAttribute] = schema.StringAttribute{
+			Optional: true,
+			Computed: true,
+			Description: "Provider-only Host API Idempotency-Key for this WorkerVersion apply. " +
+				"Without runtime_input_nonce an explicit visible-ASCII value is preserved in state, " +
+				"while omission keeps the established deterministic Host key. With provider-scoped runtime input " +
+				"the provider computes this value from the nonce and the value-free logical " +
+				"apply identity. It never includes a secret value or enters the portable desired spec. Changing it " +
+				"replaces this immutable version.",
+			Validators:    []validator.String{StringIdempotencyKey()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+		}
 	}
 	// A Form that declares no update capability has no update to bound: the
 	// attribute is not declared at all, so a configuration that sets it fails

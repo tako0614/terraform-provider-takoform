@@ -1,7 +1,7 @@
 // Package currentformsnapshot compiles already acquired, data-only Form
 // Package artifacts into one immutable, provider-neutral exact-identity graph.
 //
-// It deliberately imports no official family, Terraform Provider, Host, or
+// It deliberately imports no built-in publisher family, Terraform Provider, Host, or
 // conformance implementation. Acquisition, publisher trust, package-signature
 // admission, and executable Host adapters are separate owners.
 package currentformsnapshot

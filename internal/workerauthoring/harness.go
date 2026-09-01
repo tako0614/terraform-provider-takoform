@@ -1,5 +1,5 @@
 // Package workerauthoring drives the Edge Platform Family authoring surface —
-// the current stable resources and the official `worker-app` module — through a
+// the current stable resources and the repository `worker-app` module — through a
 // REAL Terraform-compatible CLI against the deterministic stable-v1 reference
 // host.
 //
@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 )
 
@@ -36,6 +37,12 @@ const stablePortableHostCorpus = "conformance/takoform-v1/family-host/edge/porta
 // ProviderAddress is the one canonical FQN both supported CLIs install the
 // provider under.
 const ProviderAddress = "registry.terraform.io/tako0614/takoform"
+
+// developmentProviderVersion labels binaries built from the publisher-set
+// source checkout. release/version.json describes immutable Provider 3 release
+// tooling and must not relabel a breaking next-major development binary as
+// 3.0.0.
+const developmentProviderVersion = "4.0.0-dev"
 
 // CLIIdentity is the exact CLI one scenario ran under.
 type CLIIdentity struct {
@@ -58,8 +65,9 @@ type harness struct {
 	// teardown scenario can ask what is LEFT. The wire has no list route, so
 	// nothing else can answer "nothing was left behind" rather than "the names
 	// I remembered are gone".
-	store   *portableconformancev3.ReferenceHost
-	cleanup []func()
+	store    *portableconformancev3.ReferenceHost
+	formRefs map[string]formpackage.FormRef
+	cleanup  []func()
 }
 
 // harnessOptions selects which Forms the disposable host answers support for.
@@ -83,11 +91,28 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 	if err != nil {
 		return nil, fmt.Errorf("verify portable host v3 contract: %w", err)
 	}
-	catalog, err := portableconformancev3.LoadCatalog(repoRoot, contract)
+	catalog, err := portableconformancev3.LoadArtifactFamilyCatalog(
+		repoRoot,
+		contract,
+		"internal/provider/artifacts/publisher",
+	)
 	if err != nil {
-		return nil, fmt.Errorf("load Edge Family candidate catalog: %w", err)
+		return nil, fmt.Errorf("load publisher Edge Form catalog: %w", err)
 	}
-	h := &harness{repoRoot: repoRoot, cli: executable, identity: identity}
+	formRefs := make(map[string]formpackage.FormRef, len(catalog.Forms))
+	for _, installed := range catalog.Forms {
+		if installed.Ref.APIVersion != "edge.forms.takoform.com" {
+			continue
+		}
+		if _, duplicate := formRefs[installed.Ref.Kind]; duplicate {
+			return nil, fmt.Errorf("publisher Edge catalog contains multiple active definitions for %s", installed.Ref.Kind)
+		}
+		formRefs[installed.Ref.Kind] = formpackage.FormRef{
+			APIVersion: installed.Ref.APIVersion, Kind: installed.Ref.Kind,
+			DefinitionVersion: installed.Ref.DefinitionVersion, SchemaDigest: installed.Ref.SchemaDigest,
+		}
+	}
+	h := &harness{repoRoot: repoRoot, cli: executable, identity: identity, formRefs: formRefs}
 	temp, err := os.MkdirTemp("", "takoform-worker-authoring-")
 	if err != nil {
 		return nil, err
@@ -107,18 +132,13 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 			return nil, err
 		}
 	}
-	version, err := providerVersion(repoRoot)
-	if err != nil {
-		h.Close()
-		return nil, err
-	}
 	binary := filepath.Join(binDir, "terraform-provider-takoform")
 	if options.providerBinary != "" {
 		if err := copyExecutable(options.providerBinary, binary); err != nil {
 			h.Close()
 			return nil, fmt.Errorf("copy explicit provider binary: %w", err)
 		}
-	} else if output, err := buildProvider(ctx, repoRoot, version, binary); err != nil {
+	} else if output, err := buildProvider(ctx, repoRoot, developmentProviderVersion, binary); err != nil {
 		h.Close()
 		return nil, fmt.Errorf("build provider binary: %w\n%s", err, output)
 	}
@@ -204,24 +224,6 @@ func identifyCLI(ctx context.Context, requested string) (string, CLIIdentity, er
 		return executable, CLIIdentity{Product: "Terraform", Version: decoded.TerraformVersion}, nil
 	}
 	return "", CLIIdentity{}, errors.New("unsupported Terraform-compatible CLI product")
-}
-
-func providerVersion(repoRoot string) (string, error) {
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "release", "version.json"))
-	if err != nil {
-		return "", err
-	}
-	var descriptor struct {
-		Version   string `json:"version"`
-		GoVersion string `json:"goVersion"`
-	}
-	if err := json.Unmarshal(raw, &descriptor); err != nil {
-		return "", err
-	}
-	if descriptor.Version == "" {
-		return "", errors.New("release descriptor carries no provider version")
-	}
-	return descriptor.Version, nil
 }
 
 func buildProvider(ctx context.Context, repoRoot, version, outputPath string) (string, error) {

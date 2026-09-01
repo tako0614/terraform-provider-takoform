@@ -272,6 +272,58 @@ func hostRequest(
 	return response.StatusCode, data
 }
 
+func TestStableExactPathQueryRejectsMissingOrMalformedIdentity(t *testing.T) {
+	host, contract := fallbackHost(t)
+	ref := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
+	server := httptest.NewServer(host)
+	defer server.Close()
+	definitionPath := contract.APIPath + "/form-definitions/" +
+		groupSegments(ref.APIVersion) + "/" + url.PathEscape(ref.Kind)
+	resourcePath := contract.APIPath + "/resources/" +
+		groupSegments(ref.APIVersion) + "/" + url.PathEscape(ref.Kind) + "/missing"
+
+	for _, testCase := range []struct {
+		name  string
+		query url.Values
+	}{
+		{
+			name: "missing definition version",
+			query: url.Values{
+				"space": {"conformance"}, "schemaDigest": {ref.SchemaDigest},
+			},
+		},
+		{
+			name: "malformed definition version",
+			query: url.Values{
+				"space": {"conformance"}, "definitionVersion": {"0.1"},
+				"schemaDigest": {ref.SchemaDigest},
+			},
+		},
+		{
+			name: "missing schema digest",
+			query: url.Values{
+				"space": {"conformance"}, "definitionVersion": {ref.DefinitionVersion},
+			},
+		},
+		{
+			name: "malformed schema digest",
+			query: url.Values{
+				"space": {"conformance"}, "definitionVersion": {ref.DefinitionVersion},
+				"schemaDigest": {"sha256:short"},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			for _, target := range []string{definitionPath, resourcePath} {
+				status, body := hostRequest(t, server, http.MethodGet, target+"?"+testCase.query.Encode(), nil, nil)
+				if status != http.StatusBadRequest || !strings.Contains(string(body), "invalid_argument") {
+					t.Fatalf("GET %s = %d %s, want 400 invalid_argument", target, status, strings.TrimSpace(string(body)))
+				}
+			}
+		})
+	}
+}
+
 // TestDeleteOfBoundTargetFailsDependencyInUse drives the live-binding rule
 // over real HTTP: a resource referenced by another stored resource's typed
 // binding cannot be deleted, and the delete leaves it readable.
@@ -309,8 +361,6 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 	defer server.Close()
 	query := url.Values{}
 	query.Set("space", "conformance")
-	query.Set("group", kvRef.APIVersion)
-	query.Set("kind", kvRef.Kind)
 	query.Set("definitionVersion", kvRef.DefinitionVersion)
 	query.Set("schemaDigest", kvRef.SchemaDigest)
 	target := contract.APIPath + "/resources/" +
@@ -560,8 +610,6 @@ func TestStaleRevisionDeleteRejected(t *testing.T) {
 	defer server.Close()
 	query := url.Values{}
 	query.Set("space", "conformance")
-	query.Set("group", kvRef.APIVersion)
-	query.Set("kind", kvRef.Kind)
 	query.Set("definitionVersion", kvRef.DefinitionVersion)
 	query.Set("schemaDigest", kvRef.SchemaDigest)
 	target := contract.APIPath + "/resources/" +

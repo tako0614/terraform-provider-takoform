@@ -90,10 +90,10 @@ func TestStableGenericInputsContainNoOfficialFamilyOrCatalogSource(t *testing.T)
 		}
 	}
 
-	// Reject official Form Kind identities structurally. Raw token matching is
+	// Reject publisher-set Form Kind identities structurally. Raw token matching is
 	// intentionally not used here: artifact-manifest kinds are protocol values
 	// and may share words with a Form Kind without becoming a Form identity.
-	officialKinds := map[string]bool{}
+	publisherKinds := map[string]bool{}
 	for _, family := range manifest.Families {
 		familyPath, err := stableResolve(repositoryRoot, manifestPath, family.Path)
 		if err != nil {
@@ -112,7 +112,7 @@ func TestStableGenericInputsContainNoOfficialFamilyOrCatalogSource(t *testing.T)
 			t.Fatal(err)
 		}
 		for _, candidate := range candidates.Forms {
-			officialKinds[candidate.Kind] = true
+			publisherKinds[candidate.Kind] = true
 		}
 	}
 	for _, path := range paths {
@@ -127,8 +127,8 @@ func TestStableGenericInputsContainNoOfficialFamilyOrCatalogSource(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if officialKinds[definition.Kind] {
-			t.Fatalf("active generic definition %s reuses official Form Kind %q", path, definition.Kind)
+		if publisherKinds[definition.Kind] {
+			t.Fatalf("active generic definition %s reuses publisher-set Form Kind %q", path, definition.Kind)
 		}
 	}
 
@@ -151,7 +151,7 @@ func TestStableGenericInputsContainNoOfficialFamilyOrCatalogSource(t *testing.T)
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			switch typed := node.(type) {
 			case *ast.Ident:
-				if restrictedIdentifiers[typed.Name] || officialKinds[typed.Name] {
+				if restrictedIdentifiers[typed.Name] || publisherKinds[typed.Name] {
 					t.Errorf("active generic source %s names concrete identifier %q", filepath.Base(path), typed.Name)
 				}
 			case *ast.BasicLit:
@@ -164,7 +164,7 @@ func TestStableGenericInputsContainNoOfficialFamilyOrCatalogSource(t *testing.T)
 					break
 				}
 				lowered := strings.ToLower(value)
-				if officialKinds[value] || restrictedIdentifiers[value] ||
+				if publisherKinds[value] || restrictedIdentifiers[value] ||
 					strings.Contains(lowered, "application/javascript") ||
 					strings.Contains(lowered, "application/sql") {
 					t.Errorf("active generic source %s names concrete string %q", filepath.Base(path), value)

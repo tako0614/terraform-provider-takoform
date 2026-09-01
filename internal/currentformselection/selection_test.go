@@ -210,7 +210,7 @@ func TestSelectionSourceDoesNotImportOfficialCatalogs(t *testing.T) {
 		}
 		raw := mustRead(t, entry.Name())
 		if bytes.Contains(raw, []byte("formcatalog")) || bytes.Contains(raw, []byte("currentformregistry")) {
-			t.Fatalf("%s imports or references an official catalog/registry", entry.Name())
+			t.Fatalf("%s imports or references an publisher catalog/registry", entry.Name())
 		}
 	}
 }

@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	providerV3ProjectionFormat = "takoform.provider-v3-projection@v1"
-	providerV3HostAPI          = "forms.takoform.com/v1"
+	providerV3ProjectionFormat        = "takoform.provider-v3-projection@v1"
+	providerPublisherProjectionFormat = "takoform.provider-publisher-set-projection@v1"
+	providerV3HostAPI                 = "forms.takoform.com/v1"
 
 	v3ProjectionCurrent    = "current"
 	v3ProjectionRetained   = "retained-readable"
@@ -27,6 +28,27 @@ const (
 	providerV3UnreadableFormCount  = 1
 	providerV3ReadableFormCount    = 45
 	providerV3ResourceMappingCount = 45
+)
+
+type v3ProjectionContract struct {
+	format           string
+	currentForms     int
+	retainedForms    int
+	unreadableForms  int
+	readableForms    int
+	resourceMappings int
+}
+
+var (
+	providerV3ProjectionContract = v3ProjectionContract{
+		format: providerV3ProjectionFormat, currentForms: providerV3CurrentFormCount,
+		retainedForms: providerV3RetainedFormCount, unreadableForms: providerV3UnreadableFormCount,
+		readableForms: providerV3ReadableFormCount, resourceMappings: providerV3ResourceMappingCount,
+	}
+	providerPublisherProjectionContract = v3ProjectionContract{
+		format: providerPublisherProjectionFormat, currentForms: publisherProviderFormCount,
+		retainedForms: 15, unreadableForms: 0, readableForms: 32, resourceMappings: 32,
+	}
 )
 
 // v3ProviderProjection is the Provider-owned immutable Terraform projection.
@@ -138,12 +160,20 @@ type v3ProjectionIndex struct {
 var projectedTerraformResourceTypePattern = regexp.MustCompile(`^takoform_[a-z0-9_]+$`)
 
 func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
+	return decodeProviderProjection(raw, providerV3ProjectionContract)
+}
+
+func decodePublisherProviderProjection(raw []byte) (*v3ProjectionIndex, error) {
+	return decodeProviderProjection(raw, providerPublisherProjectionContract)
+}
+
+func decodeProviderProjection(raw []byte, contract v3ProjectionContract) (*v3ProjectionIndex, error) {
 	var document v3ProviderProjection
 	if err := formpackage.DecodeStrictIJSON(raw, &document); err != nil {
 		return nil, fmt.Errorf("takoform provider: decode Provider 3 projection: %w", err)
 	}
-	if document.Format != providerV3ProjectionFormat {
-		return nil, fmt.Errorf("takoform provider: projection format %q, want %q", document.Format, providerV3ProjectionFormat)
+	if document.Format != contract.format {
+		return nil, fmt.Errorf("takoform provider: projection format %q, want %q", document.Format, contract.format)
 	}
 	if document.HostAPI != providerV3HostAPI {
 		return nil, fmt.Errorf("takoform provider: projection Host API %q, want %q", document.HostAPI, providerV3HostAPI)
@@ -200,13 +230,13 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 		index.forms[key] = entry
 		index.document.Forms[position] = entry
 	}
-	if len(index.currentKeys) != providerV3CurrentFormCount || len(index.retainedKeys) != providerV3RetainedFormCount ||
-		len(index.unreadableRetained) != providerV3UnreadableFormCount || len(index.forms) != providerV3CurrentFormCount+providerV3RetainedFormCount {
+	if len(index.currentKeys) != contract.currentForms || len(index.retainedKeys) != contract.retainedForms ||
+		len(index.unreadableRetained) != contract.unreadableForms || len(index.forms) != contract.currentForms+contract.retainedForms {
 		return nil, fmt.Errorf(
 			"takoform provider: projection Form history is %d current/%d retained/%d unreadable (%d total), want %d/%d/%d (%d total)",
 			len(index.currentKeys), len(index.retainedKeys), len(index.unreadableRetained), len(index.forms),
-			providerV3CurrentFormCount, providerV3RetainedFormCount, providerV3UnreadableFormCount,
-			providerV3CurrentFormCount+providerV3RetainedFormCount,
+			contract.currentForms, contract.retainedForms, contract.unreadableForms,
+			contract.currentForms+contract.retainedForms,
 		)
 	}
 
@@ -260,8 +290,8 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 		}
 		index.resources[key] = resource
 	}
-	if len(index.resources) != providerV3ResourceMappingCount {
-		return nil, fmt.Errorf("takoform provider: projection has %d exact resource mappings, want %d", len(index.resources), providerV3ResourceMappingCount)
+	if len(index.resources) != contract.resourceMappings {
+		return nil, fmt.Errorf("takoform provider: projection has %d exact resource mappings, want %d", len(index.resources), contract.resourceMappings)
 	}
 	if artifactRules != 3 || workerArtifactRules != 1 || fileArtifactRules != 2 {
 		return nil, fmt.Errorf("takoform provider: projection has %d artifact rules (%d worker/%d file), want 3 (1/2)", artifactRules, workerArtifactRules, fileArtifactRules)
@@ -297,8 +327,8 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 	if len(index.defaults) != len(index.currentKeys) {
 		return nil, fmt.Errorf("takoform provider: projection has %d default-create refs for %d current exact refs", len(index.defaults), len(index.currentKeys))
 	}
-	if len(index.defaults) != providerV3CurrentFormCount {
-		return nil, fmt.Errorf("takoform provider: projection has %d default-create refs, want %d", len(index.defaults), providerV3CurrentFormCount)
+	if len(index.defaults) != contract.currentForms {
+		return nil, fmt.Errorf("takoform provider: projection has %d default-create refs, want %d", len(index.defaults), contract.currentForms)
 	}
 
 	for position, ref := range document.ReadableRefs {
@@ -318,8 +348,8 @@ func decodeProviderV3Projection(raw []byte) (*v3ProjectionIndex, error) {
 	if len(index.resources) != len(index.readable) {
 		return nil, fmt.Errorf("takoform provider: projection has %d resource mappings for %d readable exact refs", len(index.resources), len(index.readable))
 	}
-	if len(index.readable) != providerV3ReadableFormCount {
-		return nil, fmt.Errorf("takoform provider: projection has %d readable exact refs, want %d", len(index.readable), providerV3ReadableFormCount)
+	if len(index.readable) != contract.readableForms {
+		return nil, fmt.Errorf("takoform provider: projection has %d readable exact refs, want %d", len(index.readable), contract.readableForms)
 	}
 	for key, ref := range index.readable {
 		resource, ok := index.resources[key]

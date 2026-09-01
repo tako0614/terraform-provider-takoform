@@ -1,6 +1,6 @@
 ---
 page_title: "takoform_at_least_once_queue Resource - takoform"
-subcategory: "Current Form Families"
+subcategory: "tako0614 Forms"
 description: |-
   At-Least-Once Queue (edge.forms.takoform.com, role identity).
 ---
@@ -11,8 +11,8 @@ Message queue with at-least-once delivery and no ordering guarantee, exactly as 
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This page documents the current Provider 3 mapping; its current exact FormRef `edge.forms.takoform.com/AtLeastOnceQueue` is recorded below.
-The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/026f862975b9adb0e2bfd9c6214a5e6691dfb596/forms/candidates/edge.forms.takoform.com/at-least-once-queue/definition.json).
+This page documents the publisher-set next-major Provider mapping; its exact FormRef `edge.forms.takoform.com/AtLeastOnceQueue` is recorded below.
+The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/at-least-once-queue/definition.json).
 See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_at_least_once_queue/resource.tf).
 
 ## Exact FormRef
