@@ -11,9 +11,9 @@ resulting identity and desired state in Terraform state; the Host runs the
 service. API/Core checkpoint **`v1.0.1`** uses the existing
 `forms.takoform.com/v1` wire and discovery lane.
 
-## Publisher-specific next major
+## Publisher-specific major
 
-This checkout implements the next Provider major at the existing
+This checkout implements the Provider major published at the
 `registry.terraform.io/tako0614/takoform` source address. It registers only the
 17 exact Forms selected from `github.com/tako0614/takoform-forms`. Provider `3.0.0`
 remains immutable 31-Form aggregate history and is not silently rewritten.
@@ -21,7 +21,7 @@ remains immutable 31-Form aggregate history and is not silently rewritten.
 This relationship is identified by publisher repository and exact FormRefs;
 Takoform assigns it no privileged classification.
 
-After the next major is published, point it at a compatible Host:
+Point it at a compatible Host:
 
 ```hcl
 terraform {
@@ -46,8 +46,11 @@ resource "takoform_module_worker" "api" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-No `4.0.0` publication or Registry availability is claimed here. The exact
-removal and state boundary is documented in the
+Provider `4.0.0` is recorded as Registry-published in the
+[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json), whose entry carries the immutable
+GitHub Release and the Registry readback for that version.
+Availability is verified, not declared by this immutable documentation.
+The exact removal and state boundary is documented in the
 [v3-to-v4 migration guide](../release/migrations/v3-to-v4.md).
 
 ## Resource reference
@@ -71,8 +74,11 @@ retains the exact release identities.
 curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v3.0.0
+git checkout --detach v4.0.0
 ```
+
+A source tag, documentation page, or local build alone is not
+Registry publication or installation evidence.
 
 Version and migration history are kept in `website/docs/versions.md`, the
 [v2-to-v3 guide](../release/migrations/v2-to-v3.md), and the
