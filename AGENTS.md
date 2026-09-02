@@ -4,7 +4,7 @@
 
 ## Repository
 
-- Scope: Typed Terraform and OpenTofu Provider for exact Takoform FormRefs, retained independently from the Specification and publishers.
+- Scope: Typed Terraform and OpenTofu Provider for an explicit set of exact Forms published by tako0614; designed for composition with other publishers' and industry-standard Providers.
 - Repository kind: `product`
 - Direct sibling dependencies: なし
 - Repository gate: `bun run check`
@@ -12,9 +12,9 @@
 
 ## Ownership
 
-- Owns: Terraform and OpenTofu resource mappings, schemas, state, import, codecs, and diagnostics / Provider release identities and immutable compatibility history / Provider-specific lossless projections of exact FormRefs
-- Does not own: Takoform Specification, Core, Host API, public schemas, verifier, or trust semantics / Form family semantics, publisher privilege, Host support, installation, or activation / Host implementation, backend lifecycle, targets, credentials, pricing, capacity, or SLA
-- Hazards: A Provider release never publishes or promotes a Specification, Host API, Form, or Form Package identity. / The predecessor Specification and schema writers stay tombstoned after the one-way W10 authority cutover. / Form and package source retained until the W16 publisher split is migration custody only and grants no official privilege.
+- Owns: Terraform and OpenTofu resource mappings, schemas, state, import, codecs, and diagnostics / Provider release identities and immutable compatibility history / Provider-specific lossless projections of exact FormRefs from the tako0614/takoform-forms publisher
+- Does not own: Takoform Core, Host API, public schemas, verifier, or trust semantics / Form family semantics, Forms published by another authority, Host support, installation, or activation / Host implementation, backend lifecycle, targets, credentials, pricing, capacity, or SLA / The takoform.com API website, any publisher-neutral Form catalog, or another publisher's Form pages
+- Hazards: A Provider release never publishes or promotes a Host API, Form, or Form Package identity. / The publisher relationship is identified by repository and exact FormRefs, never by a publisher-class or privileged label. / Modules may compose this Provider with zero or more other Takoform or industry-standard Providers; this Provider is not a universal Takoform client or provider catalog. / The predecessor Host API and schema writers stay tombstoned after the one-way W10 authority cutover. / Form and package source retained until the W16 publisher split is migration custody only and grants no publisher privilege.
 
 ## Required workflow
 
