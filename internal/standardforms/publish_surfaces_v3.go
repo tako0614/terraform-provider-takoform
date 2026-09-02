@@ -350,7 +350,7 @@ description: |-
 
 `, resourceType, form.Title+" ("+form.Family.APIVersion()+", role "+string(form.Role)+").", resourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This page documents the publisher-set next-major Provider mapping; its exact FormRef `" +
+	builder.WriteString("This page documents the publisher-set Provider 4 mapping; its exact FormRef `" +
 		form.Family.APIVersion() + "/" + form.Kind + "` is recorded below.\n" +
 		"The resource type is Provider metadata. " + formDefinitionReference(form) + "\n" +
 		"See the complete exact identity and the [complete example](https://takoform.com/examples/resources/" + resourceType + "/resource.tf).\n")
@@ -367,7 +367,7 @@ description: |-
 		}
 	}
 	if form.Kind == "WorkerVersion" {
-		builder.WriteString("- `apply_idempotency_key` (candidate Provider 4.0.0, String, optional, computed, forces replacement) — Provider-only Host operation identity for this immutable version's apply. Released Provider 3.0.0 does not expose this attribute. On an ordinary run with no `runtime_input_nonce`, omitting it keeps the Provider's established deterministic operation key; an explicitly configured 1..255-byte visible-ASCII value retains the caller-selected behavior. When `runtime_input_nonce` is configured on this exact Provider instance, this argument must be omitted: the Provider computes it from that nonce and the exact value-free logical WorkerVersion apply identity and records only the opaque result in plan and state. Rotating a sensitive value under the same nonce does not change the key; rotating the nonce does, producing a new immutable WorkerVersion identity. The key is never included in the portable desired spec or read back from the Host.\n")
+		builder.WriteString("- `apply_idempotency_key` (Provider 4.0.0, String, optional, computed, forces replacement) — Provider-only Host operation identity for this immutable version's apply. Retained Provider 3.0.0 does not expose this attribute. On an ordinary run with no `runtime_input_nonce`, omitting it keeps the Provider's established deterministic operation key; an explicitly configured 1..255-byte visible-ASCII value retains the caller-selected behavior. When `runtime_input_nonce` is configured on this exact Provider instance, this argument must be omitted: the Provider computes it from that nonce and the exact value-free logical WorkerVersion apply identity and records only the opaque result in plan and state. Rotating a sensitive value under the same nonce does not change the key; rotating the nonce does, producing a new immutable WorkerVersion identity. The key is never included in the portable desired spec or read back from the Host.\n")
 	}
 	builder.WriteString("- `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.\n")
 	if form.DeclaresUpdate() {
