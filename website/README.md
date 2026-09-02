@@ -222,8 +222,9 @@ published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The retained Provider 3
 compatibility projection maps eight versionless families and 31 exact
 Experimental `0.x` FormRefs. The Provider 4 candidate maps only the
-tako0614 Edge source's 16 Forms and has no `ObjectBucket`,
-`edge.objects`, or `module-worker.object-bucket`. This repository does not
+tako0614 Edge source's 17 Forms: the 16 the retained Provider 3 projection
+carries plus `ObjectBucket`, with `edge.objects` and
+`module-worker.object-bucket`. This repository does not
 assert any host's live catalog. The last published
 historical admission identity is `forms/admissions/v1.0.7`; its exact Git and
 set identities remain pinned as Legacy evidence.
@@ -235,11 +236,13 @@ retained Provider 2.1.1/v1beta1 packages use
 Provider release. Published v1alpha1/v1alpha2 package indexes remain immutable
 Legacy evidence.
 
-`release/version.json` names the unpublished Provider `v4.0.0` candidate and
-keeps `publicationStatus: candidate-only`; the descriptor must not be presented
-as live publication state. The append-only release identity ledger independently
-establishes `v3.0.0` as the current Registry-published provider and retains
-`v2.1.1` history. Provider releases remain non-normative and cannot close or
+`release/version.json` is the Provider `v4.0.0` release descriptor and keeps
+`publicationStatus: candidate-only`; the descriptor must not be presented as
+live publication state. `release/candidates/provider-v4.0.0.json` retains the
+byte-identical candidate record and `release/history/provider-v3.0.0.json`
+retains the Provider 3 writer input. The append-only release identity ledger
+independently establishes `v3.0.0` as the current Registry-published provider
+and retains `v2.1.1` history. Provider releases remain non-normative and cannot close or
 block the historical Specification 1.1 receipt. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
 and the repository [`AGENTS.md`](../AGENTS.md).

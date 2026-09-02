@@ -397,7 +397,7 @@ describe("Specification 1.1 owner ledger", () => {
     expect(releaseGuide).toMatch(
       /31 typed resources across eight\s+versionless families/,
     );
-    expect(releaseGuide).toMatch(/selects only the\s+16 exact Edge Forms/);
+    expect(releaseGuide).toMatch(/selects only the\s+17 exact Edge Forms/);
     expect(releaseGuide).toMatch(
       /signed release-tag commit must be an ancestor of the reviewed\s+protected-main\/readback commit/,
     );

@@ -9,7 +9,7 @@ the service.
 
 The `registry.terraform.io/tako0614/takoform` source address maps an explicit
 set of Forms published by `github.com/tako0614/takoform-forms`. Its next major
-registers only the 16 exact Forms in `edge.forms.takoform.com`. Provider `3.0.0` remains
+registers only the 17 exact Forms in `edge.forms.takoform.com`. Provider `3.0.0` remains
 immutable Registry history for the former 31-Form aggregate; it is not the
 roster that future releases extend.
 
@@ -54,7 +54,7 @@ resource names are adapter metadata.
 
 | Family | Resources |
 | ------ | --------: |
-| Edge   |        16 |
+| Edge   |        17 |
 
 <!-- current-generation:begin -->
 
