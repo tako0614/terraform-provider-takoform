@@ -15,10 +15,11 @@ hero:
 ---
 
 Takoform Provider は、Terraform / OpenTofu の型付きリソースを、互換 Host が
-公開する Form contract に対応させます。Provider `4.0.0` candidateは既存の
+公開する Form contract に対応させます。Registry の
+Provider **`4.0.0`** は既存の
 `tako0614/takoform` addressで、`tako0614/takoform-forms` から選んだ
-exact Edge Form 17種だけを登録します。Registryの
-Provider **`3.0.0`** は31 resource aggregateのimmutable historyです。
+exact Edge Form 17種だけを登録します。
+Provider `3.0.0` は31 resource aggregateのimmutable historyです。
 API/Core **`v1.0.1`** は `forms.takoform.com/v1` のままです。
 
 ## Install と configure
@@ -28,7 +29,6 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      # Publisher-specific Provider 4公開後に使用します。
       version = "~> 4.0"
     }
   }

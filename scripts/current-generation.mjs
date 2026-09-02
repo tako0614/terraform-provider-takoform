@@ -29,10 +29,15 @@ const END = "<!-- current-generation:end -->";
 const CORE_API_RELEASE_VERSION = "1.0.1";
 const CORE_API_LANE = "forms.takoform.com/v1";
 function render(facts) {
+  // The published Provider and the descriptor target are independent axes, so
+  // the note states the second one only while they differ.
+  const target = facts.providerTarget === facts.providerPublished
+    ? ""
+    : ` Provider \`${facts.providerTarget}\` is the candidate at the same source address.`;
   return [
     BEGIN,
     "",
-    `Registry Provider \`${facts.providerPublished}\` is retained aggregate history. Provider \`${facts.providerTarget}\` is the candidate at the same \`tako0614/takoform\` source address and registers only the 17 Forms selected from \`tako0614/takoform-forms\`. Core \`${CORE_API_RELEASE_VERSION}\` implements \`${CORE_API_LANE}\`; neither Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).`,
+    `Registry Provider \`${facts.providerPublished}\` is the published release at the \`tako0614/takoform\` source address and registers only the 17 Forms selected from \`tako0614/takoform-forms\`.${target} Provider \`3.0.0\` remains immutable 31-Form aggregate history. Core \`${CORE_API_RELEASE_VERSION}\` implements \`${CORE_API_LANE}\`; no Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).`,
     "",
     END,
   ].join("\n");

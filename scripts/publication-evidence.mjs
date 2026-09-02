@@ -1768,7 +1768,7 @@ function validateProviderEvidence(document, repositoryRoot, candidate) {
     const migrationBytes = gitShowBytes(repositoryRoot, providerCommit, migrationPath);
     const releaseLedger = parseJson(releaseIdentityBytes, releaseIdentitiesPath);
     const versions = (releaseLedger.entries ?? []).map((entry) => entry.version);
-    for (const version of ["1.0.3", "2.0.0", "2.1.1", "3.0.0"]) {
+    for (const version of ["1.0.3", "2.0.0", "2.1.1", "3.0.0", "4.0.0"]) {
       if (!versions.includes(version)) fail(`Provider release ledger is missing ${version}`);
     }
     const passedTests = runProviderCompatibility(repositoryRoot);
@@ -1776,7 +1776,7 @@ function validateProviderEvidence(document, repositoryRoot, candidate) {
       format: PROVIDER_COMPATIBILITY_FORMAT,
       providerVersion: "3.0.0",
       sourceCommit: providerCommit,
-      retainedVersions: ["1.0.3", "2.0.0", "2.1.1"],
+      retainedVersions: ["1.0.3", "2.0.0", "2.1.1", "3.0.0"],
       releaseIdentityLedger: {
         path: releaseIdentitiesPath,
         sha256: sha256Bytes(releaseIdentityBytes),

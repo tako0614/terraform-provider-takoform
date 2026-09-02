@@ -5,17 +5,19 @@ Takoform Provider は、Terraform / OpenTofu の型付きリソースを、互�
 Terraform state に保持され、実際のリソースは Host が実行します。現在の
 API/Core は **`v1.0.1`** で、`forms.takoform.com/v1` を使います。
 
-## Publisher-specific next major
+## Publisher-specific major
 
-この source checkout は既存の `registry.terraform.io/tako0614/takoform`
+Provider `4.0.0` は既存の `registry.terraform.io/tako0614/takoform`
 address を維持し、`github.com/tako0614/takoform-forms` から選んだ exact Form 17 種だけを
 登録します。Provider `3.0.0` の 31 resource aggregate は immutable history
-として残します。次 major の Registry 公開はまだ主張しません。
+として残します。Registry 公開の根拠は
+[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
+の `4.0.0` entry にある Registry readback です。
 
 この関係は publisher repository と exact FormRefs で識別します。Takoform は
 特権的な分類を付けません。
 
-次 major の公開後は次のように設定します。
+設定は次のとおりです。
 
 ```hcl
 terraform {

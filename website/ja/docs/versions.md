@@ -11,8 +11,8 @@ withdrawn lane は artifact / history identity であり、domain axis を増や
 | API/Core | **`v1.0.1`** | `forms.takoform.com/v1` 上の current compatibility checkpoint。互換性のある 1.x は同じ lane に留まります。 |
 | external Edge publication | [`takoform-forms` commit `3231633605b737ce5279d7fc020b4780568e7091`](https://github.com/tako0614/takoform-forms/commit/3231633605b737ce5279d7fc020b4780568e7091) | 17 content-addressed package の公開正本。 |
 | embedded Edge candidate snapshot | [`forms/candidates/edge.forms.takoform.com/candidate-set.json`](/forms/candidates/edge.forms.takoform.com/candidate-set.json) | Provider repository 内の `publicationStatus: unpublished` snapshot。公開 evidence ではありません。 |
-| Provider source | **`4.0.0` candidate** | 同じ `tako0614/takoform` addressで publisher set の Edge Form 17種だけを登録 (Provider 3 から引き継ぐ 16種 + `ObjectBucket`)。未公開。 |
-| Registry Provider | **`3.0.0`** | 8 versionless family / 31 mappingのimmutable aggregate history。 |
+| Registry Provider | **`4.0.0`** | 同じ `tako0614/takoform` addressで publisher set の Edge Form 17種だけを登録 (Provider 3 から引き継ぐ 16種 + `ObjectBucket`)。Registry 公開済み。 |
+| retained Registry Provider | **`3.0.0`** | 8 versionless family / 31 mappingのimmutable aggregate history。 |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha5` | package identity。公開は Provider release と独立します。 |
 
 Exact Form は family、kind、`definitionVersion`、`schemaDigest` で識別します。
@@ -23,7 +23,7 @@ state に保持します。Provider resource 名は adapter metadata です。
 
 | Provider | Host/API lane | 互換性 |
 | --- | --- | --- |
-| **4.0.0** | current Host API | publisher set の Edge Form 17種限定のcandidate。Registry公開は未主張。 |
+| **4.0.0** | current Host API | publisher set の Edge Form 17種限定の現行 Registry 公開 release。 |
 | **3.0.0** | current Host API | 8 family / 31 typed mappingのimmutable retained Registry distribution。 |
 | **2.1.1** | `forms.takoform.com/v1beta1` | [identity ledger](/release/provider-form-identities.json) にある 15 immutable Edge Form identity 用の retained client。 |
 | **2.0.0** | withdrawn `v1alpha2` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |

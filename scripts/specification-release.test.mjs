@@ -377,7 +377,10 @@ describe("Specification 1.1 owner ledger", () => {
     expect(readme).toContain("# Takoform Provider");
     expect(readme).toContain("## Quick start");
     expect(readme).toContain('version = "~> 4.0"');
-    expect(readme).toContain("No `4.0.0` publication");
+    expect(readme).toContain(
+      "Provider `4.0.0` is published on the Terraform Registry",
+    );
+    expect(readme).not.toContain("No `4.0.0` publication");
     expect(readme).toContain("These commands are read-only.");
     expect(readme).not.toContain("four explicit boundaries");
     expect(readme).not.toContain("C1 freezes the normative tree");

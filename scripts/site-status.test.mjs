@@ -43,6 +43,7 @@ function fixture(mutate) {
     for (const relativePath of [
       RELEASE_VERSION,
       "release/provider-release-identities.json",
+      "release/provider-form-identities.json",
       "release/specification-releases.json",
       "spec/publication-blockers.json",
       FAMILY_CANDIDATE_SET,
@@ -124,9 +125,9 @@ describe("the committed status document", () => {
     expect(document.currentFamilyIndex).toBe(CURRENT_FAMILY_INDEX);
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
-    expect(document.providerPublished).toBe("3.0.0");
+    expect(document.providerPublished).toBe("4.0.0");
     expect(document.providerTarget).toBe("4.0.0");
-    expect(document.providerTargetStatus).toBe("candidate-only");
+    expect(document.providerTargetStatus).toBe("registry-published");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -191,24 +192,24 @@ describe("the committed status document", () => {
       "utf8",
     );
     expect(security).toContain(
-      "Provider `v3.0.0` is the current\nRegistry-published typed client",
+      "Provider `v4.0.0` is the current\nRegistry-published typed client",
     );
     expect(security).not.toContain(
-      "Provider `v2.1.1` is the current\npublished client",
+      "Provider `v3.0.0` is the current\nRegistry-published typed client",
     );
 
     const migration = readFileSync(
       path.join(repositoryRoot, "release/migrations/v1-to-v2.md"),
       "utf8",
     );
-    expect(migration).toContain("Provider 3.0.0 is the\ncurrent published provider");
+    expect(migration).toContain("Provider 4.0.0 is the\ncurrent published provider");
     expect(migration).not.toContain(
-      "v2.1.1 is the Registry-published current provider",
+      "Provider 3.0.0 is the\ncurrent published provider",
     );
 
     for (const relativePath of ["website/index.md", "website/ja/index.md"]) {
       const page = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
-      expect(page).toContain("**`3.0.0`**");
+      expect(page).toContain("**`4.0.0`**");
       expect(page).toContain("**`v1.0.1`**");
       expect(page).not.toContain("Specification 1.1 candidate / Host API v1");
     }
@@ -345,7 +346,7 @@ describe("Specification release status derivation", () => {
     expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
     expect(status.formMaturity).toBe("experimental");
     expect(status.formPackagePublicationStatus).toBe("unpublished");
-    expect(status.providerTargetStatus).toBe("candidate-only");
+    expect(status.providerTargetStatus).toBe("registry-published");
   });
 });
 
@@ -353,14 +354,14 @@ describe("the gate refuses", () => {
   test("an incomplete current Provider Registry readback", () => {
     const failures = fixture((root) => {
       const ledger = read(root, "release/provider-release-identities.json");
-      const current = ledger.entries.find((entry) => entry.version === "3.0.0");
+      const current = ledger.entries.find((entry) => entry.version === "4.0.0");
       current.registryReadback.installation.resourceSchemaCount = 30;
       write(root, "release/provider-release-identities.json", ledger);
       return verifySiteStatusDocument(root);
     });
     expect(
       failures.some((failure) =>
-        failure.includes("Registry schema count differs from the retained aggregate Form count"),
+        failure.includes("Registry schema count differs from its published Form roster"),
       ),
     ).toBe(true);
   });

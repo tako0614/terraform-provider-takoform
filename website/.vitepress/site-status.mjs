@@ -61,7 +61,7 @@ export const SITE_STATUS_PUBLISHED_PATH =
 // deliberately named as a Provider SemVer, not as an API lane: Provider,
 // Host API, Form Family and Form-definition versions are independent axes.
 export const PROVIDER_RELEASE_TARGET_VERSION = "4.0.0";
-export const PROVIDER_REGISTRY_PUBLISHED_VERSION = "3.0.0";
+export const PROVIDER_REGISTRY_PUBLISHED_VERSION = "4.0.0";
 // Retain the legacy field name/value for consumers that still describe the
 // Edge preview descriptor. It is metadata only: providerTargetStatus below is
 // the independent Registry availability fact.
@@ -75,6 +75,7 @@ export const CURRENT_FAMILY_INDEX =
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
 export const RELEASE_VERSION = "release/candidates/provider-v4.0.0.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
+const PROVIDER_FORM_IDENTITIES = "release/provider-form-identities.json";
 const SPECIFICATION_RELEASES = "release/specification-releases.json";
 
 export const SITE_STATUS_FIELDS = [
@@ -380,12 +381,27 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     (total, family) => total + family.forms.length,
     0,
   );
+  // The installed schema is compared against the published Provider's own Form
+  // roster, not against currentFormCount. currentFormCount is the retained
+  // aggregate corpus this repository still carries; the published Provider
+  // registers exactly the Forms its own identity ledger release names, and a
+  // Provider that selects a publisher subset is expected to differ from the
+  // aggregate. The roster is the only count the Registry readback can falsify.
+  const providerFormIdentities = readJson(repositoryRoot, PROVIDER_FORM_IDENTITIES);
+  const publishedProviderRelease = (providerFormIdentities.releases ?? []).find(
+    (release) => release?.providerVersion === providerPublished,
+  );
+  if (!Array.isArray(publishedProviderRelease?.forms)) {
+    throw new Error(
+      `${PROVIDER_FORM_IDENTITIES}: no Form roster for the published Provider ${providerPublished}`,
+    );
+  }
   if (
     providerPublishedEntry.registryReadback.installation.resourceSchemaCount !==
-      currentFormCount
+      publishedProviderRelease.forms.length
   ) {
     throw new Error(
-      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerPublished} Registry schema count differs from the retained aggregate Form count`,
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerPublished} Registry schema count differs from its published Form roster`,
     );
   }
 

@@ -6,18 +6,19 @@ identity and desired state in Terraform state; the Host runs the service.
 The current API/Core checkpoint is **`v1.0.1`** on the existing
 `forms.takoform.com/v1` wire and discovery lane.
 
-## Publisher-specific next major
+## Publisher-specific major
 
-This source checkout keeps the existing
+Provider `4.0.0` keeps the existing
 `registry.terraform.io/tako0614/takoform` address and registers only the 17
 exact Forms selected from `github.com/tako0614/takoform-forms`. Provider `3.0.0` remains
-immutable 31-resource aggregate history. No next-major Registry publication is
-claimed yet.
+immutable 31-resource aggregate history. The Registry readback that records
+`4.0.0` as published is the `4.0.0` entry of the
+[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json).
 
 This relationship is identified by publisher repository and exact FormRefs;
 Takoform assigns it no privileged classification.
 
-After the next major is published, install and configure it as follows:
+Install and configure it as follows:
 
 ```hcl
 terraform {

@@ -8,13 +8,12 @@ the service.
 ## Quick start
 
 The `registry.terraform.io/tako0614/takoform` source address maps an explicit
-set of Forms published by `github.com/tako0614/takoform-forms`. Its next major
-registers only the 17 exact Forms in `edge.forms.takoform.com`. Provider `3.0.0` remains
-immutable Registry history for the former 31-Form aggregate; it is not the
-roster that future releases extend.
+set of Forms published by `github.com/tako0614/takoform-forms`. Its current
+major registers only the 17 exact Forms in `edge.forms.takoform.com`. Provider
+`3.0.0` remains immutable Registry history for the former 31-Form aggregate; it
+is not the roster that future releases extend.
 
-After the publisher-set major is published, pin it from the canonical Registry
-address and configure a Host:
+Pin the Provider from the canonical Registry address and configure a Host:
 
 ```hcl
 terraform {
@@ -42,9 +41,12 @@ resource "takoform_module_worker" "api" {
 The repository's reference Host is for conformance only and serves no
 application traffic.
 
-No `4.0.0` publication, tag, or Registry availability is claimed by this
-checkout. Until publication, existing users remain explicitly pinned to
-Provider `3.0.0` and follow the [v3-to-v4 migration boundary](release/migrations/v3-to-v4.md).
+Provider `4.0.0` is published on the Terraform Registry at that address. The
+signed tag, the immutable GitHub Release, and the Registry readback that prove
+it are the `4.0.0` entry of the
+[Provider release identity ledger](release/provider-release-identities.json).
+Users staying on Provider `3.0.0` keep an explicit `= 3.0.0` pin and cross the
+[v3-to-v4 migration boundary](release/migrations/v3-to-v4.md) when they upgrade.
 
 ## Resource model
 
@@ -58,7 +60,7 @@ resource names are adapter metadata.
 
 <!-- current-generation:begin -->
 
-Registry Provider `3.0.0` is retained aggregate history. Provider `4.0.0` is the candidate at the same `tako0614/takoform` source address and registers only the 17 Forms selected from `tako0614/takoform-forms`. Core `1.0.1` implements `forms.takoform.com/v1`; neither Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).
+Registry Provider `4.0.0` is the published release at the `tako0614/takoform` source address and registers only the 17 Forms selected from `tako0614/takoform-forms`. Provider `3.0.0` remains immutable 31-Form aggregate history. Core `1.0.1` implements `forms.takoform.com/v1`; no Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).
 
 <!-- current-generation:end -->
 

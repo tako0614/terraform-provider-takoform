@@ -18,6 +18,7 @@ import {
 } from "./specification-release.mjs";
 import {
   FAMILY_CANDIDATE_SET,
+  PROVIDER_REGISTRY_PUBLISHED_VERSION,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
 
@@ -620,36 +621,8 @@ function checkSpecificationReleaseWording() {
   }
 }
 
-function providerCodeBlocksFromMarkdown(source) {
-  return [...source.matchAll(/^[ \t]*```[^\n]*\n([\s\S]*?)^[ \t]*```[ \t]*$/gm)]
-    .map((match) => match[1])
-    .filter((block) =>
-      block.includes("registry.terraform.io/tako0614/takoform"),
-    );
-}
-
-function providerCodeBlocksFromHtml(source) {
-  return [...source.matchAll(/<pre\b[^>]*>\s*<code\b[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi)]
-    .map((match) => visibleHtmlText(match[1]))
-    .filter((block) =>
-      block.includes("registry.terraform.io/tako0614/takoform"),
-    );
-}
-
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function hasExactProviderPin(block, providerVersion) {
-  return new RegExp(
-    `\\bversion\\s*=\\s*"= ${escapeRegExp(providerVersion)}"`,
-  ).test(block);
-}
-
-function hasProviderFloor(block, providerVersion) {
-  return new RegExp(
-    `\\bversion\\s*=\\s*">= ${escapeRegExp(providerVersion)}"`,
-  ).test(block);
 }
 
 function checkCurrentProviderSample(filePath) {
@@ -736,36 +709,34 @@ function checkImmutableProviderTagDocs(source, truth) {
   }
 }
 
-function deriveHistoricalLegacyProviderVersion() {
-  const ledger = readJson(
-    path.join(repositoryRoot, "release", "provider-release-identities.json"),
+// The Provider reference in docs/ is rendered into the Registry's own immutable
+// documentation for the published version, so it can never be corrected after
+// the fact: it must carry the verification path for the exact published tag and
+// must not carry a status the publication has already falsified. The same
+// falsified status is refused on the hand-written landing and reference pages
+// in both languages, which are the surfaces a reader reaches first.
+const PUBLISHED_INSTALL_PROSE = [
+  "README.md",
+  "docs/index.md",
+  "website/index.md",
+  "website/ja/index.md",
+  "website/docs/index.md",
+  "website/ja/docs/index.md",
+];
+
+function checkPublishedProviderInstallDocs(providerVersion) {
+  checkImmutableProviderTagDocs(
+    read(path.join(repositoryRoot, "docs", "index.md")),
+    { providerVersion },
   );
-  const entries = Array.isArray(ledger.entries) ? ledger.entries : [];
-  const candidates = entries.filter((entry) => {
-    const version = typeof entry?.version === "string" ? entry.version : "";
-    const [major, minor, patch] = version.split(".").map(Number);
-    return (
-      entry?.status === "assigned" &&
-      Number.isInteger(major) &&
-      major === 1 &&
-      Number.isInteger(minor) &&
-      Number.isInteger(patch) &&
-      entry?.tag === `v${version}` &&
-      typeof entry?.tagObject === "string" &&
-      entry.tagObject !== "" &&
-      typeof entry?.commit === "string" &&
-      entry.commit !== "" &&
-      typeof entry?.signingFingerprint === "string" &&
-      entry.signingFingerprint !== ""
-    );
-  });
-  candidates.sort((left, right) => {
-    const parse = (value) => value.split(".").map(Number);
-    const a = parse(left.version);
-    const b = parse(right.version);
-    return b[0] - a[0] || b[1] - a[1] || b[2] - a[2];
-  });
-  return candidates[0]?.version ?? null;
+  for (const relativePath of PUBLISHED_INSTALL_PROSE) {
+    const source = read(path.join(repositoryRoot, relativePath));
+    if (hasNotInstallableWording(source)) {
+      fail(
+        `${relativePath}: says the published Provider cannot be installed from the Registry`,
+      );
+    }
+  }
 }
 
 function handAuthoredPages() {
@@ -1144,7 +1115,7 @@ function checkHandWrittenInventories(familyRoster) {
       file: "website/index.md",
       label: "the English landing inventory",
       required: [
-        { needle: "**`3.0.0`**", subject: "current Provider" },
+        { needle: "**`4.0.0`**", subject: "current Provider" },
         { needle: "| Edge | 17 |", subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
@@ -1153,7 +1124,7 @@ function checkHandWrittenInventories(familyRoster) {
       file: "website/ja/index.md",
       label: "the Japanese landing inventory",
       required: [
-        { needle: "**`3.0.0`**", subject: "current Provider" },
+        { needle: "**`4.0.0`**", subject: "current Provider" },
         { needle: "| Edge | 17 |", subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
@@ -1980,6 +1951,7 @@ checkContractLaneDocumentation();
 checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
+checkPublishedProviderInstallDocs(PROVIDER_REGISTRY_PUBLISHED_VERSION);
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(edgeFamilyRoster);
@@ -2005,7 +1977,7 @@ if (failures.length > 0) {
   const siteStatus = deriveSiteStatusFacts(repositoryRoot);
   console.log(
     `Public surfaces OK: Specification 1.1 is ${siteStatus.specificationReleaseStatus}, ` +
-      `the Provider v${releaseVersion.version} candidate selects 17 tako0614 Edge Forms, Provider v3.0.0 ` +
+      `the Registry-published Provider v${siteStatus.providerPublished} selects 17 tako0614 Edge Forms, Provider v3.0.0 ` +
       "retains the 31-Form Registry history, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );
 }

@@ -208,8 +208,10 @@ operator and are never committed here.
 The site must claim nothing beyond signed, committed evidence in this
 repository. The current public truth is: Core/API `v1.0.1` is published by the
 external [Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
-on `/v1`; Provider `v3.0.0` is the published, Registry readback-verified typed
-distribution retaining the former 31-resource aggregate across eight families; the Provider `v4.0.0` candidate selects only the 17 tako0614 Edge Forms. Provider
+on `/v1`; Provider `v4.0.0` is the current published, Registry
+readback-verified typed distribution selecting only the 17 tako0614 Edge Forms;
+Provider `v3.0.0` remains the published, Registry readback-verified typed
+distribution retaining the former 31-resource aggregate across eight families. Provider
 `v2.1.1` remains immutable retained Host API v1beta1 history; Provider `v2.0.0`
 is the published compatibility predecessor; Provider `v1.0.3` is the published
 Legacy client; and the standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
@@ -221,7 +223,7 @@ publication and may not be reused); and the 34
 published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The retained Provider 3
 compatibility projection maps eight versionless families and 31 exact
-Experimental `0.x` FormRefs. The Provider 4 candidate maps only the
+Experimental `0.x` FormRefs. The published Provider 4 maps only the
 tako0614 Edge source's 17 Forms: the 16 the retained Provider 3 projection
 carries plus `ObjectBucket`, with `edge.objects` and
 `module-worker.object-bucket`. This repository does not
@@ -241,8 +243,8 @@ Legacy evidence.
 live publication state. `release/candidates/provider-v4.0.0.json` retains the
 byte-identical candidate record and `release/history/provider-v3.0.0.json`
 retains the Provider 3 writer input. The append-only release identity ledger
-independently establishes `v3.0.0` as the current Registry-published provider
-and retains `v2.1.1` history. Provider releases remain non-normative and cannot close or
+independently establishes `v4.0.0` as the current Registry-published provider
+and retains `v3.0.0` and `v2.1.1` history. Provider releases remain non-normative and cannot close or
 block the historical Specification 1.1 receipt. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
 and the repository [`AGENTS.md`](../AGENTS.md).
