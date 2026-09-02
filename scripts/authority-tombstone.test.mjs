@@ -269,15 +269,17 @@ describe("W10 predecessor authority tombstone", () => {
     }
   });
 
-  test("release-deploy bytes are unchanged and retained Provider/Form entries stay usable", () => {
-    const baselineReleaseDeploy = execFileSync(
-      "/usr/bin/git",
-      ["show", `${PREDECESSOR_CUTOFF_COMMIT}:scripts/release-deploy.mjs`],
-      { cwd: repositoryRoot, encoding: "utf8" },
-    );
-    expect(readFileSync(join(repositoryRoot, "scripts/release-deploy.mjs"), "utf8")).toBe(
-      baselineReleaseDeploy,
-    );
+  // The tombstone's claim is that the RETIRED Specification/schema writer
+  // surface is gone, not that the retained Provider/Form release lane can
+  // never evolve: takoform-provider-release and takoform-form-package-release
+  // are listed under retainedSurfaces precisely so they can keep shipping
+  // majors. So this pins the invariant that actually holds across a retained
+  // release change — every disabled surface stays absent from the effective
+  // contract and every retained surface stays invocable — instead of freezing
+  // scripts/release-deploy.mjs byte-for-byte. The predecessor writer blob oids
+  // in release/specification-schema-authority-tombstone.json remain frozen
+  // history of the cutoff commit and are unaffected.
+  test("disabled writers stay absent while retained Provider/Form entries stay usable", () => {
     const contract = JSON.parse(
       execFileSync(process.execPath, ["scripts/deploy.mjs", "--contract"], {
         cwd: repositoryRoot,
@@ -291,6 +293,12 @@ describe("W10 predecessor authority tombstone", () => {
       expect(effective).toEqual(contract);
     } else {
       expect(effectiveNames).toEqual([...RETAINED_SURFACES]);
+      for (const surface of DISABLED_SURFACES) {
+        expect(effectiveNames).not.toContain(surface);
+        expect(() =>
+          assertAuthorityInvocationAllowed(surface, current),
+        ).toThrow();
+      }
     }
     for (const surface of RETAINED_SURFACES) {
       expect(() => assertAuthorityInvocationAllowed(surface, current)).not.toThrow();
