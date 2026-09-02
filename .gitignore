@@ -6,6 +6,7 @@ crash.log
 crash.*.log
 
 /terraform-provider-takoform
+/cmd/provider-release/provider-release
 /dist/
 # No trailing slash: the directory AND a symlink standing in for it. A
 # worktree that borrowed one by symlink got it committed, and CI could not
