@@ -82,11 +82,12 @@ card padding is not part of this system.
 
 - The Takoform wordmark, dark aka-red palette, fonts, navigation, footer, focus
   treatment, and status vocabulary.
-- The facts: project `Experimental`; Provider `3.0.0` is retained immutable
+- The facts: project `Experimental`; Provider `4.0.0` is the current
+  Registry-published release and Provider `3.0.0` is retained immutable
   Registry history for 31 typed resources across eight versionless families.
-  The next-major source keeps Host API `forms.takoform.com/v1` and selects only
+  Provider 4 keeps Host API `forms.takoform.com/v1` and selects only
   the 17 content-addressed Form packages published by the tako0614 Edge source.
-  It makes no Provider 4 publication claim. The current package envelope is
+  The current package envelope is
   `packages.forms.takoform.com/v1alpha5`. `release/version.json` is the Provider
   `4.0.0` release descriptor, `release/candidates/provider-v4.0.0.json` the
   retained byte-identical candidate record, and

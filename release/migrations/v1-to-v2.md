@@ -11,7 +11,8 @@ different Form epochs.
 
 Provider v2.1 carries the retained Experimental Edge Platform Family over Beta
 Host API `forms.takoform.com/v1beta1`. Provider v2.1.1 was the last Provider 2
-release and remains Registry-published immutable history; Provider 3.0.0 is the
+release and remains Registry-published immutable history; Provider 3.0.0 is
+retained 31-Form aggregate history and Provider 4.0.0 is the
 current published provider. The v2.1.1 release descriptor remains
 `candidate-only` metadata by design after owner publication, while its Registry
 publication is independently verified by readback

@@ -1,25 +1,32 @@
 # Release
 
-## Published Provider history and Provider 4 candidate
+## Published Provider and retained Provider history
 
-Provider **v3.0.0** is the current Registry-published Terraform/OpenTofu
-Provider. Its immutable release registers 31 typed resources across eight versionless families;
+Provider **v4.0.0** is the current Registry-published Terraform/OpenTofu
+Provider at the `tako0614/takoform` address. It selects only the
+17 exact Edge Forms selected from the `tako0614/takoform-forms` set tag
+`forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c` — the 16 Edge Forms
+carried over from Provider 3 plus `ObjectBucket`. Its signed tag, immutable
+GitHub Release, and Registry readback are the `4.0.0` entry of the identity
+ledger below. The 15 removed aggregate
+types and explicit state paths are documented in [v3 to v4 publisher-set
+migration](migrations/v3-to-v4.md). Ordinary AWS, Cloudflare, Kubernetes, and
+other resources remain native resources of their own providers. Why the
+publisher set is the released roster is recorded in
+[control ADR 0020](https://github.com/tako0614/takos-control/blob/main/docs/platform/decisions/0020-provider-4-is-the-publisher-set-release.md),
+which also states why this repository's own decision series cannot take that
+entry while the Specification 1.1 receipt seals `spec/`.
+
+Provider **v3.0.0** is retained Registry history at the same address. Its
+immutable release registers 31 typed resources across eight versionless families;
 each resource keeps an exact FormRef and provider mapping in its release
 identity projection. Provider release, Form Definition publication, package
 publication, and Host deployment are separate owner actions.
 
-Provider **v4.0.0** is the candidate at the same `tako0614/takoform` address and selects only the
-17 exact Edge Forms selected from the `tako0614/takoform-forms` set tag
-`forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c` — the 16 Edge Forms
-carried over from Provider 3 plus `ObjectBucket`. It does not
-claim that Provider 4 has been tagged or published. The 15 removed aggregate
-types and explicit state paths are documented in [v3 to v4 publisher-set
-migration](migrations/v3-to-v4.md). Ordinary AWS, Cloudflare, Kubernetes, and
-other resources remain native resources of their own providers.
-
 `release/version.json` is the Provider `4.0.0` release descriptor every release
 entrypoint reads; it keeps `publicationStatus: candidate-only` by the standing
-descriptor convention and is not live publication state.
+descriptor convention and is not live publication state. The Registry readback
+recorded in the identity ledger is the availability authority.
 `release/candidates/provider-v4.0.0.json` is the retained candidate record and
 stays byte-identical to it, with its derived 17-Form mapping in
 `release/candidates/provider-v4.0.0-form-identities.json`.
@@ -45,8 +52,8 @@ resource contracts.
 
 ### Provider 3 to Provider 4
 
-Provider 3.0.0 is the compatibility predecessor of Provider 4. The exact
-removal and state boundary is [v3 to v4 publisher-set
+Provider 3.0.0 is the compatibility predecessor of Provider 4 and remains
+installable. The exact removal and state boundary is [v3 to v4 publisher-set
 migration](migrations/v3-to-v4.md); a consumer may instead stay pinned to
 `= 3.0.0` as retained history.
 

@@ -109,6 +109,47 @@
           "resourceSchemaCount": 31
         }
       }
+    },
+    {
+      "version": "4.0.0",
+      "tag": "v4.0.0",
+      "status": "assigned",
+      "tagObject": "d3a36d21243f402cde2ff607d497289acce052c3",
+      "commit": "5440fa77af712520b4edbf0f888eacc098f418b3",
+      "signingFingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709",
+      "registryReadback": {
+        "format": "takoform.provider-registry-readback@v1",
+        "checkedAt": "2026-09-02T09:43:53Z",
+        "providerAddress": "registry.terraform.io/tako0614/takoform",
+        "githubRelease": {
+          "id": 381125922,
+          "url": "https://github.com/tako0614/terraform-provider-takoform/releases/tag/v4.0.0",
+          "immutable": true,
+          "publishedAt": "2026-09-02T09:36:34Z"
+        },
+        "registry": {
+          "versionsUrl": "https://registry.terraform.io/v1/providers/tako0614/takoform/versions",
+          "downloadUrl": "https://registry.terraform.io/v1/providers/tako0614/takoform/4.0.0/download/linux/amd64",
+          "protocol": "6.0",
+          "platforms": [
+            "darwin_amd64",
+            "darwin_arm64",
+            "linux_amd64",
+            "linux_arm64",
+            "windows_amd64"
+          ],
+          "linuxAmd64Sha256": "23fc2f43deec7e9bf20a4fe8253169fdbaa163840a8fdf8dfe1f4293f2346044"
+        },
+        "installation": {
+          "product": "OpenTofu",
+          "version": "1.12.3",
+          "providerVersion": "4.0.0",
+          "signingKeyId": "34FC18AC897FB709",
+          "lockfileSha256": "40221b0eb529c8eca80f3fb9c3e9c2eb18c1b8f7a8247934539e14ffcdb10f86",
+          "schemaSha256": "29c968b73dc097fe7408b977f29088db97b172a584a1cde9a8e4377443fc4cee",
+          "resourceSchemaCount": 17
+        }
+      }
     }
   ]
 }

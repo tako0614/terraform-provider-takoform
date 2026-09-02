@@ -4,8 +4,11 @@ Provider `3.0.0` is immutable Registry history for a 31-resource aggregate.
 Provider `4.0.0` at the same `registry.terraform.io/tako0614/takoform` source
 address registers only the 17 exact Forms selected from the
 `github.com/tako0614/takoform-forms` publisher in the
-`edge.forms.takoform.com` family. It is a candidate descriptor until an
-immutable Registry readback records publication.
+`edge.forms.takoform.com` family. Its publication is recorded by the immutable
+Registry readback in the `4.0.0` entry of the
+[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json); the
+release descriptor keeps `publicationStatus: candidate-only` as writer-input
+metadata and is not availability state.
 
 ## 15 withdrawn aggregate resource types
 
