@@ -4,12 +4,13 @@ import path from "node:path";
 
 import {
   PROVIDER4_DESCRIPTOR,
+  PROVIDER_RELEASE_DESCRIPTOR,
   validateProvider4Candidate,
 } from "./provider4-candidate.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
-test("Provider 4 candidate is publisher-specific and separate from the tombstoned Provider 3 writer", () => {
+test("promoted Provider 4 release descriptor is publisher-specific and keeps Provider 3 as retained history", () => {
   const candidate = validateProvider4Candidate(root);
   expect(candidate.providerVersion).toBe("4.0.0");
   expect(candidate.portableApiVersion).toBe("forms.takoform.com/v1");
@@ -20,13 +21,22 @@ test("Provider 4 candidate is publisher-specific and separate from the tombstone
     "takoform_edge_object_bucket",
   );
 
-  const retired = JSON.parse(
-    readFileSync(path.join(root, "release/version.json"), "utf8"),
+  const retained = JSON.parse(
+    readFileSync(path.join(root, "release/history/provider-v3.0.0.json"), "utf8"),
+  );
+  const current = JSON.parse(
+    readFileSync(path.join(root, PROVIDER_RELEASE_DESCRIPTOR), "utf8"),
   );
   const descriptor = JSON.parse(
     readFileSync(path.join(root, PROVIDER4_DESCRIPTOR), "utf8"),
   );
-  expect(retired.version).toBe("3.0.0");
+  expect(retained.version).toBe("3.0.0");
+  expect(retained.tag).toBe("v3.0.0");
+  expect(current.version).toBe("4.0.0");
+  expect(current.tag).toBe("v4.0.0");
+  // The ledger readback, not this field, is the availability authority: both
+  // release workflows hard-require candidate-only on the writer input.
+  expect(current.publicationStatus).toBe("candidate-only");
   expect(descriptor.publicationStatus).toBe("candidate-only");
   expect(descriptor.formPublisherRepository).toBe(
     "github.com/tako0614/takoform-forms",
@@ -46,6 +56,7 @@ test("current Provider surfaces identify the publisher without a privileged clas
     "website/index.md",
     "website/docs/index.md",
     PROVIDER4_DESCRIPTOR,
+    PROVIDER_RELEASE_DESCRIPTOR,
   ]) {
     const contents = readFileSync(path.join(root, relativePath), "utf8");
     expect(contents).not.toMatch(/\bofficial(?:-only)?\b/iu);

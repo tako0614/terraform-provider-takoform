@@ -45,6 +45,7 @@ const PUBLIC_DOCUMENT_LEDGER = "release/published-document-lanes.json";
 const PUBLIC_SCHEMA_LEDGER = "release/public-schema-identities.json";
 const PROVIDER_RELEASE_LEDGER = "release/provider-release-identities.json";
 const PROVIDER_FORM_LEDGER = "release/provider-form-identities.json";
+const PROVIDER_DESCRIPTOR = "release/version.json";
 const SPECIFICATION_RELEASE_LEDGER = "release/specification-releases.json";
 const FAMILY_INDEX = "forms/candidates/current-family-index.json";
 
@@ -446,7 +447,11 @@ function addCurrentForm(root, catalog, candidateSetPath, form) {
   });
 }
 
-function addProviderFormIdentities(catalog, providerFormLedger) {
+// The current Provider is whichever release the descriptor selects, not a
+// literal major: its embedded Forms are the current unpublished-candidate
+// projection, while every other release in the append-only ledger is retained
+// history for a withdrawn or superseded Provider identity.
+function addProviderFormIdentities(catalog, providerFormLedger, currentProviderVersion) {
   for (const release of providerFormLedger.releases ?? []) {
     if (!isRecord(release) || !Array.isArray(release.forms)) fail(`${PROVIDER_FORM_LEDGER} contains an invalid release`);
     for (const form of release.forms) {
@@ -462,20 +467,21 @@ function addProviderFormIdentities(catalog, providerFormLedger) {
       const groupRoot = group.includes("/")
         ? `forms/candidates/${group.split("/", 1)[0]}/${group.slice(group.indexOf("/") + 1)}`
         : `forms/candidates/${group}`;
+      const isCurrent = release.providerVersion === currentProviderVersion;
       addExpected(catalog, "form-package", {
         identity,
-        status: release.providerVersion === "3.0.0" ? "unpublished-candidate" : "withdrawn-retained",
+        status: isCurrent ? "unpublished-candidate" : "withdrawn-retained",
         sourcePaths: [PROVIDER_FORM_LEDGER, `${groupRoot}/${kindSlug}/definition.json`, `${groupRoot}/${kindSlug}/package-index.json`],
         owningLedger: PROVIDER_FORM_LEDGER,
         migrationDetails: {
-          from: release.providerVersion === "3.0.0" ? null : form.formRef.apiVersion,
-          reason: release.providerVersion === "3.0.0"
+          from: isCurrent ? null : form.formRef.apiVersion,
+          reason: isCurrent
             ? "Provider projection does not publish or promote the current Form package"
             : `retained Provider ${release.providerVersion} Form history; never rewrite the identity`,
         },
         formRef: form.formRef,
         packageDigest: form.packageDigest,
-        publication: release.providerVersion === "3.0.0" ? "unpublished-candidate" : "withdrawn-retained",
+        publication: isCurrent ? "unpublished-candidate" : "withdrawn-retained",
       });
     }
   }
@@ -637,12 +643,16 @@ function buildCatalog(root) {
   const providerFormLedger = readJson(root, PROVIDER_FORM_LEDGER);
   const specificationReleaseLedger = readJson(root, SPECIFICATION_RELEASE_LEDGER);
   const familyIndex = readJson(root, FAMILY_INDEX);
+  const providerDescriptor = readJson(root, PROVIDER_DESCRIPTOR);
+  if (typeof providerDescriptor.version !== "string" || providerDescriptor.version === "") {
+    fail(`${PROVIDER_DESCRIPTOR} has no current Provider version`);
+  }
   const catalog = new Map(CLASS_IDS.map((classId) => [classId, new Map()]));
 
   addPublicSchemaIdentities(root, catalog, publicSchemaLedger);
   addPublishedDocumentIdentities(catalog, documentLedger);
   addCurrentFamilies(root, catalog, familyIndex);
-  addProviderFormIdentities(catalog, providerFormLedger);
+  addProviderFormIdentities(catalog, providerFormLedger, providerDescriptor.version);
   addCandidateContracts(root, catalog, familyIndex);
   addProviderVersions(catalog, providerReleaseLedger);
   addSpecificationIdentities(catalog, specificationReleaseLedger);

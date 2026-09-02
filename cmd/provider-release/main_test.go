@@ -30,8 +30,8 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if desc.Version != "3.0.0" {
-		t.Fatalf("current provider candidate must be 3.0.0, got %q", desc.Version)
+	if desc.Version != "4.0.0" {
+		t.Fatalf("current provider release descriptor must be 4.0.0, got %q", desc.Version)
 	}
 	if desc.Versioning.PortableAPIVersion != "forms.takoform.com/v1" {
 		t.Fatalf("current provider candidate must target stable Host API v1, got %q", desc.Versioning.PortableAPIVersion)
@@ -62,7 +62,7 @@ func TestReleaseDescriptorRejectsWrongSigner(t *testing.T) {
 	}
 }
 
-func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedV211(t *testing.T) {
+func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedHistory(t *testing.T) {
 	repo := testRepoRoot(t)
 	desc, err := loadDescriptor(repo)
 	if err != nil {
@@ -72,17 +72,28 @@ func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedV211(t *testin
 	if err != nil {
 		t.Fatalf("loadProviderIdentityLedger: %v", err)
 	}
-	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) != 2 {
+	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) != 3 {
 		t.Fatalf("unexpected provider identity ledger envelope: %#v", ledger)
 	}
 	retained := ledger.Releases[0]
 	if err := validateProviderV211IdentityRelease(retained); err != nil {
 		t.Fatalf("retained provider 2.1.1 identity release: %v", err)
 	}
-	current := ledger.Releases[1]
-	if current.ProviderVersion != "3.0.0" || current.PortableAPIVersion != providerHostAPIVersion ||
-		current.Family != "" || len(current.Families) != 8 || current.FormMaturity != "experimental" || len(current.Forms) != 31 {
-		t.Fatalf("unexpected provider 3 identity release: %#v", current)
+	// Provider 3.0.0 is Registry-published immutable history; the writer moved
+	// to 4.0.0 but the aggregate projection stays exactly as published.
+	retainedV3 := ledger.Releases[1]
+	if retainedV3.ProviderVersion != "3.0.0" || retainedV3.PortableAPIVersion != providerHostAPIVersion ||
+		retainedV3.Family != "" || len(retainedV3.Families) != 8 || retainedV3.FormMaturity != "experimental" || len(retainedV3.Forms) != 31 {
+		t.Fatalf("unexpected retained provider 3 identity release: %#v", retainedV3)
+	}
+	if err := validateProviderV3IdentityRelease(repo, retainedV3); err != nil {
+		t.Fatalf("retained provider 3.0.0 identity release: %v", err)
+	}
+	current := ledger.Releases[2]
+	if current.ProviderVersion != "4.0.0" || current.PortableAPIVersion != providerHostAPIVersion ||
+		current.Family != "" || len(current.Families) != 1 || current.Families[0] != providerPublisherFamily ||
+		current.FormMaturity != "experimental" || len(current.Forms) != 17 {
+		t.Fatalf("unexpected provider 4 identity release: %#v", current)
 	}
 }
 

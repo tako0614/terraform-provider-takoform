@@ -314,12 +314,19 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
 }
 
 // assertProviderReleaseCandidate keeps Provider distribution independent from
-// package and Specification obligations. Provider 3 may be a candidate while
+// package and Specification obligations. Provider 4 may be a candidate while
 // every Form remains Experimental and unpublished. The append-only ledger also
-// keeps Provider 2.1.1's exact fifteen identities immutable history.
+// keeps Provider 3.0.0's exact 31 and Provider 2.1.1's exact fifteen
+// identities immutable history.
 export function assertProviderReleaseCandidate(repositoryRoot) {
   const descriptor = JSON.parse(
     readFileSync(path.join(repositoryRoot, "release/version.json"), "utf8"),
+  );
+  const retainedProvider3Descriptor = JSON.parse(
+    readFileSync(
+      path.join(repositoryRoot, "release/history/provider-v3.0.0.json"),
+      "utf8",
+    ),
   );
   const index = JSON.parse(
     readFileSync(
@@ -328,13 +335,22 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     ),
   );
   if (
-    descriptor.version !== "3.0.0" ||
-    descriptor.tag !== "v3.0.0" ||
+    descriptor.version !== "4.0.0" ||
+    descriptor.tag !== "v4.0.0" ||
     descriptor.publicationStatus !== "candidate-only" ||
     descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1"
   ) {
     fail(
-      "provider release descriptor is not candidate-only v3.0.0 on stable Host API v1",
+      "provider release descriptor is not candidate-only v4.0.0 on stable Host API v1",
+    );
+  }
+  if (
+    retainedProvider3Descriptor.version !== "3.0.0" ||
+    retainedProvider3Descriptor.tag !== "v3.0.0" ||
+    retainedProvider3Descriptor.publicationStatus !== "candidate-only"
+  ) {
+    fail(
+      "the retained Provider 3 writer input in release/history/provider-v3.0.0.json drifted",
     );
   }
   if (
@@ -342,7 +358,7 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     index.families?.length !== 8
   ) {
     fail(
-      "the current Provider 3 candidate index must contain the exact eight versionless families",
+      "the retained Provider 3 index must contain the exact eight versionless families",
     );
   }
   let candidateFormCount = 0;
@@ -371,32 +387,44 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   }
   if (candidateFormCount !== 31) {
     fail(
-      `the current Provider 3 candidate index contains ${candidateFormCount} Forms, want 31`,
+      `the retained Provider 3 index contains ${candidateFormCount} Forms, want 31`,
     );
   }
   const identities = validateProviderIdentityLedger(repositoryRoot, descriptor);
   const embedded = identities.releases.find(
     (entry) => entry.providerVersion === descriptor.version,
   );
+  const retainedProvider3 = identities.releases.find(
+    (entry) => entry.providerVersion === "3.0.0",
+  );
   const retained = identities.releases.find(
     (entry) => entry.providerVersion === "2.1.1",
   );
+  // Provider 4's identity source is the external publisher set: one family,
+  // 17 selected Forms. Provider 3's eight-family, 31-Form projection stays
+  // asserted beside it so promoting the current major never leaves the
+  // Registry-published Provider 3 identity unguarded.
   if (
     identities.format !== "takoform.provider-form-identities@v1" ||
     embedded?.portableApiVersion !== descriptor.versioning.portableApiVersion ||
-    embedded?.families?.length !== 8 ||
+    embedded?.families?.length !== 1 ||
+    embedded?.families?.[0] !== "edge.forms.takoform.com" ||
     embedded?.formMaturity !== "experimental" ||
-    embedded?.forms?.length !== 31 ||
+    embedded?.forms?.length !== 17 ||
+    retainedProvider3?.families?.length !== 8 ||
+    retainedProvider3?.formMaturity !== "experimental" ||
+    retainedProvider3?.forms?.length !== 31 ||
     retained?.family !== "edge.forms.takoform.com/v1beta1" ||
     retained?.forms?.length !== 15
   ) {
     fail(
-      "Provider 3 current identities or Provider 2.1.1 retained identities drifted",
+      "Provider 4 current identities or Provider 3.0.0/2.1.1 retained identities drifted",
     );
   }
   return {
     formCount: embedded.forms.length,
     candidateFormCount,
+    retainedProvider3FormCount: retainedProvider3.forms.length,
     retainedFormCount: retained.forms.length,
     version: descriptor.version,
   };
@@ -446,8 +474,9 @@ function main() {
     .join(" ");
   const traceability = summarizeTraceability(ledger);
   console.log(
-    `retained Provider/Form Package policy OK: Provider v${provider.version} locks ${provider.formCount} exact current Experimental Forms, ` +
-      `the candidate lane carries ${provider.candidateFormCount}, and Provider 2.1.1 retains ${provider.retainedFormCount}; ` +
+    `retained Provider/Form Package policy OK: Provider v${provider.version} locks ${provider.formCount} exact publisher-selected Experimental Forms, ` +
+      `the retained local candidate lane carries ${provider.candidateFormCount}, Provider 3.0.0 retains ${provider.retainedProvider3FormCount}, ` +
+      `and Provider 2.1.1 retains ${provider.retainedFormCount}; ` +
       `${open.length} separate package/public-service obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ` +
       `none authorizes or blocks a Specification release; ${traceability}`,
   );

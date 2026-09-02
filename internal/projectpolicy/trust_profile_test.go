@@ -167,8 +167,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	root := repositoryRoot(t)
 	var profile trustProfile
 	readStrictJSON(t, filepath.Join(root, "spec", "trust", "profile.json"), &profile)
+	// The Provider 3 version-stream lock is retained history: after the
+	// Provider 4 promotion its writer input lives only in release/history.
 	var release releaseDescriptor
-	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
+	readStrictJSON(t, filepath.Join(root, "release", "history", "provider-v3.0.0.json"), &release)
+	var current releaseDescriptor
+	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &current)
 
 	if profile.SchemaVersion != 3 || profile.Status != "architecture-decision-accepted-implementation-in-progress" {
 		t.Fatalf("unexpected trust profile identity: version=%d status=%q", profile.SchemaVersion, profile.Status)
@@ -230,7 +234,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1" ||
 		release.Versioning.FormDefinitionVersions != "independent-immutable-semver" ||
 		release.Versioning.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
-		t.Fatalf("Provider 3 version streams are not independently locked: %#v", release.Versioning)
+		t.Fatalf("retained Provider 3 version streams are not independently locked: %#v", release.Versioning)
+	}
+	if current.Version != "4.0.0" || current.Tag != "v4.0.0" ||
+		current.SigningFingerprint != profile.Provider.Signature.Fingerprint ||
+		current.Versioning != release.Versioning {
+		t.Fatalf("current Provider 4 version streams are not independently locked: %#v", current)
 	}
 	if profile.RunnerReport.HostFormat != "takoform.standard-runner-report@v1" ||
 		profile.RunnerReport.ProviderFormat != "takoform.standard-provider-runner-report@v2" ||
