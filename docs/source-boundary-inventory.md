@@ -7,10 +7,12 @@ This document classifies the current source graph before repository extraction.
 It is not a public contract or a publication record. The target topology is:
 
 Post-extraction/current Provider policy supersedes this counted baseline:
-`tako0614/takoform` selects only the 16 exact tako0614 Edge Forms published by
-`takoform-forms`. The former eight-family/31-resource aggregate is Provider 3
-history, not the current source roster. Ordinary OpenTofu providers compose
-natively and are never re-published as Takoform Forms.
+`tako0614/takoform` selects only the 17 exact tako0614 Edge Forms published by
+`takoform-forms` — the 16 Edge Forms counted below plus `ObjectBucket`, which
+the publisher set supplies and this repository's own corpus does not. The
+former eight-family/31-resource aggregate is Provider 3 history, not the
+current source roster. Ordinary OpenTofu providers compose natively and are
+never re-published as Takoform Forms.
 
 | Repository                                        | Sole responsibility after extraction                                                                |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -59,7 +61,7 @@ source graph; they are not evidence of Form Package publication.
 | `forms/candidates/<group>/`, `forms/candidates/current-family-index.json`                             | Generated current package/candidate selection surface                                               | `takoform-forms`                                                                 | Produced only from publisher source; admitted by neutral Core using exact digests                                                    |
 | `interfaces/candidates/v1alpha1/`, `bindings/candidates/v1alpha2/`                                    | Generated current Interface and Binding candidate sets                                              | `takoform-forms`                                                                 | Produced with publisher family packages; interpreted by Core contracts without an publisher roster                                     |
 | deleted `internal/currentformregistry/`                                                               | Former mixed current/default/retained registry and publisher resolver                               | no owner                                                                         | Removed at W08; Provider projection plus Core Snapshot own consumption, and the authoring resolver lives in `currentformmodel`        |
-| `internal/provider/artifacts/publisher/`, `v3_snapshot_assembly.go`, `provider.go`                    | Current publisher-set binary closure and 16 typed Provider resources                                | `terraform-provider-takoform`                                                    | Embed only the exact tako0614 Edge projection; derive it mechanically from retained Provider 3 custody until the publisher input is cut over |
+| `internal/provider/artifacts/publisher/`, `v3_snapshot_assembly.go`, `provider.go`                    | Current publisher-set binary closure and 17 typed Provider resources                                | `terraform-provider-takoform`                                                    | Embed only the exact tako0614 Edge projection; derive it mechanically from retained Provider 3 custody until the publisher input is cut over |
 | `internal/provider/artifacts/v3/`, `v3_resource_types.go`                                           | Provider 3's immutable 31-resource artifact and mapping history                                      | `terraform-provider-takoform` history custody                                    | Read from source-side goldens and migration checks; never embed the withdrawn aggregate packages into the current provider binary    |
 | `internal/provider/v3_lifecycle.go`, `v3_codec.go`                                                    | Provider lifecycle request/response and exact state codec dispatch                                  | `terraform-provider-takoform`                                                    | Preserve Provider 3 behavior and consume exact Snapshot identities                                                                   |
 | `scripts/takoform-v1-derive.mjs`, `cmd/portable-host-conformance/`, `internal/portableconformancev3/` | Mixed generic, family and composition conformance derivation/execution                              | split by corpus authority                                                        | Generic Core/Host corpus and runner go to `takoform`; family fixtures go to `takoform-forms`; selected composition is explicit input |

@@ -87,9 +87,12 @@ card padding is not part of this system.
   The next-major source keeps Host API `forms.takoform.com/v1` and selects only
   the 17 content-addressed Form packages published by the tako0614 Edge source.
   It makes no Provider 4 publication claim. The current package envelope is
-  `packages.forms.takoform.com/v1alpha5`. The `release/version.json`
-  descriptor remains `candidate-only` source metadata after owner publication;
-  the release identity ledger owns live distribution truth. Provider `2.1.1`
+  `packages.forms.takoform.com/v1alpha5`. `release/version.json` is the Provider
+  `4.0.0` release descriptor, `release/candidates/provider-v4.0.0.json` the
+  retained byte-identical candidate record, and
+  `release/history/provider-v3.0.0.json` the retained Provider 3 writer input; a
+  release descriptor remains `candidate-only` source metadata after owner
+  publication, and the release identity ledger owns live distribution truth. Provider `2.1.1`
   and earlier lanes remain immutable Registry history. Host implementation
   source and live service availability are different evidence.
 
