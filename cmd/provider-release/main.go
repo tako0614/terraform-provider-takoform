@@ -870,6 +870,54 @@ func verifyPinnedDetachedSignature(publicKeyPath, expectedFingerprint, signature
 	return validFingerprints[0], nil
 }
 
+// isolatedGPGEnvironment returns the ambient environment with every inherited
+// GnuPG selector removed and GNUPGHOME pinned to home, so signature checks
+// depend only on the throwaway keyring this process just built.
+func isolatedGPGEnvironment(home string) []string {
+	ambient := os.Environ()
+	env := make([]string, 0, len(ambient)+2)
+	for _, entry := range ambient {
+		name, _, found := strings.Cut(entry, "=")
+		if !found || name == "GNUPGHOME" || name == "LC_ALL" || strings.HasPrefix(name, "GPG_") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	return append(env, "GNUPGHOME="+home, "LC_ALL=C")
+}
+
+// verifyPinnedTagSignature verifies one git tag object against the repository's
+// own pinned public key inside a throwaway GnuPG home. The pinned-signer
+// decision therefore never depends on whichever keyring the caller happens to
+// carry: the managed owner-gate environment starts from an empty keyring, and a
+// developer keyring must not be able to widen the accepted signer set either.
+func verifyPinnedTagSignature(repo, publicKeyPath, expectedFingerprint, tagRef string) (string, error) {
+	fingerprint, err := publicKeyFingerprint(publicKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("inspect pinned provider public key: %w", err)
+	}
+	if fingerprint != expectedFingerprint {
+		return fingerprint, fmt.Errorf("provider public key fingerprint %s does not match pinned signer %s", fingerprint, expectedFingerprint)
+	}
+	gnupgHome, err := os.MkdirTemp("", "takoform-provider-tag-verify-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(gnupgHome)
+	if err := os.Chmod(gnupgHome, 0o700); err != nil {
+		return "", err
+	}
+	env := isolatedGPGEnvironment(gnupgHome)
+	if _, err := command(repo, env, "gpg", "--homedir", gnupgHome, "--batch", "--import", publicKeyPath); err != nil {
+		return "", fmt.Errorf("import pinned provider public key: %w", err)
+	}
+	var verifyOutput bytes.Buffer
+	verify := exec.Command("git", "verify-tag", "--raw", tagRef)
+	verify.Dir, verify.Env, verify.Stdout, verify.Stderr = repo, env, &verifyOutput, &verifyOutput
+	verifyErr := verify.Run()
+	return verifyPinnedTagSigner(verifyOutput.String(), verifyErr, expectedFingerprint)
+}
+
 func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflightPath, expectedRunID, expectedRunAttempt, expectedRequestID, expectedCommit string, materializeRef bool) (signedTagArtifactEvidence, error) {
 	if strings.TrimSpace(artifactPath) == "" || strings.TrimSpace(preflightPath) == "" {
 		return signedTagArtifactEvidence{}, errors.New("--artifact and --preflight-artifact are required")
@@ -976,23 +1024,12 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	if err != nil || strings.TrimSpace(peeled) != expectedCommit {
 		return signedTagArtifactEvidence{}, errors.New("reconstructed tag object does not peel to the exact protected-main commit")
 	}
-	gnupgHome, err := os.MkdirTemp("", "takoform-provider-tag-verify-")
-	if err != nil {
-		return signedTagArtifactEvidence{}, err
-	}
-	defer os.RemoveAll(gnupgHome)
-	if err := os.Chmod(gnupgHome, 0o700); err != nil {
-		return signedTagArtifactEvidence{}, err
-	}
-	verifyEnv := append(os.Environ(), "GNUPGHOME="+gnupgHome)
-	if _, err := command(repo, verifyEnv, "gpg", "--batch", "--import", filepath.Join(repo, desc.PublicKeyPath)); err != nil {
-		return signedTagArtifactEvidence{}, fmt.Errorf("import pinned provider public key: %w", err)
-	}
-	var verifyOutput bytes.Buffer
-	verify := exec.Command("git", "verify-tag", "--raw", tagObjectOID)
-	verify.Dir, verify.Env, verify.Stdout, verify.Stderr = repo, verifyEnv, &verifyOutput, &verifyOutput
-	verifyErr := verify.Run()
-	signer, err := verifyPinnedTagSigner(verifyOutput.String(), verifyErr, desc.SigningFingerprint)
+	signer, err := verifyPinnedTagSignature(
+		repo,
+		filepath.Join(repo, desc.PublicKeyPath),
+		desc.SigningFingerprint,
+		tagObjectOID,
+	)
 	if err != nil {
 		return signedTagArtifactEvidence{}, err
 	}
@@ -1583,16 +1620,11 @@ func inspectSource(repo string, desc descriptor, allowDirty, allowUntagged bool)
 	tagSigned := false
 	tagSignerFingerprint := ""
 	if tagPresent {
-		var verifyOutput bytes.Buffer
-		verify := exec.Command("git", "verify-tag", "--raw", desc.Tag)
-		verify.Dir = repo
-		verify.Stdout = &verifyOutput
-		verify.Stderr = &verifyOutput
-		verifyErr := verify.Run()
-		tagSignerFingerprint, verifyErr = verifyPinnedTagSigner(
-			verifyOutput.String(),
-			verifyErr,
+		signer, verifyErr := verifyPinnedTagSignature(
+			repo,
+			filepath.Join(repo, desc.PublicKeyPath),
 			desc.SigningFingerprint,
+			desc.Tag,
 		)
 		if verifyErr != nil {
 			return sourceEvidence{}, fmt.Errorf(
@@ -1602,6 +1634,7 @@ func inspectSource(repo string, desc descriptor, allowDirty, allowUntagged bool)
 				verifyErr,
 			)
 		}
+		tagSignerFingerprint = signer
 		tagSigned = true
 	}
 	blockers := []string{}

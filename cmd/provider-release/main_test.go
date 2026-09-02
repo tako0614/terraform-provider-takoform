@@ -353,13 +353,57 @@ func TestCanonicalRequestIDRequiresLowercaseUUIDv4(t *testing.T) {
 	}
 }
 
+func TestVerifyPinnedTagSignatureRefusesUnpinnedPublicKeyFile(t *testing.T) {
+	requireGPG(t)
+	repo := testRepoRoot(t)
+	const unpinned = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	fingerprint, err := verifyPinnedTagSignature(
+		repo,
+		filepath.Join(repo, "release/keys/provider-signing-key.asc"),
+		unpinned,
+		"HEAD",
+	)
+	if err == nil || !strings.Contains(err.Error(), "does not match pinned signer") {
+		t.Fatalf("expected unpinned key-file rejection, got %v", err)
+	}
+	if fingerprint == unpinned {
+		t.Fatalf("rejected key file must not report the pinned fingerprint: %q", fingerprint)
+	}
+}
+
+// TestInspectSourceVerifiesSignedTagWithEmptyAmbientKeyring proves the release
+// tag check is self-contained: the managed owner-gate environment hands the Go
+// tool a fresh HOME with no GnuPG keyring at all, so verification must succeed
+// from the repository's own pinned public key and nothing else.
+func TestInspectSourceVerifiesSignedTagWithEmptyAmbientKeyring(t *testing.T) {
+	requireGPG(t)
+	repo, desc, _ := newSignedTagFixture(t)
+	emptyAmbientGPG(t)
+	assertAmbientKeyringCannotVerify(t, repo, desc.Tag)
+
+	evidence, err := inspectSource(repo, desc, false, false)
+	if err != nil {
+		t.Fatalf("signed tag must verify from the pinned key alone: %v", err)
+	}
+	if !evidence.TagPresent || !evidence.TagSigned {
+		t.Fatalf("unexpected signed-tag evidence %#v", evidence)
+	}
+	if evidence.TagSignerFingerprint != desc.SigningFingerprint {
+		t.Fatalf("signer %q does not match pinned %q", evidence.TagSignerFingerprint, desc.SigningFingerprint)
+	}
+}
+
 func TestInspectSourceRejectsUnsignedExactTag(t *testing.T) {
-	repo := newGitFixture(t)
-	desc := testDescriptor()
+	requireGPG(t)
+	repo, desc, _ := newGitFixtureWithPinnedKey(t)
 	run(t, repo, "git", "tag", "-a", desc.Tag, "-m", "unsigned release tag")
+	emptyAmbientGPG(t)
 	_, err := inspectSource(repo, desc, false, false)
 	if err == nil || !strings.Contains(err.Error(), "not signed by pinned signer") {
 		t.Fatalf("expected unsigned tag rejection, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "git tag signature verification failed") {
+		t.Fatalf("rejection must come from tag verification, not a missing key file: %v", err)
 	}
 }
 
@@ -933,6 +977,117 @@ func TestOfficialInTotoAndSLSAValidatorsAcceptCandidateProvenance(t *testing.T) 
 	if err := validateSLSAProvenance(document); err == nil || !strings.Contains(err.Error(), "internalParameters") {
 		t.Fatalf("expected explicit internalParameters rejection, got %v", err)
 	}
+}
+
+func requireGPG(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("gpg"); err != nil {
+		t.Skip("gpg is unavailable; signed-tag isolation is not exercised here")
+	}
+}
+
+// emptyAmbientGPG points the ambient environment at empty directories so the
+// process inherits no usable keyring, reproducing the managed owner-gate
+// environment that scripts/deploy-safety.mjs builds.
+func emptyAmbientGPG(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GNUPGHOME", t.TempDir())
+	t.Setenv("GPG_TTY", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+}
+
+// assertAmbientKeyringCannotVerify fails the test unless the ambient keyring is
+// genuinely empty, so a passing isolation test can never be explained by a
+// signer key that leaked in from the developer environment.
+func assertAmbientKeyringCannotVerify(t *testing.T, repo, tag string) {
+	t.Helper()
+	verify := exec.Command("git", "verify-tag", "--raw", tag)
+	verify.Dir = repo
+	if output, err := verify.CombinedOutput(); err == nil {
+		t.Fatalf("ambient keyring already trusts the tag; the isolation claim is unproven:\n%s", output)
+	}
+}
+
+// newThrowawayGPGKey generates one signing key inside its own GnuPG home and
+// returns that home and the key fingerprint.
+func newThrowawayGPGKey(t *testing.T) (string, string) {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.Chmod(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	env := append(os.Environ(), "GNUPGHOME="+home, "LC_ALL=C")
+	t.Cleanup(func() {
+		kill := exec.Command("gpgconf", "--homedir", home, "--kill", "all")
+		kill.Env = env
+		_ = kill.Run()
+	})
+	generate := exec.Command("gpg", "--homedir", home, "--batch", "--pinentry-mode", "loopback",
+		"--passphrase", "", "--quick-generate-key",
+		"Takoform Release Fixture <release-fixture@example.invalid>", "ed25519", "sign", "never")
+	generate.Env = env
+	if output, err := generate.CombinedOutput(); err != nil {
+		t.Skipf("throwaway GnuPG key generation is unavailable here: %v\n%s", err, output)
+	}
+	list := exec.Command("gpg", "--homedir", home, "--batch", "--with-colons", "--list-secret-keys")
+	list.Env = env
+	output, err := list.CombinedOutput()
+	if err != nil {
+		t.Fatalf("list throwaway secret key: %v\n%s", err, output)
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) > 9 && fields[0] == "fpr" && regexp.MustCompile(`^[0-9A-F]{40}$`).MatchString(strings.ToUpper(fields[9])) {
+			return home, strings.ToUpper(fields[9])
+		}
+	}
+	t.Fatalf("throwaway key has no fingerprint:\n%s", output)
+	return "", ""
+}
+
+// newGitFixtureWithPinnedKey builds a git fixture whose committed public key is
+// the descriptor's pinned signer, so tag verification exercises the real
+// pinned-signer path without depending on the production private key.
+func newGitFixtureWithPinnedKey(t *testing.T) (string, descriptor, string) {
+	t.Helper()
+	signerHome, fingerprint := newThrowawayGPGKey(t)
+	signerEnv := append(os.Environ(), "GNUPGHOME="+signerHome, "LC_ALL=C")
+	export := exec.Command("gpg", "--homedir", signerHome, "--batch", "--armor", "--export", fingerprint)
+	export.Env = signerEnv
+	publicKey, err := export.Output()
+	if err != nil {
+		t.Fatalf("export throwaway public key: %v", err)
+	}
+	repo := newGitFixture(t)
+	keyPath := "release/keys/fixture-signing-key.asc"
+	if err := os.MkdirAll(filepath.Join(repo, filepath.Dir(keyPath)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, keyPath), publicKey, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, repo, "git", "add", keyPath)
+	run(t, repo, "git", "commit", "--quiet", "-m", "pin fixture signing key")
+	run(t, repo, "git", "config", "user.signingkey", fingerprint)
+	desc := testDescriptor()
+	desc.PublicKeyPath = keyPath
+	desc.SigningFingerprint = fingerprint
+	return repo, desc, signerHome
+}
+
+// newSignedTagFixture returns a git fixture whose HEAD carries an exact release
+// tag signed by the descriptor's pinned key.
+func newSignedTagFixture(t *testing.T) (string, descriptor, string) {
+	t.Helper()
+	repo, desc, signerHome := newGitFixtureWithPinnedKey(t)
+	tag := exec.Command("git", "tag", "-s", "-u", desc.SigningFingerprint, "-m", "signed release tag", desc.Tag)
+	tag.Dir = repo
+	tag.Env = append(os.Environ(), "GNUPGHOME="+signerHome, "LC_ALL=C")
+	if output, err := tag.CombinedOutput(); err != nil {
+		t.Skipf("signed tag creation is unavailable here: %v\n%s", err, output)
+	}
+	return repo, desc, signerHome
 }
 
 func testDescriptor() descriptor {
