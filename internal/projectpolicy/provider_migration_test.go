@@ -102,7 +102,7 @@ func TestCurrentV4MigrationGuideStatesPublisherSetBoundary(t *testing.T) {
 	migration := readText(t, filepath.Join(root, "release", "migrations", "v3-to-v4.md"))
 	for _, required := range []string{
 		"Provider `3.0.0` is immutable Registry history",
-		"16 exact Forms",
+		"17 exact Forms",
 		"edge.forms.takoform.com",
 		"15 withdrawn aggregate",
 		"= 3.0.0",
@@ -240,10 +240,11 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	}
 	providerPublish := localPublisher[providerPublishStart:providerPublishEnd]
 	if !strings.Contains(providerPublish, "body:") ||
-		!strings.Contains(providerPublish, "Breaking upgrade from Provider v2.1.1") ||
+		!strings.Contains(providerPublish, "Breaking upgrade from Provider v3.0.0") ||
+		!strings.Contains(providerPublish, "release/migrations/v3-to-v4.md") ||
 		!strings.Contains(providerPublish, "release/migrations/v2-to-v3.md") ||
 		!strings.Contains(providerPublish, "release/migrations/v1-to-v2.md") {
-		t.Fatal("retired owner-local Provider 3 publisher no longer retains both required migration boundaries")
+		t.Fatal("the owner-local Provider publisher no longer retains every required migration boundary")
 	}
 
 	resourceDocs, err := filepath.Glob(filepath.Join(root, "docs", "resources", "*.md"))

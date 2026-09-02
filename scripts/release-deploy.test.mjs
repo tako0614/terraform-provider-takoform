@@ -214,29 +214,57 @@ function memoryIO() {
   };
 }
 
-test("provider v3 release body names stable independent identities and migration boundary", () => {
+// An independent copy of the canonicalization the writer pins with, so a
+// change to either side has to be made deliberately on both.
+function canonicalLedgerDigest(value) {
+  const sorted = (input) => {
+    if (Array.isArray(input)) return input.map(sorted);
+    if (input === null || typeof input !== "object") return input;
+    return Object.fromEntries(
+      Object.keys(input)
+        .sort()
+        .map((key) => [key, sorted(input[key])]),
+    );
+  };
+  return `sha256:${createHash("sha256")
+    .update(JSON.stringify(sorted(value)))
+    .digest("hex")}`;
+}
+
+test("provider v4 release body names the publisher-set identity and v3 migration boundary", () => {
   const descriptor = JSON.parse(
     readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
   );
   const body = providerReleaseBody(descriptor);
-  expect(body).toContain("Provider v3.0.0");
+  expect(body).toContain("Provider v4.0.0");
   expect(body).toContain("forms.takoform.com/v1");
-  expect(body).toContain("eight versionless current Form families");
-  expect(body).toContain("31 Experimental 0.x FormRefs");
+  expect(body).toContain(
+    "single versionless current Form family `edge.forms.takoform.com`",
+  );
+  expect(body).toContain("17 Experimental 0.x FormRefs");
   expect(body).toContain("release/provider-form-identities.json");
   expect(body).toContain("Provider SemVer, Host API, Form Family");
-  expect(body).toContain("Breaking upgrade from Provider v2.1.1");
-  expect(body).toContain("nine withdrawn v1alpha2 Terraform resource types");
+  expect(body).toContain("Breaking upgrade from Provider v3.0.0");
+  expect(body).toContain("15 withdrawn aggregate Terraform resource types");
+  expect(body).toContain("release/migrations/v3-to-v4.md");
   expect(body).toContain("release/migrations/v2-to-v3.md");
   expect(body).toContain("release/migrations/v1-to-v2.md");
-  expect(body).toContain("Provider v1 remains a separate migration boundary");
-  expect(body).toContain("Provider 2.1.1 identities remain immutable history");
+  expect(body).toContain("github.com/tako0614/takoform-forms");
+  expect(body).toContain("forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c");
+  expect(body).toContain("3231633605b737ce5279d7fc020b4780568e7091");
+  // The retained majors must stay named in the immutable public record.
+  expect(body).toContain(
+    "Provider v2.1.1 and Provider v1 remain separate migration boundaries",
+  );
+  expect(body).toContain(
+    "Provider 2.1.1 and 3.0.0 identities remain immutable history",
+  );
 });
 
-test("provider descriptor and identity ledger are exact stable release inputs", () => {
+test("provider descriptor and identity ledger are exact current and retained release inputs", () => {
   const descriptor =
     releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
-  expect(descriptor.version).toBe("3.0.0");
+  expect(descriptor.version).toBe("4.0.0");
   expect(descriptor.versioning.portableApiVersion).toBe(
     "forms.takoform.com/v1",
   );
@@ -248,10 +276,21 @@ test("provider descriptor and identity ledger are exact stable release inputs", 
     releases.find((release) => release.providerVersion === "2.1.1")?.forms,
   ).toHaveLength(15);
   const current = releases.find(
+    (release) => release.providerVersion === "4.0.0",
+  );
+  expect(current?.families).toEqual(["edge.forms.takoform.com"]);
+  expect(current?.forms).toHaveLength(17);
+  // Provider 3.0.0 is Registry-published immutable history: it keeps its exact
+  // eight-family, 31-Form projection and its canonical digest even though the
+  // writer no longer addresses it.
+  const retained = releases.find(
     (release) => release.providerVersion === "3.0.0",
   );
-  expect(current?.families).toHaveLength(8);
-  expect(current?.forms).toHaveLength(31);
+  expect(retained?.families).toHaveLength(8);
+  expect(retained?.forms).toHaveLength(31);
+  expect(canonicalLedgerDigest(retained)).toBe(
+    "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb",
+  );
 });
 
 function context(execFile, overrides = {}) {

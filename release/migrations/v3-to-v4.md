@@ -2,7 +2,7 @@
 
 Provider `3.0.0` is immutable Registry history for a 31-resource aggregate.
 Provider `4.0.0` at the same `registry.terraform.io/tako0614/takoform` source
-address registers only the 16 exact Forms selected from the
+address registers only the 17 exact Forms selected from the
 `github.com/tako0614/takoform-forms` publisher in the
 `edge.forms.takoform.com` family. It is a candidate descriptor until an
 immutable Registry readback records publication.

@@ -47,16 +47,17 @@ describe("the committed ledger", () => {
     );
   });
 
-  test("preserves exact Provider 2.1 history independently of the current Provider 3 lane", () => {
+  test("preserves exact Provider 2.1 and Provider 3 history independently of the current Provider 4 lane", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
-    // Provider 3's unpublished candidate and Provider 2.1.1's immutable
-    // published history are separate facts.
+    // Provider 4's unpublished candidate and the immutable published history
+    // of Provider 3.0.0 and Provider 2.1.1 are separate facts.
     expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
-      formCount: 31,
+      formCount: 17,
       candidateFormCount: 31,
+      retainedProvider3FormCount: 31,
       retainedFormCount: 15,
-      version: "3.0.0",
+      version: "4.0.0",
     });
   });
 

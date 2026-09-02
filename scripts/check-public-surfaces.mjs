@@ -1742,21 +1742,46 @@ function checkPublicSchemas() {
   }
 }
 
-const retiredReleaseVersion = readJson(
+// release/version.json is the current Provider 4 release descriptor.
+// release/history/provider-v3.0.0.json is the retained Provider 3 writer input
+// and the only surviving copy of it, so it stays byte-stable and asserted.
+// release/candidates/provider-v4.0.0.json is retained as the pre-publication
+// candidate record and must remain byte-identical to the promoted descriptor.
+const retainedProvider3Descriptor = readJson(
+  path.join(repositoryRoot, "release", "history", "provider-v3.0.0.json"),
+);
+if (
+  retainedProvider3Descriptor.version !== "3.0.0" ||
+  retainedProvider3Descriptor.tag !== "v3.0.0" ||
+  retainedProvider3Descriptor.publicationStatus !== "candidate-only"
+) {
+  fail(
+    "release/history/provider-v3.0.0.json: retained Provider 3 writer input drifted",
+  );
+}
+const releaseVersion = readJson(
   path.join(repositoryRoot, "release", "version.json"),
 );
 if (
-  retiredReleaseVersion.version !== "3.0.0" ||
-  retiredReleaseVersion.tag !== "v3.0.0" ||
-  retiredReleaseVersion.publicationStatus !== "candidate-only"
+  !readFileSync(
+    path.join(repositoryRoot, "release", "version.json"),
+  ).equals(
+    readFileSync(
+      path.join(
+        repositoryRoot,
+        "release",
+        "candidates",
+        "provider-v4.0.0.json",
+      ),
+    ),
+  )
 ) {
-  fail("release/version.json: tombstoned Provider 3 writer input drifted");
+  fail(
+    "release/version.json: promoted descriptor is not byte-identical to release/candidates/provider-v4.0.0.json",
+  );
 }
-const releaseVersion = readJson(
-  path.join(repositoryRoot, "release", "candidates", "provider-v4.0.0.json"),
-);
 if (releaseVersion.publicationStatus !== "candidate-only") {
-  fail("release/candidates/provider-v4.0.0.json: publicationStatus must be candidate-only");
+  fail("release/version.json: publicationStatus must be candidate-only");
 }
 if (
   typeof releaseVersion.version !== "string" ||

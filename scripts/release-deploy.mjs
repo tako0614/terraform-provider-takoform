@@ -39,18 +39,28 @@ import {
   validateC2DiffPaths,
   validateSpecificationRecoveryPath,
 } from "./specification-release.mjs";
+import { generateProvider4Identities } from "./provider4-candidate.mjs";
 
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
 const PROVIDER_SIGNER = "3510E75E05BBCC303B92D77934FC18AC897FB709";
-const PROVIDER_VERSION = "3.0.0";
+const PROVIDER_VERSION = "4.0.0";
+// Retained majors keep their published identity in the append-only ledgers;
+// the writer only ever addresses PROVIDER_VERSION.
+const PROVIDER_RETAINED_AGGREGATE_VERSION = "3.0.0";
 const PROVIDER_HOST_API = "forms.takoform.com/v1";
 const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
 const PROVIDER_CURRENT_FAMILY_INDEX =
   "forms/candidates/current-family-index.json";
 const PROVIDER_V211_LEDGER_DIGEST =
   "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d";
+// Provider 3.0.0 is Registry-published immutable history. Its 31-Form embedded
+// identity lost its implicit byte protection the moment the descriptor moved
+// off it, so it is pinned explicitly here and in the Go mirror's
+// frozenLedgerEntryDigests.
+const PROVIDER_V300_LEDGER_DIGEST =
+  "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb";
 const PROVIDER_WITHDRAWN_V1ALPHA2_RESOURCE_TYPES = new Set([
   "takoform_edge_worker",
   "takoform_relational_database",
@@ -2160,6 +2170,56 @@ function loadCurrentProviderCandidateProjection(repo) {
   return { families, candidates };
 }
 
+/**
+ * loadProviderRosterProjection dispatches on the descriptor version so a
+ * retained major keeps exactly the roster rule it was published under.
+ *
+ * 3.0.0 is the retained 31-Form aggregate: its roster comes from the local
+ * eight-family candidate index and ObjectBucket stays banned, because that
+ * kind was deliberately absent from the Provider 3 surface.
+ *
+ * 4.0.0 is the publisher-selected release: its roster is derived from
+ * internal/provider/artifacts/publisher/closure.json plus projection.json
+ * through the single derivation in scripts/provider4-candidate.mjs, so a
+ * publisher-set change cannot silently pass and there is no second literal
+ * copy of the family list or the count. ObjectBucket is part of that selected
+ * set and is therefore allowed on this path only.
+ */
+function loadProviderRosterProjection(repo, descriptor) {
+  if (descriptor.version === PROVIDER_RETAINED_AGGREGATE_VERSION) {
+    const { families, candidates } = loadCurrentProviderCandidateProjection(repo);
+    return {
+      families,
+      candidates,
+      banObjectBucket: true,
+      rosterLabel: "current-family",
+    };
+  }
+  const { ledgerEntry } = generateProvider4Identities(repo);
+  if (ledgerEntry.providerVersion !== descriptor.version) {
+    throw new Error(
+      `provider ${descriptor.version} has no publisher-selected roster derivation`,
+    );
+  }
+  const candidates = new Map(
+    ledgerEntry.forms.map((form) => [
+      providerFormRefKey(form.formRef),
+      { formRef: form.formRef, packageDigest: form.packageDigest },
+    ]),
+  );
+  if (candidates.size !== ledgerEntry.forms.length) {
+    throw new Error(
+      `provider ${descriptor.version} publisher-selected roster repeats a FormRef`,
+    );
+  }
+  return {
+    families: ledgerEntry.families,
+    candidates,
+    banObjectBucket: false,
+    rosterLabel: "publisher-selected",
+  };
+}
+
 export function validateProviderIdentityLedger(repo, descriptor) {
   const ledger = readJSON(
     join(repo, PROVIDER_IDENTITY_LEDGER),
@@ -2178,7 +2238,6 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     throw new Error("provider Form identity ledger has an invalid envelope");
   }
   const providerVersions = new Set();
-  const formRefs = new Set();
   let current;
   for (const [releaseIndex, release] of ledger.releases.entries()) {
     const releaseKeys = Object.keys(release ?? {}).sort();
@@ -2239,6 +2298,18 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     ) {
       throw new Error("immutable provider 2.1.1 identity ledger entry changed");
     }
+    if (
+      release.providerVersion === PROVIDER_RETAINED_AGGREGATE_VERSION &&
+      sha256(Buffer.from(JSON.stringify(recursivelySorted(release)))) !==
+        PROVIDER_V300_LEDGER_DIGEST
+    ) {
+      throw new Error("immutable provider 3.0.0 identity ledger entry changed");
+    }
+    // FormRef uniqueness is per release: a later major legitimately carries
+    // forward the exact FormRefs an earlier major published, and the identity
+    // that must stay unique inside one release is the FormRef-to-resource-type
+    // mapping, not the FormRef across the whole append-only lineage.
+    const formRefs = new Set();
     for (const [formIndex, form] of release.forms.entries()) {
       requireExactKeys(
         form,
@@ -2273,7 +2344,7 @@ export function validateProviderIdentityLedger(repo, descriptor) {
       formRefs.add(refKey);
     }
   }
-  const projection = loadCurrentProviderCandidateProjection(repo);
+  const projection = loadProviderRosterProjection(repo, descriptor);
   if (
     current === undefined ||
     current.portableApiVersion !== descriptor.versioning?.portableApiVersion ||
@@ -2295,20 +2366,21 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     if (
       resourceTypes.has(form.resourceType) ||
       PROVIDER_WITHDRAWN_V1ALPHA2_RESOURCE_TYPES.has(form.resourceType) ||
-      form.resourceType === "takoform_edge_object_bucket" ||
-      form.formRef.kind === "ObjectBucket" ||
+      (projection.banObjectBucket &&
+        (form.resourceType === "takoform_edge_object_bucket" ||
+          form.formRef.kind === "ObjectBucket")) ||
       candidate === undefined ||
       candidate.packageDigest !== form.packageDigest
     ) {
       throw new Error(
-        `provider v3 embedded Form identity ${formIndex} is not an exact current-family entry`,
+        `provider ${descriptor.version} embedded Form identity ${formIndex} is not an exact ${projection.rosterLabel} entry`,
       );
     }
     resourceTypes.add(form.resourceType);
   }
   if (resourceTypes.size !== projection.candidates.size) {
     throw new Error(
-      "provider v3 identity ledger does not contain one unique resource type per current Form",
+      `provider ${descriptor.version} identity ledger does not contain one unique resource type per ${projection.rosterLabel} Form`,
     );
   }
   return ledger;
@@ -4316,17 +4388,19 @@ export function providerReleaseBody(descriptor) {
     descriptor?.versioning?.portableApiVersion !== PROVIDER_HOST_API
   ) {
     throw new Error(
-      "provider release body requires the exact v3.0.0 stable Host API descriptor",
+      `provider release body requires the exact v${PROVIDER_VERSION} stable Host API descriptor`,
     );
   }
   return (
-    "Signed deterministic Takoform Provider v3.0.0 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from Provider v2.1.1: Provider 3 removes the nine withdrawn v1alpha2 Terraform resource types and never reoccupies those names with a different contract. Existing state must stay pinned to Provider 2.1.1 or be explicitly forgotten or destroyed before upgrading; follow the fail-closed migration guide: " +
+    "Signed deterministic Takoform Provider v4.0.0 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from Provider v3.0.0: Provider 4 registers only the publisher-selected roster and drops the 15 withdrawn aggregate Terraform resource types takoform_container_custom_domain, takoform_container_endpoint, takoform_container_revision, takoform_container_traffic, takoform_serverless_container_service, takoform_function, takoform_function_deployment, takoform_function_endpoint, takoform_function_version, takoform_pull_queue, takoform_message_schedule, takoform_table, takoform_topic, takoform_topic_subscription, and takoform_dense_vector_index. Existing state must stay pinned to Provider 3.0.0 or be explicitly forgotten or destroyed before upgrading; follow the fail-closed migration guide: " +
+    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v3-to-v4.md` +
+    "\n\nProvider v2.1.1 and Provider v1 remain separate migration boundaries and Provider 4 does not rewrite their state. Operators coming from those majors follow the retained boundary records: " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v2-to-v3.md` +
-    "\n\nProvider v1 remains a separate migration boundary and Provider 3 does not rewrite its state. Operators coming from Provider v1 must first follow the explicit v1-to-v2 inventory and cutover guide: " +
+    " and " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v1-to-v2.md` +
-    "\n\nThis provider release targets stable Host API `forms.takoform.com/v1` and the eight versionless current Form families. Provider SemVer, Host API, Form Family, Form definition, and Form Package versions are independent axes. The exact 31 Experimental 0.x FormRefs, provider-owned Terraform resource types, and package digests are locked in " +
+    "\n\nThis provider release targets stable Host API `forms.takoform.com/v1` and the single versionless current Form family `edge.forms.takoform.com`. Provider SemVer, Host API, Form Family, Form definition, and Form Package versions are independent axes. The exact 17 Experimental 0.x FormRefs, provider-owned Terraform resource types, and package digests are selected from the `github.com/tako0614/takoform-forms` publisher set tag `forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c` at commit `3231633605b737ce5279d7fc020b4780568e7091` and locked in " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/${PROVIDER_IDENTITY_LEDGER}` +
-    ". Published Provider 2.1.1 identities remain immutable history."
+    ". Published Provider 2.1.1 and 3.0.0 identities remain immutable history."
   );
 }
 
@@ -4462,19 +4536,31 @@ function providerTag(context, options, descriptor) {
 function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   const releaseBody = providerReleaseBody(descriptor);
+  // Independent second copy of the body facts on purpose: the release body is
+  // immutable once published, so the builder and the publisher assert the same
+  // contract separately rather than sharing one statement of it.
   if (
-    !releaseBody.includes("Provider v3.0.0") ||
+    !releaseBody.includes("Provider v4.0.0") ||
     !releaseBody.includes(PROVIDER_HOST_API) ||
-    !releaseBody.includes("eight versionless current Form families") ||
+    !releaseBody.includes(
+      "single versionless current Form family `edge.forms.takoform.com`",
+    ) ||
     !releaseBody.includes(PROVIDER_IDENTITY_LEDGER) ||
-    !releaseBody.includes("31 Experimental") ||
+    !releaseBody.includes("17 Experimental") ||
+    !releaseBody.includes("release/migrations/v3-to-v4.md") ||
     !releaseBody.includes("release/migrations/v2-to-v3.md") ||
     !releaseBody.includes("release/migrations/v1-to-v2.md") ||
-    !releaseBody.includes("Breaking upgrade from Provider v2.1.1") ||
-    !releaseBody.includes("nine withdrawn v1alpha2 Terraform resource types")
+    !releaseBody.includes("Breaking upgrade from Provider v3.0.0") ||
+    !releaseBody.includes("15 withdrawn aggregate Terraform resource types") ||
+    !releaseBody.includes(
+      "forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c",
+    ) ||
+    !releaseBody.includes(
+      "Provider 2.1.1 and 3.0.0 identities remain immutable history",
+    )
   ) {
     throw new Error(
-      "provider release body omits the exact v3 stable identity and migration contract",
+      "provider release body omits the exact v4 publisher-set identity and migration contract",
     );
   }
   assertCurrentProtectedMain(context, expectedCommit);

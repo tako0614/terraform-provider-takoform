@@ -5,12 +5,16 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+// release/version.json is the Provider 4 release descriptor: the writer input
+// every entrypoint reads. release/candidates/provider-v4.0.0.json is retained
+// as the pre-publication candidate record and must stay byte-identical to it,
+// so the promotion never creates a second live source of truth.
 export const PROVIDER4_DESCRIPTOR = "release/candidates/provider-v4.0.0.json";
 export const PROVIDER4_IDENTITIES =
   "release/candidates/provider-v4.0.0-form-identities.json";
-const PROVIDER3_DESCRIPTOR = "release/version.json";
+export const PROVIDER_RELEASE_DESCRIPTOR = "release/version.json";
 const PROVIDER3_HISTORY_DESCRIPTOR = "release/history/provider-v3.0.0.json";
-const PROVIDER_HISTORY_IDENTITIES = "release/provider-form-identities.json";
+const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
 const PUBLISHER_CLOSURE = "internal/provider/artifacts/publisher/closure.json";
 const PUBLISHER_ROOT = "internal/provider/artifacts/publisher";
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
@@ -77,37 +81,46 @@ function validateDescriptor(descriptor) {
     !Array.isArray(descriptor.cliMatrix) ||
     descriptor.cliMatrix.length !== 2
   ) {
-    fail(`${PROVIDER4_DESCRIPTOR} is not the exact unpublished Provider 4 descriptor`);
+    fail(`${PROVIDER4_DESCRIPTOR} is not the exact Provider 4 release descriptor`);
   }
 }
 
-export function generateProvider4CandidateIdentities(root) {
+export function generateProvider4Identities(root) {
   const descriptor = readJson(root, PROVIDER4_DESCRIPTOR);
   validateDescriptor(descriptor);
 
-  const provider3 = readFileSync(path.join(root, PROVIDER3_DESCRIPTOR));
-  const provider3History = readFileSync(
-    path.join(root, PROVIDER3_HISTORY_DESCRIPTOR),
+  const releaseDescriptor = readFileSync(
+    path.join(root, PROVIDER_RELEASE_DESCRIPTOR),
   );
-  if (!provider3.equals(provider3History)) {
-    fail("the retired Provider 3 descriptor and its history copy differ");
-  }
-  const provider3Document = JSON.parse(provider3.toString("utf8"));
-  if (
-    provider3Document.version !== "3.0.0" ||
-    provider3Document.tag !== "v3.0.0"
-  ) {
-    fail("release/version.json no longer preserves the tombstoned Provider 3 writer input");
+  const candidateDescriptor = readFileSync(
+    path.join(root, PROVIDER4_DESCRIPTOR),
+  );
+  if (!releaseDescriptor.equals(candidateDescriptor)) {
+    fail(
+      `${PROVIDER_RELEASE_DESCRIPTOR} is not byte-identical to the retained ${PROVIDER4_DESCRIPTOR} record`,
+    );
   }
 
-  const history = readJson(root, PROVIDER_HISTORY_IDENTITIES);
+  const provider3Document = JSON.parse(
+    readFileSync(path.join(root, PROVIDER3_HISTORY_DESCRIPTOR), "utf8"),
+  );
+  if (
+    provider3Document.version !== "3.0.0" ||
+    provider3Document.tag !== "v3.0.0" ||
+    provider3Document.publicationStatus !== "candidate-only"
+  ) {
+    fail(
+      `${PROVIDER3_HISTORY_DESCRIPTOR} no longer preserves the retained Provider 3 writer input`,
+    );
+  }
+
+  const history = readJson(root, PROVIDER_IDENTITY_LEDGER);
   if (
     history.format !== "takoform.provider-form-identities@v1" ||
-    history.releases?.some((release) => release?.providerVersion === "4.0.0") ||
     history.releases?.find((release) => release?.providerVersion === "3.0.0")
       ?.forms?.length !== 31
   ) {
-    fail("the retired Provider identity ledger is not an exact Provider 3 history surface");
+    fail("the Provider identity ledger is not an exact Provider 3 history surface");
   }
 
   const closure = readJson(root, PUBLISHER_CLOSURE);
@@ -172,28 +185,72 @@ export function generateProvider4CandidateIdentities(root) {
     })
     .sort((left, right) => left.resourceType.localeCompare(right.resourceType));
   if (forms.length !== 17 || packages.size !== forms.length) {
-    fail(`the Provider 4 candidate maps ${forms.length}/${packages.size} Forms, want 17/17`);
+    fail(`the Provider 4 release maps ${forms.length}/${packages.size} Forms, want 17/17`);
   }
 
+  // One derivation, two projections of it. The candidate record keeps the
+  // publisher provenance triple; the identity ledger entry is the append-only
+  // cross-version shape both release entrypoints read for the descriptor.
   return {
-    format: "takoform.provider-candidate-form-identities@v1",
-    providerVersion: descriptor.version,
-    formPublisherRepository: descriptor.formPublisherRepository,
-    formPublisherCommit: descriptor.formPublisherCommit,
-    formSetTag: descriptor.formSetTag,
-    portableApiVersion: descriptor.versioning.portableApiVersion,
-    families: [PUBLISHER_FAMILY],
-    forms,
+    candidate: {
+      format: "takoform.provider-candidate-form-identities@v1",
+      providerVersion: descriptor.version,
+      formPublisherRepository: descriptor.formPublisherRepository,
+      formPublisherCommit: descriptor.formPublisherCommit,
+      formSetTag: descriptor.formSetTag,
+      portableApiVersion: descriptor.versioning.portableApiVersion,
+      families: [PUBLISHER_FAMILY],
+      forms,
+    },
+    ledgerEntry: {
+      providerVersion: descriptor.version,
+      portableApiVersion: descriptor.versioning.portableApiVersion,
+      families: [PUBLISHER_FAMILY],
+      formMaturity: "experimental",
+      forms,
+    },
   };
 }
 
+export function generateProvider4CandidateIdentities(root) {
+  return generateProvider4Identities(root).candidate;
+}
+
 export function validateProvider4Candidate(root) {
-  const expected = generateProvider4CandidateIdentities(root);
+  const { candidate, ledgerEntry } = generateProvider4Identities(root);
   const actual = readJson(root, PROVIDER4_IDENTITIES);
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (JSON.stringify(actual) !== JSON.stringify(candidate)) {
     fail(`${PROVIDER4_IDENTITIES} is stale; run bun run sync:provider4-candidate`);
   }
-  return expected;
+  const ledger = readJson(root, PROVIDER_IDENTITY_LEDGER);
+  const recorded = (ledger.releases ?? []).filter(
+    (release) => release?.providerVersion === ledgerEntry.providerVersion,
+  );
+  if (recorded.length !== 1) {
+    fail(
+      `${PROVIDER_IDENTITY_LEDGER} must carry exactly one ${ledgerEntry.providerVersion} release, found ${recorded.length}`,
+    );
+  }
+  if (JSON.stringify(recorded[0]) !== JSON.stringify(ledgerEntry)) {
+    fail(`${PROVIDER_IDENTITY_LEDGER} is stale; run bun run sync:provider4-candidate`);
+  }
+  return candidate;
+}
+
+function writeLedgerEntry(root, ledgerEntry) {
+  const ledgerPath = path.join(root, PROVIDER_IDENTITY_LEDGER);
+  const ledger = readJson(root, PROVIDER_IDENTITY_LEDGER);
+  const releases = [...(ledger.releases ?? [])];
+  const position = releases.findIndex(
+    (release) => release?.providerVersion === ledgerEntry.providerVersion,
+  );
+  // Append-only: retained releases keep their bytes, order, and shape.
+  if (position === -1) releases.push(ledgerEntry);
+  else releases[position] = ledgerEntry;
+  writeFileSync(
+    ledgerPath,
+    `${JSON.stringify({ ...ledger, releases }, null, 2)}\n`,
+  );
 }
 
 function main() {
@@ -202,17 +259,18 @@ function main() {
     fail("usage: bun scripts/provider4-candidate.mjs --check|--write");
   }
   const root = path.resolve(import.meta.dirname, "..");
-  const candidate = generateProvider4CandidateIdentities(root);
+  const { candidate, ledgerEntry } = generateProvider4Identities(root);
   if (mode === "--write") {
     writeFileSync(
       path.join(root, PROVIDER4_IDENTITIES),
       `${JSON.stringify(candidate, null, 2)}\n`,
     );
+    writeLedgerEntry(root, ledgerEntry);
   } else {
     validateProvider4Candidate(root);
   }
   process.stdout.write(
-    `Provider 4 candidate: ${candidate.forms.length} publisher-selected Forms; Provider 3 writer remains tombstoned\n`,
+    `Provider 4 release: ${candidate.forms.length} publisher-selected Forms recorded in ${PROVIDER_IDENTITY_LEDGER}; the retained Provider 3 writer input stays in ${PROVIDER3_HISTORY_DESCRIPTOR}\n`,
   );
 }
 

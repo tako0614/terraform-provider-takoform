@@ -35,7 +35,51 @@ const (
 	providerCurrentFamilyIndexPath = "forms/candidates/current-family-index.json"
 	providerV211FamilyAPIVersion   = "edge.forms.takoform.com/v1beta1"
 	providerHostAPIVersion         = "forms.takoform.com/v1"
+
+	providerPublisherClosurePath    = "internal/provider/artifacts/publisher/closure.json"
+	providerPublisherProjectionPath = "internal/provider/artifacts/publisher/projection.json"
+	providerPublisherFamily         = "edge.forms.takoform.com"
 )
+
+type providerPublisherClosure struct {
+	Format     string `json:"format"`
+	Projection struct {
+		Path   string `json:"path"`
+		Digest string `json:"digest"`
+	} `json:"projection"`
+	Packages []struct {
+		Root          string          `json:"root"`
+		FormRef       providerFormRef `json:"formRef"`
+		PackageDigest string          `json:"packageDigest"`
+	} `json:"packages"`
+}
+
+type providerPublisherProjectionRef struct {
+	APIVersion        string `json:"apiVersion"`
+	Kind              string `json:"kind"`
+	DefinitionVersion string `json:"definitionVersion"`
+	SchemaDigest      string `json:"schemaDigest"`
+	PackageDigest     string `json:"packageDigest"`
+}
+
+func (ref providerPublisherProjectionRef) providerFormRef() providerFormRef {
+	return providerFormRef{
+		APIVersion:        ref.APIVersion,
+		Kind:              ref.Kind,
+		DefinitionVersion: ref.DefinitionVersion,
+		SchemaDigest:      ref.SchemaDigest,
+	}
+}
+
+type providerPublisherProjection struct {
+	Format    string `json:"format"`
+	HostAPI   string `json:"hostApi"`
+	Resources []struct {
+		Ref          providerPublisherProjectionRef `json:"ref"`
+		ResourceType string                         `json:"resourceType"`
+		Register     bool                           `json:"register"`
+	} `json:"resources"`
+}
 
 var (
 	semverPattern    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
@@ -1302,6 +1346,96 @@ func validateProviderV3IdentityRelease(repo string, release providerIdentityRele
 	return nil
 }
 
+// validateProviderV4IdentityRelease is the mirror of the publisher-selected
+// roster rule in scripts/release-deploy.mjs. Provider 4 does not read the
+// local eight-family candidate index at all: its roster is exactly the
+// registered resources of the embedded publisher-set projection, cross-checked
+// against the package closure, so the family list and the count are derived
+// rather than written down twice. ObjectBucket is part of that selected set
+// and is therefore allowed here, while it stays banned on the retained
+// Provider 3 path.
+func validateProviderV4IdentityRelease(repo string, release providerIdentityRelease) error {
+	closureRaw, err := os.ReadFile(filepath.Join(repo, providerPublisherClosurePath))
+	if err != nil {
+		return fmt.Errorf("read publisher package closure: %w", err)
+	}
+	var closure providerPublisherClosure
+	if err := json.Unmarshal(closureRaw, &closure); err != nil {
+		return fmt.Errorf("decode publisher package closure: %w", err)
+	}
+	if closure.Format != "takoform.provider-publisher-set-artifact-closure@v1" ||
+		closure.Projection.Path != "projection.json" || len(closure.Packages) == 0 {
+		return errors.New("publisher package closure has an invalid envelope")
+	}
+	packages := map[string]string{}
+	for index, entry := range closure.Packages {
+		if entry.FormRef.APIVersion != providerPublisherFamily || entry.PackageDigest == "" {
+			return fmt.Errorf("publisher package closure entry %d is not an exact Edge package", index)
+		}
+		key := providerFormRefKey(entry.FormRef)
+		if _, duplicate := packages[key]; duplicate {
+			return fmt.Errorf("publisher package closure repeats exact FormRef %s", key)
+		}
+		packages[key] = entry.PackageDigest
+	}
+
+	projectionRaw, err := os.ReadFile(filepath.Join(repo, providerPublisherProjectionPath))
+	if err != nil {
+		return fmt.Errorf("read publisher-selected Provider projection: %w", err)
+	}
+	var projection providerPublisherProjection
+	if err := json.Unmarshal(projectionRaw, &projection); err != nil {
+		return fmt.Errorf("decode publisher-selected Provider projection: %w", err)
+	}
+	if projection.Format != "takoform.provider-publisher-set-projection@v1" ||
+		projection.HostAPI != providerHostAPIVersion {
+		return errors.New("publisher-selected Provider projection identity drifted")
+	}
+	registered := map[string]string{}
+	for index, entry := range projection.Resources {
+		if !entry.Register {
+			continue
+		}
+		key := providerFormRefKey(entry.Ref.providerFormRef())
+		digest, known := packages[key]
+		if !known || digest != entry.Ref.PackageDigest || entry.ResourceType == "" {
+			return fmt.Errorf("registered Provider projection entry %d is not an exact publisher package mapping", index)
+		}
+		if _, duplicate := registered[key]; duplicate {
+			return fmt.Errorf("registered Provider projection repeats exact FormRef %s", key)
+		}
+		registered[key] = entry.ResourceType
+	}
+	if len(registered) != len(packages) {
+		return fmt.Errorf("publisher-selected Provider roster maps %d of %d packages", len(registered), len(packages))
+	}
+
+	if release.PortableAPIVersion != providerHostAPIVersion || release.Family != "" ||
+		release.FormMaturity != "experimental" ||
+		!reflect.DeepEqual(release.Families, []string{providerPublisherFamily}) ||
+		len(release.Forms) != len(registered) {
+		return fmt.Errorf("provider Form identity ledger has no exact %d-entry publisher-selected release for the descriptor", len(registered))
+	}
+	seenResourceTypes := map[string]bool{}
+	seenForms := map[string]bool{}
+	for index, form := range release.Forms {
+		key := providerFormRefKey(form.FormRef)
+		resourceType, selected := registered[key]
+		if seenResourceTypes[form.ResourceType] || providerWithdrawnV1Alpha2ResourceTypes[form.ResourceType] {
+			return fmt.Errorf("provider v4 embedded Form identity %d has a duplicate or withdrawn resource type", index)
+		}
+		if !selected || resourceType != form.ResourceType || packages[key] != form.PackageDigest {
+			return fmt.Errorf("provider v4 embedded Form identity %d is not an exact publisher-selected package mapping", index)
+		}
+		seenResourceTypes[form.ResourceType] = true
+		seenForms[key] = true
+	}
+	if len(seenForms) != len(registered) {
+		return errors.New("provider v4 identity ledger does not cover every publisher-selected exact FormRef")
+	}
+	return nil
+}
+
 // frozenLedgerEntryDigests pins the canonical digest of every RELEASED ledger
 // entry. A published provider's embedded identity set is immutable; before the
 // candidate lane moved past the published release, byte-equality with the
@@ -1310,6 +1444,7 @@ func validateProviderV3IdentityRelease(repo string, release providerIdentityRele
 // state. The release deploy verifier independently pins the same digest.
 var frozenLedgerEntryDigests = map[string]string{
 	"2.1.1": "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
+	"3.0.0": "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb",
 }
 
 func assertFrozenLedgerEntries(raw []byte) error {
@@ -1356,7 +1491,6 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 		return ledger, err
 	}
 	seenProviderVersions := map[string]bool{}
-	seenFormRefs := map[string]bool{}
 	var current *providerIdentityRelease
 	for index := range ledger.Releases {
 		release := &ledger.Releases[index]
@@ -1390,6 +1524,10 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 				allowedFamilies[family] = true
 			}
 		}
+		// FormRef uniqueness is per release, not across the append-only
+		// lineage: a later major legitimately carries forward the exact
+		// FormRefs an earlier major published.
+		seenFormRefs := map[string]bool{}
 		for formIndex, form := range release.Forms {
 			if !regexp.MustCompile(`^takoform_[a-z0-9_]+$`).MatchString(form.ResourceType) ||
 				!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(form.PackageDigest) ||
@@ -1414,8 +1552,13 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	if current == nil || current.PortableAPIVersion != desc.Versioning.PortableAPIVersion {
 		return ledger, errors.New("provider Form identity ledger has no release matching the descriptor")
 	}
-	if desc.Version == "3.0.0" {
+	switch desc.Version {
+	case "3.0.0":
 		if err := validateProviderV3IdentityRelease(repo, *current); err != nil {
+			return ledger, err
+		}
+	case "4.0.0":
+		if err := validateProviderV4IdentityRelease(repo, *current); err != nil {
 			return ledger, err
 		}
 	}
