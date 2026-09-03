@@ -3150,6 +3150,189 @@ describe("local immutable GitHub Release publication", () => {
     };
   }
 
+  test("every release caller keeps the mutation and pre-publish fences distinct", () => {
+    const source = readFileSync(
+      join(repositoryRoot, "scripts/release-deploy.mjs"),
+      "utf8",
+    );
+    for (const [functionName, publicationCall] of [
+      ["providerPublish", "publishReleaseLocally"],
+      ["providerRecoverTagOnly", "publishReleaseLocally"],
+      ["providerRecoverDraft", "resumeDraftReleaseLocally"],
+      ["revocationPublish", "publishReleaseLocally"],
+    ]) {
+      const start = source.indexOf(`function ${functionName}(`);
+      const end = source.indexOf("\nfunction ", start + 1);
+      const body = source.slice(start, end);
+      const publication = body.indexOf(`const release = ${publicationCall}(`);
+      const mutationFence = body.indexOf("preMutationFence:", publication);
+      const prePublishFence = body.indexOf("prePublishFence:", publication);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(publication).toBeGreaterThanOrEqual(0);
+      expect(mutationFence).toBeGreaterThan(publication);
+      expect(prePublishFence).toBeGreaterThan(publication);
+    }
+  });
+
+  test("immutable policy races are fenced before each local publication mutation", () => {
+    for (const [flipStage, expectedMutations] of [
+      ["create-draft", []],
+      ["upload-asset", ["draft"]],
+      ["publish-draft", ["draft", "upload"]],
+    ]) {
+      const fixture = assetFixture();
+      const tag = "v1.0.1";
+      const body = "exact provider release";
+      const calls = [];
+      const remoteAssets = [];
+      let draftCreated = false;
+      let published = false;
+      let immutableEnabled = true;
+      const draft = () => ({
+        id: 7,
+        tag_name: tag,
+        target_commitish: "main",
+        name: tag,
+        body,
+        draft: true,
+        prerelease: false,
+        immutable: false,
+        published_at: null,
+        assets_url:
+          "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+        upload_url:
+          "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+        assets: remoteAssets,
+      });
+      const publicRelease = () => ({
+        ...draft(),
+        draft: false,
+        immutable: true,
+        html_url: "https://github.com/example/release",
+      });
+      const fake = (executable, args) => {
+        calls.push({ executable, args: [...args] });
+        if (
+          executable === "gh" &&
+          args.join(" ") ===
+            "api repos/tako0614/terraform-provider-takoform/immutable-releases"
+        ) {
+          return JSON.stringify({ enabled: immutableEnabled });
+        }
+        if (isReleaseList(args)) {
+          return JSON.stringify([
+            draftCreated
+              ? [{ id: 7, tag_name: tag, draft: !published }]
+              : [],
+          ]);
+        }
+        if (executable === "git" && args[0] === "for-each-ref") return "";
+        if (executable === "git" && args[0] === "ls-remote") return "";
+        if (
+          executable === "gh" &&
+          args.includes("POST") &&
+          args[3] === "repos/tako0614/terraform-provider-takoform/releases"
+        ) {
+          draftCreated = true;
+          return JSON.stringify({
+            id: 7,
+            tag_name: tag,
+            draft: true,
+            upload_url:
+              "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+          });
+        }
+        if (
+          executable === "gh" &&
+          args.includes("POST") &&
+          args.some((argument) => argument.includes("/assets?name="))
+        ) {
+          const path = args[args.indexOf("--input") + 1];
+          const name = decodeURIComponent(
+            args
+              .find((argument) => argument.includes("/assets?name="))
+              .split("/assets?name=")[1],
+          );
+          const asset = {
+            id: remoteAssets.length + 100,
+            name,
+            state: "uploaded",
+            digest: sha256(readFileSync(path)),
+            size: readFileSync(path).length,
+          };
+          remoteAssets.push(asset);
+          return JSON.stringify(asset);
+        }
+        if (
+          executable === "gh" &&
+          args[0] === "api" &&
+          args[1] ===
+            "repos/tako0614/terraform-provider-takoform/releases/7"
+        ) {
+          return JSON.stringify(published ? publicRelease() : draft());
+        }
+        if (executable === "gh" && args.includes("PATCH")) {
+          published = true;
+          return JSON.stringify(publicRelease());
+        }
+        if (
+          executable === "gh" &&
+          args[0] === "api" &&
+          args[1]?.includes("/releases/tags/")
+        ) {
+          return JSON.stringify(publicRelease());
+        }
+        throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+      };
+      const execution = context(fake);
+
+      // The first policy read is the initial gate. The fence callback models a
+      // repository policy change racing the next side effect.
+      releaseDeployTestHooks.assertReleaseImmutabilityEnabled(execution);
+      const preMutationFence = (stage) => {
+        if (stage === flipStage) immutableEnabled = false;
+        releaseDeployTestHooks.assertReleaseImmutabilityEnabled(execution);
+      };
+      expect(() =>
+        releaseDeployTestHooks.publishReleaseLocally(execution, {
+          tag,
+          assets: fixture.assets,
+          body,
+          temporaryRoot: fixture.root,
+          preMutationFence,
+          prePublishFence: () => {},
+        }),
+      ).toThrow("immutable releases to be enabled");
+
+      const mutations = calls
+        .filter(
+          ({ executable, args }) =>
+            executable === "gh" &&
+            args.includes("--method") &&
+            ["POST", "PATCH"].includes(
+              args[args.indexOf("--method") + 1],
+            ),
+        )
+        .map(({ args }) => {
+          const method = args[args.indexOf("--method") + 1];
+          return method === "PATCH"
+            ? "patch"
+            : args.some((argument) => argument.includes("/assets?name="))
+              ? "upload"
+              : "draft";
+        });
+      expect(mutations).toEqual(expectedMutations);
+      expect(mutations).not.toContain("patch");
+      expect(
+        calls.some(
+          ({ executable, args }) =>
+            executable === "gh" &&
+            (args.includes("DELETE") || args.includes("--method=DELETE")),
+        ),
+      ).toBe(false);
+    }
+  });
+
   function retainedDraftFixture() {
     const fixture = assetFixture();
     const secondPath = join(fixture.root, "candidate", "second.txt");

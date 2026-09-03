@@ -4548,6 +4548,10 @@ function providerPublish(context, options, descriptor) {
         prerelease: descriptor.version.includes("-"),
         body: releaseBody,
         temporaryRoot,
+        preMutationFence: () => {
+          ownerGateAndFence(context, expectedCommit);
+          assertRegistryVersionAbsent(context, descriptor.version);
+        },
         prePublishFence: () => {
           ownerGateAndFence(context, expectedCommit);
           assertRegistryVersionAbsent(context, descriptor.version);
@@ -4660,6 +4664,15 @@ function providerRecoverTagOnly(context, options, descriptor) {
           prerelease: descriptor.version.includes("-"),
           body: providerReleaseBody(descriptor),
           temporaryRoot,
+          preMutationFence: (_stage, releaseId) =>
+            providerRecoveryMutationFence(context, {
+              descriptor,
+              releaseCommit,
+              recoveryCommit,
+              expectedObject,
+              releaseId: releaseId ?? undefined,
+              label: "provider tag-only mutation fence",
+            }),
           prePublishFence: (releaseId) =>
             providerRecoveryMutationFence(context, {
               descriptor,
@@ -4767,6 +4780,15 @@ function providerRecoverDraft(context, options, descriptor) {
           body: providerReleaseBody(descriptor),
           temporaryRoot,
           surface: PROVIDER_SURFACE,
+          preMutationFence: (_stage, retainedReleaseId) =>
+            providerRecoveryMutationFence(context, {
+              descriptor,
+              releaseCommit,
+              recoveryCommit,
+              expectedObject,
+              releaseId: retainedReleaseId,
+              label: "provider retained-draft mutation fence",
+            }),
           prePublishFence: (retainedReleaseId) =>
             providerRecoveryMutationFence(context, {
               descriptor,
@@ -5354,6 +5376,15 @@ function revocationPublish(context, options) {
           assets: verified.assets,
           body: "Append-only Takoform Form Package security revocation checkpoint. Verify the signed cumulative checkpoint before enforcement.",
           temporaryRoot,
+          preMutationFence: () => {
+            const mutationMain = ownerGateAndFence(context);
+            assertFormReleaseAuthorityFence(context, {
+              sourceCommit: commit,
+              toolingCommit,
+              currentMain: mutationMain,
+              label: "revocation mutation fence",
+            });
+          },
           prePublishFence: () => {
             const publishMain = ownerGateAndFence(context);
             assertFormReleaseAuthorityFence(context, {
