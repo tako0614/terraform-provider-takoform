@@ -2411,6 +2411,78 @@ describe("owner gate final fence and pinned release tools", () => {
     ).toBe(false);
   });
 
+  test("refuses under mutable-release policy before any mutation", () => {
+    const ownerGateTools = nominateOwnerGateTools();
+    const calls = [];
+    let ownerChecks = 0;
+    let immutabilityReads = 0;
+    const fake = (executable, args) => {
+      calls.push({ executable, args: [...args] });
+      const ownerGateOutput = ownerGateToolOutput(
+        ownerGateTools,
+        executable,
+        args,
+      );
+      if (ownerGateOutput !== null) return ownerGateOutput;
+      const version = toolOutput(executable, args);
+      if (version !== null) return version;
+      if (executable === "bun") {
+        ownerChecks += 1;
+        return "";
+      }
+      if (
+        executable === "gh" &&
+        args.join(" ") ===
+          "api repos/tako0614/terraform-provider-takoform/immutable-releases"
+      ) {
+        immutabilityReads += 1;
+        return JSON.stringify({ enabled: false });
+      }
+      if (executable === "git") {
+        if (args.join(" ") === "config --local -z --list") {
+          return safeReleaseGitConfiguration();
+        }
+        if (
+          args.join(" ") === "rev-parse --path-format=absolute --git-common-dir"
+        ) {
+          return `${join(repositoryRoot, ".git")}\n`;
+        }
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") {
+          return "false\n";
+        }
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return "main\n";
+        if (args[0] === "fetch") return "";
+        if (args[0] === "rev-parse") return `${commit}\n`;
+        if (args[0] === "cat-file") return "";
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    // The provider lane shares one gate with the Specification lane, so the
+    // repository immutable-release setting is proved before prepare dispatches
+    // a workflow, before a tag is pushed, and before a draft is created.
+    expect(() =>
+      releaseDeployTestHooks.ownerGateAndFence(context(fake), commit),
+    ).toThrow("immutable releases to be enabled");
+    expect(ownerChecks).toBe(1);
+    expect(immutabilityReads).toBe(1);
+    expect(
+      calls.some(
+        (call) =>
+          (call.executable === "git" &&
+            ["push", "tag"].includes(call.args[0])) ||
+          (call.executable === "gh" &&
+            (call.args.includes("POST") ||
+              call.args.includes("PATCH") ||
+              call.args.includes("DELETE") ||
+              call.args[0] === "workflow")),
+      ),
+    ).toBe(false);
+  });
+
   test("rejects an unpinned verifier before the owner check", () => {
     let ranOwnerCheck = false;
     const fake = (executable, args) => {
@@ -3196,7 +3268,6 @@ describe("local immutable GitHub Release publication", () => {
           assets: fixture.assets,
           body,
           temporaryRoot: fixture.root,
-          strictIdentity: true,
         }),
       ).toThrow();
       expect(
@@ -3287,7 +3358,6 @@ describe("local immutable GitHub Release publication", () => {
         assets: fixture.assets,
         body,
         temporaryRoot: fixture.root,
-        strictIdentity: true,
       }),
     ).toThrow("PATCH response differs");
     const patch = calls.find((args) => args.includes("PATCH"));
@@ -3668,6 +3738,23 @@ describe("local immutable GitHub Release publication", () => {
       digest: fixture.digest,
       size: readFileSync(fixture.path).length,
     };
+    let uploaded = [];
+    const exactDraft = () => ({
+      id: 7,
+      tag_name: "v1.0.0",
+      target_commitish: "main",
+      name: "v1.0.0",
+      body: "exact release",
+      draft: true,
+      prerelease: false,
+      immutable: false,
+      published_at: null,
+      assets_url:
+        "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+      upload_url:
+        "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+      assets: uploaded,
+    });
     const fake = (_executable, args) => {
       calls.push([...args]);
       if (isReleaseList(args)) {
@@ -3691,13 +3778,11 @@ describe("local immutable GitHub Release publication", () => {
       ) {
         if (!published) throw commandFailure("HTTP 404: Not Found");
         return JSON.stringify({
-          id: 7,
-          tag_name: "v1.0.0",
+          ...exactDraft(),
           draft: false,
-          prerelease: false,
           immutable: true,
+          published_at: "2026-01-01T00:00:00Z",
           html_url: "https://github.com/example/release",
-          assets: [remoteAsset],
         });
       }
       if (
@@ -3708,6 +3793,7 @@ describe("local immutable GitHub Release publication", () => {
           ),
         )
       ) {
+        uploaded = [remoteAsset];
         return JSON.stringify(remoteAsset);
       }
       if (args.includes("POST")) {
@@ -3723,17 +3809,11 @@ describe("local immutable GitHub Release publication", () => {
         args[0] === "api" &&
         args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
       ) {
-        return JSON.stringify({
-          id: 7,
-          tag_name: "v1.0.0",
-          draft: true,
-          prerelease: false,
-          assets: [remoteAsset],
-        });
+        return JSON.stringify(exactDraft());
       }
       if (args.includes("PATCH")) {
         published = true;
-        return "{}";
+        return JSON.stringify({ ...exactDraft(), draft: false });
       }
       if (args[0] === "release" && args[1] === "download") {
         const output = args[args.indexOf("--dir") + 1];
@@ -3847,9 +3927,31 @@ describe("local immutable GitHub Release publication", () => {
     const fixture = assetFixture();
     const calls = [];
     let releaseReads = 0;
+    let listCalls = 0;
+    const exactDraft = () => ({
+      id: 7,
+      tag_name: "v1.0.0",
+      target_commitish: "main",
+      name: "v1.0.0",
+      body: "exact release",
+      draft: true,
+      prerelease: false,
+      immutable: false,
+      published_at: null,
+      assets_url:
+        "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+      upload_url:
+        "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+      assets: [],
+    });
     const fake = (_executable, args) => {
       calls.push([...args]);
-      if (isReleaseList(args)) return "[[]]";
+      if (isReleaseList(args)) {
+        listCalls += 1;
+        return listCalls === 1
+          ? "[[]]"
+          : JSON.stringify([[{ id: 7, tag_name: "v1.0.0", draft: true }]]);
+      }
       if (args[0] === "api" && args[1]?.includes("/releases/tags/")) {
         throw commandFailure("HTTP 404: Not Found");
       }
@@ -3880,12 +3982,11 @@ describe("local immutable GitHub Release publication", () => {
       ) {
         releaseReads += 1;
         return JSON.stringify({
-          id: 7,
-          tag_name: "v1.0.0",
-          draft: releaseReads === 1,
-          prerelease: false,
+          ...exactDraft(),
+          draft: releaseReads <= 2,
+          published_at: releaseReads <= 2 ? null : "2026-01-01T00:00:00Z",
           assets:
-            releaseReads === 1
+            releaseReads === 2
               ? [
                   {
                     id: 9,
@@ -3907,7 +4008,7 @@ describe("local immutable GitHub Release publication", () => {
         body: "exact release",
         temporaryRoot: fixture.root,
       }),
-    ).toThrow("draft API asset identity");
+    ).toThrow("drifted asset");
     expect(calls.some((args) => args.includes("DELETE"))).toBe(false);
   });
 
@@ -3915,9 +4016,31 @@ describe("local immutable GitHub Release publication", () => {
     const fixture = assetFixture();
     const calls = [];
     let releaseReads = 0;
+    let listCalls = 0;
+    const exactDraft = () => ({
+      id: 7,
+      tag_name: "v1.0.0",
+      target_commitish: "main",
+      name: "v1.0.0",
+      body: "exact release",
+      draft: true,
+      prerelease: false,
+      immutable: false,
+      published_at: null,
+      assets_url:
+        "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+      upload_url:
+        "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+      assets: [],
+    });
     const fake = (_executable, args) => {
       calls.push([...args]);
-      if (isReleaseList(args)) return "[[]]";
+      if (isReleaseList(args)) {
+        listCalls += 1;
+        return listCalls === 1
+          ? "[[]]"
+          : JSON.stringify([[{ id: 7, tag_name: "v1.0.0", draft: true }]]);
+      }
       if (args[0] === "api" && args[1]?.includes("/releases/tags/")) {
         throw commandFailure("HTTP 404: Not Found");
       }
@@ -3949,19 +4072,19 @@ describe("local immutable GitHub Release publication", () => {
       ) {
         releaseReads += 1;
         return JSON.stringify({
-          id: 7,
-          tag_name: "v1.0.0",
-          draft: true,
-          prerelease: false,
-          assets: [
-            {
-              id: 9,
-              name: "asset.txt",
-              state: "uploaded",
-              digest: `sha256:${"f".repeat(64)}`,
-              size: readFileSync(fixture.path).length,
-            },
-          ],
+          ...exactDraft(),
+          assets:
+            releaseReads === 1
+              ? []
+              : [
+                  {
+                    id: 9,
+                    name: "asset.txt",
+                    state: "uploaded",
+                    digest: `sha256:${"f".repeat(64)}`,
+                    size: readFileSync(fixture.path).length,
+                  },
+                ],
         });
       }
       throw new Error(`unexpected gh ${args.join(" ")}`);
@@ -3973,8 +4096,8 @@ describe("local immutable GitHub Release publication", () => {
         body: "exact release",
         temporaryRoot: fixture.root,
       }),
-    ).toThrow("draft API asset identity");
-    expect(releaseReads).toBe(2);
+    ).toThrow("drifted asset");
+    expect(releaseReads).toBe(3);
     expect(calls.some((args) => args.includes("DELETE"))).toBe(false);
   });
 
@@ -4572,64 +4695,6 @@ describe("local immutable GitHub Release publication", () => {
         label: "revocation pre-publish fence",
       }),
     ).toThrow("release authority paths changed");
-  });
-
-  test("pre-PATCH draft validator rejects changed identity, state, and duplicate asset ids", () => {
-    const root = temporaryDirectory("release-draft-validation");
-    const firstPath = join(root, "first.txt");
-    const secondPath = join(root, "second.txt");
-    writeFileSync(firstPath, "first\n");
-    writeFileSync(secondPath, "second\n");
-    const assets = new Map([
-      [
-        "first.txt",
-        {
-          name: "first.txt",
-          path: firstPath,
-          sha256: sha256(readFileSync(firstPath)),
-        },
-      ],
-      [
-        "second.txt",
-        {
-          name: "second.txt",
-          path: secondPath,
-          sha256: sha256(readFileSync(secondPath)),
-        },
-      ],
-    ]);
-    const draft = {
-      id: 7,
-      tag_name: "v1.0.0",
-      draft: true,
-      prerelease: false,
-      assets: [...assets.values()].map((asset, index) => ({
-        id: index + 9,
-        name: asset.name,
-        state: "uploaded",
-        digest: asset.sha256,
-        size: readFileSync(asset.path).length,
-      })),
-    };
-    const validate = (candidate) =>
-      releaseDeployTestHooks.validateDraftBeforePublication(candidate, {
-        releaseId: 7,
-        tag: "v1.0.0",
-        prerelease: false,
-        assets,
-      });
-    expect(() => validate(structuredClone(draft))).not.toThrow();
-    for (const mutate of [
-      (candidate) => (candidate.id = 8),
-      (candidate) => (candidate.draft = false),
-      (candidate) => (candidate.prerelease = true),
-      (candidate) => (candidate.assets[0].state = "new"),
-      (candidate) => (candidate.assets[1].id = candidate.assets[0].id),
-    ]) {
-      const candidate = structuredClone(draft);
-      mutate(candidate);
-      expect(() => validate(candidate)).toThrow();
-    }
   });
 
   test("retained-draft public readback rejects release metadata drift", () => {
