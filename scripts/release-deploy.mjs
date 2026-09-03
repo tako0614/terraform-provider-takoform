@@ -143,7 +143,7 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
+        "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, the complete owner check before every dispatch, tag push, or release mutation, a repository immutable-release setting proved enabled at every one of those fences, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
       "post-conditions":
         "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, and rechecks the pinned signed tag before VERIFIED",
       reversal:
@@ -172,7 +172,7 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN; every phase accepts one exact forms/revocations/v<semver> tag plus its exact source commit, requires the committed revocation source and checkpoint files, a clean non-shallow current protected main that descends from that source commit, and the pinned gh/cosign toolchain, runs the complete owner check before dispatch and again before every mutation, consumes only one explicitly named successful revocation-workflow run/attempt, checksum-closes that same-run candidate, verifies its deterministic tag object, source/tooling commit ancestry, and Sigstore identity against the trusted root retained at the tooling commit, and records the exact tag object and every published asset digest",
+        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN; every phase accepts one exact forms/revocations/v<semver> tag plus its exact source commit, requires the committed revocation source and checkpoint files, a clean non-shallow current protected main that descends from that source commit, and the pinned gh/cosign toolchain, runs the complete owner check before dispatch and again before every mutation with the repository immutable-release setting proved enabled at each one, consumes only one explicitly named successful revocation-workflow run/attempt, checksum-closes that same-run candidate, verifies its deterministic tag object, source/tooling commit ancestry, and Sigstore identity against the trusted root retained at the tooling commit, and records the exact tag object and every published asset digest",
       "post-conditions":
         "after the create-only tag push and Release publication, publish-revocation requires exact remote tag resolution, one immutable release with the exact id/tag identity, exact API asset digests, and a fresh six-file revocation download identical to the verified candidate; verify-revocation closes the published identity by re-downloading the live release, re-verifying its manifest, checksum closure, deep Go semantic report, and Sigstore bundle, and binding the published source commit to the expected commit and its tooling commit to an ancestor of current protected main",
       reversal:
@@ -900,7 +900,6 @@ function specificationPublish(context, options) {
           assets,
           body: specificationReleaseBody(input),
           temporaryRoot,
-          strictIdentity: true,
           preMutationFence: (_stage, releaseId) =>
             specificationMutationFence(context, {
               input,
@@ -975,7 +974,6 @@ function specificationRecoverTagOnly(context, options) {
         assets,
         body: specificationReleaseBody(input),
         temporaryRoot,
-        strictIdentity: true,
         preMutationFence: (_stage, releaseId) =>
           specificationMutationFence(context, {
             input,
@@ -1735,23 +1733,37 @@ function runOwnerCheck(context) {
   });
 }
 
-function ownerGateAndFence(context, expectedCommit, options) {
-  verifyLocalReleaseToolchain(context);
-  assertCurrentProtectedMain(context, expectedCommit, options);
-  runOwnerCheck(context);
-  return assertCurrentProtectedMain(context, expectedCommit, options);
-}
-
-function specificationOwnerGateAndFence(context, expectedCommit, options) {
-  verifySpecificationReleaseToolchain(context);
+// Every release surface shares one gate: the pinned toolchain, the protected
+// main fence around the complete owner check, and the repository immutable
+// release setting. GitHub only makes releases immutable when the setting was
+// enabled before publication, so it is rechecked at every mutation fence of
+// every surface — a provider tag push under mutable-release policy would burn
+// the version exactly as a Specification one would.
+function releaseGateAndFence(context, expectedCommit, options, verifyToolchain) {
+  verifyToolchain(context);
   assertCurrentProtectedMain(context, expectedCommit, options);
   runOwnerCheck(context);
   const current = assertCurrentProtectedMain(context, expectedCommit, options);
-  // GitHub only makes releases immutable when the repository setting was
-  // enabled before publication. Recheck it at every Specification mutation
-  // fence so a tag or draft cannot be created under mutable-release policy.
   assertReleaseImmutabilityEnabled(context);
   return current;
+}
+
+function ownerGateAndFence(context, expectedCommit, options) {
+  return releaseGateAndFence(
+    context,
+    expectedCommit,
+    options,
+    verifyLocalReleaseToolchain,
+  );
+}
+
+function specificationOwnerGateAndFence(context, expectedCommit, options) {
+  return releaseGateAndFence(
+    context,
+    expectedCommit,
+    options,
+    verifySpecificationReleaseToolchain,
+  );
 }
 
 function verifySpecificationReleaseToolchain(context) {
@@ -3434,43 +3446,6 @@ function downloadAndCompareRelease(context, tag, assets, parent) {
   }
 }
 
-function validateDraftBeforePublication(
-  draft,
-  { releaseId, tag, prerelease, assets },
-) {
-  if (
-    draft.id !== releaseId ||
-    draft.draft !== true ||
-    draft.prerelease !== prerelease ||
-    draft.tag_name !== tag ||
-    !Array.isArray(draft.assets) ||
-    draft.assets.length !== assets.size
-  ) {
-    throw new Error("draft changed identity before publication");
-  }
-  const draftAssets = new Map();
-  const assetIDs = new Set();
-  for (const remote of draft.assets) {
-    const local = assets.get(remote.name);
-    if (
-      !local ||
-      draftAssets.has(remote.name) ||
-      !Number.isSafeInteger(remote.id) ||
-      remote.id <= 0 ||
-      assetIDs.has(remote.id) ||
-      remote.state !== "uploaded" ||
-      remote.digest !== local.sha256 ||
-      remote.size !== lstatSync(local.path).size
-    ) {
-      throw new Error(
-        "draft API asset identity differs from the same-run candidate",
-      );
-    }
-    draftAssets.set(remote.name, remote);
-    assetIDs.add(remote.id);
-  }
-}
-
 function readExactRetainedDraft(
   context,
   { releaseId, tag, prerelease = false, body, assets, requireComplete = false },
@@ -3804,7 +3779,6 @@ function publishReleaseLocally(
     body,
     prerelease = false,
     temporaryRoot,
-    strictIdentity = false,
     preMutationFence = () => {},
     prePublishFence = () => {},
   },
@@ -3825,7 +3799,8 @@ function publishReleaseLocally(
         `repos/${GITHUB_REPOSITORY}/releases`,
         "-f",
         `tag_name=${tag}`,
-        ...(strictIdentity ? ["-f", "target_commitish=main"] : []),
+        "-f",
+        "target_commitish=main",
         "-f",
         `name=${tag}`,
         "-F",
@@ -3852,22 +3827,18 @@ function publishReleaseLocally(
     const orderedAssets = [...assets.values()].sort((left, right) =>
       compareNames(left.name, right.name),
     );
-    if (strictIdentity) {
-      const initial = readExactRetainedDraft(context, {
-        releaseId,
-        tag,
-        prerelease,
-        body,
-        assets,
-      });
-      if (
-        initial.draft.assets.length !== 0 ||
-        initial.missing.length !== assets.size
-      ) {
-        throw new Error(
-          `new exact draft ${releaseId} is not empty before upload`,
-        );
-      }
+    const initial = readExactRetainedDraft(context, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+    });
+    if (
+      initial.draft.assets.length !== 0 ||
+      initial.missing.length !== assets.size
+    ) {
+      throw new Error(`new exact draft ${releaseId} is not empty before upload`);
     }
     progress(context, `upload ${orderedAssets.length} exact assets`);
     for (const asset of orderedAssets) {
@@ -3902,43 +3873,24 @@ function publishReleaseLocally(
         );
       }
     }
-    if (strictIdentity) {
-      readExactRetainedDraft(context, {
-        releaseId,
-        tag,
-        prerelease,
-        body,
-        assets,
-        requireComplete: true,
-      });
-    } else {
-      const draft = JSON.parse(
-        command(context, "gh", [
-          "api",
-          `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
-        ]),
-      );
-      validateDraftBeforePublication(draft, {
-        releaseId,
-        tag,
-        prerelease,
-        assets,
-      });
-    }
+    readExactRetainedDraft(context, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+      requireComplete: true,
+    });
     prePublishFence(releaseId);
     preMutationFence("publish-draft", releaseId);
-    if (strictIdentity) {
-      readExactRetainedDraft(context, {
-        releaseId,
-        tag,
-        prerelease,
-        body,
-        assets,
-        requireComplete: true,
-      });
-    } else {
-      assertUniqueReleaseIdentity(context, tag, releaseId, true);
-    }
+    readExactRetainedDraft(context, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+      requireComplete: true,
+    });
     progress(context, `publish exact draft ${releaseId}`);
     const patchResponse = JSON.parse(
       command(context, "gh", [
@@ -3946,35 +3898,29 @@ function publishReleaseLocally(
         "--method",
         "PATCH",
         `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
-        ...(strictIdentity
-          ? [
-              "-f",
-              `tag_name=${tag}`,
-              "-f",
-              "target_commitish=main",
-              "-f",
-              `name=${tag}`,
-              "-f",
-              `body=${body}`,
-              "-F",
-              `prerelease=${prerelease}`,
-            ]
-          : []),
+        "-f",
+        `tag_name=${tag}`,
+        "-f",
+        "target_commitish=main",
+        "-f",
+        `name=${tag}`,
+        "-f",
+        `body=${body}`,
+        "-F",
+        `prerelease=${prerelease}`,
         "-F",
         "draft=false",
         "-f",
         "make_latest=false",
       ]),
     );
-    if (strictIdentity) {
-      validateExactReleasePatchResponse(patchResponse, {
-        releaseId,
-        tag,
-        prerelease,
-        body,
-        assets,
-      });
-    }
+    validateExactReleasePatchResponse(patchResponse, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+    });
     let release;
     for (let attempt = 1; attempt <= 12; attempt += 1) {
       release = getRelease(context, tag);
@@ -3997,16 +3943,12 @@ function publishReleaseLocally(
     }
     validateReleaseReadback(release, tag, assets, {
       prerelease,
-      ...(strictIdentity
-        ? {
-            expectedReleaseId: releaseId,
-            expectedName: tag,
-            expectedBody: body,
-            expectedTargetCommitish: "main",
-            expectedAssetsURL: `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
-            expectedUploadURL: `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
-          }
-        : {}),
+      expectedReleaseId: releaseId,
+      expectedName: tag,
+      expectedBody: body,
+      expectedTargetCommitish: "main",
+      expectedAssetsURL: `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
+      expectedUploadURL: `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
     });
     downloadAndCompareRelease(context, tag, assets, temporaryRoot);
     assertUniqueReleaseIdentity(context, tag, releaseId, false);
@@ -4606,6 +4548,10 @@ function providerPublish(context, options, descriptor) {
         prerelease: descriptor.version.includes("-"),
         body: releaseBody,
         temporaryRoot,
+        preMutationFence: () => {
+          ownerGateAndFence(context, expectedCommit);
+          assertRegistryVersionAbsent(context, descriptor.version);
+        },
         prePublishFence: () => {
           ownerGateAndFence(context, expectedCommit);
           assertRegistryVersionAbsent(context, descriptor.version);
@@ -4718,7 +4664,15 @@ function providerRecoverTagOnly(context, options, descriptor) {
           prerelease: descriptor.version.includes("-"),
           body: providerReleaseBody(descriptor),
           temporaryRoot,
-          strictIdentity: true,
+          preMutationFence: (_stage, releaseId) =>
+            providerRecoveryMutationFence(context, {
+              descriptor,
+              releaseCommit,
+              recoveryCommit,
+              expectedObject,
+              releaseId: releaseId ?? undefined,
+              label: "provider tag-only mutation fence",
+            }),
           prePublishFence: (releaseId) =>
             providerRecoveryMutationFence(context, {
               descriptor,
@@ -4826,6 +4780,15 @@ function providerRecoverDraft(context, options, descriptor) {
           body: providerReleaseBody(descriptor),
           temporaryRoot,
           surface: PROVIDER_SURFACE,
+          preMutationFence: (_stage, retainedReleaseId) =>
+            providerRecoveryMutationFence(context, {
+              descriptor,
+              releaseCommit,
+              recoveryCommit,
+              expectedObject,
+              releaseId: retainedReleaseId,
+              label: "provider retained-draft mutation fence",
+            }),
           prePublishFence: (retainedReleaseId) =>
             providerRecoveryMutationFence(context, {
               descriptor,
@@ -5413,6 +5376,15 @@ function revocationPublish(context, options) {
           assets: verified.assets,
           body: "Append-only Takoform Form Package security revocation checkpoint. Verify the signed cumulative checkpoint before enforcement.",
           temporaryRoot,
+          preMutationFence: () => {
+            const mutationMain = ownerGateAndFence(context);
+            assertFormReleaseAuthorityFence(context, {
+              sourceCommit: commit,
+              toolingCommit,
+              currentMain: mutationMain,
+              label: "revocation mutation fence",
+            });
+          },
           prePublishFence: () => {
             const publishMain = ownerGateAndFence(context);
             assertFormReleaseAuthorityFence(context, {
@@ -5553,7 +5525,6 @@ export const releaseDeployTestHooks = Object.freeze({
   specificationPublicationInput,
   specificationReleaseBody,
   validateReleaseReadback,
-  validateDraftBeforePublication,
   verifyChecksumClosure,
   verifyProviderCandidate,
   verifyProviderReleaseProvenance,
