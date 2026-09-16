@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -236,7 +237,8 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		release.Versioning.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
 		t.Fatalf("retained Provider 3 version streams are not independently locked: %#v", release.Versioning)
 	}
-	if current.Version != "4.0.0" || current.Tag != "v4.0.0" ||
+	if !regexp.MustCompile(`^4\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(current.Version) ||
+		current.Tag != "v"+current.Version ||
 		current.SigningFingerprint != profile.Provider.Signature.Fingerprint ||
 		current.Versioning != release.Versioning {
 		t.Fatalf("current Provider 4 version streams are not independently locked: %#v", current)

@@ -36,7 +36,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -77,7 +77,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -118,7 +118,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -159,7 +159,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -200,7 +200,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -241,7 +241,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -282,7 +282,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -323,7 +323,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -364,7 +364,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -405,7 +405,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -430,7 +430,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -471,7 +471,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -512,7 +512,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -553,7 +553,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -594,7 +594,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -635,7 +635,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -660,7 +660,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -685,7 +685,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -710,7 +710,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -735,7 +735,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -760,7 +760,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -785,7 +785,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -810,7 +810,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -835,7 +835,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -860,7 +860,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -885,7 +885,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -910,7 +910,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -935,7 +935,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -960,7 +960,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -985,7 +985,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -1010,7 +1010,7 @@
           "sources": [
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -1051,7 +1051,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1092,7 +1092,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1133,7 +1133,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1174,7 +1174,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1198,16 +1198,16 @@
           "status": "unpublished-candidate",
           "sources": [
             {
-              "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
-            },
-            {
               "path": "forms/candidates/edge.forms.takoform.com/worker-deployment/definition.json",
               "sha256": "sha256:d1fb89cbf8615961193002f83d4447b9e4b943e95fcbd29a85a9ab2d65d670d9"
             },
             {
               "path": "forms/candidates/edge.forms.takoform.com/worker-deployment/package-index.json",
               "sha256": "sha256:5081e05636d9cb678b9a9198e3c510da460566c119d530fa48576febad827f35"
+            },
+            {
+              "path": "release/provider-form-identities.json",
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -1248,7 +1248,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1289,7 +1289,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1313,16 +1313,16 @@
           "status": "unpublished-candidate",
           "sources": [
             {
-              "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
-            },
-            {
               "path": "forms/candidates/edge.forms.takoform.com/worker-version/definition.json",
               "sha256": "sha256:d0aa523cd44942f8ff55b30f7e001fcac7bb1257744fbacd2b0315d67c8dae21"
             },
             {
               "path": "forms/candidates/edge.forms.takoform.com/worker-version/package-index.json",
               "sha256": "sha256:c65f7f1df907055d022de0cb3d88ee014dfea1a1abc463745388c6795aa9b8ca"
+            },
+            {
+              "path": "release/provider-form-identities.json",
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "release/provider-form-identities.json",
@@ -1363,7 +1363,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1404,7 +1404,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1445,7 +1445,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -1486,7 +1486,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -2163,7 +2163,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -2204,7 +2204,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -2245,7 +2245,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -2286,7 +2286,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -2327,7 +2327,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -2368,7 +2368,7 @@
             },
             {
               "path": "release/provider-form-identities.json",
-              "sha256": "sha256:39f6a15d4f1ce9462a8a5c77740e44b0b73558e18763514e128829a379be7611"
+              "sha256": "sha256:df83306e0e41b5712e74be2755578cff2765f0803cbafdbdc528303b49d12a1c"
             }
           ],
           "owningLedger": "forms/candidates/current-family-index.json",
@@ -3036,10 +3036,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "container.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "edge.forms.takoform.com",
@@ -3142,10 +3142,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "edge.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "edge.forms.takoform.com/v1alpha1",
@@ -3310,10 +3310,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "function.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "https://forms.takoform.com/schemas/support/v1/host-support-profile.schema.json",
@@ -3410,10 +3410,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "queue.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "schedule.forms.takoform.com",
@@ -3444,10 +3444,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "schedule.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "support.takoform.com/v1",
@@ -3544,10 +3544,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "table.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "topic.forms.takoform.com",
@@ -3582,10 +3582,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "topic.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         },
         {
           "identity": "vector.forms.takoform.com",
@@ -3616,10 +3616,10 @@
           "migration": {
             "kind": "unpublished-candidate",
             "from": null,
-            "to": null,
-            "reason": "occupied API identity is read from the published-document ledger"
+            "to": "vector.forms.takoform.com",
+            "reason": "current versionless family roster is an unpublished candidate"
           },
-          "publication": "retained"
+          "publication": "unpublished-candidate"
         }
       ]
     },

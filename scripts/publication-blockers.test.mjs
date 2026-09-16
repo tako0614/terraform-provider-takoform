@@ -57,7 +57,7 @@ describe("the committed ledger", () => {
       candidateFormCount: 31,
       retainedProvider3FormCount: 31,
       retainedFormCount: 15,
-      version: "4.0.0",
+      version: "4.0.1",
     });
   });
 

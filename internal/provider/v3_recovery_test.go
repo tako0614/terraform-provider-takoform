@@ -22,10 +22,11 @@ import (
 )
 
 // TestV3CreateAcceptedButUnfinishedWritesRecoverableState drives a host that
-// accepts the apply as a 202 Operation and never finishes it. Terraform commits
-// the state a failed Create leaves behind, so a Create that returns an error
-// WITHOUT writing state orphans the resource the host now owns and the next
-// plan proposes creating it a second time.
+// accepts the apply as a 202 Operation and never finishes it. A failed Create
+// can leave Terraform's resource tainted, so a normal plan may propose a
+// replacement even after the provider writes recoverable state. The warning
+// must direct the operator through refresh-only persistence and validation
+// before any deliberate untaint; a direct provider Read is not that proof.
 func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 	host := newV3FakeHost(t)
 	host.apply202Pending = true
@@ -69,15 +70,29 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 			t.Errorf("recovered state %s = %q, want %q", name, got, want)
 		}
 	}
-	if warnings := createResponse.Diagnostics.Warnings(); len(warnings) == 0 ||
-		!strings.Contains(warnings[0].Detail(), "op_apply_pending") {
+	warnings := createResponse.Diagnostics.Warnings()
+	if len(warnings) == 0 || !strings.Contains(warnings[0].Detail(), "op_apply_pending") {
 		t.Errorf("no diagnostic told the operator what to resume: %v", createResponse.Diagnostics)
 	}
+	if len(warnings) > 0 {
+		detail := strings.ToLower(warnings[0].Detail())
+		for _, want := range []string{
+			"failed create", "taint", "normal plan", "replacement",
+			"do not apply", "refresh-only", "persist", "validated", "untaint",
+		} {
+			if !strings.Contains(detail, want) {
+				t.Errorf("accepted Create warning does not explain %q: %s", want, warnings[0].Detail())
+			}
+		}
+		if strings.Contains(detail, "next plan reconciles the existing resource instead of creating a duplicate") {
+			t.Errorf("accepted Create warning promises normal-plan reconciliation that failed Create cannot guarantee: %s", warnings[0].Detail())
+		}
+	}
 
-	// The recorded identity must be enough to re-read the resource. The next
-	// plan therefore reconciles the existing resource instead of creating a
-	// duplicate. While the operation is still running the marker SURVIVES the
-	// read: nothing has committed, so there is still something to resume.
+	// The recorded identity must be enough for the provider to re-read the
+	// resource. This direct Read verifies the provider's pending marker behavior;
+	// it does not prove what a normal Terraform plan will propose after a failed
+	// Create, because Terraform may retain a taint and plan a replacement.
 	readResponse := frameworkresource.ReadResponse{State: createResponse.State}
 	resource.Read(ctx, frameworkresource.ReadRequest{State: createResponse.State}, &readResponse)
 	if readResponse.Diagnostics.HasError() {

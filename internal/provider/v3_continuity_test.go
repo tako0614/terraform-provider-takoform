@@ -592,4 +592,60 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 			t.Fatalf("a settled read kept the marker: %q", pending.ValueString())
 		}
 	})
+
+	t.Run("terminal success adopts its verified uid when accepted state had none", func(t *testing.T) {
+		host := newV3FakeHost(t)
+		resource, state := acceptedState(t, host)
+		if diags := state.SetAttribute(ctx, path.Root("uid"), types.StringValue("")); diags.HasError() {
+			t.Fatalf("clear accepted uid: %v", diags)
+		}
+		host.commitDeferredOperation("op_apply_uncommitted")
+
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		if response.Diagnostics.HasError() {
+			t.Fatalf("read after commit with unknown accepted uid: %v", response.Diagnostics)
+		}
+		if got := v3StateString(t, ctx, response.State, "uid").ValueString(); got != "uid-1" {
+			t.Fatalf("settled uid = %q, want the verified uid-1", got)
+		}
+		if pending := v3StateString(t, ctx, response.State, "pending_operation_id"); !pending.IsNull() {
+			t.Fatalf("a settled read kept the marker: %q", pending.ValueString())
+		}
+	})
+
+	t.Run("terminal success rejects a replacement after its verified result", func(t *testing.T) {
+		host := newV3FakeHost(t)
+		resource, state := acceptedState(t, host)
+		if diags := state.SetAttribute(ctx, path.Root("uid"), types.StringValue("")); diags.HasError() {
+			t.Fatalf("clear accepted uid: %v", diags)
+		}
+		host.commitDeferredOperation("op_apply_uncommitted")
+		// The operation result is now a verified uid-1 representation. Replace
+		// the live resource before Read performs its ordinary GET so the two
+		// identities can no longer be confused.
+		host.replaceIncarnation("ModuleWorker", "module-worker", "uid-2")
+		original := state.Raw
+
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		if !response.Diagnostics.HasError() {
+			t.Fatal("read adopted a resource whose uid changed after terminal success")
+		}
+		if response.State.Raw.IsNull() || !response.State.Raw.Equal(original) {
+			t.Fatal("terminal-success UID mismatch did not preserve the original state")
+		}
+		if pending := v3StateString(t, ctx, response.State, "pending_operation_id"); pending.IsNull() || pending.ValueString() != "op_apply_uncommitted" {
+			t.Fatalf("terminal-success UID mismatch dropped the pending marker: %q", pending.ValueString())
+		}
+		if uid := v3StateString(t, ctx, response.State, "uid"); uid.IsNull() || uid.ValueString() != "" {
+			t.Fatalf("terminal-success UID mismatch changed the unknown state uid to %q", uid.ValueString())
+		}
+		detail := response.Diagnostics.Errors()[0].Detail()
+		for _, want := range []string{"uid-1", "uid-2"} {
+			if !strings.Contains(detail, want) {
+				t.Fatalf("terminal-success UID mismatch diagnostic does not name %q: %s", want, detail)
+			}
+		}
+	})
 }

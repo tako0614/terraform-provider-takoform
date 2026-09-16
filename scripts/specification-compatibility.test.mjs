@@ -141,4 +141,25 @@ describe("Specification 1.1 compatibility manifest", () => {
   test("checked output is deterministic and has no hidden source mutations", () => {
     expect(canonicalJson(generateManifest(ROOT))).toBe(canonicalJson(MANIFEST));
   });
+
+  test("shared Forms keep current status and publication across a Provider patch", () => {
+    const descriptor = JSON.parse(readFileSync(path.join(ROOT, "release/version.json"), "utf8"));
+    const ledger = JSON.parse(readFileSync(path.join(ROOT, "release/provider-form-identities.json"), "utf8"));
+    const current = ledger.releases.find((entry) => entry.providerVersion === descriptor.version);
+    const retained = ledger.releases.find((entry) => entry.providerVersion === "4.0.0");
+    expect(descriptor.version).toBe("4.0.1");
+    expect(current.forms).toHaveLength(17);
+    expect(current.forms).toEqual(retained.forms);
+    const entries = generateManifest(ROOT).classes.find((entry) => entry.id === "form-package").entries;
+    for (const form of current.forms) {
+      const matches = entries.filter((entry) => canonicalJson(entry.formRef ?? null) === canonicalJson(form.formRef));
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        status: "unpublished-candidate",
+        publication: "unpublished-candidate",
+        packageDigest: form.packageDigest,
+      });
+      expect(matches[0].migration.reason).not.toContain("retained Provider 4.0.0");
+    }
+  });
 });

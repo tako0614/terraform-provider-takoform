@@ -57,23 +57,12 @@ export const SITE_STATUS_REPOSITORY_PATH =
 export const SITE_STATUS_PUBLISHED_PATH =
   "website/public/.well-known/takoform-site.json";
 
-// This constant pins generated examples to the provider release target. It is
-// deliberately named as a Provider SemVer, not as an API lane: Provider,
-// Host API, Form Family and Form-definition versions are independent axes.
-export const PROVIDER_RELEASE_TARGET_VERSION = "4.0.0";
-export const PROVIDER_REGISTRY_PUBLISHED_VERSION = "4.0.0";
-// Retain the legacy field name/value for consumers that still describe the
-// Edge preview descriptor. It is metadata only: providerTargetStatus below is
-// the independent Registry availability fact.
-export const EDGE_PREVIEW_PROVIDER_VERSION = PROVIDER_RELEASE_TARGET_VERSION;
-export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate-only`;
-
 export const FAMILY_CANDIDATE_SET =
   "forms/candidates/edge.forms.takoform.com/candidate-set.json";
 export const CURRENT_FAMILY_INDEX =
   "forms/candidates/current-family-index.json";
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
-export const RELEASE_VERSION = "release/candidates/provider-v4.0.0.json";
+export const RELEASE_VERSION = "release/version.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
 const PROVIDER_FORM_IDENTITIES = "release/provider-form-identities.json";
 const SPECIFICATION_RELEASES = "release/specification-releases.json";
@@ -166,7 +155,14 @@ function readJson(repositoryRoot, relativePath) {
   }
 }
 
+function stableVersionParts(value) {
+  if (typeof value !== "string") return null;
+  const parts = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  return parts?.[0] === value ? parts : null;
+}
+
 function validateCurrentProviderRegistryReadback(entry) {
+  const version = entry?.version;
   const readback = entry?.registryReadback;
   const expectedPlatforms = [
     "darwin_amd64",
@@ -176,8 +172,8 @@ function validateCurrentProviderRegistryReadback(entry) {
     "windows_amd64",
   ];
   const valid =
-    entry?.version === PROVIDER_REGISTRY_PUBLISHED_VERSION &&
-    entry?.tag === `v${PROVIDER_REGISTRY_PUBLISHED_VERSION}` &&
+    stableVersionParts(version) !== null &&
+    entry?.tag === `v${version}` &&
     entry?.status === "assigned" &&
     typeof entry?.tagObject === "string" &&
     /^[0-9a-f]{40}$/.test(entry.tagObject) &&
@@ -187,17 +183,17 @@ function validateCurrentProviderRegistryReadback(entry) {
     readback?.providerAddress === "registry.terraform.io/tako0614/takoform" &&
     readback?.githubRelease?.immutable === true &&
     readback?.githubRelease?.url ===
-      `https://github.com/tako0614/terraform-provider-takoform/releases/tag/v${PROVIDER_REGISTRY_PUBLISHED_VERSION}` &&
+      `https://github.com/tako0614/terraform-provider-takoform/releases/tag/v${version}` &&
     readback?.registry?.versionsUrl ===
       "https://registry.terraform.io/v1/providers/tako0614/takoform/versions" &&
     readback?.registry?.downloadUrl ===
-      `https://registry.terraform.io/v1/providers/tako0614/takoform/${PROVIDER_REGISTRY_PUBLISHED_VERSION}/download/linux/amd64` &&
+      `https://registry.terraform.io/v1/providers/tako0614/takoform/${version}/download/linux/amd64` &&
     readback?.registry?.protocol === "6.0" &&
     JSON.stringify(readback?.registry?.platforms) ===
       JSON.stringify(expectedPlatforms) &&
     /^[0-9a-f]{64}$/.test(readback?.registry?.linuxAmd64Sha256 ?? "") &&
     readback?.installation?.product === "OpenTofu" &&
-    readback?.installation?.providerVersion === PROVIDER_REGISTRY_PUBLISHED_VERSION &&
+    readback?.installation?.providerVersion === version &&
     /^[0-9A-F]{16}$/.test(readback?.installation?.signingKeyId ?? "") &&
     /^[0-9a-f]{64}$/.test(readback?.installation?.lockfileSha256 ?? "") &&
     /^[0-9a-f]{64}$/.test(readback?.installation?.schemaSha256 ?? "") &&
@@ -205,7 +201,7 @@ function validateCurrentProviderRegistryReadback(entry) {
     readback.installation.resourceSchemaCount > 0;
   if (!valid) {
     throw new Error(
-      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${PROVIDER_REGISTRY_PUBLISHED_VERSION} Registry readback is incomplete`,
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${version} Registry readback is incomplete`,
     );
   }
   return entry;
@@ -220,14 +216,23 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseVersion = readJson(repositoryRoot, RELEASE_VERSION);
   const providerReleaseTarget = releaseVersion.version;
   if (
-    providerReleaseTarget !== PROVIDER_RELEASE_TARGET_VERSION ||
-    typeof releaseVersion.publicationStatus !== "string" ||
-    releaseVersion.publicationStatus === ""
+    stableVersionParts(providerReleaseTarget)?.[1] !== "4" ||
+    releaseVersion.tag !== `v${providerReleaseTarget}` ||
+    releaseVersion.publicationStatus !== "candidate-only"
   ) {
     throw new Error(
-      `${RELEASE_VERSION}: expected provider target ${PROVIDER_RELEASE_TARGET_VERSION} ` +
-        "with a non-empty publicationStatus",
+      `${RELEASE_VERSION}: expected an exact stable Provider 4 version, matching tag and candidate-only publicationStatus`,
     );
+  }
+  // Keep this module self-contained for isolated website copies. The complete
+  // release descriptor validator lives in scripts/; this projection checks the
+  // target identity and exact candidate mirror before deriving availability.
+  const candidateDescriptorPath =
+    `release/candidates/provider-v${providerReleaseTarget}.json`;
+  if (!readFileSync(path.join(repositoryRoot, RELEASE_VERSION)).equals(
+    readFileSync(path.join(repositoryRoot, candidateDescriptorPath)),
+  )) {
+    throw new Error(`${RELEASE_VERSION}: bytes differ from ${candidateDescriptorPath}`);
   }
 
   const specificationReleases = readJson(repositoryRoot, SPECIFICATION_RELEASES);
@@ -274,25 +279,26 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseIdentityEntries = Array.isArray(releaseIdentities.entries)
     ? releaseIdentities.entries
     : [];
-  const publishedEntries = Array.isArray(releaseIdentities.entries)
-    ? releaseIdentityEntries.filter((entry) => entry?.registryReadback)
-    : [];
+  if (new Set(releaseIdentityEntries.map((entry) => entry?.version)).size !==
+      releaseIdentityEntries.length) {
+    throw new Error(`${PROVIDER_RELEASE_IDENTITIES}: duplicate Provider version`);
+  }
+  const publishedEntries = releaseIdentityEntries.filter((entry) =>
+    entry != null && Object.hasOwn(entry, "registryReadback")
+  );
   const providerPublished = publishedEntries.at(-1)?.version;
   if (typeof providerPublished !== "string" || providerPublished === "") {
     throw new Error(
       `${PROVIDER_RELEASE_IDENTITIES}: no retained Registry-readback release`,
     );
   }
-  if (providerPublished !== PROVIDER_REGISTRY_PUBLISHED_VERSION) {
-    throw new Error(
-      `${PROVIDER_RELEASE_IDENTITIES}: latest Registry readback is ${providerPublished}, expected ${PROVIDER_REGISTRY_PUBLISHED_VERSION}`,
-    );
-  }
   const providerPublishedEntry = publishedEntries.at(-1);
   validateCurrentProviderRegistryReadback(providerPublishedEntry);
-  const providerTargetStatus = publishedEntries.some(
+  const providerTargetEntry = publishedEntries.find(
     (entry) => entry?.version === providerReleaseTarget,
-  )
+  );
+  if (providerTargetEntry) validateCurrentProviderRegistryReadback(providerTargetEntry);
+  const providerTargetStatus = providerTargetEntry
     ? "registry-published"
     : releaseVersion.publicationStatus;
 
@@ -388,12 +394,13 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   // Provider that selects a publisher subset is expected to differ from the
   // aggregate. The roster is the only count the Registry readback can falsify.
   const providerFormIdentities = readJson(repositoryRoot, PROVIDER_FORM_IDENTITIES);
-  const publishedProviderRelease = (providerFormIdentities.releases ?? []).find(
+  const publishedProviderReleases = (providerFormIdentities.releases ?? []).filter(
     (release) => release?.providerVersion === providerPublished,
   );
-  if (!Array.isArray(publishedProviderRelease?.forms)) {
+  const publishedProviderRelease = publishedProviderReleases[0];
+  if (publishedProviderReleases.length !== 1 || !Array.isArray(publishedProviderRelease?.forms)) {
     throw new Error(
-      `${PROVIDER_FORM_IDENTITIES}: no Form roster for the published Provider ${providerPublished}`,
+      `${PROVIDER_FORM_IDENTITIES}: expected one Form roster for the published Provider ${providerPublished}`,
     );
   }
   if (
@@ -432,7 +439,7 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     // The release descriptor intentionally remains candidate-only even after
     // the Provider bytes are Registry-published. Keep this legacy field
     // explicit so callers cannot mistake descriptor metadata for availability.
-    edgePreviewProvider: EDGE_PREVIEW_PROVIDER,
+    edgePreviewProvider: `${providerReleaseTarget}-candidate-only`,
     edgeFamilyStatus: formPackagePublicationStatus,
     specificationVersion,
     specificationReleaseStatus,

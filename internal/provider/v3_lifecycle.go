@@ -468,6 +468,10 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if resume.Stop {
 		return
 	}
+	expectedUID := v3StateStringValue(values.UID)
+	if resume.ExpectedUID != "" {
+		expectedUID = resume.ExpectedUID
+	}
 	res, err := r.data.clientV3.GetResource(ctx, space, clientFormRef(codec.Ref), values.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, clientv3.ErrNotFound) {
@@ -486,12 +490,12 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 			Name:         values.Name.ValueString(),
 			Ref:          codec.Ref,
 			Pointer:      "/metadata",
-			ExpectedUID:  v3StateStringValue(values.UID),
+			ExpectedUID:  expectedUID,
 			OperationID:  v3StateStringValue(values.PendingOperationID),
 		}))
 		return
 	}
-	if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), v3StateStringValue(values.UID), res, &resp.Diagnostics) {
+	if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), expectedUID, res, &resp.Diagnostics) {
 		// State is DELIBERATELY kept: the resource is still under management and
 		// the operator must choose which incarnation it names.
 		return
