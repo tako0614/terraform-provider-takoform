@@ -40,15 +40,19 @@ import {
   validateSpecificationRecoveryPath,
 } from "./specification-release.mjs";
 import { generateProvider4Identities } from "./provider4-candidate.mjs";
+import {
+  readCurrentProvider4Release,
+  validateProvider4ReleaseDescriptor,
+} from "./provider-release-descriptor.mjs";
 
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
 const PROVIDER_SIGNER = "3510E75E05BBCC303B92D77934FC18AC897FB709";
-const PROVIDER_VERSION = "4.0.0";
 // Retained majors keep their published identity in the append-only ledgers;
-// the writer only ever addresses PROVIDER_VERSION.
+// the writer addresses the validated current Provider 4.x descriptor.
 const PROVIDER_RETAINED_AGGREGATE_VERSION = "3.0.0";
+const PROVIDER_RETAINED_PROVIDER4_VERSION = "4.0.0";
 const PROVIDER_HOST_API = "forms.takoform.com/v1";
 const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
 const PROVIDER_CURRENT_FAMILY_INDEX =
@@ -61,6 +65,11 @@ const PROVIDER_V211_LEDGER_DIGEST =
 // frozenLedgerEntryDigests.
 const PROVIDER_V300_LEDGER_DIGEST =
   "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb";
+// Provider 4.0.0 is now Registry-published immutable history. Its exact
+// 17-Form embedded identity remains pinned after the current descriptor moves
+// to the next stable Provider 4.x candidate.
+const PROVIDER_V400_LEDGER_DIGEST =
+  "sha256:76086ec15b12c9d7c8e9cb4cc281d08f006ae2028fbee5b3bbac85bc59bbc2c6";
 const PROVIDER_WITHDRAWN_V1ALPHA2_RESOURCE_TYPES = new Set([
   "takoform_edge_worker",
   "takoform_relational_database",
@@ -2190,7 +2199,7 @@ function loadCurrentProviderCandidateProjection(repo) {
  * eight-family candidate index and ObjectBucket stays banned, because that
  * kind was deliberately absent from the Provider 3 surface.
  *
- * 4.0.0 is the publisher-selected release: its roster is derived from
+ * Provider 4.x is the publisher-selected release line: its roster is derived from
  * internal/provider/artifacts/publisher/closure.json plus projection.json
  * through the single derivation in scripts/provider4-candidate.mjs, so a
  * publisher-set change cannot silently pass and there is no second literal
@@ -2317,6 +2326,13 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     ) {
       throw new Error("immutable provider 3.0.0 identity ledger entry changed");
     }
+    if (
+      release.providerVersion === PROVIDER_RETAINED_PROVIDER4_VERSION &&
+      sha256(Buffer.from(JSON.stringify(recursivelySorted(release)))) !==
+        PROVIDER_V400_LEDGER_DIGEST
+    ) {
+      throw new Error("immutable provider 4.0.0 identity ledger entry changed");
+    }
     // FormRef uniqueness is per release: a later major legitimately carries
     // forward the exact FormRefs an earlier major published, and the identity
     // that must stay unique inside one release is the FormRef-to-resource-type
@@ -2399,14 +2415,10 @@ export function validateProviderIdentityLedger(repo, descriptor) {
 }
 
 export function readProviderDescriptor(repo) {
-  const descriptor = readJSON(
-    join(repo, "release/version.json"),
-    "provider release descriptor",
-  );
+  const { descriptor } = readCurrentProvider4Release(repo);
   if (
     typeof descriptor !== "object" ||
     descriptor === null ||
-    descriptor.version !== PROVIDER_VERSION ||
     !PROVIDER_TAG.test(descriptor.tag) ||
     descriptor.tag !== `v${descriptor.version}` ||
     descriptor.sourceRepository !== `github.com/${GITHUB_REPOSITORY}` ||
@@ -4324,17 +4336,24 @@ function publicAssets(root, names) {
 }
 
 export function providerReleaseBody(descriptor) {
+  validateProvider4ReleaseDescriptor(descriptor);
   if (
-    descriptor?.version !== PROVIDER_VERSION ||
-    descriptor?.tag !== `v${PROVIDER_VERSION}` ||
+    descriptor?.tag !== `v${descriptor?.version}` ||
     descriptor?.versioning?.portableApiVersion !== PROVIDER_HOST_API
   ) {
     throw new Error(
-      `provider release body requires the exact v${PROVIDER_VERSION} stable Host API descriptor`,
+      `provider release body requires the exact stable Provider 4.x Host API descriptor`,
     );
   }
+  // Release-specific notes are not version-selection authority. Preserve the
+  // generic major-boundary guidance below while stating this patch's purpose.
+  const maintenanceNote = descriptor.version === "4.0.1"
+    ? "Maintenance update from Provider v4.0.0: v4.0.1 keeps the same 17 exact FormRefs, package digests, resource schemas and Host API. It carries a successful pending Operation's UID into the following resource read and refuses a different incarnation. The corrected recovery warning explains that a failed Create may leave tainted state: do not apply a replacement; persist settled same-identity state with a saved refresh-only apply before any deliberate exact-address untaint. This patch does not perform automatic untaint or state migration.\n\n"
+    : "";
   return (
-    "Signed deterministic Takoform Provider v4.0.0 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from Provider v3.0.0: Provider 4 registers only the publisher-selected roster and drops the 15 withdrawn aggregate Terraform resource types takoform_container_custom_domain, takoform_container_endpoint, takoform_container_revision, takoform_container_traffic, takoform_serverless_container_service, takoform_function, takoform_function_deployment, takoform_function_endpoint, takoform_function_version, takoform_pull_queue, takoform_message_schedule, takoform_table, takoform_topic, takoform_topic_subscription, and takoform_dense_vector_index. Existing state must stay pinned to Provider 3.0.0 or be explicitly forgotten or destroyed before upgrading; follow the fail-closed migration guide: " +
+    `Signed deterministic Takoform Provider v${descriptor.version} release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\n` +
+    maintenanceNote +
+    "Breaking upgrade from Provider v3.0.0: Provider 4 registers only the publisher-selected roster and drops the 15 withdrawn aggregate Terraform resource types takoform_container_custom_domain, takoform_container_endpoint, takoform_container_revision, takoform_container_traffic, takoform_serverless_container_service, takoform_function, takoform_function_deployment, takoform_function_endpoint, takoform_function_version, takoform_pull_queue, takoform_message_schedule, takoform_table, takoform_topic, takoform_topic_subscription, and takoform_dense_vector_index. Existing state must stay pinned to Provider 3.0.0 or be explicitly forgotten or destroyed before upgrading; follow the fail-closed migration guide: " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v3-to-v4.md` +
     "\n\nProvider v2.1.1 and Provider v1 remain separate migration boundaries and Provider 4 does not rewrite their state. Operators coming from those majors follow the retained boundary records: " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v2-to-v3.md` +
@@ -4482,7 +4501,7 @@ function providerPublish(context, options, descriptor) {
   // immutable once published, so the builder and the publisher assert the same
   // contract separately rather than sharing one statement of it.
   if (
-    !releaseBody.includes("Provider v4.0.0") ||
+    !releaseBody.includes(`Provider v${descriptor.version}`) ||
     !releaseBody.includes(PROVIDER_HOST_API) ||
     !releaseBody.includes(
       "single versionless current Form family `edge.forms.takoform.com`",

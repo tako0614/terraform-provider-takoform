@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { validateProviderIdentityLedger } from "./release-deploy.mjs";
+import { readCurrentProvider4Release } from "./provider-release-descriptor.mjs";
 import process from "node:process";
 
 export const BLOCKER_LEDGER = "spec/publication-blockers.json";
@@ -319,9 +320,7 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
 // keeps Provider 3.0.0's exact 31 and Provider 2.1.1's exact fifteen
 // identities immutable history.
 export function assertProviderReleaseCandidate(repositoryRoot) {
-  const descriptor = JSON.parse(
-    readFileSync(path.join(repositoryRoot, "release/version.json"), "utf8"),
-  );
+  const { descriptor } = readCurrentProvider4Release(repositoryRoot);
   const retainedProvider3Descriptor = JSON.parse(
     readFileSync(
       path.join(repositoryRoot, "release/history/provider-v3.0.0.json"),
@@ -335,13 +334,11 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     ),
   );
   if (
-    descriptor.version !== "4.0.0" ||
-    descriptor.tag !== "v4.0.0" ||
     descriptor.publicationStatus !== "candidate-only" ||
     descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1"
   ) {
     fail(
-      "provider release descriptor is not candidate-only v4.0.0 on stable Host API v1",
+      "provider release descriptor is not candidate-only stable Provider 4.x on Host API v1",
     );
   }
   if (
@@ -397,6 +394,9 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   const retainedProvider3 = identities.releases.find(
     (entry) => entry.providerVersion === "3.0.0",
   );
+  const retainedProvider4 = identities.releases.find(
+    (entry) => entry.providerVersion === "4.0.0",
+  );
   const retained = identities.releases.find(
     (entry) => entry.providerVersion === "2.1.1",
   );
@@ -414,6 +414,10 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     retainedProvider3?.families?.length !== 8 ||
     retainedProvider3?.formMaturity !== "experimental" ||
     retainedProvider3?.forms?.length !== 31 ||
+    retainedProvider4?.families?.length !== 1 ||
+    retainedProvider4?.families?.[0] !== "edge.forms.takoform.com" ||
+    retainedProvider4?.formMaturity !== "experimental" ||
+    retainedProvider4?.forms?.length !== 17 ||
     retained?.family !== "edge.forms.takoform.com/v1beta1" ||
     retained?.forms?.length !== 15
   ) {

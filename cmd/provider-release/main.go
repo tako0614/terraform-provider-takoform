@@ -82,8 +82,9 @@ type providerPublisherProjection struct {
 }
 
 var (
-	semverPattern    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
-	requestIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	semverPattern                  = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
+	providerV4StableVersionPattern = regexp.MustCompile(`^4\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+	requestIDPattern               = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
 type cliCompatibility struct {
@@ -1174,6 +1175,9 @@ func loadDescriptor(repo string) (descriptor, error) {
 	if value.SchemaVersion != 1 || !semverPattern.MatchString(value.Version) {
 		return value, errors.New("release descriptor has invalid schemaVersion or semver")
 	}
+	if err := validateProvider4Version(value.Version); err != nil {
+		return value, err
+	}
 	if value.Tag != "v"+value.Version {
 		return value, errors.New("release tag must equal v<version> for Terraform Registry discovery")
 	}
@@ -1214,6 +1218,17 @@ func loadDescriptor(repo string) (descriptor, error) {
 		return value, err
 	}
 	return value, nil
+}
+
+func isStableProvider4Version(version string) bool {
+	return providerV4StableVersionPattern.MatchString(version)
+}
+
+func validateProvider4Version(version string) error {
+	if !isStableProvider4Version(version) {
+		return fmt.Errorf("provider v4 release version %q must be an exact stable major-4 semver", version)
+	}
+	return nil
 }
 
 func validateCLIMatrix(matrix []cliCompatibility) error {
@@ -1392,6 +1407,9 @@ func validateProviderV3IdentityRelease(repo string, release providerIdentityRele
 // and is therefore allowed here, while it stays banned on the retained
 // Provider 3 path.
 func validateProviderV4IdentityRelease(repo string, release providerIdentityRelease) error {
+	if err := validateProvider4Version(release.ProviderVersion); err != nil {
+		return fmt.Errorf("provider v4 identity release: %w", err)
+	}
 	closureRaw, err := os.ReadFile(filepath.Join(repo, providerPublisherClosurePath))
 	if err != nil {
 		return fmt.Errorf("read publisher package closure: %w", err)
@@ -1482,6 +1500,7 @@ func validateProviderV4IdentityRelease(repo string, release providerIdentityRele
 var frozenLedgerEntryDigests = map[string]string{
 	"2.1.1": "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
 	"3.0.0": "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb",
+	"4.0.0": "sha256:76086ec15b12c9d7c8e9cb4cc281d08f006ae2028fbee5b3bbac85bc59bbc2c6",
 }
 
 func assertFrozenLedgerEntries(raw []byte) error {
@@ -1514,6 +1533,12 @@ func assertFrozenLedgerEntries(raw []byte) error {
 
 func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityLedger, error) {
 	var ledger providerIdentityLedger
+	// This loader serves the current writer. Historical ledger entries retain
+	// their own SemVer semantics, but another current major must never bypass
+	// the publisher-selected roster validator below.
+	if err := validateProvider4Version(desc.Version); err != nil {
+		return ledger, err
+	}
 	raw, err := os.ReadFile(filepath.Join(repo, providerIdentityLedgerPath))
 	if err != nil {
 		return ledger, fmt.Errorf("read provider Form identity ledger: %w", err)
@@ -1589,15 +1614,8 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	if current == nil || current.PortableAPIVersion != desc.Versioning.PortableAPIVersion {
 		return ledger, errors.New("provider Form identity ledger has no release matching the descriptor")
 	}
-	switch desc.Version {
-	case "3.0.0":
-		if err := validateProviderV3IdentityRelease(repo, *current); err != nil {
-			return ledger, err
-		}
-	case "4.0.0":
-		if err := validateProviderV4IdentityRelease(repo, *current); err != nil {
-			return ledger, err
-		}
+	if err := validateProviderV4IdentityRelease(repo, *current); err != nil {
+		return ledger, err
 	}
 	return ledger, nil
 }

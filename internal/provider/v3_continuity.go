@@ -112,6 +112,10 @@ type v3PendingOutcome struct {
 	// An operation that has not reached a terminal state still has something to
 	// resume, even when the resource is already readable.
 	KeepMarker bool
+	// ExpectedUID fences the following resource read to the UID carried by a
+	// verified terminal-success result. This is non-empty only for that branch;
+	// all other branches keep using the UID already recorded in state.
+	ExpectedUID string
 }
 
 // v3NoPendingOperation is the outcome of a read with no recorded operation:
@@ -219,6 +223,8 @@ func v3ResumePendingOperation(
 	}
 	// The operation committed. The ordinary read follows so state settles against
 	// the representation that exists NOW rather than the one the operation
-	// happened to return, and it clears the marker by writing state.
-	return v3NoPendingOperation
+	// happened to return, and it clears the marker by writing state. The verified
+	// result UID is carried as the fence for that read so a same-named replacement
+	// between these two requests cannot be adopted when state had no UID yet.
+	return v3PendingOutcome{RemoveOnAbsent: true, ExpectedUID: result.Metadata.UID}
 }

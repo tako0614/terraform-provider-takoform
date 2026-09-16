@@ -30,8 +30,8 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if desc.Version != "4.0.0" {
-		t.Fatalf("current provider release descriptor must be 4.0.0, got %q", desc.Version)
+	if !isStableProvider4Version(desc.Version) {
+		t.Fatalf("current provider release descriptor must be stable Provider 4 SemVer, got %q", desc.Version)
 	}
 	if desc.Versioning.PortableAPIVersion != "forms.takoform.com/v1" {
 		t.Fatalf("current provider candidate must target stable Host API v1, got %q", desc.Versioning.PortableAPIVersion)
@@ -72,7 +72,7 @@ func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedHistory(t *tes
 	if err != nil {
 		t.Fatalf("loadProviderIdentityLedger: %v", err)
 	}
-	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) != 3 {
+	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) < 4 {
 		t.Fatalf("unexpected provider identity ledger envelope: %#v", ledger)
 	}
 	retained := ledger.Releases[0]
@@ -80,7 +80,7 @@ func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedHistory(t *tes
 		t.Fatalf("retained provider 2.1.1 identity release: %v", err)
 	}
 	// Provider 3.0.0 is Registry-published immutable history; the writer moved
-	// to 4.0.0 but the aggregate projection stays exactly as published.
+	// to Provider 4 while the aggregate projection stays exactly as published.
 	retainedV3 := ledger.Releases[1]
 	if retainedV3.ProviderVersion != "3.0.0" || retainedV3.PortableAPIVersion != providerHostAPIVersion ||
 		retainedV3.Family != "" || len(retainedV3.Families) != 8 || retainedV3.FormMaturity != "experimental" || len(retainedV3.Forms) != 31 {
@@ -89,11 +89,17 @@ func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedHistory(t *tes
 	if err := validateProviderV3IdentityRelease(repo, retainedV3); err != nil {
 		t.Fatalf("retained provider 3.0.0 identity release: %v", err)
 	}
-	current := ledger.Releases[2]
-	if current.ProviderVersion != "4.0.0" || current.PortableAPIVersion != providerHostAPIVersion ||
+	var current *providerIdentityRelease
+	for index := range ledger.Releases {
+		if ledger.Releases[index].ProviderVersion == desc.Version {
+			current = &ledger.Releases[index]
+			break
+		}
+	}
+	if current == nil || current.PortableAPIVersion != providerHostAPIVersion ||
 		current.Family != "" || len(current.Families) != 1 || current.Families[0] != providerPublisherFamily ||
 		current.FormMaturity != "experimental" || len(current.Forms) != 17 {
-		t.Fatalf("unexpected provider 4 identity release: %#v", current)
+		t.Fatalf("unexpected current Provider 4 identity release: %#v", current)
 	}
 }
 
@@ -126,6 +132,160 @@ func TestProviderIdentityLedgerRejectsDigestDrift(t *testing.T) {
 	}
 	if _, err := loadDescriptor(fixture); err == nil || !strings.Contains(err.Error(), "identity ledger entry changed") {
 		t.Fatalf("expected candidate-set digest drift rejection, got %v", err)
+	}
+}
+
+func TestProvider4ForwardPatchUsesPublisherRosterValidation(t *testing.T) {
+	fixture, desc := provider4LedgerFixture(t, "4.0.1")
+	ledger, err := loadProviderIdentityLedger(fixture, desc)
+	if err != nil {
+		t.Fatalf("loadProviderIdentityLedger: %v", err)
+	}
+	current := providerIdentityReleaseForVersion(t, ledger, desc.Version)
+	if len(current.Forms) != 17 {
+		t.Fatalf("Provider %s roster contains %d Forms, want 17", desc.Version, len(current.Forms))
+	}
+}
+
+func TestProvider4ForwardPatchRejectsRosterDrift(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*providerIdentityRelease)
+	}{
+		{
+			name: "wrong package mapping",
+			mutate: func(release *providerIdentityRelease) {
+				release.Forms[0].PackageDigest = "sha256:" + strings.Repeat("f", 64)
+			},
+		},
+		{
+			name: "missing form",
+			mutate: func(release *providerIdentityRelease) {
+				release.Forms = release.Forms[:len(release.Forms)-1]
+			},
+		},
+		{
+			name: "duplicate resource type",
+			mutate: func(release *providerIdentityRelease) {
+				release.Forms[1].ResourceType = release.Forms[0].ResourceType
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture, desc := provider4LedgerFixture(t, "4.0.1")
+			mutateProviderIdentityRelease(t, fixture, desc.Version, test.mutate)
+			if _, err := loadProviderIdentityLedger(fixture, desc); err == nil {
+				t.Fatalf("Provider %s roster drift was accepted", desc.Version)
+			}
+		})
+	}
+}
+
+func TestProvider4RetainedLedgerEntryIsFrozen(t *testing.T) {
+	fixture, desc := provider4LedgerFixture(t, "4.0.1")
+	mutateProviderIdentityRelease(t, fixture, "4.0.0", func(release *providerIdentityRelease) {
+		release.Forms[0].PackageDigest = "sha256:" + strings.Repeat("f", 64)
+	})
+	if _, err := loadProviderIdentityLedger(fixture, desc); err == nil ||
+		!strings.Contains(err.Error(), "immutable provider 4.0.0 identity ledger entry changed") {
+		t.Fatalf("expected retained Provider 4.0.0 digest rejection, got %v", err)
+	}
+}
+
+func TestProvider4VersionRecognitionKeepsHistoricalSemVerPermissive(t *testing.T) {
+	for _, version := range []string{"4.0.0", "4.0.1", "4.12.3"} {
+		if !isStableProvider4Version(version) {
+			t.Errorf("stable Provider 4 version %q was not recognized", version)
+		}
+		if err := validateProvider4Version(version); err != nil {
+			t.Errorf("stable Provider 4 version %q was rejected: %v", version, err)
+		}
+	}
+	for _, version := range []string{
+		"4.0.1-rc.1",
+		"4.00.1",
+		"4.0.1+build.1",
+		"5.0.0",
+		"3.0.0",
+	} {
+		if isStableProvider4Version(version) {
+			t.Errorf("non-stable Provider 4 version %q was recognized", version)
+		}
+		if err := validateProvider4Version(version); err == nil {
+			t.Errorf("invalid Provider 4 lane version %q was accepted", version)
+		}
+	}
+	for _, version := range []string{"0.1.0-rc.2", "3.0.0"} {
+		if !semverPattern.MatchString(version) {
+			t.Errorf("historical SemVer %q no longer matches shared semverPattern", version)
+		}
+	}
+}
+
+func TestReleaseDescriptorRejectsMalformedProvider4VersionOrTag(t *testing.T) {
+	repo := testRepoRoot(t)
+	raw, err := os.ReadFile(filepath.Join(repo, descriptorPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptorJSON map[string]any
+	if err := json.Unmarshal(raw, &descriptorJSON); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		version string
+		tag     string
+	}{
+		{name: "prerelease", version: "4.0.1-rc.1", tag: "v4.0.1-rc.1"},
+		{name: "leading zero", version: "4.00.1", tag: "v4.00.1"},
+		{name: "build metadata", version: "4.0.1+build.1", tag: "v4.0.1+build.1"},
+		{name: "tag mismatch", version: "4.0.1", tag: "v4.0.0"},
+		{name: "other major", version: "5.0.0", tag: "v5.0.0"},
+		{name: "historical major is not current", version: "3.0.0", tag: "v3.0.0"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := t.TempDir()
+			mutated := make(map[string]any, len(descriptorJSON))
+			for key, value := range descriptorJSON {
+				mutated[key] = value
+			}
+			mutated["version"] = test.version
+			mutated["tag"] = test.tag
+			encoded, err := json.Marshal(mutated)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(fixture, filepath.Dir(descriptorPath)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(fixture, descriptorPath), encoded, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			keyPath, ok := descriptorJSON["publicKeyPath"].(string)
+			if !ok || keyPath == "" {
+				t.Fatal("descriptor fixture has no publicKeyPath")
+			}
+			if err := os.MkdirAll(filepath.Join(fixture, filepath.Dir(keyPath)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			copyFile(t, filepath.Join(repo, keyPath), filepath.Join(fixture, keyPath))
+			if _, err := loadDescriptor(fixture); err == nil {
+				t.Fatalf("malformed Provider 4 descriptor %s/%s was accepted", test.version, test.tag)
+			}
+		})
+	}
+}
+
+func TestProviderIdentityLedgerRejectsNonCurrentMajorBeforeRosterSelection(t *testing.T) {
+	for _, version := range []string{"3.0.0", "5.0.0"} {
+		fixture, desc := provider4LedgerFixture(t, version)
+		if _, err := loadProviderIdentityLedger(fixture, desc); err == nil ||
+			!strings.Contains(err.Error(), "exact stable major-4 semver") {
+			t.Fatalf("non-current major %s bypassed the Provider 4 lane: %v", version, err)
+		}
 	}
 }
 
@@ -1157,6 +1317,125 @@ func runOutput(t *testing.T, dir, name string, args ...string) string {
 		t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, output)
 	}
 	return string(output)
+}
+
+func provider4LedgerFixture(t *testing.T, version string) (string, descriptor) {
+	t.Helper()
+	repo := testRepoRoot(t)
+	fixture := t.TempDir()
+	for _, relativePath := range []string{
+		descriptorPath,
+		providerIdentityLedgerPath,
+		providerPublisherClosurePath,
+		providerPublisherProjectionPath,
+	} {
+		target := filepath.Join(fixture, relativePath)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		copyFile(t, filepath.Join(repo, relativePath), target)
+	}
+
+	descriptorRaw, err := os.ReadFile(filepath.Join(fixture, descriptorPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptorJSON map[string]any
+	if err := json.Unmarshal(descriptorRaw, &descriptorJSON); err != nil {
+		t.Fatal(err)
+	}
+	descriptorJSON["version"] = version
+	descriptorJSON["tag"] = "v" + version
+	descriptorRaw, err = json.Marshal(descriptorJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixture, descriptorPath), descriptorRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var desc descriptor
+	if err := json.Unmarshal(descriptorRaw, &desc); err != nil {
+		t.Fatal(err)
+	}
+
+	ledgerRaw, err := os.ReadFile(filepath.Join(fixture, providerIdentityLedgerPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ledger providerIdentityLedger
+	if err := json.Unmarshal(ledgerRaw, &ledger); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for index := range ledger.Releases {
+		if ledger.Releases[index].ProviderVersion == version {
+			found = true
+			break
+		}
+	}
+	if !found {
+		for index := range ledger.Releases {
+			if ledger.Releases[index].ProviderVersion != "4.0.0" {
+				continue
+			}
+			candidate := ledger.Releases[index]
+			candidate.ProviderVersion = version
+			ledger.Releases = append(ledger.Releases, candidate)
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("fixture ledger has no retained Provider 4.0.0 release")
+	}
+	ledgerRaw, err = json.MarshalIndent(ledger, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledgerRaw = append(ledgerRaw, '\n')
+	if err := os.WriteFile(filepath.Join(fixture, providerIdentityLedgerPath), ledgerRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return fixture, desc
+}
+
+func providerIdentityReleaseForVersion(t *testing.T, ledger providerIdentityLedger, version string) providerIdentityRelease {
+	t.Helper()
+	for _, release := range ledger.Releases {
+		if release.ProviderVersion == version {
+			return release
+		}
+	}
+	t.Fatalf("fixture ledger has no Provider %s release", version)
+	return providerIdentityRelease{}
+}
+
+func mutateProviderIdentityRelease(t *testing.T, repo, version string, mutate func(*providerIdentityRelease)) {
+	t.Helper()
+	path := filepath.Join(repo, providerIdentityLedgerPath)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ledger providerIdentityLedger
+	if err := json.Unmarshal(raw, &ledger); err != nil {
+		t.Fatal(err)
+	}
+	for index := range ledger.Releases {
+		if ledger.Releases[index].ProviderVersion == version {
+			mutate(&ledger.Releases[index])
+			encoded, err := json.MarshalIndent(ledger, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded = append(encoded, '\n')
+			if err := os.WriteFile(path, encoded, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatalf("fixture ledger has no Provider %s release", version)
 }
 
 func copyFile(t *testing.T, source, target string) {

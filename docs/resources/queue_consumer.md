@@ -81,13 +81,23 @@ This Provider mapping carries the following exact four-field FormRef:
   applied — and it does not remove state, which would make the next apply fail against the
   resource that does exist, with no plan left to repair it. Resolve it by importing the new
   incarnation explicitly, restoring the prior one, or deleting the host-side replacement.
-- **An unfinished mutation is resumed, not re-created.** When `pending_operation_id` is
+- **A refresh resumes an unfinished operation.** When `pending_operation_id` is
   set, a refresh asks the host about that operation before it reads the resource. While the
   operation is still running the resource may legitimately not exist yet, so its absence is
   not treated as deletion and the marker survives; a terminal success is verified against
   the exact identity and settles state; a terminal failure or an expired operation record
-  defers to an exact read of the resource, which decides. Refresh again once the host
-  settles.
+  defers to an exact read of the resource, which decides.
+- **Failed Create may leave a tainted instance.** Provider Read does not clear
+  Terraform/OpenTofu taint. A normal plan may therefore propose deletion and recreation
+  even after the operation succeeds. Do not apply that replacement as a recovery step.
+  A plan alone does not persist refreshed state. Review a saved refresh-only plan for
+  resource mutations, then apply that exact state-only plan to persist the observation.
+  If the operation marker remains, the identity conflicts, or the intended resource is
+  not verified, stop. Only after verifying the settled resource's exact FormRef, name,
+  Space and UID should an operator consider untainting that exact address, with normal
+  state locking. Then review a fresh normal plan before any resource-changing apply.
+  Do not untaint an unrelated or deliberately tainted instance, or treat an absent
+  resource after failed/expired-operation recovery as successful creation.
 
 ## Import
 

@@ -171,11 +171,13 @@ try {
     throw new Error(`tar extraction failed: ${extracted.stderr ?? ""}`);
   }
 
-  // Execute the same immutable golden bytes from both sides of the private
+  // Replay the same immutable golden bytes through both sides of the private
   // seam change. The historical W02 harness compiles inside the v3.0.0 source
-  // archive; the adapted live harness ran above. Checking every live golden
-  // byte against the immutable checkpoint makes a coordinated current-code +
-  // fixture rewrite fail before either suite starts.
+  // archive; the adapted live harness already ran above. Its branch golden
+  // explicitly locks one reviewed current forward warning digest
+  // (apply-202-pending-recovery) while keeping the fixture bytes frozen. This
+  // check still rejects any coordinated current-code + fixture rewrite before
+  // the historical suite starts.
   for (const path of compatibilityGoldenPaths) {
     const historical = readGitBlob(compatibilityHarnessCommit, path);
     const current = readFileSync(join(sourceRoot, path));
@@ -208,7 +210,7 @@ try {
     );
   }
   process.stdout.write(
-    `Provider 3 baseline OK: ${tagObject} -> ${sourceCommit}; immutable W02 state/codec/import/lifecycle/diagnostic/schema harness and adapted current harness pass against identical frozen goldens.\n`,
+    `Provider 3 baseline OK: ${tagObject} -> ${sourceCommit}; immutable W02 state/codec/import/lifecycle/diagnostic/schema replay and adapted current harness pass against frozen goldens, with the explicitly locked apply-202-pending-recovery forward warning digest.\n`,
   );
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });

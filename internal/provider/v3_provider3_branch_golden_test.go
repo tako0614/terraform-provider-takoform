@@ -38,6 +38,12 @@ const v3Provider3BranchGoldenPath = "testdata/v3-provider3-branch-golden.json"
 const (
 	v3Provider3SourceTag    = "v3.0.0"
 	v3Provider3SourceCommit = "a225cfa7c84aa551981cc8ad56c9a281fa6e051a"
+
+	// The immutable release fixture records the historical recovery warning.
+	// The forward provider intentionally has one reviewed warning correction;
+	// both digests are locked so this exception cannot broaden silently.
+	v3Provider3PendingRecoveryHistoricalDiagnosticDigest = "sha256:b1ff73610e5c69498658cd515b79e5fcaa8b43411fbebf40268a730dcaff4e25"
+	v3Provider3PendingRecoveryCurrentDiagnosticDigest    = "sha256:e4b6c3c503d4a8e41bdb6008e5eae432d9b2bc7551a9b1f027bcbe34f9b3191b"
 )
 
 type v3Provider3BranchGolden struct {
@@ -130,9 +136,44 @@ type v3Provider3BranchDependencies struct {
 func TestV3Provider3BranchGoldenLocksBehavior(t *testing.T) {
 	want := readV3Provider3BranchGolden(t)
 	got := deriveV3Provider3BranchGolden(t)
-	if !reflect.DeepEqual(got, want) {
+	const pendingRecoveryScenario = "apply-202-pending-recovery"
+	wantPendingRecovery, wantPendingRecoveryCount := -1, 0
+	for i, branch := range want.Host {
+		if branch.Name == pendingRecoveryScenario {
+			wantPendingRecovery, wantPendingRecoveryCount = i, wantPendingRecoveryCount+1
+		}
+	}
+	if wantPendingRecoveryCount != 1 {
+		t.Fatalf("immutable branch golden must contain exactly one host scenario %q, got %d", pendingRecoveryScenario, wantPendingRecoveryCount)
+	}
+	gotPendingRecovery, gotPendingRecoveryCount := -1, 0
+	for i, branch := range got.Host {
+		if branch.Name == pendingRecoveryScenario {
+			gotPendingRecovery, gotPendingRecoveryCount = i, gotPendingRecoveryCount+1
+		}
+	}
+	if gotPendingRecoveryCount != 1 {
+		t.Fatalf("current branch derivation must contain exactly one host scenario %q, got %d", pendingRecoveryScenario, gotPendingRecoveryCount)
+	}
+	if want.Host[wantPendingRecovery].DiagnosticDigest != v3Provider3PendingRecoveryHistoricalDiagnosticDigest {
+		t.Fatalf("immutable %s diagnostic digest drifted: got %q want %q", pendingRecoveryScenario, want.Host[wantPendingRecovery].DiagnosticDigest, v3Provider3PendingRecoveryHistoricalDiagnosticDigest)
+	}
+	if got.Host[gotPendingRecovery].DiagnosticDigest != v3Provider3PendingRecoveryCurrentDiagnosticDigest {
+		t.Fatalf("current %s diagnostic digest drifted: got %q want reviewed forward digest %q", pendingRecoveryScenario, got.Host[gotPendingRecovery].DiagnosticDigest, v3Provider3PendingRecoveryCurrentDiagnosticDigest)
+	}
+
+	// The v3.0.0 fixture remains immutable.  The forward provider intentionally
+	// corrects only this recovery warning, so normalize that one reviewed digest
+	// in a copied Host slice before the full comparison.  This is not a fixture
+	// refresh or a broad diagnostic exemption: every other field remains under
+	// DeepEqual and any additional warning drift fails the golden.
+	normalized := got
+	normalized.Host = make([]v3Provider3HostEnvelopeBranch, len(got.Host))
+	copy(normalized.Host, got.Host)
+	normalized.Host[gotPendingRecovery].DiagnosticDigest = v3Provider3PendingRecoveryHistoricalDiagnosticDigest
+	if !reflect.DeepEqual(normalized, want) {
 		wantRaw, _ := json.MarshalIndent(want, "", "  ")
-		gotRaw, _ := json.MarshalIndent(got, "", "  ")
+		gotRaw, _ := json.MarshalIndent(normalized, "", "  ")
 		t.Fatalf("Provider 3 branch golden drifted:\nwant:\n%s\ngot:\n%s", wantRaw, gotRaw)
 	}
 }

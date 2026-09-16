@@ -231,7 +231,11 @@ function addExpected(catalog, classId, specification) {
     return;
   }
   current.sourcePaths = [...new Set([...current.sourcePaths, ...sourcePaths, owningLedger])].sort();
-  if (STATUS_PRIORITY[status] > STATUS_PRIORITY[current.status]) current.status = status;
+  if (STATUS_PRIORITY[status] > STATUS_PRIORITY[current.status]) {
+    current.status = status;
+    current.publication = publication;
+    current.migrationDetails = migrationDetails;
+  }
   if (current.formRef === undefined && formRef !== undefined) current.formRef = formRef;
   if (current.packageDigest === undefined && packageDigest !== undefined) current.packageDigest = packageDigest;
   if (current.publication === undefined && publication !== undefined) current.publication = publication;

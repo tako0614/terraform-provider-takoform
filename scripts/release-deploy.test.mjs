@@ -85,6 +85,26 @@ function trustedTemporaryDirectory(prefix) {
   return directory;
 }
 
+function copyProviderIdentityInputs(root) {
+  const files = [
+    "release/version.json",
+    "release/history/provider-v3.0.0.json",
+    "release/provider-form-identities.json",
+    "release/provider-release-identities.json",
+    "internal/provider/artifacts/publisher/closure.json",
+    "internal/provider/artifacts/publisher/projection.json",
+  ];
+  for (const name of readdirSync(join(repositoryRoot, "release/candidates"))) {
+    files.push(join("release/candidates", name));
+  }
+  for (const name of files) {
+    const source = join(repositoryRoot, name);
+    const destination = join(root, name);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(source, destination);
+  }
+}
+
 function writeExecutable(path) {
   writeFileSync(path, "#!/bin/sh\nexit 0\n");
   chmodSync(path, 0o500);
@@ -236,7 +256,13 @@ test("provider v4 release body names the publisher-set identity and v3 migration
     readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
   );
   const body = providerReleaseBody(descriptor);
-  expect(body).toContain("Provider v4.0.0");
+  expect(body).toContain(`Provider ${descriptor.tag}`);
+  expect(body).toContain("Maintenance update from Provider v4.0.0: v4.0.1");
+  expect(body).toContain("same 17 exact FormRefs, package digests, resource schemas and Host API");
+  expect(body).toContain("successful pending Operation's UID");
+  expect(body).toContain("do not apply a replacement");
+  expect(body).toContain("saved refresh-only apply");
+  expect(body).toContain("does not perform automatic untaint or state migration");
   expect(body).toContain("forms.takoform.com/v1");
   expect(body).toContain(
     "single versionless current Form family `edge.forms.takoform.com`",
@@ -264,7 +290,7 @@ test("provider v4 release body names the publisher-set identity and v3 migration
 test("provider descriptor and identity ledger are exact current and retained release inputs", () => {
   const descriptor =
     releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
-  expect(descriptor.version).toBe("4.0.0");
+  expect(descriptor.version).toBe("4.0.1");
   expect(descriptor.versioning.portableApiVersion).toBe(
     "forms.takoform.com/v1",
   );
@@ -276,7 +302,7 @@ test("provider descriptor and identity ledger are exact current and retained rel
     releases.find((release) => release.providerVersion === "2.1.1")?.forms,
   ).toHaveLength(15);
   const current = releases.find(
-    (release) => release.providerVersion === "4.0.0",
+    (release) => release.providerVersion === descriptor.version,
   );
   expect(current?.families).toEqual(["edge.forms.takoform.com"]);
   expect(current?.forms).toHaveLength(17);
@@ -290,6 +316,89 @@ test("provider descriptor and identity ledger are exact current and retained rel
   expect(retained?.forms).toHaveLength(31);
   expect(canonicalLedgerDigest(retained)).toBe(
     "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb",
+  );
+  const retainedProvider4 = releases.find(
+    (release) => release.providerVersion === "4.0.0",
+  );
+  expect(retainedProvider4?.forms).toHaveLength(17);
+  expect(canonicalLedgerDigest(retainedProvider4)).toBe(
+    "sha256:76086ec15b12c9d7c8e9cb4cc281d08f006ae2028fbee5b3bbac85bc59bbc2c6",
+  );
+});
+
+test("provider body rejects malformed and non-Provider-4 targets", () => {
+  const descriptor = JSON.parse(
+    readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
+  );
+  for (const [version, tag] of [
+    ["4.0.1-rc.1", "v4.0.1-rc.1"],
+    ["5.0.0", "v5.0.0"],
+    ["4.01.0", "v4.01.0"],
+    ["4.0.1/escape", "v4.0.1/escape"],
+    ["4.0.1", "v4.0.0"],
+  ]) {
+    expect(() => providerReleaseBody({ ...descriptor, version, tag })).toThrow(
+      /Provider 4 release descriptor|stable Provider 4\.x/,
+    );
+  }
+});
+
+test("the current Provider 4.x target refuses historical 4.0.0 tag phases", () => {
+  const phases = [
+    ["prepare", ["--expected-commit", commit]],
+    [
+      "tag",
+      ["--expected-commit", commit, "--run-id", "1", "--run-attempt", "1"],
+    ],
+    [
+      "publish",
+      ["--expected-commit", commit, "--run-id", "1", "--run-attempt", "1"],
+    ],
+  ];
+  for (const [phase, options] of phases) {
+    const calls = [];
+    expect(() =>
+      runReleaseSurface({
+        surface: "takoform-provider-release",
+        args: [phase, "--tag", "v4.0.0", ...options],
+        repo: repositoryRoot,
+        execFile: (...args) => {
+          calls.push(args);
+          throw new Error("the historical tag must be rejected first");
+        },
+      }),
+    ).toThrow(/--tag must exactly match release\/version\.json \(v4\.0\.1\)/);
+    expect(calls).toHaveLength(0);
+  }
+});
+
+test("the current descriptor stays candidate-only without a new publication claim", () => {
+  const descriptor =
+    releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
+  expect(descriptor.publicationStatus).toBe("candidate-only");
+  const published = JSON.parse(
+    readFileSync(
+      join(repositoryRoot, "release/provider-release-identities.json"),
+      "utf8",
+    ),
+  );
+  expect(
+    published.entries.some((entry) => entry.version === descriptor.version),
+  ).toBe(false);
+});
+
+test("retained Provider 4.0.0 identity mutation is refused", () => {
+  const root = trustedTemporaryDirectory("provider-v400-lock");
+  copyProviderIdentityInputs(root);
+  const ledgerPath = join(root, "release/provider-form-identities.json");
+  const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+  const retained = ledger.releases.find(
+    (entry) => entry.providerVersion === "4.0.0",
+  );
+  retained.forms[0].packageDigest = `sha256:${"0".repeat(64)}`;
+  writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
+  expect(() => releaseDeployTestHooks.readProviderDescriptor(root)).toThrow(
+    "immutable provider 4.0.0 identity ledger entry changed",
   );
 });
 

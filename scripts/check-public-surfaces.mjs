@@ -12,13 +12,13 @@ import {
   PUBLIC_SCHEMA_ROUTE,
 } from "./public-schema-manifest.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
+import { readCurrentProvider4Release } from "./provider-release-descriptor.mjs";
 import {
   RELEASE_STATE_NEUTRAL_SOURCE_PATHS,
   staleSpecificationReleaseWording,
 } from "./specification-release.mjs";
 import {
   FAMILY_CANDIDATE_SET,
-  PROVIDER_REGISTRY_PUBLISHED_VERSION,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
 
@@ -1077,6 +1077,7 @@ function checkWebsiteDocsProjection(formDocNames) {
 // generated surface carried it. A Form now cannot be added or removed without
 // every one of these learning about it.
 function checkHandWrittenInventories(familyRoster) {
+  const publishedProvider = deriveSiteStatusFacts(repositoryRoot).providerPublished;
   const familyKinds = familyRoster.map(({ kind }) => kind);
   const familyDocNames = familyRoster.map(({ docName }) => docName);
   const familySlugs = familyRoster.map(({ slug }) => slug);
@@ -1115,7 +1116,7 @@ function checkHandWrittenInventories(familyRoster) {
       file: "website/index.md",
       label: "the English landing inventory",
       required: [
-        { needle: "**`4.0.0`**", subject: "current Provider" },
+        { needle: `**\`${publishedProvider}\`**`, subject: "current Provider" },
         { needle: "| Edge | 17 |", subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
@@ -1124,7 +1125,7 @@ function checkHandWrittenInventories(familyRoster) {
       file: "website/ja/index.md",
       label: "the Japanese landing inventory",
       required: [
-        { needle: "**`4.0.0`**", subject: "current Provider" },
+        { needle: `**\`${publishedProvider}\`**`, subject: "current Provider" },
         { needle: "| Edge | 17 |", subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
@@ -1716,8 +1717,8 @@ function checkPublicSchemas() {
 // release/version.json is the current Provider 4 release descriptor.
 // release/history/provider-v3.0.0.json is the retained Provider 3 writer input
 // and the only surviving copy of it, so it stays byte-stable and asserted.
-// release/candidates/provider-v4.0.0.json is retained as the pre-publication
-// candidate record and must remain byte-identical to the promoted descriptor.
+// The current descriptor selects its versioned candidate record, which must
+// remain byte-identical. Published Provider 4 records are retained separately.
 const retainedProvider3Descriptor = readJson(
   path.join(repositoryRoot, "release", "history", "provider-v3.0.0.json"),
 );
@@ -1730,41 +1731,8 @@ if (
     "release/history/provider-v3.0.0.json: retained Provider 3 writer input drifted",
   );
 }
-const releaseVersion = readJson(
-  path.join(repositoryRoot, "release", "version.json"),
-);
-if (
-  !readFileSync(
-    path.join(repositoryRoot, "release", "version.json"),
-  ).equals(
-    readFileSync(
-      path.join(
-        repositoryRoot,
-        "release",
-        "candidates",
-        "provider-v4.0.0.json",
-      ),
-    ),
-  )
-) {
-  fail(
-    "release/version.json: promoted descriptor is not byte-identical to release/candidates/provider-v4.0.0.json",
-  );
-}
-if (releaseVersion.publicationStatus !== "candidate-only") {
-  fail("release/version.json: publicationStatus must be candidate-only");
-}
-if (
-  typeof releaseVersion.version !== "string" ||
-  !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
-    releaseVersion.version,
-  )
-) {
-  fail("release/version.json: version must be exact SemVer");
-}
-if (releaseVersion.tag !== `v${releaseVersion.version}`) {
-  fail("release/version.json: tag must match version");
-}
+const currentProviderRelease = readCurrentProvider4Release(repositoryRoot);
+const releaseVersion = currentProviderRelease.descriptor;
 
 // Provider 3's eight-family index and identity projection are immutable
 // aggregate history. The current Provider source selects only the publisher
@@ -1778,12 +1746,7 @@ const providerIdentityLedger = readJson(
   path.join(repositoryRoot, "release", "provider-form-identities.json"),
 );
 const currentProviderIdentity = readJson(
-  path.join(
-    repositoryRoot,
-    "release",
-    "candidates",
-    "provider-v4.0.0-form-identities.json",
-  ),
+  path.join(repositoryRoot, currentProviderRelease.candidateFormIdentitiesPath),
 );
 const publisherClosure = readJson(
   path.join(
@@ -1807,7 +1770,7 @@ if (
   currentProviderIdentity.providerVersion !== releaseVersion.version
 ) {
   fail(
-    `release/candidates/provider-v4.0.0-form-identities.json: missing Provider ${releaseVersion.version} identity projection`,
+    `${currentProviderRelease.candidateFormIdentitiesPath}: missing Provider ${releaseVersion.version} identity projection`,
   );
 }
 const retainedProvider3Identity = (providerIdentityLedger.releases ?? []).find(
@@ -1866,7 +1829,7 @@ const currentFormRoster = (currentProviderIdentity.forms ?? []).map((entry) => {
     !resourceType.startsWith("takoform_")
   ) {
     fail(
-      `release/candidates/provider-v4.0.0-form-identities.json: malformed publisher mapping ${group}/${kind} -> ${resourceType}`,
+      `${currentProviderRelease.candidateFormIdentitiesPath}: malformed publisher mapping ${group}/${kind} -> ${resourceType}`,
     );
   }
   return {
@@ -1951,7 +1914,7 @@ checkContractLaneDocumentation();
 checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
-checkPublishedProviderInstallDocs(PROVIDER_REGISTRY_PUBLISHED_VERSION);
+checkPublishedProviderInstallDocs(deriveSiteStatusFacts(repositoryRoot).providerPublished);
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(edgeFamilyRoster);

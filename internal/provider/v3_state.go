@@ -229,14 +229,16 @@ func v3CodecFieldMissingError(codec v3FormCodec, attribute string) diag.Diagnost
 // but that produced no verified representation (clientv3.AcceptedError): the
 // long-running Operation did not finish before the deadline, failed, or came
 // back unreadable. Terraform commits the state a failed Create leaves behind,
-// so writing nothing here orphans a resource the host now owns and the next
-// plan proposes creating it a second time.
+// but that failed Create can leave the resource tainted and a normal plan may
+// propose a replacement. The warning below gives the operator an explicit,
+// refresh-only persistence and validation path instead of promising recovery.
 //
 // What is written is exactly what is known without trusting an unverified
 // response: the client-owned name and space, the exact FormRef the mutation
 // targeted, the planned desired fields, and the host-issued uid plus the
-// operation id when the accepted operation disclosed them. That is enough for
-// the next Read to re-read the resource and reconcile.
+// operation id when the accepted operation disclosed them. That lets the next
+// Read inspect the accepted mutation; it does not clear a Terraform taint or
+// guarantee that a normal plan will avoid a replacement.
 //
 // An error that is not an accepted mutation writes nothing: the host never
 // took the request, so there is no resource to record.
@@ -277,9 +279,12 @@ func (r *v3FormResource) writeV3AcceptedState(
 func v3AcceptedRecoveryDetail(accepted *clientv3.AcceptedError, space, name, kind string) string {
 	detail := fmt.Sprintf(
 		"The host accepted this %s mutation, so %s/%s may exist even though no verified representation came back. "+
-			"State records the name, space, and exact Form identity (plus pending_operation_id when the host named an "+
-			"operation) so the next plan reconciles the existing resource instead of creating a duplicate. "+
-			"Run a refresh once the host settles.",
+			"After a failed Create, Terraform can retain a taint and a normal plan may propose a replacement. "+
+			"Do not apply that replacement as a recovery step. After the host settles, review a saved refresh-only "+
+			"plan for resource mutations, then apply that exact state-only plan to persist the refreshed state. If pending_operation_id remains "+
+			"or a UID conflict is reported, stop and do not untaint. Only after the exact same host identity is validated "+
+			"in settled state should you consider deliberately untainting this exact Terraform address with normal "+
+			"state locking, then review a fresh normal plan. A plan-only refresh does not persist state or remove a taint.",
 		kind, space, name,
 	)
 	if accepted.OperationID != "" {

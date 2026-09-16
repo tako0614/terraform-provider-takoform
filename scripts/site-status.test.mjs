@@ -40,8 +40,10 @@ function fixture(mutate) {
     const currentFamilyIndex = JSON.parse(
       readFileSync(path.join(repositoryRoot, CURRENT_FAMILY_INDEX), "utf8"),
     );
+    const release = read(repositoryRoot, RELEASE_VERSION);
     for (const relativePath of [
       RELEASE_VERSION,
+      `release/candidates/provider-v${release.version}.json`,
       "release/provider-release-identities.json",
       "release/provider-form-identities.json",
       "release/specification-releases.json",
@@ -126,8 +128,9 @@ describe("the committed status document", () => {
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
     expect(document.providerPublished).toBe("4.0.0");
-    expect(document.providerTarget).toBe("4.0.0");
-    expect(document.providerTargetStatus).toBe("registry-published");
+    expect(document.providerTarget).toBe("4.0.1");
+    expect(document.providerTargetStatus).toBe("candidate-only");
+    expect(document.edgePreviewProvider).toBe("4.0.1-candidate-only");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -321,6 +324,100 @@ describe("read-only site status preparation", () => {
       ).toThrow(/is missing or unreadable in read-only mode/);
     });
   });
+
+  test("an isolated website copy retains the committed status without root imports", () => {
+    fixture((root) => {
+      const before = readFileSync(path.join(root, SITE_STATUS_REPOSITORY_PATH));
+      rmSync(path.join(root, "release"), { recursive: true });
+      const facts = prepareSiteStatus(path.join(root, "website"));
+      expect(renderSiteStatusDocument(facts)).toBe(before.toString("utf8"));
+      expect(readFileSync(path.join(root, SITE_STATUS_REPOSITORY_PATH)).equals(before)).toBe(true);
+    });
+  });
+});
+
+describe("Provider target and Registry publication derivation", () => {
+  test("the next candidate does not promote published availability", () => {
+    const facts = fixture((root) => deriveSiteStatusFacts(root));
+    expect(facts.providerTarget).toBe("4.0.1");
+    expect(facts.providerTargetStatus).toBe("candidate-only");
+    expect(facts.providerPublished).toBe("4.0.0");
+    expect(facts.providerCurrent).toBe("4.0.0");
+  });
+
+  test("only complete matching readback promotes the new target", () => {
+    const facts = fixture((root) => {
+      const descriptor = read(root, RELEASE_VERSION);
+      const ledgerPath = "release/provider-release-identities.json";
+      const ledger = read(root, ledgerPath);
+      const entry = structuredClone(ledger.entries.find((value) => value.version === "4.0.0"));
+      entry.version = descriptor.version;
+      entry.tag = descriptor.tag;
+      entry.registryReadback.githubRelease.url =
+        `https://github.com/tako0614/terraform-provider-takoform/releases/tag/${descriptor.tag}`;
+      entry.registryReadback.registry.downloadUrl =
+        `https://registry.terraform.io/v1/providers/tako0614/takoform/${descriptor.version}/download/linux/amd64`;
+      entry.registryReadback.installation.providerVersion = descriptor.version;
+      ledger.entries.push(entry);
+      write(root, ledgerPath, ledger);
+      return deriveSiteStatusFacts(root);
+    });
+    expect(facts.providerTarget).toBe("4.0.1");
+    expect(facts.providerPublished).toBe("4.0.1");
+    expect(facts.providerTargetStatus).toBe("registry-published");
+    expect(facts.edgePreviewProvider).toBe("4.0.1-candidate-only");
+  });
+
+  test("an incomplete new readback cannot silently fall back to the old release", () => {
+    for (const registryReadback of [null, {}]) {
+      expect(() => fixture((root) => {
+        const ledgerPath = "release/provider-release-identities.json";
+        const ledger = read(root, ledgerPath);
+        ledger.entries.push({ version: "4.0.1", tag: "v4.0.1", registryReadback });
+        write(root, ledgerPath, ledger);
+        return deriveSiteStatusFacts(root);
+      })).toThrow("Provider 4.0.1 Registry readback is incomplete");
+    }
+  });
+
+  test("duplicate published identities are refused", () => {
+    expect(() => fixture((root) => {
+      const ledgerPath = "release/provider-release-identities.json";
+      const ledger = read(root, ledgerPath);
+      ledger.entries.push(structuredClone(ledger.entries.at(-1)));
+      write(root, ledgerPath, ledger);
+      return deriveSiteStatusFacts(root);
+    })).toThrow("duplicate Provider version");
+  });
+
+  test("target identity is validated before deriving candidate paths", () => {
+    for (const patch of [
+      { version: "4.0.01" },
+      { version: "4.0.1\n" },
+      { version: "4.0.1-rc.1" },
+      { version: "4.0.1+build" },
+      { version: "../4.0.1" },
+      { version: "5.0.0" },
+      { tag: "v4.0.0" },
+      { publicationStatus: "registry-published" },
+    ]) {
+      expect(() => fixture((root) => {
+        write(root, RELEASE_VERSION, { ...read(root, RELEASE_VERSION), ...patch });
+        return deriveSiteStatusFacts(root);
+      })).toThrow("expected an exact stable Provider 4 version");
+    }
+  });
+
+  test("current and candidate descriptors must be byte-identical", () => {
+    expect(() => fixture((root) => {
+      const release = read(root, RELEASE_VERSION);
+      writeFileSync(
+        path.join(root, `release/candidates/provider-v${release.version}.json`),
+        JSON.stringify(release),
+      );
+      return deriveSiteStatusFacts(root);
+    })).toThrow("bytes differ from release/candidates/provider-v4.0.1.json");
+  });
 });
 
 describe("Specification release status derivation", () => {
@@ -346,7 +443,7 @@ describe("Specification release status derivation", () => {
     expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
     expect(status.formMaturity).toBe("experimental");
     expect(status.formPackagePublicationStatus).toBe("unpublished");
-    expect(status.providerTargetStatus).toBe("registry-published");
+    expect(status.providerTargetStatus).toBe("candidate-only");
   });
 });
 
@@ -434,7 +531,7 @@ describe("the gate refuses", () => {
 
   test("a providerPublished that contradicts the readback-backed derivation", () => {
     // providerPublished derives from the append-only registryReadback entries
-    // in release/provider-form-identities.json; a document claiming another
+    // in release/provider-release-identities.json; a document claiming another
     // version disagrees with that derivation and fails.
     const failures = fixture((root) => {
       for (const relativePath of [
