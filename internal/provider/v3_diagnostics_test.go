@@ -137,6 +137,50 @@ func TestV3DiagnosticDestructuresTheHostAnswer(t *testing.T) {
 	}
 }
 
+// TestV3FormUnavailableRepairDoesNotAssumeActivation keeps the 503 repair
+// neutral: form_unavailable does not prove whether support, runtime, or policy
+// made the exact Form unavailable.
+func TestV3FormUnavailableRepairDoesNotAssumeActivation(t *testing.T) {
+	t.Parallel()
+	err := &clientv3.APIError{
+		StatusCode: http.StatusServiceUnavailable,
+		Code:       "form_unavailable",
+		Message:    "The host cannot currently execute this Form.",
+		RequestID:  "req-form-unavailable",
+		Retryable:  false,
+	}
+	detail := v3HostCallDiagnostic("Failed to create WorkerBundle", err, v3Diagnostic{
+		ResourceType: "takoform_worker_bundle",
+		Space:        "prod",
+		Name:         "bundle-abc",
+		Ref: v3FormRef{
+			APIVersion: "edge.forms.takoform.com", Kind: "WorkerBundle",
+			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:abc",
+		},
+	}).Detail()
+
+	const hint = "The host cannot currently execute this exact Form. Ask the host operator to check support, runtime availability, and policy before retrying."
+	if !strings.HasSuffix(detail, "\n\n"+hint) {
+		t.Errorf("form_unavailable repair = %q, want exact neutral hint %q", detail, hint)
+	}
+	for _, want := range []string{
+		"Host: The host cannot currently execute this Form.",
+		"Resource: takoform_worker_bundle (prod/bundle-abc)",
+		"Form: edge.forms.takoform.com WorkerBundle@0.1.0 schema=sha256:abc",
+		"Request: req-form-unavailable",
+		"Code: form_unavailable (host, HTTP 503)",
+		"Retryable: no",
+	} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("form_unavailable diagnostic does not carry %q:\n%s", want, detail)
+		}
+	}
+	lowerDetail := strings.ToLower(detail)
+	if strings.Contains(lowerDetail, "installed") || strings.Contains(lowerDetail, "activat") {
+		t.Errorf("form_unavailable diagnostic guessed an installation or activation cause:\n%s", detail)
+	}
+}
+
 // TestV3HostRepairsCoverTheClosedTaxonomy proves the repair table is complete
 // against the PUBLISHED error enum rather than against whatever the provider
 // happens to have seen. A code with no repair renders a diagnostic that names a

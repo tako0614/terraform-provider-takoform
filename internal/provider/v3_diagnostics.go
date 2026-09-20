@@ -118,7 +118,7 @@ var v3HostRepairs = map[string]string{
 	"permission_denied":      "Grant this credential the operation on this space, or apply as a principal that already has it.",
 	"form_unknown":           "This host does not carry the exact Form identity in the message. Install it on the host, or pin a provider build whose default create target the host does carry.",
 	"form_not_installed":     "Install this exact Form on the host before applying resources of this kind.",
-	"form_unavailable":       "The Form is installed but not activated for this scope. Ask the host operator to activate it, then re-run.",
+	"form_unavailable":       "The host cannot currently execute this exact Form. Ask the host operator to check support, runtime availability, and policy before retrying.",
 	"form_identity_conflict": "The host holds a different definition under this Form line. Reconcile the host's installed identity with the one this provider build carries.",
 	"resource_not_found":     "Refresh so state reflects the host, then re-plan.",
 	"resource_busy":          "Another operation holds this resource. This is retryable: wait and re-run the same apply.",
