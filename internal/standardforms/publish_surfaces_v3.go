@@ -353,7 +353,7 @@ description: |-
 	builder.WriteString("This page documents the publisher-set Provider 4 mapping; its exact FormRef `" +
 		form.Family.APIVersion() + "/" + form.Kind + "` is recorded below.\n" +
 		"The resource type is Provider metadata. " + formDefinitionReference(form) + "\n" +
-		"See the complete exact identity and the [complete example](https://takoform.com/examples/resources/" + resourceType + "/resource.tf).\n")
+			"See the complete exact identity and the [complete example](../../examples/resources/" + resourceType + "/resource.tf).\n")
 	builder.WriteString(v3ExactFormIdentitySection(form))
 	builder.WriteString("\n## Arguments\n\n")
 	builder.WriteString(v3NameArgumentDoc(form))

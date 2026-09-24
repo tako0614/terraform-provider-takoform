@@ -49,8 +49,9 @@ resource "takoform_module_worker" "api" {
 | --- | ---: |
 | Edge | 17 |
 
-Read the [Provider reference](/docs/), [Provider mapping inventory](/forms/), and
-[conformance evidence](/conformance/) for generated contracts and executable
-checks. See [Versions and compatibility](/docs/versions.html) for retained
-releases and migration. AWS, Cloudflare, Kubernetes, and other providers are
-declared natively beside Takoform in the same OpenTofu module.
+Read the [Takoform reference](https://takoform.com/reference/), [schema index](https://takoform.com/schemas/),
+and [conformance evidence](https://takoform.com/conformance/) for the current
+Core contracts and executable checks. The current site does not serve
+publisher-specific Form pages; Provider mappings remain in this repository's
+`docs/resources/` and `examples/resources/` trees. AWS, Cloudflare, Kubernetes,
+and other providers are declared natively beside Takoform in the same OpenTofu module.
