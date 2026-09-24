@@ -9,7 +9,7 @@ withdrawn lane は artifact / history identity であり、domain axis を増や
 | surface | identity | 用途 |
 | --- | --- | --- |
 | API/Core | **`v1.0.1`** | `forms.takoform.com/v1` 上の current compatibility checkpoint。互換性のある 1.x は同じ lane に留まります。 |
-| external Edge publication | [`takoform-forms` commit `3231633605b737ce5279d7fc020b4780568e7091`](https://github.com/tako0614/takoform-forms/commit/3231633605b737ce5279d7fc020b4780568e7091) | 17 content-addressed package の公開正本。 |
+| external Edge publication | [`takoform-forms` commit `3231633605b737ce5279d7fc020b4780568e7091`](https://github.com/tako0614/takoform-forms/commit/3231633605b737ce5279d7fc020b4780568e7091) | 17 content-addressed package の公開正本 (正とする情報)。 |
 | embedded Edge candidate snapshot | [`forms/candidates/edge.forms.takoform.com/candidate-set.json`](/forms/candidates/edge.forms.takoform.com/candidate-set.json) | Provider repository 内の `publicationStatus: unpublished` snapshot。公開 evidence ではありません。 |
 | Registry Provider | **`4.0.0`** | 同じ `tako0614/takoform` addressで publisher set の Edge Form 17種だけを登録 (Provider 3 から引き継ぐ 16種 + `ObjectBucket`)。Registry 公開済み。 |
 | retained Registry Provider | **`3.0.0`** | 8 versionless family / 31 mappingのimmutable aggregate history。 |
