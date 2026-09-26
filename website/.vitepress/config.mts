@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -309,14 +309,36 @@ export default defineConfig({
     const ogDescription = pageData.frontmatter?.description
       ? description
       : (firstParagraph(siteConfig.srcDir, pageData.relativePath) ?? description);
+    const pageUrl = new URL(route, "https://takoform.com/").href;
+    // hreflang targets the same page in the other locale when that source file
+    // exists; x-default points at the root (English) locale.
+    const enPath = pageData.relativePath.startsWith("ja/")
+      ? pageData.relativePath.slice(3)
+      : pageData.relativePath;
+    const enRoute = enPath
+      .replace(/(^|\/)index\.md$/u, "$1")
+      .replace(/\.md$/u, ".html");
+    const hasEn = existsSync(path.join(siteConfig.srcDir, enPath));
+    const hasJa = existsSync(path.join(siteConfig.srcDir, `ja/${enPath}`));
+    const enUrl = new URL(enRoute, "https://takoform.com/").href;
+    const jaUrl = new URL(`ja/${enRoute}`, "https://takoform.com/").href;
+    const alternates = [];
+    if (hasEn) {
+      alternates.push(["link", { rel: "alternate", hreflang: "en", href: enUrl }]);
+    }
+    if (hasJa) {
+      alternates.push(["link", { rel: "alternate", hreflang: "ja", href: jaUrl }]);
+    }
+    if (hasEn && hasJa) {
+      alternates.push(["link", { rel: "alternate", hreflang: "x-default", href: enUrl }]);
+    }
     return [
       ["meta", { property: "og:title", content: title }],
       ["meta", { property: "og:description", content: ogDescription }],
       ["meta", { property: "og:locale", content: route.startsWith("ja/") ? "ja_JP" : "en_US" }],
-      [
-        "meta",
-        { property: "og:url", content: new URL(route, "https://takoform.com/").href },
-      ],
+      ["meta", { property: "og:url", content: pageUrl }],
+      ["link", { rel: "canonical", href: pageUrl }],
+      ...alternates,
       ["meta", { name: "twitter:title", content: title }],
       ["meta", { name: "twitter:description", content: ogDescription }],
     ];
