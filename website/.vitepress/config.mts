@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +25,40 @@ if (snapshotReadOnlyFlag !== undefined && snapshotReadOnlyFlag !== "1") {
     "TAKOFORM_WEBSITE_SNAPSHOT_READ_ONLY must be exactly \"1\" when set",
   );
 }
+// Pages rarely carry a frontmatter description. Fall back to the first prose
+// paragraph of the Markdown source so a shared link describes the actual page
+// rather than repeating the site blurb.
+function firstParagraph(srcDir, relativePath) {
+  try {
+    const raw = readFileSync(path.join(srcDir, relativePath), "utf8");
+    const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+    for (const line of body.split("\n")) {
+      const text = line.trim();
+      if (
+        text === "" ||
+        text.startsWith("#") ||
+        text.startsWith("<") ||
+        text.startsWith("```") ||
+        text.startsWith("---") ||
+        text.startsWith(":::") ||
+        text.startsWith("|")
+      )
+        continue;
+      const plain = text
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/<[^>]+>/g, "")
+        .replace(/\{#[^}]+\}/g, "")
+        .replace(/[*_`~]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (plain !== "") return plain.slice(0, 200);
+    }
+  } catch {
+    // Fall back to the site-level description below.
+  }
+  return undefined;
+}
+
 const siteStatus = {
   ...prepareSiteStatus(siteDirectory, {
     write: snapshotReadOnlyFlag === undefined,
@@ -260,10 +295,92 @@ export default defineConfig({
   // pass keeps MiniSearch insertion order (and its emitted chunk hash) stable
   // across fresh builds, including the isolated snapshot output.
   buildConcurrency: 1,
+  head: [
+    ["link", { rel: "icon", href: "/tako.png" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "Takoform" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "color-scheme", content: "light dark" }],
+  ],
+  transformHead({ pageData, siteConfig, title, description }) {
+    const route = pageData.relativePath
+      .replace(/(^|\/)index\.md$/u, "$1")
+      .replace(/\.md$/u, ".html");
+    const ogDescription = pageData.frontmatter?.description
+      ? description
+      : (siteConfig?.srcDir
+          ? firstParagraph(siteConfig.srcDir, pageData.relativePath)
+          : undefined) ?? description;
+    const pageUrl = new URL(route, "https://takoform.com/").href;
+    // hreflang targets the same page in the other locale when that source file
+    // exists; x-default points at the root (English) locale.
+    const enPath = pageData.relativePath.startsWith("ja/")
+      ? pageData.relativePath.slice(3)
+      : pageData.relativePath;
+    const enRoute = enPath
+      .replace(/(^|\/)index\.md$/u, "$1")
+      .replace(/\.md$/u, ".html");
+    const hasEn =
+      siteConfig?.srcDir !== undefined &&
+      existsSync(path.join(siteConfig.srcDir, enPath));
+    const hasJa =
+      siteConfig?.srcDir !== undefined &&
+      existsSync(path.join(siteConfig.srcDir, `ja/${enPath}`));
+    const enUrl = new URL(enRoute, "https://takoform.com/").href;
+    const jaUrl = new URL(`ja/${enRoute}`, "https://takoform.com/").href;
+    const alternates = [];
+    if (hasEn) {
+      alternates.push(["link", { rel: "alternate", hreflang: "en", href: enUrl }]);
+    }
+    if (hasJa) {
+      alternates.push(["link", { rel: "alternate", hreflang: "ja", href: jaUrl }]);
+    }
+    if (hasEn && hasJa) {
+      alternates.push(["link", { rel: "alternate", hreflang: "x-default", href: enUrl }]);
+    }
+    return [
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: ogDescription }],
+      ["meta", { property: "og:locale", content: route.startsWith("ja/") ? "ja_JP" : "en_US" }],
+      ["meta", { property: "og:url", content: pageUrl }],
+      ["meta", { property: "og:image", content: "https://takoform.com/og.png" }],
+      ["meta", { property: "og:image:type", content: "image/png" }],
+      ["meta", { property: "og:image:width", content: "1200" }],
+      ["meta", { property: "og:image:height", content: "630" }],
+      ["link", { rel: "canonical", href: pageUrl }],
+      ...alternates,
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: ogDescription }],
+      ["meta", { name: "twitter:image", content: "https://takoform.com/og.png" }],
+    ];
+  },
   themeConfig: {
+    // Only a curated subset of pages has a ja counterpart. Keep locale
+    // switches at the locale home instead of deep-linking into a 404.
+    i18nRouting: false,
     outline: { level: [2, 3] },
     search: {
       provider: "local",
+      options: {
+        locales: {
+          ja: {
+            translations: {
+              button: { buttonText: "検索", buttonAriaLabel: "検索" },
+              modal: {
+                displayDetails: "詳細を表示",
+                resetButtonTitle: "検索をクリア",
+                backButtonTitle: "閉じる",
+                noResultsText: "見つかりませんでした",
+                footer: {
+                  selectText: "選択",
+                  navigateText: "移動",
+                  closeText: "閉じる",
+                },
+              },
+            },
+          },
+        },
+      },
     },
     siteStatus,
   },
@@ -275,6 +392,17 @@ export default defineConfig({
         nav: englishNav,
         sidebar: englishSidebar,
         siteStatus,
+        docFooter: { prev: "Previous page", next: "Next page" },
+        darkModeSwitchLabel: "Appearance",
+        returnToTopLabel: "Return to top",
+        sidebarMenuLabel: "Menu",
+        outlineTitle: "On this page",
+        langMenuLabel: "Change language",
+        notFound: {
+          title: "Page not found",
+          quote: "Check the URL or use search to find a page.",
+          linkText: "Home",
+        },
       },
     },
     ja: {
@@ -285,6 +413,17 @@ export default defineConfig({
         nav: japaneseNav,
         sidebar: japaneseSidebar,
         siteStatus,
+        docFooter: { prev: "前へ", next: "次へ" },
+        darkModeSwitchLabel: "配色",
+        returnToTopLabel: "先頭へ",
+        sidebarMenuLabel: "目次",
+        outlineTitle: "このページ",
+        langMenuLabel: "言語を切り替える",
+        notFound: {
+          title: "ページがありません",
+          quote: "URLが正しいか確認するか、検索から探してください。",
+          linkText: "トップへ",
+        },
       },
     },
   },
