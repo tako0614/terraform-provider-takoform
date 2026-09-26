@@ -446,12 +446,11 @@ func (r *v3FormResource) plannedBindingUsed(
 // the host advertises: the enum values it accepts, the inclusive ranges it
 // accepts, and the ceilings it publishes.
 //
-// The ceilings are read by convention from the field's own wire name —
-// `maximumHandlers` bounds `handlers`, `maximumVersions` bounds a deployment's
-// `versions`, `maximumRequiredSensitiveVars` bounds the secret slots a version
-// asks for — plus the one ceiling the lane names in prose,
-// `maximumBundleBytes`, which is checked against the artifact this plan would
-// commit. Nothing is invented for a limit the host does not publish.
+// Stable v1 profiles key capabilities by JSON Pointer, so a collection field's
+// ceiling is looked up at `/` + its wire name (for example,
+// `/requiredSensitiveVars`). Retained beta profiles use the original
+// lowerCamelCase `maximum<Field>` convention. Nothing is invented for a limit
+// the host does not publish.
 func (r *v3FormResource) checkPlannedValues(
 	ctx context.Context, profile v3SupportProfile, codec v3FormCodec, resp *resource.ModifyPlanResponse,
 ) {
@@ -497,7 +496,8 @@ func (r *v3FormResource) checkPlannedValues(
 			}
 		}
 		if count, countable := v3PlannedCount(value); countable {
-			if ceiling, published := profile.limit(v3MaximumLimitName(field.Wire)); published && count > ceiling {
+			limitName := profile.collectionLimitName(field.Wire)
+			if ceiling, published := profile.limit(limitName); published && count > ceiling {
 				resp.Diagnostics.Append(v3Diagnostic{
 					Summary:      "This host accepts fewer " + name + " entries than the plan declares",
 					ResourceType: r.resourceTypeName(),
@@ -507,7 +507,7 @@ func (r *v3FormResource) checkPlannedValues(
 					Code:         v3CodeLimitExceeded,
 					Detail: fmt.Sprintf(
 						"The plan declares %d entries and the host publishes the ceiling %s = %d.",
-						count, v3MaximumLimitName(field.Wire), ceiling,
+						count, limitName, ceiling,
 					),
 					Repair: "Declare at most the ceiling above, or apply against a host that publishes a higher one.",
 				}.error())
@@ -531,6 +531,21 @@ func (r *v3FormResource) checkPlannedValues(
 			}
 		}
 	}
+}
+
+// collectionLimitName returns the profile key that bounds one collection
+// field. Stable v1 uses the desired document's JSON Pointer directly; retained
+// beta profiles keep the historical maximum<Field> convention. Keeping this
+// distinction here prevents a stable profile's `/requiredSensitiveVars` from
+// being silently translated to the legacy `maximumRequiredSensitiveVars` key.
+func (p v3SupportProfile) collectionLimitName(wire string) string {
+	if wire == "" {
+		return ""
+	}
+	if apiVersion, _ := p["apiVersion"].(string); apiVersion == clientv3.SupportProfileAPIVersion {
+		return "/" + strings.TrimPrefix(wire, "/")
+	}
+	return v3MaximumLimitName(wire)
 }
 
 // checkExternalServices asks the Host about each opaque standard-service slot
