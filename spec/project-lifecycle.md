@@ -215,7 +215,7 @@ In particular:
   satisfied the Stable criteria above;
 - the retained ten-Form `portable-standard` admission closure is historical
   signed lifecycle evidence for exact identities, not a normative ranking;
-- a Takosumi or Takosumi Cloud implementation count is Host Support or Service
+- a Takosumi OSS or Takosumi Hosted implementation count is Host Support or Service
   Offering data, not Form maturity;
 - existing Resources keep their exact pins and MUST retain safe observation,
   deletion, recovery, and explicit migration paths.
