@@ -997,7 +997,7 @@ func runConfigurationValidation(ctx context.Context, repoRoot, cliPath, provider
 		if output, err := h.runIn(ctx, directory, "get", "-no-color"); err != nil {
 			return nil, fmt.Errorf("%s module install in %s: %w\n%s", h.identity.Product, directory, err, output)
 		}
-		providers, err := h.runIn(ctx, directory, "providers", "-no-color")
+		providers, err := inspectProviderRequirements(ctx, h.repoRoot, h.cli, h.env, directory)
 		if err != nil {
 			return nil, fmt.Errorf("%s provider inspection in %s: %w\n%s", h.identity.Product, directory, err, providers)
 		}
@@ -1019,6 +1019,36 @@ func runConfigurationValidation(ctx context.Context, repoRoot, cliPath, provider
 		validated = append(validated, filepath.ToSlash(relative))
 	}
 	return validated, nil
+}
+
+// inspectProviderRequirements asks the CLI to parse the complete configuration
+// and local-module closure without making a committed lockfile's selected
+// provider packages a prerequisite. The caller passes a disposable scratch
+// copy, never a repository configuration. Restore the exact lockfile before
+// returning so a peer-provider config can be skipped for this single-provider
+// harness without weakening the subsequent validation of provider-only
+// configurations.
+func inspectProviderRequirements(ctx context.Context, repoRoot, cliPath string, env []string, directory string) (string, error) {
+	lockPath := filepath.Join(directory, ".terraform.lock.hcl")
+	lockContents, err := os.ReadFile(lockPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return runCommand(ctx, repoRoot, env, cliPath, "-chdir="+directory, "providers", "-no-color")
+	}
+	if err != nil {
+		return "", err
+	}
+	lockInfo, err := os.Stat(lockPath)
+	if err != nil {
+		return "", err
+	}
+	if err := os.Remove(lockPath); err != nil {
+		return "", err
+	}
+	output, commandErr := runCommand(ctx, repoRoot, env, cliPath, "-chdir="+directory, "providers", "-no-color")
+	if err := os.WriteFile(lockPath, lockContents, lockInfo.Mode().Perm()); err != nil {
+		return output, fmt.Errorf("restore scratch provider lockfile: %w", err)
+	}
+	return output, commandErr
 }
 
 // hasExternalProviderRequirement reports whether `providers` output names a
