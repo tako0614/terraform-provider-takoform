@@ -78,7 +78,7 @@ AWS、Cloudflare、Kubernetes、PostgreSQLなどの業界標準providerは
 `required_providers` の対等なsourceとして宣言します。OpenTofuが複数providerの
 install、alias、plan/state、dependency graphを管理します。Takoformはそれらを
 Formでwrapせず、provider catalogも持ちません。
-[native provider composition example](/examples/native-provider-composition/main.tf)
+[native provider composition example](https://github.com/tako0614/terraform-provider-takoform/blob/main/examples/native-provider-composition/main.tf)
 を参照してください。
 
 実行可能な互換性検証は [Conformance](/conformance/) にまとめています。

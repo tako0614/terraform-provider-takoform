@@ -91,7 +91,7 @@ Takoform implementation details. A module declares any number of provider
 sources in `required_providers` and connects their resources through the native
 OpenTofu graph. Takoform does not create wrapper Forms, proxy their credentials,
 or maintain a central provider catalog. See the
-[composition example](../examples/native-provider-composition/main.tf).
+[composition example](https://github.com/tako0614/terraform-provider-takoform/blob/main/examples/native-provider-composition/main.tf).
 
 ## Host requirements
 
