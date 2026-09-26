@@ -77,7 +77,7 @@ AWS, Cloudflare, Kubernetes, PostgreSQL, and other industry providers remain
 ordinary peers in `required_providers`. OpenTofu installs all declared sources
 and builds one dependency graph; Takoform does not wrap their resources as
 Forms or maintain a provider catalog. See the [native provider composition
-example](/examples/native-provider-composition/main.tf).
+example](https://github.com/tako0614/terraform-provider-takoform/blob/main/examples/native-provider-composition/main.tf).
 
 The executable compatibility checks are listed in [Conformance](/conformance/).
 
