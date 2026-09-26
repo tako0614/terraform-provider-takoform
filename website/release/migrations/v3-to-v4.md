@@ -65,4 +65,4 @@ provider installation, aliases, graph edges, plan/state, and dependency order.
 Takoform neither wraps those resources as Forms nor acts as a provider catalog.
 
 The repository includes an
-[AWS plus Takoform example](https://github.com/tako0614/terraform-provider-takoform/blob/main/examples/native-provider-composition/main.tf).
+[AWS plus Takoform example](../../examples/native-provider-composition/main.tf).
