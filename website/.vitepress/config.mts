@@ -344,6 +344,9 @@ export default defineConfig({
     ];
   },
   themeConfig: {
+    // Only a curated subset of pages has a ja counterpart. Keep locale
+    // switches at the locale home instead of deep-linking into a 404.
+    i18nRouting: false,
     outline: { level: [2, 3] },
     search: {
       provider: "local",
