@@ -2,8 +2,8 @@ English: [日本語](ja/getting-started.md)
 
 # Manage a published Form from HCL
 
-This guide introduces a small Terraform/OpenTofu module with one AWS resource
-and one Takoform resource. The example is
+This guide introduces a small Terraform/OpenTofu module with one Random
+Provider resource and one Takoform resource. The example is
 [`examples/getting-started/main.tf`](../examples/getting-started/main.tf).
 
 This Provider is for HCL authors who want to manage an explicit set of
@@ -20,8 +20,8 @@ Have these ready before planning:
 - The Host's endpoint, exact Space ID, and (if that Host requires it) a bearer
   token from the Host operator. The Host must support the exact FormRef used by
   each resource.
-- AWS credentials available through the AWS Provider's normal credential
-  configuration, plus the region and an available S3 bucket name you choose.
+- The Random Provider needs no cloud credentials. Applying the Takoform
+  resource changes the selected Host.
 
 The Takoform endpoint and Space are supplied by your selected Host; there is
 no default Host or Space. Keep a bearer token out of HCL and variable files.
@@ -32,10 +32,13 @@ supported when you configure the Provider through its environment variables.
 ## Declare both Providers
 
 Use the checked-in [example module](../examples/getting-started/main.tf). It
-declares `registry.terraform.io/tako0614/takoform` beside the industry
-`registry.terraform.io/hashicorp/aws` Provider. The graph contains an S3 bucket
-and a `takoform_edge_kv_namespace` resource with an ordinary `depends_on`
-edge; neither Provider wraps or forwards credentials to the other.
+declares `registry.terraform.io/tako0614/takoform` beside the
+`registry.terraform.io/hashicorp/random` Provider. The Random resource provides
+a generated suffix for the `takoform_edge_kv_namespace` name through a normal
+HCL reference. The Random Provider has no cloud account to configure; the
+Takoform Provider alone manages the namespaced resource on the selected Host.
+For a cloud-provider composition example, see the existing
+[AWS S3 example](../examples/native-provider-composition/main.tf).
 
 From the example directory, check formatting, initialize the module, and
 validate it. After supplying the required inputs and credentials, review the
@@ -50,11 +53,10 @@ tofu plan
 ```
 
 Use `terraform` in place of `tofu` when working with Terraform. Supply these
-four non-secret inputs through your usual variable mechanism: Host endpoint,
-Space ID, AWS region, and S3 bucket name. Choose a bucket name accepted by S3
-and available for your deployment. Reviewing the plan is important because
-applying it creates resources in both the AWS account and the selected Host.
-Apply only after confirming both targets and the planned changes.
+two non-secret inputs through your usual variable mechanism: Host endpoint and
+Space ID. Reviewing the plan is important because applying it creates a
+namespace on the selected Host. Apply only after confirming the target and the
+planned changes.
 
 This resource maps to the published [EdgeKVNamespace Form at definition
 0.1.0](https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.1.0/). A

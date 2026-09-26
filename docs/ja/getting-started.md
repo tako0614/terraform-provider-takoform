@@ -2,8 +2,8 @@
 
 # HCL から公開済み Form を管理する
 
-このガイドでは、AWS と Takoform のリソースを 1 つずつ含む Terraform / OpenTofu
-module を紹介します。使用する設定は
+このガイドでは、Random Provider と Takoform のリソースを 1 つずつ含む
+Terraform / OpenTofu module を紹介します。使用する設定は
 [`examples/getting-started/main.tf`](../../examples/getting-started/main.tf) です。
 
 この Provider は、公開済みの Takoform Form を HCL から管理するためのものです。
@@ -20,8 +20,8 @@ plan を作る前に、次を用意してください。
 - Host 運用者から受け取った接続先、正確な Space ID、および Host が必要とする
   場合は bearer token。Host は resource が使う正確な FormRef に対応している必要が
   あります。
-- AWS Provider の通常の認証設定で利用できる AWS 認証情報、region、および選んだ
-  AWS account で利用できる S3 bucket 名。
+- Random Provider にクラウド認証情報は不要です。Takoform のリソースを apply すると、
+  選択した Host は変更されます。
 
 Takoform の接続先と Space は選択した Host が指定します。既定の Host や Space
 はありません。bearer token を HCL や変数ファイルに書かないでください。必要なら
@@ -31,11 +31,12 @@ Takoform の接続先と Space は選択した Host が指定します。既定�
 ## 2 つの Provider を宣言する
 
 同梱の[サンプル module](../../examples/getting-started/main.tf)を使います。
-`registry.terraform.io/tako0614/takoform` と、業界標準の
-`registry.terraform.io/hashicorp/aws` を宣言しています。依存グラフには S3 bucket と
-`takoform_edge_kv_namespace` resource があり、通常の `depends_on` で接続しています。
-片方の Provider がもう片方の resource を包んだり、credentials を転送したりは
-しません。
+`registry.terraform.io/tako0614/takoform` と
+`registry.terraform.io/hashicorp/random` を宣言しています。Random のリソースが生成する
+値を通常の HCL reference で `takoform_edge_kv_namespace` の名前に使います。Random
+Provider にクラウドアカウントの設定は不要です。Takoform Provider が選択した Host の
+namespace を管理します。クラウド Provider との連携例は既存の
+[AWS S3 サンプル](../../examples/native-provider-composition/main.tf)を参照してください。
 
 サンプルのディレクトリで HCL の整形、初期化、検証を行います。入力と認証情報を
 用意したら、apply の前に plan を確認してください。
@@ -49,9 +50,8 @@ tofu plan
 ```
 
 Terraform を使う場合は `tofu` の代わりに `terraform` を実行します。Host の接続先と
-Space ID、AWS region、S3 bucket 名の 4 つは、普段使っている方法で module に渡して
-ください。S3 で利用できる bucket 名を選びます。apply すると AWS account と選択した
-Host の両方にリソースが作られるため、対象と変更内容を確認してから実行してください。
+Space ID の 2 つを、普段使っている方法で module に渡してください。apply すると選択した
+Host に namespace が作られるため、対象と変更内容を確認してから実行してください。
 
 この resource は公開済みの
 [EdgeKVNamespace Form、definition 0.1.0](https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.1.0/)

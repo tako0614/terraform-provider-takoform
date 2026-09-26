@@ -7,9 +7,13 @@ provider catalog. Each Provider keeps its own source, version, credentials,
 resources, and state.
 
 Start with the [HCL author getting-started guide](docs/getting-started.md) and
-its [AWS + Takoform example](examples/getting-started/main.tf). The example
-uses one published [EdgeKVNamespace Form, definition 0.1.0](https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.1.0/)
-beside an AWS S3 bucket in the normal OpenTofu dependency graph.
+its [Random + Takoform example](examples/getting-started/main.tf). The Random
+resource needs no cloud credentials; the Takoform Provider still needs the
+selected Host's endpoint, Space, and any required authentication. It uses the
+published [EdgeKVNamespace Form, definition
+0.1.0](https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.1.0/)
+and keeps that resource under the selected Host. For an AWS S3 example, see
+[native provider composition](examples/native-provider-composition/main.tf).
 
 The compatible Host supplies the endpoint, Space, and (if required) bearer
 token. This Provider neither selects nor creates a Host. For the separate
