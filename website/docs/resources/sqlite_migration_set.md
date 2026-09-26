@@ -13,7 +13,7 @@ This is a `revision` resource: an immutable snapshot. It is create-only — ever
 
 This page documents the publisher-set Provider 4 mapping; its exact FormRef `edge.forms.takoform.com/SQLiteMigrationSet` is recorded below.
 The resource type is Provider metadata. The published Edge Form Definition is maintained in the [takoform-forms source](https://github.com/tako0614/takoform-forms/blob/3231633605b737ce5279d7fc020b4780568e7091/forms/candidates/edge.forms.takoform.com/sqlite-migration-set/definition.json).
-See the complete exact identity and the [complete example](https://takoform.com/examples/resources/takoform_sqlite_migration_set/resource.tf).
+See the complete exact identity and the [complete example](../../examples/resources/takoform_sqlite_migration_set/resource.tf).
 
 ## Exact FormRef
 
