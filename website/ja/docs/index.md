@@ -11,7 +11,7 @@ Provider `4.0.0` は既存の `registry.terraform.io/tako0614/takoform`
 address を維持し、`github.com/tako0614/takoform-forms` から選んだ exact Form 17 種だけを
 登録します。Provider `3.0.0` の 31 resource aggregate は immutable history
 として残します。Registry 公開の根拠は
-[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
+[provider-release-identities.json](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
 の `4.0.0` entry にある Registry readback です。
 
 この関係は publisher repository と exact FormRefs で識別します。Takoform は
@@ -61,7 +61,7 @@ resource "takoform_module_worker" "api" {
 各リソースページには、4 フィールドすべてを含む FormRef、別管理の package
 digest、引数、state、import の仕様、参照元の Form が載っています。
 [mapping inventory](/forms/) はリソース一覧と各 `definitionVersion` を、
-[identity ledger](/release/provider-form-identities.json) はリリース時の正確な
+[provider-form-identities.json](/release/provider-form-identities.json) はリリース時の正確な
 identity を記録します。
 
 ## History と migration

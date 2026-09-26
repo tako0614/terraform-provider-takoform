@@ -25,7 +25,7 @@ state に保持します。Provider resource 名は adapter metadata です。
 | --- | --- | --- |
 | **4.0.0** | current Host API | publisher set の Edge Form 17種限定の現行 Registry 公開 release。 |
 | **3.0.0** | current Host API | 8 family / 31 typed mappingのimmutable retained Registry distribution。 |
-| **2.1.1** | `forms.takoform.com/v1beta1` | [identity ledger](/release/provider-form-identities.json) にある 15 immutable Edge Form identity 用の retained client。 |
+| **2.1.1** | `forms.takoform.com/v1beta1` | [provider-form-identities.json](/release/provider-form-identities.json) にある 15 immutable Edge Form identity 用の retained client。 |
 | **2.0.0** | withdrawn `v1alpha2` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |
 | **1.0.3** | withdrawn `v1alpha1` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |
 
