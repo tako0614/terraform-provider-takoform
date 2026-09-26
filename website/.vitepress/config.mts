@@ -299,7 +299,7 @@ export default defineConfig({
     ["link", { rel: "icon", href: "/tako.png" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "Takoform" }],
-    ["meta", { name: "twitter:card", content: "summary" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
     ["meta", { name: "color-scheme", content: "light dark" }],
   ],
   transformHead({ pageData, siteConfig, title, description }) {
@@ -308,7 +308,9 @@ export default defineConfig({
       .replace(/\.md$/u, ".html");
     const ogDescription = pageData.frontmatter?.description
       ? description
-      : (firstParagraph(siteConfig.srcDir, pageData.relativePath) ?? description);
+      : (siteConfig?.srcDir
+          ? firstParagraph(siteConfig.srcDir, pageData.relativePath)
+          : undefined) ?? description;
     const pageUrl = new URL(route, "https://takoform.com/").href;
     // hreflang targets the same page in the other locale when that source file
     // exists; x-default points at the root (English) locale.
@@ -318,8 +320,12 @@ export default defineConfig({
     const enRoute = enPath
       .replace(/(^|\/)index\.md$/u, "$1")
       .replace(/\.md$/u, ".html");
-    const hasEn = existsSync(path.join(siteConfig.srcDir, enPath));
-    const hasJa = existsSync(path.join(siteConfig.srcDir, `ja/${enPath}`));
+    const hasEn =
+      siteConfig?.srcDir !== undefined &&
+      existsSync(path.join(siteConfig.srcDir, enPath));
+    const hasJa =
+      siteConfig?.srcDir !== undefined &&
+      existsSync(path.join(siteConfig.srcDir, `ja/${enPath}`));
     const enUrl = new URL(enRoute, "https://takoform.com/").href;
     const jaUrl = new URL(`ja/${enRoute}`, "https://takoform.com/").href;
     const alternates = [];
@@ -337,10 +343,15 @@ export default defineConfig({
       ["meta", { property: "og:description", content: ogDescription }],
       ["meta", { property: "og:locale", content: route.startsWith("ja/") ? "ja_JP" : "en_US" }],
       ["meta", { property: "og:url", content: pageUrl }],
+      ["meta", { property: "og:image", content: "https://takoform.com/og.png" }],
+      ["meta", { property: "og:image:type", content: "image/png" }],
+      ["meta", { property: "og:image:width", content: "1200" }],
+      ["meta", { property: "og:image:height", content: "630" }],
       ["link", { rel: "canonical", href: pageUrl }],
       ...alternates,
       ["meta", { name: "twitter:title", content: title }],
       ["meta", { name: "twitter:description", content: ogDescription }],
+      ["meta", { name: "twitter:image", content: "https://takoform.com/og.png" }],
     ];
   },
   themeConfig: {
