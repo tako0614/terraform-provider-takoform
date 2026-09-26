@@ -286,6 +286,26 @@ export default defineConfig({
     outline: { level: [2, 3] },
     search: {
       provider: "local",
+      options: {
+        locales: {
+          ja: {
+            translations: {
+              button: { buttonText: "検索", buttonAriaLabel: "検索" },
+              modal: {
+                displayDetails: "詳細を表示",
+                resetButtonTitle: "検索をクリア",
+                backButtonTitle: "閉じる",
+                noResultsText: "見つかりませんでした",
+                footer: {
+                  selectText: "選択",
+                  navigateText: "移動",
+                  closeText: "閉じる",
+                },
+              },
+            },
+          },
+        },
+      },
     },
     siteStatus,
   },
@@ -297,6 +317,17 @@ export default defineConfig({
         nav: englishNav,
         sidebar: englishSidebar,
         siteStatus,
+        docFooter: { prev: "Previous page", next: "Next page" },
+        darkModeSwitchLabel: "Appearance",
+        returnToTopLabel: "Return to top",
+        sidebarMenuLabel: "Menu",
+        outlineTitle: "On this page",
+        langMenuLabel: "Change language",
+        notFound: {
+          title: "Page not found",
+          quote: "Check the URL or use search to find a page.",
+          linkText: "Home",
+        },
       },
     },
     ja: {
@@ -307,6 +338,17 @@ export default defineConfig({
         nav: japaneseNav,
         sidebar: japaneseSidebar,
         siteStatus,
+        docFooter: { prev: "前へ", next: "次へ" },
+        darkModeSwitchLabel: "配色",
+        returnToTopLabel: "先頭へ",
+        sidebarMenuLabel: "目次",
+        outlineTitle: "このページ",
+        langMenuLabel: "言語を切り替える",
+        notFound: {
+          title: "ページがありません",
+          quote: "URLが正しいか確認するか、検索から探してください。",
+          linkText: "トップへ",
+        },
       },
     },
   },
