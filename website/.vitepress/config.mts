@@ -260,6 +260,28 @@ export default defineConfig({
   // pass keeps MiniSearch insertion order (and its emitted chunk hash) stable
   // across fresh builds, including the isolated snapshot output.
   buildConcurrency: 1,
+  head: [
+    ["link", { rel: "icon", href: "/tako.png" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "Takoform" }],
+    ["meta", { name: "twitter:card", content: "summary" }],
+    ["meta", { name: "color-scheme", content: "light dark" }],
+  ],
+  transformHead({ pageData, title, description }) {
+    const route = pageData.relativePath
+      .replace(/(^|\/)index\.md$/u, "$1")
+      .replace(/\.md$/u, ".html");
+    return [
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: description }],
+      [
+        "meta",
+        { property: "og:url", content: new URL(route, "https://takoform.com/").href },
+      ],
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: description }],
+    ];
+  },
   themeConfig: {
     outline: { level: [2, 3] },
     search: {
