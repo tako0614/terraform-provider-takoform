@@ -1,9 +1,20 @@
 # Takoform Provider
 
-Takoform Provider is a Terraform/OpenTofu client for a compatible Takoform
-Host. It maps typed resource configuration to exact Form contracts and keeps
-the resulting identity and desired state in Terraform state; the Host runs
-the service.
+Use ordinary Terraform/OpenTofu HCL to manage exact Takoform resources served
+by a compatible Host. This is a typed Provider you declare beside AWS,
+Cloudflare, or other Providers—not a universal Takoform API client or a
+provider catalog. Each Provider keeps its own source, version, credentials,
+resources, and state.
+
+Start with the [HCL author getting-started guide](docs/getting-started.md) and
+its [AWS + Takoform example](examples/getting-started/main.tf). The example
+uses one published [EdgeKVNamespace Form, definition 0.1.0](https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.1.0/)
+beside an AWS S3 bucket in the normal OpenTofu dependency graph.
+
+The compatible Host supplies the endpoint, Space, and (if required) bearer
+token. This Provider neither selects nor creates a Host. For the separate
+provider-neutral contract and Host API, see the [Takoform Host API
+documentation](https://takoform.com/en/host-api/).
 
 ## Quick start
 
@@ -37,6 +48,8 @@ resource "takoform_module_worker" "api" {
 
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
+Replace the example endpoint and Space with values supplied for your chosen
+Host; do not put a bearer token in HCL or a checked-in variable file.
 
 The repository's reference Host is for conformance only and serves no
 application traffic.
@@ -67,6 +80,12 @@ Registry Provider `4.0.0` is the published release at the `tako0614/takoform` so
 The [Provider reference](docs/index.md) lists every resource with its full
 FormRef, arguments, state, and import contract. The [mapping inventory](forms/README.md)
 lists the roster and each `definitionVersion`.
+
+`version = "~> 4.0"` constrains the Provider package; it is not a Form-version
+pin. Each resource type maps to a specific FormRef, and resource state records
+the API version, kind, definition version, and schema digest in use. See
+[Form identity and state](docs/resources/edge_kv_namespace.md#exact-formref)
+for one mapping.
 
 ## Native OpenTofu provider composition
 
