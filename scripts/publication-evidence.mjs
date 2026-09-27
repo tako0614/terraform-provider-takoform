@@ -407,7 +407,11 @@ function localGitConfiguration(repositoryRoot) {
     if (separator <= 0) fail("repository Git configuration has an invalid entry");
     const name = record.slice(0, separator);
     const value = record.slice(separator + 1);
-    const allowedBranch = /^branch\..+\.(?:merge|remote)$/u.test(name);
+    // VS Code's Git extension consumes this annotation for editor history; the
+    // Git CLI evidence commands below do not consult it or use its value to
+    // select canonical refs or committed bytes.
+    const allowedBranch =
+      /^branch\..+\.(?:merge|remote|vscode-merge-base)$/u.test(name);
     const allowedRemote =
       name === "remote.origin.fetch" || name === "remote.origin.url";
     const allowedFixtureIdentity = name === "user.name" || name === "user.email";
