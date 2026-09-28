@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -9,12 +10,88 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
+
+func TestContainerCandidateDoesNotChangeNormalWorkerVersionSchemas(t *testing.T) {
+	baselineProtocol, baselineDesired := normalWorkerVersionSchemas(t)
+	source, err := os.ReadFile("../../cmd/provider-container-candidate/container-http-candidate.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateFactory := NewContainerCandidate(source)
+	assertNormalWorkerVersionSchemasUnchanged(t, baselineProtocol, baselineDesired, "candidate construction")
+	if got := len(candidateFactory().(*takoformProvider).Resources(context.Background())); got != 19 {
+		t.Fatalf("candidate resource count = %d, want 19", got)
+	}
+	assertNormalWorkerVersionSchemasUnchanged(t, baselineProtocol, baselineDesired, "candidate Resources")
+}
+
+func assertNormalWorkerVersionSchemasUnchanged(t *testing.T, baselineProtocol, baselineDesired []byte, stage string) {
+	t.Helper()
+	protocol, desired := normalWorkerVersionSchemas(t)
+	if !bytes.Equal(protocol, baselineProtocol) {
+		t.Fatalf("normal Provider protocol schema changed after %s", stage)
+	}
+	if !bytes.Equal(desired, baselineDesired) {
+		t.Fatalf("normal WorkerVersion desired schema changed after %s", stage)
+	}
+}
+
+func normalWorkerVersionSchemas(t *testing.T) ([]byte, []byte) {
+	t.Helper()
+	normal := New("4.0.0")()
+	server := providerserver.NewProtocol6(normal)()
+	response, err := server.GetProviderSchema(context.Background(), &tfprotov6.GetProviderSchemaRequest{})
+	if err != nil || len(response.Diagnostics) != 0 {
+		t.Fatalf("normal GetProviderSchema: %v, diagnostics = %#v", err, response.Diagnostics)
+	}
+	if got := len(response.ResourceSchemas); got != 17 {
+		t.Fatalf("normal Provider resource count = %d, want 17", got)
+	}
+	protocol := v3Provider3TofuSchemaDocument(t, response)
+	for _, factory := range normal.Resources(context.Background()) {
+		instance := factory()
+		var metadata resource.MetadataResponse
+		instance.Metadata(context.Background(), resource.MetadataRequest{ProviderTypeName: "takoform"}, &metadata)
+		if metadata.TypeName != "takoform_worker_version" {
+			continue
+		}
+		worker := instance.(*v3FormResource)
+		assembly := mustPublisherProviderSnapshotAssembly()
+		desired, err := worker.form.DesiredSchema(v3SnapshotProjectionResolver{snapshot: assembly.snapshot})
+		if err != nil {
+			t.Fatal(err)
+		}
+		properties := desired["properties"].(map[string]any)
+		for _, field := range []struct{ name, contract, version string }{
+			{"worker", "worker.runtime", "1.1.0"},
+			{"actorBindings", "worker.actor", "1.0.0"},
+		} {
+			property := properties[field.name].(map[string]any)
+			if field.name == "actorBindings" {
+				property = property["items"].(map[string]any)["properties"].(map[string]any)["resource"].(map[string]any)
+			}
+			ref := property["x-takoform-required-interface"].(map[string]any)
+			if ref["name"] != field.contract || ref["version"] != field.version {
+				t.Fatalf("normal WorkerVersion %s interface = %v, want %s@%s", field.name, ref, field.contract, field.version)
+			}
+		}
+		encoded, err := json.Marshal(desired)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return protocol, encoded
+	}
+	t.Fatal("normal Provider has no WorkerVersion")
+	return nil, nil
+}
 
 func TestContainerForwardCandidateCompilesTypedResourcesWithoutChangingDefaultSet(t *testing.T) {
 	source, err := os.ReadFile("../../cmd/provider-container-candidate/container-http-candidate.json")

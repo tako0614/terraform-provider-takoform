@@ -533,12 +533,24 @@ func containerCandidateWorkerVersion(assembly *v3ProviderAssembly) model.Form {
 		panic("takoform provider: Container candidate has no existing typed WorkerVersion basis")
 	}
 	worker.DefinitionVersion = containerForwardCandidateWorkerVersion
+	// The published assembly is cached process-wide. Detach every slice and
+	// pointer this candidate changes before overlaying its forward contracts.
+	worker.Fields = append([]model.Field(nil), worker.Fields...)
 	for index := range worker.Fields {
+		var version string
 		if worker.Fields[index].HCL == "worker" {
-			worker.Fields[index].Target.Interface.Version = "1.2.0"
+			version = "1.2.0"
 		}
 		if worker.Fields[index].HCL == "actor_bindings" {
-			worker.Fields[index].Target.Interface.Version = "2.0.0"
+			version = "2.0.0"
+		}
+		if version != "" {
+			if worker.Fields[index].Target.Interface == nil {
+				panic("takoform provider: candidate WorkerVersion target has no Interface")
+			}
+			contract := *worker.Fields[index].Target.Interface
+			contract.Version = version
+			worker.Fields[index].Target.Interface = &contract
 		}
 	}
 	worker.Fields = append(worker.Fields,
@@ -561,7 +573,7 @@ func containerCandidateWorkerVersion(assembly *v3ProviderAssembly) model.Form {
 			Doc: "Typed module-worker.container-http bindings to exact ContainerService resources.",
 		},
 	)
-	worker.AcceptedBindings = append(worker.AcceptedBindings,
+	worker.AcceptedBindings = append(append([]model.BindingRefSource(nil), worker.AcceptedBindings...),
 		model.BindingRefSource{Name: "module-worker.edge-vector", Version: "1.0.0"},
 		model.BindingRefSource{Name: "module-worker.container-http", Version: containerForwardCandidateInterfaceVersion},
 	)
