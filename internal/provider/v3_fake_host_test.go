@@ -113,6 +113,15 @@ type v3FakeHost struct {
 	// deleted" rule is actually wrong on, and the only one that can falsify
 	// pending-operation resumption.
 	apply202Uncommitted bool
+	// apply202NoTargetUID omits the optional target UID from an accepted
+	// uncommitted Create and its pending Operation. Only a successful terminal
+	// result can then supply the resource incarnation fence.
+	apply202NoTargetUID bool
+	// apply202Malformed accepts a Create without a usable Operation handle.
+	apply202Malformed bool
+	// applyDirectMalformed returns an accepted direct 201 without a usable
+	// representation, which likewise has no Operation handle to resume.
+	applyDirectMalformed bool
 	// delete202Pending accepts one delete without removing its record until the
 	// operation settles. This exposes the accepted-delete timeout boundary.
 	delete202Pending   bool
@@ -776,18 +785,34 @@ func (h *v3FakeHost) serveApply(w http.ResponseWriter, r *http.Request, group, k
 			h.apply202Uncommitted = false
 			id := "op_apply_uncommitted"
 			h.deferredCommits[id] = &v3DeferredCommit{key: key, name: name, record: record}
-			h.pendingOperations[id] = record.uid
+			uid := record.uid
+			if h.apply202NoTargetUID {
+				uid = ""
+				h.apply202NoTargetUID = false
+			}
+			h.pendingOperations[id] = uid
 			w.Header().Set("Retry-After", "0")
-			h.writeJSON(w, http.StatusAccepted, map[string]any{
-				"operation": map[string]any{
-					"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
-					"id": id, "done": false,
-					"target": map[string]any{"uid": record.uid},
-				},
-			})
+			operation := map[string]any{
+				"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
+				"id": id, "done": false,
+			}
+			if uid != "" {
+				operation["target"] = map[string]any{"uid": uid}
+			}
+			h.writeJSON(w, http.StatusAccepted, map[string]any{"operation": operation})
+			return
+		}
+		if h.apply202Malformed {
+			h.apply202Malformed = false
+			h.writeJSON(w, http.StatusAccepted, map[string]any{"operation": map[string]any{"id": "bad"}})
 			return
 		}
 		h.resources[key] = record
+		if h.applyDirectMalformed {
+			h.applyDirectMalformed = false
+			h.writeJSON(w, http.StatusCreated, map[string]any{"invalid": true})
+			return
+		}
 		if h.apply202Pending {
 			h.apply202Pending = false
 			h.pendingOperations["op_apply_pending"] = record.uid

@@ -131,8 +131,8 @@ type v3PendingRequest struct {
 // that follows it.
 type v3PendingOutcome struct {
 	// Stop ends the read immediately, leaving state exactly as it is. It is set
-	// when a diagnostic error was raised, or when the operation is still running
-	// and the resource does not exist yet.
+	// when a diagnostic error was raised, including when the accepted create
+	// lacks a Host-issued UID and cannot safely adopt a same-name resource.
 	Stop bool
 	// RemoveOnAbsent authorizes the caller to treat `resource_not_found` as
 	// deletion. It is FALSE while an accepted mutation is still in flight: on a
@@ -147,6 +147,10 @@ type v3PendingOutcome struct {
 	// handle is not addressable to this caller. The missing handle is not proof
 	// that an accepted mutation failed or stopped committing.
 	FailOnAbsent bool
+	// ExpectedUID is a Host-issued identity from a verified terminal result.
+	// The following resource GET must match it even when accepted state had no
+	// target UID; otherwise a same-name replacement could be adopted.
+	ExpectedUID string
 }
 
 // v3NoPendingOperation is the outcome of a read with no recorded operation:
@@ -157,6 +161,8 @@ var v3NoPendingOperation = v3PendingOutcome{RemoveOnAbsent: true}
 // invalid operation ID in state so every plan is fenced, without ever sending
 // a fabricated ID to the Host.
 const v3UnaddressableDeleteOperation = "unaddressable_delete_operation"
+
+const v3UnaddressableCreateOperation = "unaddressable_create_operation"
 
 const v3PendingDeletePrivateKey = "pending_delete"
 
@@ -256,22 +262,23 @@ func v3ResumePendingDelete(
 //	operation state            what the read may then conclude
 //	-------------------------  ------------------------------------------------
 //	still running              absence is NOT deletion; a readable
-//	                           representation settles state but the marker
-//	                           stays, because nothing has committed yet
+//	                           representation settles state only when a
+//	                           Host-issued uid is already recorded, and the
+//	                           marker stays because nothing has committed yet
 //	terminal, success          the operation's result resource is verified
 //	                           against the exact identity, its uid is adopted
 //	                           when state has none, and the ordinary read
 //	                           settles state and clears the marker
-//	terminal, error            the exact resource GET is the final word:
+//	terminal, error            a known uid permits an exact resource GET:
 //	                           absent means state may be removed, present means
-//	                           the uid decides between adoption and hard error
+//	                           the uid decides between continuity and hard error
 //	operation_not_found        not addressable to this caller; a present
 //	                           resource settles only when its known uid matches;
 //	                           absence is an error that retains state
 //
 // Nothing in the table ever re-binds by name alone: a known uid is verified in
-// every branch (v3RequireStateUID), and an unknown uid is adopted only from a
-// representation the host served under the exact FormRef state records.
+// every branch (v3RequireStateUID), and an unknown uid is adopted only after
+// the terminal Operation's verified result supplies that Host-issued identity.
 func v3ResumePendingOperation(
 	ctx context.Context,
 	c *clientv3.Client,
@@ -281,6 +288,14 @@ func v3ResumePendingOperation(
 ) v3PendingOutcome {
 	if request.OperationID == "" {
 		return v3NoPendingOperation
+	}
+	if request.OperationID == v3UnaddressableCreateOperation {
+		diags.AddError(
+			"Cannot reconcile accepted "+kind+" create",
+			"The Host accepted the create but did not return a usable operation handle. State is preserved; "+
+				"resolve the Host-side outcome explicitly before another mutation.",
+		)
+		return v3PendingOutcome{Stop: true}
 	}
 	operation, err := c.GetOperation(ctx, request.OperationID)
 	switch {
@@ -319,6 +334,14 @@ func v3ResumePendingOperation(
 		return v3PendingOutcome{Stop: true}
 	}
 	if !operation.Done {
+		if request.StateUID == "" {
+			diags.AddError(
+				"Cannot reconcile accepted "+kind+" operation "+request.OperationID,
+				"The operation is still running and state has no Host-issued resource uid. A same-name "+
+					"resource cannot prove the accepted create's incarnation. State and the operation id are preserved.",
+			)
+			return v3PendingOutcome{Stop: true}
+		}
 		diags.AddWarning(
 			kind+" mutation is still running on the host",
 			fmt.Sprintf(
@@ -331,6 +354,15 @@ func v3ResumePendingOperation(
 		return v3PendingOutcome{RemoveOnAbsent: false, KeepMarker: true}
 	}
 	if operation.Error != nil {
+		if request.StateUID == "" {
+			diags.AddError(
+				"Cannot reconcile failed "+kind+" operation "+request.OperationID,
+				"The operation ended with "+operation.Error.Code+" but state has no Host-issued resource uid. "+
+					"A same-name resource cannot prove which incarnation the accepted create named. State and the "+
+					"operation id are preserved for explicit resolution.",
+			)
+			return v3PendingOutcome{Stop: true}
+		}
 		diags.AddWarning(
 			kind+" mutation failed on the host",
 			fmt.Sprintf(
@@ -357,5 +389,5 @@ func v3ResumePendingOperation(
 	// The operation committed. The ordinary read follows so state settles against
 	// the representation that exists NOW rather than the one the operation
 	// happened to return, and it clears the marker by writing state.
-	return v3NoPendingOperation
+	return v3PendingOutcome{RemoveOnAbsent: true, ExpectedUID: result.Metadata.UID}
 }

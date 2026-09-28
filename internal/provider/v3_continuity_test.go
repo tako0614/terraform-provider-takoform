@@ -621,6 +621,152 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 	})
 }
 
+func TestV3AcceptedCreateWithoutTargetUIDCannotAdoptByName(t *testing.T) {
+	ctx := context.Background()
+	for _, phase := range []string{"pending", "terminal_error", "terminal_success"} {
+		t.Run(phase, func(t *testing.T) {
+			host := newV3FakeHost(t)
+			host.apply202Uncommitted = true
+			host.apply202NoTargetUID = true
+			resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+			schemaResponse := v3SchemaOf(t, resource)
+			plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+				"name": types.StringValue("module-worker"), "create_timeout": types.StringValue("400ms"),
+			})
+			created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+			resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+			if !created.Diagnostics.HasError() {
+				t.Fatal("uncommitted Create reported success")
+			}
+			if uid := v3StateString(t, ctx, created.State, "uid"); uid.ValueString() != "" {
+				t.Fatalf("accepted Create without target UID wrote %q", uid.ValueString())
+			}
+			if got := v3StateString(t, ctx, created.State, "pending_operation_id").ValueString(); got != "op_apply_uncommitted" {
+				t.Fatalf("accepted Create lost its operation: %q", got)
+			}
+
+			switch phase {
+			case "terminal_error":
+				host.failDeferredOperation("op_apply_uncommitted", "backend_unavailable")
+			case "terminal_success":
+				host.commitDeferredOperation("op_apply_uncommitted")
+			}
+			// Another incarnation now occupies the name. It is not proof that
+			// the accepted Create produced this resource.
+			host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
+			read := frameworkresource.ReadResponse{State: created.State}
+			resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+			if !read.Diagnostics.HasError() || read.State.Raw.IsNull() {
+				t.Fatalf("%s adopted or removed a foreign incarnation: %v", phase, read.Diagnostics)
+			}
+			if uid := v3StateString(t, ctx, read.State, "uid"); uid.ValueString() != "" {
+				t.Fatalf("%s adopted foreign UID %q", phase, uid.ValueString())
+			}
+			if got := v3StateString(t, ctx, read.State, "pending_operation_id").ValueString(); got != "op_apply_uncommitted" {
+				t.Fatalf("%s lost pending custody: %q", phase, got)
+			}
+		})
+	}
+}
+
+func TestV3AcceptedCreateWithoutHandleBlocksRefreshAndMutation(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.apply202Malformed = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{"name": types.StringValue("module-worker")})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if !created.Diagnostics.HasError() || created.State.Raw.IsNull() {
+		t.Fatalf("accepted Create without handle did not retain state: %v", created.Diagnostics)
+	}
+	marker := v3StateString(t, ctx, created.State, "pending_operation_id")
+	if marker.IsNull() || marker.ValueString() == "" {
+		t.Fatal("accepted Create without handle has no custody marker")
+	}
+	queries := len(host.resourceQueries)
+	for _, foreign := range []bool{false, true} {
+		if foreign {
+			host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
+		}
+		read := frameworkresource.ReadResponse{State: created.State}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+		if !read.Diagnostics.HasError() || read.State.Raw.IsNull() || len(host.resourceQueries) != queries {
+			t.Fatalf("unaddressable accepted Create queried or dropped state (foreign=%t): %v", foreign, read.Diagnostics)
+		}
+		if uid := v3StateString(t, ctx, read.State, "uid"); uid.ValueString() != "" {
+			t.Fatalf("unaddressable accepted Create adopted UID %q", uid.ValueString())
+		}
+		if got := v3StateString(t, ctx, read.State, "pending_operation_id"); got != marker {
+			t.Fatalf("unaddressable accepted Create lost custody marker: %q", got.ValueString())
+		}
+	}
+	planResponse := frameworkresource.ModifyPlanResponse{Plan: plan}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{State: created.State, Plan: plan, Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: plan.Raw}}, &planResponse)
+	if !planResponse.Diagnostics.HasError() {
+		t.Fatal("ModifyPlan did not fence an unaddressable accepted Create")
+	}
+	deleted := frameworkresource.DeleteResponse{State: created.State}
+	resource.Delete(ctx, frameworkresource.DeleteRequest{State: created.State}, &deleted)
+	if !deleted.Diagnostics.HasError() || deleted.State.Raw.IsNull() {
+		t.Fatalf("Delete did not fence an unaddressable accepted Create: %v", deleted.Diagnostics)
+	}
+}
+
+func TestV3AcceptedCreateInvalidDirectResponseRetainsCustody(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.applyDirectMalformed = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{"name": types.StringValue("module-worker")})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if !created.Diagnostics.HasError() || created.State.Raw.IsNull() {
+		t.Fatalf("invalid accepted 201 lost Create state: %v", created.Diagnostics)
+	}
+	if got := v3StateString(t, ctx, created.State, "pending_operation_id").ValueString(); got != v3UnaddressableCreateOperation {
+		t.Fatalf("invalid accepted 201 lost unaddressable marker: %q", got)
+	}
+	host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
+	queries := len(host.resourceQueries)
+	read := frameworkresource.ReadResponse{State: created.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+	if !read.Diagnostics.HasError() || read.State.Raw.IsNull() || len(host.resourceQueries) != queries {
+		t.Fatalf("invalid accepted 201 adopted a same-name replacement: %v", read.Diagnostics)
+	}
+}
+
+func TestV3AcceptedCreateWithoutTargetUIDSettlesFromMatchingResult(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.apply202Uncommitted = true
+	host.apply202NoTargetUID = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name": types.StringValue("module-worker"), "create_timeout": types.StringValue("400ms"),
+	})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if !created.Diagnostics.HasError() {
+		t.Fatal("uncommitted Create reported success")
+	}
+	host.commitDeferredOperation("op_apply_uncommitted")
+	read := frameworkresource.ReadResponse{State: created.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+	if read.Diagnostics.HasError() || read.State.Raw.IsNull() {
+		t.Fatalf("matching terminal result could not settle: %v", read.Diagnostics)
+	}
+	if got := v3StateString(t, ctx, read.State, "uid").ValueString(); got != "uid-1" {
+		t.Fatalf("settled uid = %q, want uid-1", got)
+	}
+	if marker := v3StateString(t, ctx, read.State, "pending_operation_id"); !marker.IsNull() {
+		t.Fatalf("settled result kept marker %q", marker.ValueString())
+	}
+}
+
 func TestV3UnaddressableOperationWithoutUIDCannotAdoptByName(t *testing.T) {
 	ctx := context.Background()
 	host := newV3FakeHost(t)

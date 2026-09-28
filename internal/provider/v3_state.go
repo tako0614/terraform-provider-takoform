@@ -242,8 +242,9 @@ func v3CodecFieldMissingError(codec v3FormCodec, attribute string) diag.Diagnost
 // What is written is exactly what is known without trusting an unverified
 // response: the client-owned name and space, the exact FormRef the mutation
 // targeted, the planned desired fields, and the host-issued uid plus the
-// operation id when the accepted operation disclosed them. That is enough for
-// the next Read to re-read the resource and reconcile.
+// operation id when the accepted operation disclosed them. Without a usable
+// handle, a local marker blocks refresh and mutation until explicit resolution;
+// it is never sent to the Host as an Operation id.
 //
 // An error that is not an accepted mutation writes nothing: the host never
 // took the request, so there is no resource to record.
@@ -272,7 +273,13 @@ func (r *v3FormResource) writeV3AcceptedState(
 	diags.Append(r.writeV3StateFrom(
 		ctx, state, codec, space, values, partial, false, v3AcceptedWithoutRepresentation,
 	)...)
-	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), v3OptionalStateString(accepted.OperationID))...)
+	operationID := accepted.OperationID
+	if operationID == "" {
+		// Even a malformed accepted response may commit later. A local sentinel
+		// keeps every read/plan/mutation fail-closed and is never sent to Host.
+		operationID = v3UnaddressableCreateOperation
+	}
+	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringValue(operationID))...)
 	if r.providerSurface == v3ProviderSurfaceCurrent {
 		diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_action"), types.StringValue("create"))...)
 	}
@@ -285,6 +292,19 @@ func (r *v3FormResource) writeV3AcceptedState(
 // v3AcceptedRecoveryDetail explains what state now holds and what the operator
 // should do next.
 func v3AcceptedRecoveryDetail(accepted *clientv3.AcceptedError, space, name, kind string) string {
+	if accepted.OperationID == "" {
+		detail := fmt.Sprintf(
+			"The host accepted this %s mutation, so %s/%s may exist even though no verified representation came back. "+
+				"State records the name, space, and exact Form identity with an unaddressable pending marker. "+
+				"The Host returned no usable operation handle; resolve the Host-side outcome explicitly before "+
+				"another mutation. Refresh alone cannot settle this state.",
+			kind, space, name,
+		)
+		if accepted.UID != "" {
+			detail += " Host uid: " + accepted.UID + "."
+		}
+		return detail
+	}
 	detail := fmt.Sprintf(
 		"The host accepted this %s mutation, so %s/%s may exist even though no verified representation came back. "+
 			"State records the name, space, and exact Form identity (plus pending_operation_id when the host named an "+
@@ -292,9 +312,7 @@ func v3AcceptedRecoveryDetail(accepted *clientv3.AcceptedError, space, name, kin
 			"Run a refresh once the host settles.",
 		kind, space, name,
 	)
-	if accepted.OperationID != "" {
-		detail += " Host operation: " + accepted.OperationID + "."
-	}
+	detail += " Host operation: " + accepted.OperationID + "."
 	if accepted.UID != "" {
 		detail += " Host uid: " + accepted.UID + "."
 	}
