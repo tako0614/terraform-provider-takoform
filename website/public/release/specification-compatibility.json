@@ -4639,7 +4639,7 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",
@@ -4657,7 +4657,7 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",
@@ -4675,7 +4675,7 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",
@@ -4693,7 +4693,7 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",
@@ -4711,7 +4711,7 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",
@@ -4729,7 +4729,7 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",
@@ -4747,7 +4747,25 @@
           "sources": [
             {
               "path": "release/provider-release-identities.json",
-              "sha256": "sha256:c5a676f8bf26c0965d74d15dddd08010d2ab0bb68c959ffb7c3aa29ad2f7abf9"
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
+            }
+          ],
+          "owningLedger": "release/provider-release-identities.json",
+          "migration": {
+            "kind": "retained",
+            "from": null,
+            "to": null,
+            "reason": "Provider release identity is retained independently of the Specification"
+          },
+          "publication": "retained"
+        },
+        {
+          "identity": "registry.terraform.io/tako0614/takoform@4.1.0",
+          "status": "retained",
+          "sources": [
+            {
+              "path": "release/provider-release-identities.json",
+              "sha256": "sha256:232fdfb244b061a4c1386206ad26eba53c37fde16ff565b653eb6dc8d0b01824"
             }
           ],
           "owningLedger": "release/provider-release-identities.json",

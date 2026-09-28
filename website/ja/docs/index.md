@@ -7,12 +7,12 @@ API/Core は **`v1.0.1`** で、`forms.takoform.com/v1` を使います。
 
 ## Publisher-specific major
 
-Provider `4.0.0` は既存の `registry.terraform.io/tako0614/takoform`
+Provider `4.1.0` は既存の `registry.terraform.io/tako0614/takoform`
 address を維持し、`github.com/tako0614/takoform-forms` から選んだ exact Form 17 種だけを
 登録します。Provider `3.0.0` の 31 resource aggregate は immutable history
 として残します。Registry 公開の根拠は
 [Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
-の `4.0.0` entry にある Registry readback です。
+の `4.1.0` entry にある Registry readback です。
 
 この関係は publisher repository と exact FormRefs で識別します。Takoform は
 特権的な分類を付けません。

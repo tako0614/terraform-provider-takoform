@@ -8,11 +8,11 @@ The current API/Core checkpoint is **`v1.0.1`** on the existing
 
 ## Publisher-specific major
 
-Provider `4.0.0` keeps the existing
+Provider `4.1.0` keeps the existing
 `registry.terraform.io/tako0614/takoform` address and registers only the 17
 exact Forms selected from `github.com/tako0614/takoform-forms`. Provider `3.0.0` remains
 immutable 31-resource aggregate history. The Registry readback that records
-`4.0.0` as published is the `4.0.0` entry of the
+`4.1.0` as published is the `4.1.0` entry of the
 [Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json).
 
 This relationship is identified by publisher repository and exact FormRefs;

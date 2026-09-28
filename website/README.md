@@ -208,7 +208,7 @@ operator and are never committed here.
 The site must claim nothing beyond signed, committed evidence in this
 repository. The current public truth is: Core/API `v1.0.1` is published by the
 external [Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
-on `/v1`; Provider `v4.0.0` is the current published, Registry
+on `/v1`; Provider `v4.1.0` is the current published, Registry
 readback-verified typed distribution selecting only the 17 tako0614 Edge Forms;
 Provider `v3.0.0` remains the published, Registry readback-verified typed
 distribution retaining the former 31-resource aggregate across eight families. Provider
@@ -238,12 +238,12 @@ retained Provider 2.1.1/v1beta1 packages use
 Provider release. Published v1alpha1/v1alpha2 package indexes remain immutable
 Legacy evidence.
 
-`release/version.json` is the Provider `v4.0.0` release descriptor and keeps
+`release/version.json` is the Provider `v4.1.0` release descriptor and keeps
 `publicationStatus: candidate-only`; the descriptor must not be presented as
 live publication state. `release/candidates/provider-v4.0.0.json` retains the
 byte-identical candidate record and `release/history/provider-v3.0.0.json`
 retains the Provider 3 writer input. The append-only release identity ledger
-independently establishes `v4.0.0` as the current Registry-published provider
+independently establishes `v4.1.0` as the current Registry-published provider
 and retains `v3.0.0` and `v2.1.1` history. Provider releases remain non-normative and cannot close or
 block the historical Specification 1.1 receipt. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),

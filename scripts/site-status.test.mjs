@@ -142,9 +142,9 @@ describe("the committed status document", () => {
     expect(document.currentFamilyIndex).toBe(CURRENT_FAMILY_INDEX);
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
-    expect(document.providerPublished).toBe("4.0.0");
+    expect(document.providerPublished).toBe("4.1.0");
     expect(document.providerTarget).toBe("4.1.0");
-    expect(document.providerTargetStatus).toBe("candidate-only");
+    expect(document.providerTargetStatus).toBe("registry-published");
     expect(document.edgePreviewProvider).toBe("4.1.0-candidate-only");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
@@ -210,7 +210,7 @@ describe("the committed status document", () => {
       "utf8",
     );
     expect(security).toContain(
-      "Provider `v4.0.0` is the current\nRegistry-published typed client",
+      "Provider `v4.1.0` is the current\nRegistry-published typed client",
     );
     expect(security).not.toContain(
       "Provider `v3.0.0` is the current\nRegistry-published typed client",
@@ -220,14 +220,14 @@ describe("the committed status document", () => {
       path.join(repositoryRoot, "release/migrations/v1-to-v2.md"),
       "utf8",
     );
-    expect(migration).toContain("Provider 4.0.0 is the\ncurrent published provider");
+    expect(migration).toContain("Provider 4.1.0 is the\ncurrent published provider");
     expect(migration).not.toContain(
       "Provider 3.0.0 is the\ncurrent published provider",
     );
 
     for (const relativePath of ["website/index.md", "website/ja/index.md"]) {
       const page = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
-      expect(page).toContain("**`4.0.0`**");
+      expect(page).toContain("**`4.1.0`**");
       expect(page).toContain("**`v1.0.1`**");
       expect(page).not.toContain("Specification 1.1 candidate / Host API v1");
     }
@@ -352,31 +352,22 @@ describe("read-only site status preparation", () => {
 });
 
 describe("Provider target and Registry publication derivation", () => {
-  test("the next candidate does not promote published availability", () => {
-    const facts = fixture((root) => deriveSiteStatusFacts(root));
+  test("a descriptor alone does not promote published availability", () => {
+    const facts = fixture((root) => {
+      const ledgerPath = "release/provider-release-identities.json";
+      const ledger = read(root, ledgerPath);
+      ledger.entries = ledger.entries.filter((entry) => entry.version !== "4.1.0");
+      write(root, ledgerPath, ledger);
+      return deriveSiteStatusFacts(root);
+    });
     expect(facts.providerTarget).toBe("4.1.0");
     expect(facts.providerTargetStatus).toBe("candidate-only");
     expect(facts.providerPublished).toBe("4.0.0");
     expect(facts.providerCurrent).toBe("4.0.0");
   });
 
-  test("only complete matching readback promotes the new target", () => {
-    const facts = fixture((root) => {
-      const descriptor = read(root, RELEASE_VERSION);
-      const ledgerPath = "release/provider-release-identities.json";
-      const ledger = read(root, ledgerPath);
-      const entry = structuredClone(ledger.entries.find((value) => value.version === "4.0.0"));
-      entry.version = descriptor.version;
-      entry.tag = descriptor.tag;
-      entry.registryReadback.githubRelease.url =
-        `https://github.com/tako0614/terraform-provider-takoform/releases/tag/${descriptor.tag}`;
-      entry.registryReadback.registry.downloadUrl =
-        `https://registry.terraform.io/v1/providers/tako0614/takoform/${descriptor.version}/download/linux/amd64`;
-      entry.registryReadback.installation.providerVersion = descriptor.version;
-      ledger.entries.push(entry);
-      write(root, ledgerPath, ledger);
-      return deriveSiteStatusFacts(root);
-    });
+  test("the exact complete Registry readback promotes the target", () => {
+    const facts = fixture((root) => deriveSiteStatusFacts(root));
     expect(facts.providerTarget).toBe("4.1.0");
     expect(facts.providerPublished).toBe("4.1.0");
     expect(facts.providerTargetStatus).toBe("registry-published");
@@ -388,6 +379,7 @@ describe("Provider target and Registry publication derivation", () => {
       expect(() => fixture((root) => {
         const ledgerPath = "release/provider-release-identities.json";
         const ledger = read(root, ledgerPath);
+        ledger.entries = ledger.entries.filter((entry) => entry.version !== "4.1.0");
         ledger.entries.push({ version: "4.1.0", tag: "v4.1.0", registryReadback });
         write(root, ledgerPath, ledger);
         return deriveSiteStatusFacts(root);
@@ -458,7 +450,7 @@ describe("Specification release status derivation", () => {
     expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
     expect(status.formMaturity).toBe("experimental");
     expect(status.formPackagePublicationStatus).toBe("unpublished");
-    expect(status.providerTargetStatus).toBe("candidate-only");
+    expect(status.providerTargetStatus).toBe("registry-published");
   });
 });
 
@@ -466,7 +458,7 @@ describe("the gate refuses", () => {
   test("an incomplete current Provider Registry readback", () => {
     const failures = fixture((root) => {
       const ledger = read(root, "release/provider-release-identities.json");
-      const current = ledger.entries.find((entry) => entry.version === "4.0.0");
+      const current = ledger.entries.find((entry) => entry.version === "4.1.0");
       current.registryReadback.installation.resourceSchemaCount = 30;
       write(root, "release/provider-release-identities.json", ledger);
       return verifySiteStatusDocument(root);
