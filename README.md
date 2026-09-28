@@ -62,7 +62,8 @@ symlinks, parent traversal, or a trailing newline. Configure either a static
 token or a token file, never both. Existing 4.0.0 static-token consumers need
 not change their pin. Secure token-file access is supported on Linux, macOS,
 FreeBSD, OpenBSD, and NetBSD; Windows keeps static-token configuration only.
-4.1.0 is still a candidate, not a published release.
+Verify 4.1.0 availability in the Registry before changing a consumer pin;
+the release descriptor alone does not establish publication.
 
 The repository's reference Host is for conformance only and serves no
 application traffic.

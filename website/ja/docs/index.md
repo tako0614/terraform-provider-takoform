@@ -42,6 +42,15 @@ resource "takoform_module_worker" "api" {
 `endpoint`、`space`、bearer `token` は `TAKOFORM_ENDPOINT`、
 `TAKOFORM_SPACE`、`TAKOFORM_TOKEN` からも設定できます。
 
+Provider 4.1.0 は、run 中にローテーションする bearer token を読み取る
+`token_file` / `TAKOFORM_TOKEN_FILE` を追加します。各 Host request の直前に
+ファイルを開き直します。ファイルは Provider 実行ユーザー所有の regular file とし、
+group / other のアクセス、symlink、親ディレクトリの traversal、末尾改行を
+許可しません。静的 `token` / `TAKOFORM_TOKEN` と同時には指定できません。
+Linux、macOS、FreeBSD、OpenBSD、NetBSD で利用でき、Windows では従来の
+静的 token 設定のみを使えます。4.1.0 を pin する前に Registry の公開状態を
+確認してください。既存の 4.0.0 静的 token 利用者は pin を変更する必要がありません。
+
 リソース名は Provider の metadata であり、contract の意味は各ページから
 リンクする publisher Form Definition と
 [Core v1.0.1 の仕様](https://github.com/tako0614/takoform/tree/v1.0.1/spec)

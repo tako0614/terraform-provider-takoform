@@ -21,6 +21,7 @@ import {
   FAMILY_CANDIDATE_SET,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
+import { stalePublishedProviderStatus } from "./provider-published-docs.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -648,22 +649,11 @@ function hasNotInstallableWording(text) {
 }
 
 function checkImmutableProviderTagDocs(source, truth) {
-  const escapedVersion = escapeRegExp(truth.providerVersion);
+  const statusIssue = stalePublishedProviderStatus(source, truth.providerVersion);
+  if (statusIssue !== null) {
+    fail(`docs/index.md: immutable provider tag docs contain ${statusIssue}`);
+  }
   const forbidden = [
-    {
-      label: "stale unpublished provider status",
-      pattern: new RegExp(
-        `\\bv?${escapedVersion}\\b[^.\\n]{0,140}\\b(?:unpublished|unavailable)\\b`,
-        "i",
-      ),
-    },
-    {
-      label: "stale not-installable provider status",
-      pattern: new RegExp(
-        `\\bv?${escapedVersion}\\b[^.\\n]{0,140}\\bnot (?:yet )?installable\\b`,
-        "i",
-      ),
-    },
     {
       label: "shallow immutable-tag verification checkout",
       pattern: /^git clone[^\n]*(?:--depth|--shallow)/m,

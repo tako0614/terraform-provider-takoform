@@ -17,6 +17,7 @@ import {
   SITE_STATUS_REPOSITORY_PATH,
   verifySiteStatusDocument,
 } from "./site-status.mjs";
+import { stalePublishedProviderStatus } from "./provider-published-docs.mjs";
 import {
   CURRENT_FAMILY_INDEX,
   FAMILY_CANDIDATE_SET,
@@ -29,6 +30,20 @@ import {
 } from "../website/.vitepress/site-status.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
+
+describe("published Provider documentation wording", () => {
+  test("rejects false unpublished status before or after the exact published version", () => {
+    expect(stalePublishedProviderStatus("Provider 4.1.0 is unpublished.", "4.1.0")).toBe("stale unpublished provider status");
+    expect(stalePublishedProviderStatus("The unpublished Provider 4.1.0 candidate adds token_file.", "4.1.0")).toBe("stale unpublished provider status");
+    expect(stalePublishedProviderStatus("Provider 4.1.0 is not yet installable.", "4.1.0")).toBe("stale not-installable provider status");
+    expect(stalePublishedProviderStatus("The unavailable Provider 4.1.0 release.", "4.1.0")).toBe("stale unpublished provider status");
+  });
+
+  test("does not conflate prior unpublished candidates with the published version", () => {
+    expect(stalePublishedProviderStatus("The unpublished Provider 4.0.1 candidate remains history.", "4.1.0")).toBeNull();
+    expect(stalePublishedProviderStatus("Provider 4.1.0 is Registry-published.", "4.1.0")).toBeNull();
+  });
+});
 
 /**
  * fixture copies only the files the derivation and the gate read, so a test can
