@@ -142,12 +142,12 @@ describe("Specification 1.1 compatibility manifest", () => {
     expect(canonicalJson(generateManifest(ROOT))).toBe(canonicalJson(MANIFEST));
   });
 
-  test("shared Forms keep current status and publication across a Provider patch", () => {
+  test("shared Forms keep current status and publication across a Provider minor", () => {
     const descriptor = JSON.parse(readFileSync(path.join(ROOT, "release/version.json"), "utf8"));
     const ledger = JSON.parse(readFileSync(path.join(ROOT, "release/provider-form-identities.json"), "utf8"));
     const current = ledger.releases.find((entry) => entry.providerVersion === descriptor.version);
     const retained = ledger.releases.find((entry) => entry.providerVersion === "4.0.0");
-    expect(descriptor.version).toBe("4.0.1");
+    expect(descriptor.version).toBe("4.1.0");
     expect(current.forms).toHaveLength(17);
     expect(current.forms).toEqual(retained.forms);
     const entries = generateManifest(ROOT).classes.find((entry) => entry.id === "form-package").entries;

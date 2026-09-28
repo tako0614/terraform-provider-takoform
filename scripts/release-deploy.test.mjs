@@ -257,11 +257,13 @@ test("provider v4 release body names the publisher-set identity and v3 migration
   );
   const body = providerReleaseBody(descriptor);
   expect(body).toContain(`Provider ${descriptor.tag}`);
-  expect(body).toContain("Maintenance update from Provider v4.0.0: v4.0.1");
-  expect(body).toContain("same 17 exact FormRefs, package digests, resource schemas and Host API");
-  expect(body).toContain("successful pending Operation's UID");
-  expect(body).toContain("do not apply a replacement");
-  expect(body).toContain("saved refresh-only apply");
+  expect(body).toContain("Minor update from Provider v4.0.0: v4.1.0");
+  expect(body).toContain("token_file / TAKOFORM_TOKEN_FILE");
+  expect(body).toContain("reads the current secure regular file before each Host request");
+  expect(body).toContain("17 exact FormRefs, package digests, and resource type mappings are unchanged");
+  expect(body).toContain("accepted pending Operation retains custody through refresh");
+  expect(body).toContain("does not authorize an automatic replacement or blind retry");
+  expect(body).toContain("refresh-only apply");
   expect(body).toContain("does not perform automatic untaint or state migration");
   expect(body).toContain("forms.takoform.com/v1");
   expect(body).toContain(
@@ -290,7 +292,7 @@ test("provider v4 release body names the publisher-set identity and v3 migration
 test("provider descriptor and identity ledger are exact current and retained release inputs", () => {
   const descriptor =
     releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
-  expect(descriptor.version).toBe("4.0.1");
+  expect(descriptor.version).toBe("4.1.0");
   expect(descriptor.versioning.portableApiVersion).toBe(
     "forms.takoform.com/v1",
   );
@@ -367,7 +369,7 @@ test("the current Provider 4.x target refuses historical 4.0.0 tag phases", () =
           throw new Error("the historical tag must be rejected first");
         },
       }),
-    ).toThrow(/--tag must exactly match release\/version\.json \(v4\.0\.1\)/);
+    ).toThrow(/--tag must exactly match release\/version\.json \(v4\.1\.0\)/);
     expect(calls).toHaveLength(0);
   }
 });

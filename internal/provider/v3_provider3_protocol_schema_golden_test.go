@@ -60,6 +60,7 @@ func (provider *v3Provider3GoldenProvider) Schema(ctx context.Context, req frame
 	provider.takoformProvider.Schema(ctx, req, resp)
 	delete(resp.Schema.Attributes, "runtime_input_nonce")
 	delete(resp.Schema.Attributes, "runtime_inputs")
+	delete(resp.Schema.Attributes, "token_file")
 }
 
 func (*v3Provider3GoldenProvider) Resources(context.Context) []func() resource.Resource {
@@ -113,11 +114,15 @@ func TestCurrentPublisherProviderProtocolSchemaOwnsApplyOnlyInputs(t *testing.T)
 	}
 	nonce := providerAttributes["runtime_input_nonce"]
 	values := providerAttributes["runtime_inputs"]
+	tokenFile := providerAttributes["token_file"]
 	if nonce == nil || !nonce.Optional || nonce.Required || nonce.Sensitive {
 		t.Fatalf("current runtime_input_nonce schema = %#v", nonce)
 	}
 	if values == nil || !values.Optional || values.Required || !values.Sensitive {
 		t.Fatalf("current runtime_inputs schema = %#v", values)
+	}
+	if tokenFile == nil || !tokenFile.Optional || tokenFile.Required || tokenFile.Sensitive {
+		t.Fatalf("current token_file schema = %#v", tokenFile)
 	}
 	for name, schema := range response.ResourceSchemas {
 		if name == "takoform_worker_version" || schema == nil || schema.Block == nil {

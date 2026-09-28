@@ -549,17 +549,23 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 		assertUIDMismatchPreservesState(t, ctx, response.Diagnostics, response.State, "uid-1", "uid-42")
 	})
 
-	t.Run("a forgotten operation defers to the exact resource read", func(t *testing.T) {
+	t.Run("an unaddressable operation and absent resource preserve pending state", func(t *testing.T) {
 		host := newV3FakeHost(t)
 		resource, state := acceptedState(t, host)
 		host.forgetOperation("op_apply_uncommitted")
 		response := frameworkresource.ReadResponse{State: state}
 		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
-		if response.Diagnostics.HasError() {
-			t.Fatalf("read after the operation record expired: %v", response.Diagnostics)
+		if !response.Diagnostics.HasError() {
+			t.Fatal("an unaddressable operation and absent resource must block further planning")
 		}
-		if !response.State.Raw.IsNull() {
-			t.Fatal("a forgotten operation over an absent resource left state behind")
+		if response.State.Raw.IsNull() {
+			t.Fatal("an unaddressable operation over an absent resource removed state")
+		}
+		if got := v3StateString(t, ctx, response.State, "pending_operation_id").ValueString(); got != "op_apply_uncommitted" {
+			t.Fatalf("the unresolved operation marker was dropped: %q", got)
+		}
+		if detail := response.Diagnostics.Errors()[0].Detail(); !strings.Contains(detail, "op_apply_uncommitted") || !strings.Contains(detail, "principal") {
+			t.Fatalf("error did not explain the unaddressable operation: %v", response.Diagnostics)
 		}
 
 		// With the resource present under ANOTHER incarnation, the same path
@@ -574,6 +580,27 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 		response2 := frameworkresource.ReadResponse{State: state2}
 		resource2.Read(ctx, frameworkresource.ReadRequest{State: state2}, &response2)
 		assertUIDMismatchPreservesState(t, ctx, response2.Diagnostics, response2.State, "uid-1", "uid-42")
+	})
+
+	t.Run("a forgotten operation with the matching resource settles state", func(t *testing.T) {
+		host := newV3FakeHost(t)
+		resource, state := acceptedState(t, host)
+		host.commitDeferredOperation("op_apply_uncommitted")
+		host.forgetOperation("op_apply_uncommitted")
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		if response.Diagnostics.HasError() {
+			t.Fatalf("read after commit with an expired operation record: %v", response.Diagnostics)
+		}
+		if response.State.Raw.IsNull() {
+			t.Fatal("the matching committed resource was removed from state")
+		}
+		if got := v3StateString(t, ctx, response.State, "uid").ValueString(); got != "uid-1" {
+			t.Fatalf("settled uid = %q, want uid-1", got)
+		}
+		if pending := v3StateString(t, ctx, response.State, "pending_operation_id"); !pending.IsNull() {
+			t.Fatalf("a resource settled under its exact identity kept the marker: %q", pending.ValueString())
+		}
 	})
 
 	t.Run("a terminal success settles and clears the marker", func(t *testing.T) {
@@ -592,60 +619,504 @@ func TestV3ReadResumesPendingOperation(t *testing.T) {
 			t.Fatalf("a settled read kept the marker: %q", pending.ValueString())
 		}
 	})
+}
 
-	t.Run("terminal success adopts its verified uid when accepted state had none", func(t *testing.T) {
-		host := newV3FakeHost(t)
-		resource, state := acceptedState(t, host)
-		if diags := state.SetAttribute(ctx, path.Root("uid"), types.StringValue("")); diags.HasError() {
-			t.Fatalf("clear accepted uid: %v", diags)
+func TestV3AcceptedCreateWithoutTargetUIDCannotAdoptByName(t *testing.T) {
+	ctx := context.Background()
+	for _, phase := range []string{"pending", "terminal_error", "terminal_success"} {
+		t.Run(phase, func(t *testing.T) {
+			host := newV3FakeHost(t)
+			host.apply202Uncommitted = true
+			host.apply202NoTargetUID = true
+			resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+			schemaResponse := v3SchemaOf(t, resource)
+			plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+				"name": types.StringValue("module-worker"), "create_timeout": types.StringValue("400ms"),
+			})
+			created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+			resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+			if !created.Diagnostics.HasError() {
+				t.Fatal("uncommitted Create reported success")
+			}
+			if uid := v3StateString(t, ctx, created.State, "uid"); uid.ValueString() != "" {
+				t.Fatalf("accepted Create without target UID wrote %q", uid.ValueString())
+			}
+			if got := v3StateString(t, ctx, created.State, "pending_operation_id").ValueString(); got != "op_apply_uncommitted" {
+				t.Fatalf("accepted Create lost its operation: %q", got)
+			}
+
+			switch phase {
+			case "terminal_error":
+				host.failDeferredOperation("op_apply_uncommitted", "backend_unavailable")
+			case "terminal_success":
+				host.commitDeferredOperation("op_apply_uncommitted")
+			}
+			// Another incarnation now occupies the name. It is not proof that
+			// the accepted Create produced this resource.
+			host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
+			read := frameworkresource.ReadResponse{State: created.State}
+			resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+			if !read.Diagnostics.HasError() || read.State.Raw.IsNull() {
+				t.Fatalf("%s adopted or removed a foreign incarnation: %v", phase, read.Diagnostics)
+			}
+			if uid := v3StateString(t, ctx, read.State, "uid"); uid.ValueString() != "" {
+				t.Fatalf("%s adopted foreign UID %q", phase, uid.ValueString())
+			}
+			if got := v3StateString(t, ctx, read.State, "pending_operation_id").ValueString(); got != "op_apply_uncommitted" {
+				t.Fatalf("%s lost pending custody: %q", phase, got)
+			}
+		})
+	}
+}
+
+func TestV3AcceptedCreateWithoutHandleBlocksRefreshAndMutation(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.apply202Malformed = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{"name": types.StringValue("module-worker")})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if !created.Diagnostics.HasError() || created.State.Raw.IsNull() {
+		t.Fatalf("accepted Create without handle did not retain state: %v", created.Diagnostics)
+	}
+	marker := v3StateString(t, ctx, created.State, "pending_operation_id")
+	if marker.IsNull() || marker.ValueString() == "" {
+		t.Fatal("accepted Create without handle has no custody marker")
+	}
+	queries := len(host.resourceQueries)
+	for _, foreign := range []bool{false, true} {
+		if foreign {
+			host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
 		}
-		host.commitDeferredOperation("op_apply_uncommitted")
+		read := frameworkresource.ReadResponse{State: created.State}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+		if !read.Diagnostics.HasError() || read.State.Raw.IsNull() || len(host.resourceQueries) != queries {
+			t.Fatalf("unaddressable accepted Create queried or dropped state (foreign=%t): %v", foreign, read.Diagnostics)
+		}
+		if uid := v3StateString(t, ctx, read.State, "uid"); uid.ValueString() != "" {
+			t.Fatalf("unaddressable accepted Create adopted UID %q", uid.ValueString())
+		}
+		if got := v3StateString(t, ctx, read.State, "pending_operation_id"); got != marker {
+			t.Fatalf("unaddressable accepted Create lost custody marker: %q", got.ValueString())
+		}
+	}
+	planResponse := frameworkresource.ModifyPlanResponse{Plan: plan}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{State: created.State, Plan: plan, Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: plan.Raw}}, &planResponse)
+	if !planResponse.Diagnostics.HasError() {
+		t.Fatal("ModifyPlan did not fence an unaddressable accepted Create")
+	}
+	deleted := frameworkresource.DeleteResponse{State: created.State}
+	resource.Delete(ctx, frameworkresource.DeleteRequest{State: created.State}, &deleted)
+	if !deleted.Diagnostics.HasError() || deleted.State.Raw.IsNull() {
+		t.Fatalf("Delete did not fence an unaddressable accepted Create: %v", deleted.Diagnostics)
+	}
+}
 
+func TestV3AcceptedCreateInvalidDirectResponseRetainsCustody(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.applyDirectMalformed = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{"name": types.StringValue("module-worker")})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if !created.Diagnostics.HasError() || created.State.Raw.IsNull() {
+		t.Fatalf("invalid accepted 201 lost Create state: %v", created.Diagnostics)
+	}
+	if got := v3StateString(t, ctx, created.State, "pending_operation_id").ValueString(); got != v3UnaddressableCreateOperation {
+		t.Fatalf("invalid accepted 201 lost unaddressable marker: %q", got)
+	}
+	host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
+	queries := len(host.resourceQueries)
+	read := frameworkresource.ReadResponse{State: created.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+	if !read.Diagnostics.HasError() || read.State.Raw.IsNull() || len(host.resourceQueries) != queries {
+		t.Fatalf("invalid accepted 201 adopted a same-name replacement: %v", read.Diagnostics)
+	}
+}
+
+func TestV3AcceptedCreateWithoutTargetUIDSettlesFromMatchingResult(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.apply202Uncommitted = true
+	host.apply202NoTargetUID = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name": types.StringValue("module-worker"), "create_timeout": types.StringValue("400ms"),
+	})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if !created.Diagnostics.HasError() {
+		t.Fatal("uncommitted Create reported success")
+	}
+	host.commitDeferredOperation("op_apply_uncommitted")
+	read := frameworkresource.ReadResponse{State: created.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: created.State}, &read)
+	if read.Diagnostics.HasError() || read.State.Raw.IsNull() {
+		t.Fatalf("matching terminal result could not settle: %v", read.Diagnostics)
+	}
+	if got := v3StateString(t, ctx, read.State, "uid").ValueString(); got != "uid-1" {
+		t.Fatalf("settled uid = %q, want uid-1", got)
+	}
+	if marker := v3StateString(t, ctx, read.State, "pending_operation_id"); !marker.IsNull() {
+		t.Fatalf("settled result kept marker %q", marker.ValueString())
+	}
+}
+
+func TestV3AcceptedCreateRecoveryGuidanceIsTaintSafe(t *testing.T) {
+	ctx := context.Background()
+	for _, withoutHandle := range []bool{false, true} {
+		name := "with_handle"
+		if withoutHandle {
+			name = "without_handle"
+		}
+		t.Run(name, func(t *testing.T) {
+			host := newV3FakeHost(t)
+			host.apply202Uncommitted = !withoutHandle
+			host.apply202Malformed = withoutHandle
+			resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+			schemaResponse := v3SchemaOf(t, resource)
+			plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+				"name": types.StringValue("module-worker"), "create_timeout": types.StringValue("400ms"),
+			})
+			created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+			resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+			if !created.Diagnostics.HasError() {
+				t.Fatal("accepted Create unexpectedly succeeded")
+			}
+			var guidance string
+			for _, diagnostic := range created.Diagnostics {
+				if strings.Contains(diagnostic.Summary(), "accepted by the host") {
+					guidance = diagnostic.Detail()
+				}
+			}
+			if guidance == "" {
+				t.Fatalf("accepted Create did not explain recovery: %v", created.Diagnostics)
+			}
+			if strings.Contains(guidance, "next plan reconciles") {
+				t.Fatalf("accepted Create promised a safe normal plan despite possible taint: %s", guidance)
+			}
+			if withoutHandle {
+				for _, phrase := range []string{"Refresh alone cannot settle", "Do not untaint", "do not apply a replacement"} {
+					if !strings.Contains(guidance, phrase) {
+						t.Fatalf("unaddressable Create guidance missing %q: %s", phrase, guidance)
+					}
+				}
+			} else {
+				for _, phrase := range []string{"saved refresh-only plan", "exact FormRef, name, Space and UID", "untaint", "fresh normal plan"} {
+					if !strings.Contains(guidance, phrase) {
+						t.Fatalf("accepted Create guidance missing %q: %s", phrase, guidance)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestV3UnaddressableOperationWithoutUIDCannotAdoptByName(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	host.apply202Uncommitted = true
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":           types.StringValue("module-worker"),
+		"create_timeout": types.StringValue("400ms"),
+	})
+	createResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
+	if !createResponse.Diagnostics.HasError() {
+		t.Fatal("an uncommitted create reported success")
+	}
+	state := createResponse.State
+	if diags := state.SetAttribute(ctx, path.Root("uid"), types.StringNull()); diags.HasError() {
+		t.Fatalf("clear unverified uid: %v", diags)
+	}
+	host.forgetOperation("op_apply_uncommitted")
+	host.storeResource(
+		"ModuleWorker", "module-worker", "prod",
+		"edge.forms.takoform.com", "uid-42", map[string]any{},
+	)
+	resourceQueriesBefore := len(host.resourceQueries)
+	response := frameworkresource.ReadResponse{State: state}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+	if !response.Diagnostics.HasError() {
+		t.Fatal("an operation inaccessible to this principal allowed name-only adoption")
+	}
+	if response.State.Raw.IsNull() {
+		t.Fatal("the unresolved create state was removed")
+	}
+	if got := v3StateString(t, ctx, response.State, "uid"); !got.IsNull() {
+		t.Fatalf("name-only adoption wrote uid %q", got.ValueString())
+	}
+	if got := v3StateString(t, ctx, response.State, "pending_operation_id").ValueString(); got != "op_apply_uncommitted" {
+		t.Fatalf("unresolved operation marker = %q, want preserved marker", got)
+	}
+	if len(host.resourceQueries) != resourceQueriesBefore {
+		t.Fatalf("read queried by name without a verified UID: %v", host.resourceQueries[resourceQueriesBefore:])
+	}
+}
+
+func TestV3PendingOperationBlocksPlanAndDirectUpdate(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	resource := v3TestFormResource(t, "WorkerCronTrigger", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":   types.StringValue("worker-cron-trigger"),
+		"worker": types.StringValue("module-worker"),
+		"cron":   types.StringValue("0 3 * * *"),
+	})
+	createResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: createPlan}, &createResponse)
+	if createResponse.Diagnostics.HasError() {
+		t.Fatalf("create: %v", createResponse.Diagnostics)
+	}
+	pendingState := createResponse.State
+	if diags := pendingState.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringValue("op_unresolved")); diags.HasError() {
+		t.Fatalf("set pending operation: %v", diags)
+	}
+	updatePlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":   types.StringValue("worker-cron-trigger"),
+		"space":  types.StringValue("prod"),
+		"worker": types.StringValue("module-worker"),
+		"cron":   types.StringValue("15 0 * * *"),
+	})
+	applyCount := len(host.applyHeaders)
+	eventCount := len(host.events)
+
+	planResponse := frameworkresource.ModifyPlanResponse{Plan: updatePlan}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
+		State:  pendingState,
+		Plan:   updatePlan,
+		Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: updatePlan.Raw},
+	}, &planResponse)
+	if !planResponse.Diagnostics.HasError() {
+		t.Fatal("plan continued while an accepted operation remained unresolved")
+	}
+
+	updateResponse := frameworkresource.UpdateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Update(ctx, frameworkresource.UpdateRequest{Plan: updatePlan, State: pendingState}, &updateResponse)
+	if !updateResponse.Diagnostics.HasError() {
+		t.Fatal("direct update bypassed the unresolved-operation guard")
+	}
+	if len(host.applyHeaders) != applyCount || len(host.events) != eventCount {
+		t.Fatalf("unresolved update reached the host: headers=%d events=%v", len(host.applyHeaders)-applyCount, host.events[eventCount:])
+	}
+
+	deleteResponse := frameworkresource.DeleteResponse{}
+	resource.Delete(ctx, frameworkresource.DeleteRequest{State: pendingState}, &deleteResponse)
+	if !deleteResponse.Diagnostics.HasError() {
+		t.Fatal("direct delete bypassed the unresolved-operation guard")
+	}
+	if len(host.events) != eventCount {
+		t.Fatalf("unresolved delete reached the host: %v", host.events[eventCount:])
+	}
+	if got := v3StateString(t, ctx, pendingState, "pending_operation_id").ValueString(); got != "op_unresolved" {
+		t.Fatalf("direct delete changed the pending marker: %q", got)
+	}
+}
+
+func TestV3ReadWithoutPendingOperationRemovesAbsentResource(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name": types.StringValue("module-worker"),
+	})
+	createResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
+	if createResponse.Diagnostics.HasError() {
+		t.Fatalf("create: %v", createResponse.Diagnostics)
+	}
+	deleteResponse := frameworkresource.DeleteResponse{}
+	resource.Delete(ctx, frameworkresource.DeleteRequest{State: createResponse.State}, &deleteResponse)
+	if deleteResponse.Diagnostics.HasError() {
+		t.Fatalf("delete: %v", deleteResponse.Diagnostics)
+	}
+	response := frameworkresource.ReadResponse{State: createResponse.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: createResponse.State}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatalf("read after ordinary deletion: %v", response.Diagnostics)
+	}
+	if !response.State.Raw.IsNull() {
+		t.Fatal("an absent resource without a pending operation remained in state")
+	}
+}
+
+func TestV3AcceptedDeleteRetainsCustodyUntilVerifiedAbsent(t *testing.T) {
+	ctx := context.Background()
+	acceptedDelete := func(t *testing.T) (*v3FakeHost, *v3FormResource, tfsdk.State) {
+		t.Helper()
+		host := newV3FakeHost(t)
+		resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+		schemaResponse := v3SchemaOf(t, resource)
+		plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+			"name": types.StringValue("module-worker"), "delete_timeout": types.StringValue("400ms"),
+		})
+		created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+		resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+		if created.Diagnostics.HasError() {
+			t.Fatalf("create: %v", created.Diagnostics)
+		}
+		host.delete202Pending = true
+		deleted := frameworkresource.DeleteResponse{State: created.State}
+		resource.Delete(ctx, frameworkresource.DeleteRequest{State: created.State}, &deleted)
+		if !deleted.Diagnostics.HasError() {
+			t.Fatal("pending delete reported success")
+		}
+		if deleted.State.Raw.IsNull() || v3StateString(t, ctx, deleted.State, "pending_operation_id").ValueString() != "op_delete_pending" {
+			t.Fatalf("accepted delete lost state or operation: %v", deleted.State.Raw)
+		}
+		if got := v3StateString(t, ctx, deleted.State, "uid").ValueString(); got != "uid-1" {
+			t.Fatalf("delete lost recorded uid: %q", got)
+		}
+		return host, resource, deleted.State
+	}
+
+	t.Run("pending does not read by name or replay delete", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		queryCount, eventCount := len(host.resourceQueries), len(host.events)
 		response := frameworkresource.ReadResponse{State: state}
 		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
-		if response.Diagnostics.HasError() {
-			t.Fatalf("read after commit with unknown accepted uid: %v", response.Diagnostics)
+		if response.Diagnostics.HasError() || response.State.Raw.IsNull() {
+			t.Fatalf("pending delete did not retain state: %v", response.Diagnostics)
 		}
-		if got := v3StateString(t, ctx, response.State, "uid").ValueString(); got != "uid-1" {
-			t.Fatalf("settled uid = %q, want the verified uid-1", got)
+		if len(host.resourceQueries) != queryCount || len(host.events) != eventCount {
+			t.Fatalf("pending delete queried resource or replayed mutation: queries=%v events=%v", host.resourceQueries[queryCount:], host.events[eventCount:])
+		}
+		if got := v3StateString(t, ctx, response.State, "pending_operation_id").ValueString(); got != "op_delete_pending" {
+			t.Fatalf("pending marker dropped: %q", got)
+		}
+		secondDelete := frameworkresource.DeleteResponse{State: response.State}
+		resource.Delete(ctx, frameworkresource.DeleteRequest{State: response.State}, &secondDelete)
+		if !secondDelete.Diagnostics.HasError() || len(host.events) != eventCount {
+			t.Fatalf("pending delete was replayed: diagnostics=%v events=%v", secondDelete.Diagnostics, host.events[eventCount:])
+		}
+	})
+
+	t.Run("terminal success and exact absence remove state", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		host.settlePendingDelete("op_delete_pending", "ModuleWorker", "module-worker")
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		if response.Diagnostics.HasError() || !response.State.Raw.IsNull() {
+			t.Fatalf("successful delete did not converge to absent: %v", response.Diagnostics)
+		}
+	})
+
+	t.Run("unaddressable operation preserves state without name read", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		host.forgetOperation("op_delete_pending")
+		queryCount := len(host.resourceQueries)
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		if !response.Diagnostics.HasError() || response.State.Raw.IsNull() || len(host.resourceQueries) != queryCount {
+			t.Fatalf("unaddressable delete lost custody: %v", response.Diagnostics)
+		}
+	})
+
+	t.Run("terminal failure with old UID permits a fresh explicit delete", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		host.failPendingDelete("op_delete_pending", "backend_unavailable")
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		if response.Diagnostics.HasError() || response.State.Raw.IsNull() {
+			t.Fatalf("terminal failure did not retain the old resource: %v", response.Diagnostics)
 		}
 		if pending := v3StateString(t, ctx, response.State, "pending_operation_id"); !pending.IsNull() {
-			t.Fatalf("a settled read kept the marker: %q", pending.ValueString())
+			t.Fatalf("completed failed operation still blocks a new attempt: %q", pending.ValueString())
+		}
+		if retry := v3StateString(t, ctx, response.State, "pending_operation_action").ValueString(); retry != v3DeleteRetryActionPrefix+"op_delete_pending" {
+			t.Fatalf("retry boundary = %q", retry)
+		}
+		secondRead := frameworkresource.ReadResponse{State: response.State}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: response.State}, &secondRead)
+		if secondRead.Diagnostics.HasError() || v3StateString(t, ctx, secondRead.State, "pending_operation_action").ValueString() != v3DeleteRetryActionPrefix+"op_delete_pending" {
+			t.Fatalf("ordinary refresh lost the retry key boundary: %v", secondRead.Diagnostics)
+		}
+		secondDelete := frameworkresource.DeleteResponse{State: secondRead.State}
+		resource.Delete(ctx, frameworkresource.DeleteRequest{State: secondRead.State}, &secondDelete)
+		if secondDelete.Diagnostics.HasError() || len(host.deleteKeys) != 2 || host.deleteKeys[0] == host.deleteKeys[1] {
+			t.Fatalf("fresh delete did not reach Host with a new operation key: diagnostics=%v keys=%v", secondDelete.Diagnostics, host.deleteKeys)
 		}
 	})
 
-	t.Run("terminal success rejects a replacement after its verified result", func(t *testing.T) {
-		host := newV3FakeHost(t)
-		resource, state := acceptedState(t, host)
-		if diags := state.SetAttribute(ctx, path.Root("uid"), types.StringValue("")); diags.HasError() {
-			t.Fatalf("clear accepted uid: %v", diags)
-		}
-		host.commitDeferredOperation("op_apply_uncommitted")
-		// The operation result is now a verified uid-1 representation. Replace
-		// the live resource before Read performs its ordinary GET so the two
-		// identities can no longer be confused.
-		host.replaceIncarnation("ModuleWorker", "module-worker", "uid-2")
-		original := state.Raw
-
+	t.Run("terminal failure with exact absence removes state", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		host.failPendingDelete("op_delete_pending", "backend_unavailable")
+		host.mu.Lock()
+		delete(host.resources, host.resourceKey("ModuleWorker", "module-worker"))
+		host.mu.Unlock()
 		response := frameworkresource.ReadResponse{State: state}
 		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
-		if !response.Diagnostics.HasError() {
-			t.Fatal("read adopted a resource whose uid changed after terminal success")
-		}
-		if response.State.Raw.IsNull() || !response.State.Raw.Equal(original) {
-			t.Fatal("terminal-success UID mismatch did not preserve the original state")
-		}
-		if pending := v3StateString(t, ctx, response.State, "pending_operation_id"); pending.IsNull() || pending.ValueString() != "op_apply_uncommitted" {
-			t.Fatalf("terminal-success UID mismatch dropped the pending marker: %q", pending.ValueString())
-		}
-		if uid := v3StateString(t, ctx, response.State, "uid"); uid.IsNull() || uid.ValueString() != "" {
-			t.Fatalf("terminal-success UID mismatch changed the unknown state uid to %q", uid.ValueString())
-		}
-		detail := response.Diagnostics.Errors()[0].Detail()
-		for _, want := range []string{"uid-1", "uid-2"} {
-			if !strings.Contains(detail, want) {
-				t.Fatalf("terminal-success UID mismatch diagnostic does not name %q: %s", want, detail)
-			}
+		if response.Diagnostics.HasError() || !response.State.Raw.IsNull() {
+			t.Fatalf("terminal failure with exact absence did not settle state: %v", response.Diagnostics)
 		}
 	})
+
+	t.Run("terminal failure with foreign UID cannot unblock or adopt", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		host.failPendingDelete("op_delete_pending", "backend_unavailable")
+		host.replaceIncarnation("ModuleWorker", "module-worker", "uid-42")
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		assertUIDMismatchPreservesState(t, ctx, response.Diagnostics, response.State, "uid-1", "uid-42")
+		if got := v3StateString(t, ctx, response.State, "pending_operation_id").ValueString(); got != "op_delete_pending" {
+			t.Fatalf("foreign UID cleared pending marker: %q", got)
+		}
+	})
+
+	t.Run("foreign incarnation is never adopted", func(t *testing.T) {
+		host, resource, state := acceptedDelete(t)
+		host.settlePendingDelete("op_delete_pending", "ModuleWorker", "module-worker")
+		host.storeResource("ModuleWorker", "module-worker", "prod", "edge.forms.takoform.com", "uid-42", map[string]any{})
+		response := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &response)
+		assertUIDMismatchPreservesState(t, ctx, response.Diagnostics, response.State, "uid-1", "uid-42")
+		if got := v3StateString(t, ctx, response.State, "pending_operation_id").ValueString(); got != "op_delete_pending" {
+			t.Fatalf("foreign incarnation cleared marker: %q", got)
+		}
+	})
+}
+
+func TestV3AcceptedDeleteWithoutHandleBlocksRefresh(t *testing.T) {
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{"name": types.StringValue("module-worker")})
+	created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+	if created.Diagnostics.HasError() {
+		t.Fatalf("create: %v", created.Diagnostics)
+	}
+	host.delete202Malformed = true
+	deleted := frameworkresource.DeleteResponse{State: created.State}
+	resource.Delete(ctx, frameworkresource.DeleteRequest{State: created.State}, &deleted)
+	if !deleted.Diagnostics.HasError() || deleted.State.Raw.IsNull() {
+		t.Fatalf("malformed accepted delete lost state: %v", deleted.Diagnostics)
+	}
+	if got := v3StateString(t, ctx, deleted.State, "pending_operation_id").ValueString(); got != v3UnaddressableDeleteOperation {
+		t.Fatalf("unaddressable marker = %q", got)
+	}
+	queryCount := len(host.resourceQueries)
+	read := frameworkresource.ReadResponse{State: deleted.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: deleted.State}, &read)
+	if !read.Diagnostics.HasError() || read.State.Raw.IsNull() || len(host.resourceQueries) != queryCount {
+		t.Fatalf("unaddressable accepted delete queried or dropped state: %v", read.Diagnostics)
+	}
 }

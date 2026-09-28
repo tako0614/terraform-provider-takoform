@@ -678,6 +678,15 @@ func (c *Client) fencedStatusAction(ctx context.Context, action, space string, r
 // A direct 404 or a terminal delete Operation failing resource_not_found
 // returns ErrNotFound so callers can treat "already gone" deliberately.
 func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, name, uid, generation string) error {
+	return c.DeleteResourceWithRetryOperation(ctx, space, ref, name, uid, generation, "")
+}
+
+// DeleteResourceWithRetryOperation makes a NEW, explicitly requested delete
+// attempt after a prior accepted delete reached a terminal failure. The failed
+// operation ID separates the new Idempotency-Key from the completed attempt;
+// all transport retries within this call still reuse one key. An empty ID
+// preserves the original deterministic key, including for SDK callers.
+func (c *Client) DeleteResourceWithRetryOperation(ctx context.Context, space string, ref FormRef, name, uid, generation, failedOperationID string) error {
 	if err := c.requireReady(); err != nil {
 		return err
 	}
@@ -696,10 +705,13 @@ func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, 
 	if !uidPattern.MatchString(uid) {
 		return errors.New("takoform: delete requires the recorded metadata.uid of the incarnation being removed")
 	}
+	if failedOperationID != "" && !operationIDPattern.MatchString(failedOperationID) {
+		return errors.New("takoform: delete retry requires a valid failed operation id")
+	}
 	headers := map[string]string{
 		expectedGenerationHeader: generation,
 		"Idempotency-Key": incarnationKey(
-			"delete", ref, name, space, uid, generation, "",
+			"delete", ref, name, space, uid, generation, failedOperationID,
 		),
 	}
 	fullURL := c.resourceURL(ref, name, "", exactFormQuery(space, ref))
@@ -718,14 +730,20 @@ func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, 
 	}
 	operation, err := c.decodeOperationEnvelope(data, fullURL)
 	if err != nil {
-		return err
+		return acceptedMutation("", "", err)
 	}
-	if _, err := c.awaitOperation(ctx, operation, parseRetryAfter(responseHeaders.Get("Retry-After")), 0); err != nil {
+	operationID := operation.ID
+	acceptedUID := operationTargetUID(operation)
+	terminal, err := c.awaitOperation(ctx, operation, parseRetryAfter(responseHeaders.Get("Retry-After")), 0)
+	if got := operationTargetUID(terminal); got != "" {
+		acceptedUID = got
+	}
+	if err != nil {
 		var apiErr *APIError
 		if errors.As(err, &apiErr) && apiErr.Code == "resource_not_found" {
 			return ErrNotFound
 		}
-		return err
+		return acceptedMutation(operationID, acceptedUID, err)
 	}
 	return nil
 }

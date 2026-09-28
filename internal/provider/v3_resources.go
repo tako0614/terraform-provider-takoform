@@ -76,6 +76,14 @@ func v3AttributeName(field model.Field) string { return field.AttributeName() }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attrs := v3CommonAttributesForSurface(r.form, r.supportsApplyIdempotencyKey())
+	if r.providerSurface == v3ProviderSurfaceCurrent {
+		attrs["pending_operation_action"] = schema.StringAttribute{
+			Computed: true,
+			Description: "Internal recovery only. Create/delete identify an accepted unfinished operation; " +
+				"retry_delete:<operation-id> separates a new explicit delete from a completed failed attempt. " +
+				"Null in ordinary steady state; configurations must not depend on it.",
+		}
+	}
 	artifact, artifactInjected := r.v3ArtifactRule()
 	requiresArtifact := v3FormRequiresArtifactRule(r.form)
 	if requiresArtifact && !artifactInjected {

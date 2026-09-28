@@ -23,16 +23,22 @@ each resource keeps an exact FormRef and provider mapping in its release
 identity projection. Provider release, Form Definition publication, package
 publication, and Host deployment are separate owner actions.
 
-`release/version.json` selects the **4.0.1 candidate** for the release
+`release/version.json` selects the **4.1.0 candidate** for the release
 entrypoints. It keeps `publicationStatus: candidate-only` by the standing
 descriptor convention and is not live publication state. The Registry readback
 recorded in the identity ledger is the availability authority; the published
 version remains **4.0.0** until a new release has that readback.
-`release/candidates/provider-v4.0.1.json` is byte-identical to the current
+`release/candidates/provider-v4.1.0.json` is byte-identical to the current
 descriptor, with its derived 17-Form mapping in
-`release/candidates/provider-v4.0.1-form-identities.json`.
-The 4.0.1 candidate repairs pending-operation UID continuity and the recovery
-warning after a failed Create; it does not change Host API or Form identities.
+`release/candidates/provider-v4.1.0-form-identities.json`.
+The 4.1.0 candidate adds a run-local rotating bearer-token file and retains
+accepted pending-operation custody through refresh, including the Resource UID.
+It also carries the failed-Create recovery warning. The Host API, FormRef and
+Form Package identities remain unchanged; this is not Registry publication.
+Token-file mode is supported on Linux, macOS, FreeBSD, OpenBSD, and NetBSD;
+Windows builds retain static-token configuration only.
+The unpublished 4.0.1 candidate descriptor and projection remain source
+history, but are not the current writer target or a published identity.
 `release/candidates/provider-v4.0.0.json` and
 `release/candidates/provider-v4.0.0-form-identities.json` remain unchanged
 historical records for the published release.

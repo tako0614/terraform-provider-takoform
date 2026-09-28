@@ -194,7 +194,7 @@ func TestProvider4RetainedLedgerEntryIsFrozen(t *testing.T) {
 }
 
 func TestProvider4VersionRecognitionKeepsHistoricalSemVerPermissive(t *testing.T) {
-	for _, version := range []string{"4.0.0", "4.0.1", "4.12.3"} {
+	for _, version := range []string{"4.0.0", "4.0.1", "4.1.0", "4.12.3"} {
 		if !isStableProvider4Version(version) {
 			t.Errorf("stable Provider 4 version %q was not recognized", version)
 		}

@@ -54,6 +54,18 @@ func TestCurrentFamilyInventoryIsProviderNeutralAndComplete(t *testing.T) {
 	}
 }
 
+func TestCurrentProviderContinuityDocsKeepExpiredOperationCustody(t *testing.T) {
+	section := v3StateContinuitySection("ModuleWorker")
+	for _, phrase := range []string{"Provider 4.1", "supersede historical", "decision 0017 rule 7", "operation_not_found", "known UID", "same-name", "404", "preserves state"} {
+		if !strings.Contains(section, phrase) {
+			t.Fatalf("current Provider continuity docs omit %q", phrase)
+		}
+	}
+	if strings.Contains(section, "expired operation record\n  defers to an exact read of the resource, which decides") {
+		t.Fatal("current Provider docs still treat an expired operation plus 404 as deletion proof")
+	}
+}
+
 func TestPublishedSurfaceInventoryCoversEveryCurrentProviderMapping(t *testing.T) {
 	t.Parallel()
 

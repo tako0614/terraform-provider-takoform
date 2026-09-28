@@ -128,9 +128,9 @@ describe("the committed status document", () => {
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
     expect(document.providerPublished).toBe("4.0.0");
-    expect(document.providerTarget).toBe("4.0.1");
+    expect(document.providerTarget).toBe("4.1.0");
     expect(document.providerTargetStatus).toBe("candidate-only");
-    expect(document.edgePreviewProvider).toBe("4.0.1-candidate-only");
+    expect(document.edgePreviewProvider).toBe("4.1.0-candidate-only");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -339,7 +339,7 @@ describe("read-only site status preparation", () => {
 describe("Provider target and Registry publication derivation", () => {
   test("the next candidate does not promote published availability", () => {
     const facts = fixture((root) => deriveSiteStatusFacts(root));
-    expect(facts.providerTarget).toBe("4.0.1");
+    expect(facts.providerTarget).toBe("4.1.0");
     expect(facts.providerTargetStatus).toBe("candidate-only");
     expect(facts.providerPublished).toBe("4.0.0");
     expect(facts.providerCurrent).toBe("4.0.0");
@@ -362,10 +362,10 @@ describe("Provider target and Registry publication derivation", () => {
       write(root, ledgerPath, ledger);
       return deriveSiteStatusFacts(root);
     });
-    expect(facts.providerTarget).toBe("4.0.1");
-    expect(facts.providerPublished).toBe("4.0.1");
+    expect(facts.providerTarget).toBe("4.1.0");
+    expect(facts.providerPublished).toBe("4.1.0");
     expect(facts.providerTargetStatus).toBe("registry-published");
-    expect(facts.edgePreviewProvider).toBe("4.0.1-candidate-only");
+    expect(facts.edgePreviewProvider).toBe("4.1.0-candidate-only");
   });
 
   test("an incomplete new readback cannot silently fall back to the old release", () => {
@@ -373,10 +373,10 @@ describe("Provider target and Registry publication derivation", () => {
       expect(() => fixture((root) => {
         const ledgerPath = "release/provider-release-identities.json";
         const ledger = read(root, ledgerPath);
-        ledger.entries.push({ version: "4.0.1", tag: "v4.0.1", registryReadback });
+        ledger.entries.push({ version: "4.1.0", tag: "v4.1.0", registryReadback });
         write(root, ledgerPath, ledger);
         return deriveSiteStatusFacts(root);
-      })).toThrow("Provider 4.0.1 Registry readback is incomplete");
+      })).toThrow("Provider 4.1.0 Registry readback is incomplete");
     }
   });
 
@@ -416,7 +416,7 @@ describe("Provider target and Registry publication derivation", () => {
         JSON.stringify(release),
       );
       return deriveSiteStatusFacts(root);
-    })).toThrow("bytes differ from release/candidates/provider-v4.0.1.json");
+    })).toThrow("bytes differ from release/candidates/provider-v4.1.0.json");
   });
 });
 
