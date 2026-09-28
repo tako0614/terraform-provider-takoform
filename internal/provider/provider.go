@@ -62,6 +62,10 @@ var _ provider.Provider = (*takoformProvider)(nil)
 type takoformProvider struct {
 	// version is set at build time and surfaced to Terraform.
 	version string
+	// Only the separate local candidate binary sets these fields. The normal
+	// released Provider continues to register its exact published roster.
+	candidateResources []func() resource.Resource
+	candidateOnly      bool
 }
 
 // providerData is shared with every resource via Configure. It carries the one
@@ -148,6 +152,13 @@ func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 }
 
 func (p *takoformProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	if p.candidateOnly {
+		resp.Diagnostics.AddError(
+			"Unpublished Provider candidate",
+			"This local schema candidate exists only to validate typed OpenTofu configuration. It does not support planning or Host mutations.",
+		)
+		return
+	}
 	var cfg takoformProviderModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
@@ -272,6 +283,9 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
+	if p.candidateOnly {
+		return append([]func() resource.Resource(nil), p.candidateResources...)
+	}
 	// The current provider registers only the exact Form set selected from
 	// tako0614/takoform-forms. Provider 3's former 31-Form aggregate remains immutable release
 	// history, not a roster that this source address keeps expanding. Ordinary

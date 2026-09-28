@@ -1,0 +1,13 @@
+{
+  "format": "takoform.provider-container-forward-artifact-closure@v1",
+  "publicationStatus": "unpublished",
+  "source": {
+    "path": "container-http-candidate.json",
+    "commit": "35a77bdb37483fccbb365998923824040dad67cc",
+    "digest": "sha256:84f9534f48d56e6e1b4ee0e36601c9fb4b02217d2a65fc45418c840ae9c2dc23"
+  },
+  "input": {
+    "path": "../../internal/provider/container-forward-input.json",
+    "digest": "sha256:e0beab3536664b64c2211aa4dfc8fcfdcd9fed452e48f998047fb3df6e2bc4d9"
+  }
+}

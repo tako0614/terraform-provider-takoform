@@ -1,0 +1,73 @@
+{
+  "format": "takoform.provider-container-forward-input@v1",
+  "publicationStatus": "unpublished",
+  "source": {
+    "repository": "github.com/tako0614/takoform-forms",
+    "commit": "35a77bdb37483fccbb365998923824040dad67cc",
+    "command": "go run ./cmd/container-http-candidate"
+  },
+  "candidate": {
+    "form": {
+      "apiVersion": "edge.forms.takoform.com",
+      "kind": "ContainerService",
+      "definitionVersion": "0.1.0-dev.1",
+      "schemaDigest": "sha256:883002fb7f9cade8e8a817a14b406889afa024907348473fe0de28622b79e464"
+    },
+    "interface": {
+      "name": "container.http",
+      "version": "0.1.0",
+      "schemaDigest": "sha256:65039b3ea0223057e5f34eff182098a1ba097ee351e19fcb7626a9af41a8561a"
+    },
+    "binding": {
+      "name": "module-worker.container-http",
+      "version": "0.1.0",
+      "schemaDigest": "sha256:caf35e19cd375a9115310dead9e4985f772e044d84dd3449cc347cd0ab49f301"
+    },
+    "vector": {
+      "form": {
+        "apiVersion": "edge.forms.takoform.com",
+        "kind": "VectorIndex",
+        "definitionVersion": "0.1.0-dev.1",
+        "immutableFields": ["/dimension", "/filterKeys", "/metric"]
+      },
+      "interface": {
+        "name": "edge.vector",
+        "version": "0.1.0",
+        "schemaDigest": "sha256:6df8b7680b0ff278cb8fcb6f56c602ec5d6bb9b4ec115a6172e70e6b54d6cada"
+      },
+      "binding": {
+        "name": "module-worker.edge-vector",
+        "version": "1.0.0",
+        "schemaDigest": "sha256:bc367a665405e405ac99091fb7f1908a382123d63c4acbd807de97c10184a809"
+      }
+    },
+    "workerVersion": {
+      "kind": "WorkerVersion",
+      "definitionVersion": "0.6.0-dev.1",
+      "schemaDigest": "sha256:af31ce7e2e7da88f3281b8e49e35d35054ae33cc3bc3871dfe542f01518d1da5",
+      "bindingCount": 9,
+      "bindingNames": [
+        "module-worker.edge-kv",
+        "module-worker.object-bucket",
+        "module-worker.sqlite",
+        "module-worker.queue-producer",
+        "module-worker.service",
+        "module-worker.workflow",
+        "module-worker.actor",
+        "module-worker.edge-vector",
+        "module-worker.container-http"
+      ],
+      "typedField": "containerHttpBindings"
+    },
+    "workerDeploymentWorkerVersionTarget": {
+      "apiVersion": "edge.forms.takoform.com",
+      "kind": "WorkerVersion",
+      "definitionVersion": "0.6.0-dev.1",
+      "schemaDigest": "sha256:af31ce7e2e7da88f3281b8e49e35d35054ae33cc3bc3871dfe542f01518d1da5"
+    },
+    "workerDeployment": {
+      "kind": "WorkerDeployment",
+      "definitionVersion": "0.5.0-dev.1"
+    }
+  }
+}
