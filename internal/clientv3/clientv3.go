@@ -97,6 +97,7 @@ func (d Discovery) HasFeature(name string) bool { return d.Features[name] }
 type Client struct {
 	endpoint        string // normalized origin, no trailing slash
 	token           string
+	tokenSource     func() (string, error)
 	httpClient      *http.Client
 	userAgent       string
 	apiBase         string
@@ -109,6 +110,11 @@ type Client struct {
 
 // Options controls optional client behaviour.
 type Options struct {
+	// TokenSource supplies a fresh bearer token before every HTTP attempt,
+	// including discovery, operation polls, and retries. It must be safe for
+	// concurrent calls. A source error fails closed without sending a request.
+	// Existing static-token constructors remain unchanged.
+	TokenSource func() (string, error)
 	// RetryAttempts bounds automatic retries of mutating requests that fail
 	// with a complete stable retryable error envelope. Default 3.
 	RetryAttempts int
@@ -146,6 +152,7 @@ func NewWithOptions(endpoint, token string, httpClient *http.Client, options Opt
 	return &Client{
 		endpoint:        strings.TrimRight(endpoint, "/"),
 		token:           token,
+		tokenSource:     options.TokenSource,
 		httpClient:      httpClient,
 		userAgent:       defaultUserAgent,
 		retryAttempts:   retryAttempts,
@@ -435,8 +442,18 @@ func (c *Client) do(
 		}
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", c.userAgent)
-		if c.token != "" {
-			req.Header.Set("Authorization", "Bearer "+c.token)
+		token := c.token
+		if c.tokenSource != nil {
+			var sourceErr error
+			token, sourceErr = c.tokenSource()
+			if sourceErr != nil || token == "" {
+				// The source error may include a secret, path, or operator detail.
+				// Never let it enter Terraform diagnostics or HTTP logs.
+				return 0, nil, nil, errors.New("takoform: bearer token source unavailable")
+			}
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
 		}
 		for key, value := range headers {
 			req.Header.Set(key, value)

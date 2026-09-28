@@ -73,6 +73,7 @@ type v3FakeHost struct {
 	applySpecs   []map[string]any
 	applyBodies  []map[string]any
 	applyHeaders []http.Header
+	deleteKeys   []string
 	getRequests  int
 	// runtimeInputPuts/runtimeInputGets record the private v2 preparation
 	// seam separately from the stable public Host API.
@@ -112,6 +113,10 @@ type v3FakeHost struct {
 	// deleted" rule is actually wrong on, and the only one that can falsify
 	// pending-operation resumption.
 	apply202Uncommitted bool
+	// delete202Pending accepts one delete without removing its record until the
+	// operation settles. This exposes the accepted-delete timeout boundary.
+	delete202Pending   bool
+	delete202Malformed bool
 	// deferredCommits holds the record one uncommitted operation will store when
 	// the test commits it, keyed by operation id.
 	deferredCommits map[string]*v3DeferredCommit
@@ -459,6 +464,21 @@ func (h *v3FakeHost) settlePendingOperation(id, kind, name string) {
 	h.operationResults[id] = map[string]any{"resource": h.wireResource(record, name)}
 }
 
+func (h *v3FakeHost) settlePendingDelete(id, kind, name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.resources, h.resourceKey(kind, name))
+	delete(h.pendingOperations, id)
+	h.operationResults[id] = map[string]any{}
+}
+
+func (h *v3FakeHost) failPendingDelete(id, code string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.pendingOperations, id)
+	h.operationErrors[id] = code
+}
+
 // replaceIncarnation gives an existing record a new uid, the way a resource
 // deleted and re-created out of band reuses its name.
 func (h *v3FakeHost) replaceIncarnation(kind, name, uid string) {
@@ -666,6 +686,24 @@ func (h *v3FakeHost) serveResource(w http.ResponseWriter, r *http.Request, remai
 		}
 		if r.Header.Get("Idempotency-Key") == "" {
 			h.t.Errorf("delete must carry an Idempotency-Key")
+		}
+		h.deleteKeys = append(h.deleteKeys, r.Header.Get("Idempotency-Key"))
+		if h.delete202Malformed {
+			h.delete202Malformed = false
+			h.events = append(h.events, "delete-accepted:"+key)
+			h.writeJSON(w, http.StatusAccepted, map[string]any{"operation": map[string]any{"id": "bad"}})
+			return
+		}
+		if h.delete202Pending {
+			h.delete202Pending = false
+			h.pendingOperations["op_delete_pending"] = record.uid
+			h.events = append(h.events, "delete-accepted:"+key)
+			w.Header().Set("Retry-After", "0")
+			h.writeJSON(w, http.StatusAccepted, map[string]any{"operation": map[string]any{
+				"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
+				"id": "op_delete_pending", "done": false, "target": map[string]any{"uid": record.uid},
+			}})
+			return
 		}
 		delete(h.resources, key)
 		h.events = append(h.events, "delete:"+key)

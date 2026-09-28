@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testPrepareDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -459,6 +460,66 @@ func TestDeleteResourceOperationNotFoundMapsToErrNotFound(t *testing.T) {
 	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound from terminal operation, got %v", err)
+	}
+}
+
+func TestDeleteResourceAcceptedTimeoutRetainsOperation(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodDelete {
+			writeJSON(t, w, http.StatusAccepted, map[string]any{"operation": map[string]any{
+				"apiVersion": OperationAPIVersion, "kind": OperationKind,
+				"id": "op_delete_pending", "done": false, "target": map[string]any{"uid": "uid-1"},
+			}})
+			return true
+		}
+		if r.Method == http.MethodGet && r.URL.Path == APIRootPath+"/operations/op_delete_pending" {
+			writeJSON(t, w, http.StatusOK, map[string]any{
+				"apiVersion": OperationAPIVersion, "kind": OperationKind,
+				"id": "op_delete_pending", "done": false, "target": map[string]any{"uid": "uid-1"},
+			})
+			return true
+		}
+		return false
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	err := client.DeleteResource(ctx, testSpace, testRef, "app", "uid-1", "9")
+	var accepted *AcceptedError
+	if !errors.As(err, &accepted) || accepted.OperationID != "op_delete_pending" || accepted.UID != "uid-1" {
+		t.Fatalf("accepted delete lost its operation custody: %#v", err)
+	}
+}
+
+func TestDeleteResourceAcceptedTerminalFailureRetainsOperation(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodDelete {
+			writeJSON(t, w, http.StatusAccepted, map[string]any{"operation": map[string]any{
+				"apiVersion": OperationAPIVersion, "kind": OperationKind, "id": "op_delete_failed", "done": true,
+				"error": map[string]any{"code": "backend_unavailable", "message": "failed", "requestId": "req-delete", "retryable": false},
+			}})
+			return true
+		}
+		return false
+	})
+	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
+	var accepted *AcceptedError
+	if !errors.As(err, &accepted) || accepted.OperationID != "op_delete_failed" {
+		t.Fatalf("accepted terminal failure lost operation custody: %#v", err)
+	}
+}
+
+func TestDeleteResourceMalformed202StillReportsAcceptance(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodDelete {
+			writeJSON(t, w, http.StatusAccepted, map[string]any{"operation": map[string]any{"id": "bad"}})
+			return true
+		}
+		return false
+	})
+	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
+	var accepted *AcceptedError
+	if !errors.As(err, &accepted) || accepted.OperationID != "" {
+		t.Fatalf("malformed accepted delete was treated as safe to retry: %#v", err)
 	}
 }
 

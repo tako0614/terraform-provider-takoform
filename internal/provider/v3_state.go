@@ -106,6 +106,13 @@ func (r *v3FormResource) writeV3StateFrom(
 	// A verified representation settles any earlier accepted-but-unfinished
 	// mutation: there is nothing left to resume.
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringNull())...)
+	if r.providerSurface == v3ProviderSurfaceCurrent {
+		action := types.StringNull()
+		if retry := v3FailedDeleteOperationForRetry(values); retry != "" {
+			action = types.StringValue(v3DeleteRetryActionPrefix + retry)
+		}
+		diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_action"), action)...)
+	}
 	// Whether a relation is broken is re-derived from THIS representation on
 	// every write, so an apply that re-pinned the reference clears the recovery
 	// signal by the same rule that set it.
@@ -229,16 +236,14 @@ func v3CodecFieldMissingError(codec v3FormCodec, attribute string) diag.Diagnost
 // but that produced no verified representation (clientv3.AcceptedError): the
 // long-running Operation did not finish before the deadline, failed, or came
 // back unreadable. Terraform commits the state a failed Create leaves behind,
-// but that failed Create can leave the resource tainted and a normal plan may
-// propose a replacement. The warning below gives the operator an explicit,
-// refresh-only persistence and validation path instead of promising recovery.
+// so writing nothing here orphans a resource the host now owns and the next
+// plan proposes creating it a second time.
 //
 // What is written is exactly what is known without trusting an unverified
 // response: the client-owned name and space, the exact FormRef the mutation
 // targeted, the planned desired fields, and the host-issued uid plus the
-// operation id when the accepted operation disclosed them. That lets the next
-// Read inspect the accepted mutation; it does not clear a Terraform taint or
-// guarantee that a normal plan will avoid a replacement.
+// operation id when the accepted operation disclosed them. That is enough for
+// the next Read to re-read the resource and reconcile.
 //
 // An error that is not an accepted mutation writes nothing: the host never
 // took the request, so there is no resource to record.
@@ -268,6 +273,9 @@ func (r *v3FormResource) writeV3AcceptedState(
 		ctx, state, codec, space, values, partial, false, v3AcceptedWithoutRepresentation,
 	)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), v3OptionalStateString(accepted.OperationID))...)
+	if r.providerSurface == v3ProviderSurfaceCurrent {
+		diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_action"), types.StringValue("create"))...)
+	}
 	diags.AddWarning(
 		r.form.Kind+" was accepted by the host but did not complete",
 		v3AcceptedRecoveryDetail(accepted, space, values.Name.ValueString(), r.form.Kind),
@@ -279,12 +287,9 @@ func (r *v3FormResource) writeV3AcceptedState(
 func v3AcceptedRecoveryDetail(accepted *clientv3.AcceptedError, space, name, kind string) string {
 	detail := fmt.Sprintf(
 		"The host accepted this %s mutation, so %s/%s may exist even though no verified representation came back. "+
-			"After a failed Create, Terraform can retain a taint and a normal plan may propose a replacement. "+
-			"Do not apply that replacement as a recovery step. After the host settles, review a saved refresh-only "+
-			"plan for resource mutations, then apply that exact state-only plan to persist the refreshed state. If pending_operation_id remains "+
-			"or a UID conflict is reported, stop and do not untaint. Only after the exact same host identity is validated "+
-			"in settled state should you consider deliberately untainting this exact Terraform address with normal "+
-			"state locking, then review a fresh normal plan. A plan-only refresh does not persist state or remove a taint.",
+			"State records the name, space, and exact Form identity (plus pending_operation_id when the host named an "+
+			"operation) so the next plan reconciles the existing resource instead of creating a duplicate. "+
+			"Run a refresh once the host settles.",
 		kind, space, name,
 	)
 	if accepted.OperationID != "" {
@@ -451,7 +456,8 @@ type v3Values struct {
 	// PendingOperationID is the recovery record of a mutation the host accepted
 	// but that produced no verified representation. A read consults it before it
 	// reads the resource (v3ResumePendingOperation).
-	PendingOperationID types.String
+	PendingOperationID     types.String
+	PendingOperationAction types.String
 	// RevisionOwner names who owns a derived revision. It is provider-side
 	// authoring input that decides the derived NAME and never reaches the wire.
 	RevisionOwner types.String
@@ -516,6 +522,9 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 		return v3Values{}, diags
 	}
 	values, diags := v3CommonValuesFrom(ctx, getter, r.form.DeclaresUpdate())
+	if r.providerSurface == v3ProviderSurfaceCurrent {
+		diags.Append(getter.GetAttribute(ctx, path.Root("pending_operation_action"), &values.PendingOperationAction)...)
+	}
 	if r.derivesRevisionName() {
 		diags.Append(getter.GetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), &values.RevisionOwner)...)
 	}

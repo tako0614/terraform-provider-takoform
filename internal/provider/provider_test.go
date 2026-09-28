@@ -118,6 +118,7 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 	tests := []struct {
 		name        string
 		token       any
+		tokenFile   any
 		space       any
 		wantSummary string
 	}{
@@ -126,6 +127,13 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 			token:       tftypes.UnknownValue,
 			space:       "configured-space",
 			wantSummary: "Unknown Takoform token",
+		},
+		{
+			name:        "token_file",
+			token:       nil,
+			tokenFile:   tftypes.UnknownValue,
+			space:       "configured-space",
+			wantSummary: "Unknown Takoform token file",
 		},
 		{
 			name:        "space",
@@ -158,6 +166,7 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 				"endpoint":            tftypes.String,
 				"space":               tftypes.String,
 				"token":               tftypes.String,
+				"token_file":          tftypes.String,
 				"runtime_input_nonce": tftypes.String,
 				"runtime_inputs":      tftypes.Map{ElementType: tftypes.String},
 			}}
@@ -168,6 +177,7 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 						"endpoint":            tftypes.NewValue(tftypes.String, server.URL),
 						"space":               tftypes.NewValue(tftypes.String, test.space),
 						"token":               tftypes.NewValue(tftypes.String, test.token),
+						"token_file":          tftypes.NewValue(tftypes.String, test.tokenFile),
 						"runtime_input_nonce": tftypes.NewValue(tftypes.String, nil),
 						"runtime_inputs": tftypes.NewValue(
 							tftypes.Map{ElementType: tftypes.String},

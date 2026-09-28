@@ -454,6 +454,64 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if !ok {
 		return
 	}
+	pendingDelete := v3PendingDelete(ctx, values, req.Private, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if pendingDelete {
+		operationID := v3StateStringValue(values.PendingOperationID)
+		outcome := v3ResumePendingDelete(ctx, r.data.clientV3, r.form.Kind, v3PendingRequest{
+			OperationID: operationID, Ref: clientFormRef(codec.Ref), Space: space,
+			Name: values.Name.ValueString(), StateUID: v3StateStringValue(values.UID),
+		}, &resp.Diagnostics)
+		if outcome == v3DeleteUnresolved {
+			return
+		}
+		// Neither a terminal success nor a terminal failure grants name-based
+		// adoption. Read only the recorded exact FormRef and verify the old UID.
+		observed, err := r.data.clientV3.GetResource(ctx, space, clientFormRef(codec.Ref), values.Name.ValueString())
+		if errors.Is(err, clientv3.ErrNotFound) {
+			resp.State.RemoveResource(ctx)
+			if resp.Private != nil {
+				resp.Diagnostics.Append(resp.Private.SetKey(ctx, v3PendingDeletePrivateKey, nil)...)
+			}
+			return
+		}
+		if err != nil {
+			resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to verify accepted "+r.form.Kind+" delete", err, v3Diagnostic{
+				ResourceType: r.resourceTypeName(), Space: space, Name: values.Name.ValueString(),
+				Ref: codec.Ref, Pointer: "/metadata", ExpectedUID: v3StateStringValue(values.UID), OperationID: operationID,
+			}))
+			return
+		}
+		if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), v3StateStringValue(values.UID), observed, &resp.Diagnostics) {
+			return
+		}
+		if outcome == v3DeleteFailed {
+			v3ReportRelationCondition(
+				r.form.Kind, r.resourceTypeName(), space, values.Name.ValueString(), codec.Ref,
+				observed, r.form.DeclaresUpdate(), &resp.Diagnostics,
+			)
+			nextState := resp.State
+			resp.Diagnostics.Append(r.writeV3State(ctx, &nextState, codec, space, values, observed, r.form.DeclaresUpdate())...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			resp.State = nextState
+			// The failed operation is closed. Keep its ID only as a retry key
+			// separator; the pending marker is gone so a NEW user-requested
+			// Delete may proceed with a distinct Idempotency-Key.
+			if r.providerSurface == v3ProviderSurfaceCurrent {
+				resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("pending_operation_action"), types.StringValue(v3DeleteRetryActionPrefix+operationID))...)
+			}
+			if resp.Private != nil {
+				resp.Diagnostics.Append(resp.Private.SetKey(ctx, v3PendingDeletePrivateKey, nil)...)
+			}
+			return
+		}
+		resp.Diagnostics.AddError("Cannot settle accepted "+r.form.Kind+" delete", "Operation "+operationID+" succeeded, but the old resource is still readable. State is preserved until its absence is verified.")
+		return
+	}
 	// An accepted-but-unfinished mutation is consulted BEFORE the resource is
 	// read: on a host where the resource does not exist until the operation
 	// commits, a 404 during that window is not deletion.
@@ -468,17 +526,23 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if resume.Stop {
 		return
 	}
-	expectedUID := v3StateStringValue(values.UID)
-	if resume.ExpectedUID != "" {
-		expectedUID = resume.ExpectedUID
-	}
 	res, err := r.data.clientV3.GetResource(ctx, space, clientFormRef(codec.Ref), values.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, clientv3.ErrNotFound) {
 			if !resume.RemoveOnAbsent {
-				// The host accepted a mutation that has not committed. Absence is
-				// the pending window, not a deletion, so state stays exactly as it
-				// is and the recorded operation id survives for the next read.
+				if resume.FailOnAbsent {
+					resp.Diagnostics.AddError(
+						"Cannot resolve accepted "+r.form.Kind+" operation "+v3StateStringValue(values.PendingOperationID),
+						"The Host returned resource_not_found while accepted operation "+
+							v3StateStringValue(values.PendingOperationID)+" is not addressable to this "+
+							"principal. That does not prove the mutation failed or stopped committing. State and the "+
+							"operation id are preserved; refresh with the principal that submitted it or explicitly "+
+							"resolve the Host-side outcome before planning another mutation.",
+					)
+				}
+				// The accepted mutation is unresolved. A missing resource is not
+				// deletion proof while its operation is still running or
+				// unaddressable, so preserve state and the marker for recovery.
 				return
 			}
 			resp.State.RemoveResource(ctx)
@@ -490,12 +554,12 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 			Name:         values.Name.ValueString(),
 			Ref:          codec.Ref,
 			Pointer:      "/metadata",
-			ExpectedUID:  expectedUID,
+			ExpectedUID:  v3StateStringValue(values.UID),
 			OperationID:  v3StateStringValue(values.PendingOperationID),
 		}))
 		return
 	}
-	if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), expectedUID, res, &resp.Diagnostics) {
+	if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), v3StateStringValue(values.UID), res, &resp.Diagnostics) {
 		// State is DELIBERATELY kept: the resource is still under management and
 		// the operator must choose which incarnation it names.
 		return
@@ -645,6 +709,9 @@ func v3ParseRelationHostReason(hostReason string) (pointer, expectedUID, current
 //     because neither apply order can complete it;
 //  5. what the host declares it supports is decided HERE rather than at apply.
 func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if v3RejectPendingOperation(ctx, req.State, r.form.Kind, &resp.Diagnostics) {
+		return
+	}
 	v3PlanRelationRecovery(ctx, req.State, r.form.DeclaresUpdate(), resp)
 	if _, workerBundle := r.v3WorkerBundleArtifact(); workerBundle {
 		r.modifyWorkerBundlePlan(ctx, req, resp)
@@ -700,6 +767,9 @@ func v3PlanRelationRecovery(
 
 func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if !r.assertV3Configured(&resp.Diagnostics) {
+		return
+	}
+	if v3RejectPendingOperation(ctx, req.State, r.form.Kind, &resp.Diagnostics) {
 		return
 	}
 	if !r.form.DeclaresUpdate() {
@@ -868,9 +938,18 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if !r.assertV3Configured(&resp.Diagnostics) {
 		return
 	}
+	if v3RejectPendingOperation(ctx, req.State, r.form.Kind, &resp.Diagnostics) {
+		return
+	}
 	values, diags := r.v3ValuesFrom(ctx, req.State)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	action := v3StateStringValue(values.PendingOperationAction)
+	retryOperationID := v3FailedDeleteOperationForRetry(values)
+	if action != "" && (retryOperationID == "" || action != v3DeleteRetryActionPrefix+retryOperationID) {
+		resp.Diagnostics.AddError("Unresolved delete recovery state", "A delete cannot start while provider recovery state is inconsistent. Refresh or resolve the prior accepted mutation first.")
 		return
 	}
 	codec, ok := r.v3StateCodec(values.Identity, &resp.Diagnostics)
@@ -899,11 +978,27 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// record of an earlier delete of this NAME cannot answer this one with it
 	// (clientv3.incarnationKey). State always has one here: uid and generation
 	// are written from the same verified representation.
-	err := r.data.clientV3.DeleteResource(
+	err := r.data.clientV3.DeleteResourceWithRetryOperation(
 		opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(),
-		v3StateStringValue(values.UID), values.Generation.ValueString(),
+		v3StateStringValue(values.UID), values.Generation.ValueString(), retryOperationID,
 	)
 	if err != nil && !errors.Is(err, clientv3.ErrNotFound) {
+		var accepted *clientv3.AcceptedError
+		if errors.As(err, &accepted) {
+			resp.State = req.State
+			operationID := accepted.OperationID
+			if operationID == "" {
+				operationID = v3UnaddressableDeleteOperation
+			}
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringValue(operationID))...)
+			if r.providerSurface == v3ProviderSurfaceCurrent {
+				resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("pending_operation_action"), types.StringValue("delete"))...)
+			}
+			if resp.Private != nil {
+				resp.Diagnostics.Append(resp.Private.SetKey(ctx, v3PendingDeletePrivateKey, []byte("true"))...)
+			}
+			resp.Diagnostics.AddWarning(r.form.Kind+" delete was accepted but not verified", "State retains uid, generation, exact FormRef, and operation marker "+operationID+". Refresh to reconcile this delete; another mutation is blocked until it settles.")
+		}
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to delete "+r.form.Kind, err, v3Diagnostic{
 			ResourceType:       r.resourceTypeName(),
 			Space:              space,

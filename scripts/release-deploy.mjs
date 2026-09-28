@@ -4346,9 +4346,9 @@ export function providerReleaseBody(descriptor) {
     );
   }
   // Release-specific notes are not version-selection authority. Preserve the
-  // generic major-boundary guidance below while stating this patch's purpose.
-  const maintenanceNote = descriptor.version === "4.0.1"
-    ? "Maintenance update from Provider v4.0.0: v4.0.1 keeps the same 17 exact FormRefs, package digests, resource schemas and Host API. It carries a successful pending Operation's UID into the following resource read and refuses a different incarnation. The corrected recovery warning explains that a failed Create may leave tainted state: do not apply a replacement; persist settled same-identity state with a saved refresh-only apply before any deliberate exact-address untaint. This patch does not perform automatic untaint or state migration.\n\n"
+  // generic major-boundary guidance below while stating this minor's purpose.
+  const maintenanceNote = descriptor.version === "4.1.0"
+    ? "Minor update from Provider v4.0.0: v4.1.0 adds token_file / TAKOFORM_TOKEN_FILE for a run-local rotating bearer token. On Linux, macOS, FreeBSD, OpenBSD, and NetBSD the provider reads the current secure regular file before each Host request; Windows retains static-token configuration only. Static token / TAKOFORM_TOKEN remains available but cannot be combined with token_file. The Host API, 17 exact FormRefs, package digests, and resource type mappings are unchanged. An accepted pending Operation retains custody through refresh, including its Resource UID; failed Create or Delete does not authorize an automatic replacement or blind retry. Resolve the exact pending operation and persist settled same-identity state with refresh-only apply before any deliberate recovery. This release does not perform automatic untaint or state migration.\n\n"
     : "";
   return (
     `Signed deterministic Takoform Provider v${descriptor.version} release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\n` +

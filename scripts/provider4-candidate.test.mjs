@@ -44,6 +44,7 @@ function cloneProviderInputs(prefix = "provider4-candidate") {
     "release/candidates/provider-v4.0.0.json",
     "release/candidates/provider-v4.0.0-form-identities.json",
     "release/candidates/provider-v4.0.1.json",
+    "release/candidates/provider-v4.1.0.json",
     "internal/provider/artifacts/publisher/closure.json",
     "internal/provider/artifacts/publisher/projection.json",
   ];
@@ -79,13 +80,13 @@ function writeGeneratedCurrentCandidate(directory) {
 test("current Provider 4.x candidate keeps the exact 17 publisher Forms", () => {
   const current = readCurrentProvider4Release(root);
   const candidate = validateProvider4Candidate(root);
-  expect(candidate.providerVersion).toBe("4.0.1");
+  expect(candidate.providerVersion).toBe("4.1.0");
   expect(candidate.providerVersion).toBe(current.descriptor.version);
   expect(current.candidateDescriptorPath).toBe(
-    "release/candidates/provider-v4.0.1.json",
+    "release/candidates/provider-v4.1.0.json",
   );
   expect(current.candidateFormIdentitiesPath).toBe(
-    "release/candidates/provider-v4.0.1-form-identities.json",
+    "release/candidates/provider-v4.1.0-form-identities.json",
   );
   expect(candidate.portableApiVersion).toBe("forms.takoform.com/v1");
   expect(candidate.families).toEqual(["edge.forms.takoform.com"]);
@@ -112,17 +113,17 @@ test("current Provider 4.x candidate keeps the exact 17 publisher Forms", () => 
   ).toHaveLength(17);
 });
 
-test("generated 4.0.1 identities accept the same 17 Forms without publishing", () => {
+test("generated 4.1.0 identities accept the same 17 Forms without publishing", () => {
   const synthetic = cloneProviderInputs("provider4-generated");
   try {
     const generated = writeGeneratedCurrentCandidate(synthetic);
     const candidate = validateProvider4Candidate(synthetic);
-    expect(generated.candidate.providerVersion).toBe("4.0.1");
+    expect(generated.candidate.providerVersion).toBe("4.1.0");
     expect(candidate.forms).toHaveLength(17);
     expect(candidate.forms).toEqual(generated.candidate.forms);
     expect(
       readJson("release/provider-release-identities.json", synthetic).entries.some(
-        (entry) => entry.version === "4.0.1",
+        (entry) => entry.version === "4.1.0",
       ),
     ).toBe(false);
   } finally {
@@ -135,7 +136,7 @@ test("the current descriptor is the path authority and rejects a mirror mismatch
   try {
     const current = readCurrentProvider4Release(synthetic);
     expect(current.candidateDescriptorPath).toBe(
-      provider4CandidatePaths("4.0.1").descriptorPath,
+      provider4CandidatePaths("4.1.0").descriptorPath,
     );
     writeFileSync(
       path.join(synthetic, "release/candidates/provider-v4.0.0.json"),
@@ -265,14 +266,14 @@ test("a published current Provider 4.x readback permits only an exact no-op writ
     const published = readJson("release/provider-release-identities.json", synthetic);
     const historical = published.entries.find((entry) => entry.version === "4.0.0");
     const currentReadback = JSON.parse(JSON.stringify(historical));
-    currentReadback.version = "4.0.1";
-    currentReadback.tag = "v4.0.1";
+    currentReadback.version = "4.1.0";
+    currentReadback.tag = "v4.1.0";
     published.entries.push(currentReadback);
     writeJson("release/provider-release-identities.json", published, synthetic);
     expect(() => validateProvider4Candidate(synthetic)).not.toThrow();
     const identityPath = path.join(
       synthetic,
-      "release/candidates/provider-v4.0.1-form-identities.json",
+      "release/candidates/provider-v4.1.0-form-identities.json",
     );
     const ledgerPath = path.join(synthetic, "release/provider-form-identities.json");
     const identityBefore = readFileSync(identityPath);
@@ -282,12 +283,12 @@ test("a published current Provider 4.x readback permits only an exact no-op writ
     expect(readFileSync(ledgerPath)).toEqual(ledgerBefore);
 
     const mutatedIdentity = readJson(
-      "release/candidates/provider-v4.0.1-form-identities.json",
+      "release/candidates/provider-v4.1.0-form-identities.json",
       synthetic,
     );
     mutatedIdentity.forms[0].packageDigest = `sha256:${"0".repeat(64)}`;
     writeJson(
-      "release/candidates/provider-v4.0.1-form-identities.json",
+      "release/candidates/provider-v4.1.0-form-identities.json",
       mutatedIdentity,
       synthetic,
     );
@@ -312,7 +313,7 @@ test("current Provider surfaces identify the publisher without a privileged clas
 });
 
 // Keep the historical v4.0.0 descriptor assertions below as history checks;
-// they intentionally do not describe the current 4.0.1 writer input.
+// they intentionally do not describe the current 4.1.0 writer input.
 test("historical Provider 4.0.0 and retained Provider 3 descriptors stay named", () => {
   const retained = readJson("release/history/provider-v3.0.0.json");
   const historical = readJson(PROVIDER4_DESCRIPTOR);

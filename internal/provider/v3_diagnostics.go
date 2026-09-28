@@ -114,7 +114,7 @@ func v3HostFaultFrom(err error) (v3HostFault, bool) {
 // codes are the host's, the sentences are the provider's.
 var v3HostRepairs = map[string]string{
 	"invalid_argument":       "Correct the desired state the message names and re-plan; the host mutated nothing.",
-	"unauthenticated":        "Configure a valid `token` (or TAKOFORM_TOKEN) for this endpoint and re-run.",
+	"unauthenticated":        "Configure a valid `token` / TAKOFORM_TOKEN or `token_file` / TAKOFORM_TOKEN_FILE for this endpoint and re-run.",
 	"permission_denied":      "Grant this credential the operation on this space, or apply as a principal that already has it.",
 	"form_unknown":           "This host does not carry the exact Form identity in the message. Install it on the host, or pin a provider build whose default create target the host does carry.",
 	"form_not_installed":     "Install this exact Form on the host before applying resources of this kind.",

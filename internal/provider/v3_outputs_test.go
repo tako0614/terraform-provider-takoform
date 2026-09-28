@@ -364,6 +364,9 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 			t.Fatalf("%s schema: %v", form.Kind, response.Diagnostics)
 		}
 		want := len(v3CommonAttributes(form))
+		// Current Provider recovery state records the action associated with a
+		// pending operation; it is not a Form output.
+		want++
 		if artifact, artifactBacked := v3ProviderArtifactForForm(t, form); artifactBacked && artifact.Mode == v3ArtifactModeWorkerBundle {
 			want += len(workerBundleAttributesForProjection(*artifact))
 		} else if artifact != nil && artifact.Mode == v3ArtifactModeFileBundle {

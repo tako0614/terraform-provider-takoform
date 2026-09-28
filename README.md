@@ -55,6 +55,15 @@ resource "takoform_module_worker" "api" {
 Replace the example endpoint and Space with values supplied for your chosen
 Host; do not put a bearer token in HCL or a checked-in variable file.
 
+Provider 4.1.0 adds `token_file` / `TAKOFORM_TOKEN_FILE` for a rotating
+run-local bearer token. It reopens the file before every Host request. Use a
+regular file owned by the provider process user, without group/other access,
+symlinks, parent traversal, or a trailing newline. Configure either a static
+token or a token file, never both. Existing 4.0.0 static-token consumers need
+not change their pin. Secure token-file access is supported on Linux, macOS,
+FreeBSD, OpenBSD, and NetBSD; Windows keeps static-token configuration only.
+4.1.0 is still a candidate, not a published release.
+
 The repository's reference Host is for conformance only and serves no
 application traffic.
 
@@ -77,7 +86,7 @@ resource names are adapter metadata.
 
 <!-- current-generation:begin -->
 
-Registry Provider `4.0.0` is the published release at the `tako0614/takoform` source address and registers only the 17 Forms selected from `tako0614/takoform-forms`. Provider `4.0.1` is the candidate at the same source address. Provider `3.0.0` remains immutable 31-Form aggregate history. Core `1.0.1` implements `forms.takoform.com/v1`; no Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).
+Registry Provider `4.0.0` is the published release at the `tako0614/takoform` source address and registers only the 17 Forms selected from `tako0614/takoform-forms`. Provider `4.1.0` is the candidate at the same source address. Provider `3.0.0` remains immutable 31-Form aggregate history. Core `1.0.1` implements `forms.takoform.com/v1`; no Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).
 
 <!-- current-generation:end -->
 

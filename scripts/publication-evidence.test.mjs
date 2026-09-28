@@ -815,6 +815,39 @@ describe("canonical repository authority", () => {
     ).toThrow(/gc\.auto must be exactly 0/);
   });
 
+  test("accepts the actual VS Code branch-base annotation without changing evidence authority", () => {
+    const root = makeClone();
+    const expected = validatePublicationEvidence(DOCUMENT, { repositoryRoot: root });
+    const key =
+      "branch.fix/provider-p2-publication-ledger-authority.vscode-merge-base";
+    for (const value of [
+      "origin/fix/provider-p1-single-publisher-path",
+      "refs/attacker/not-an-evidence-ref",
+    ]) {
+      git(root, "config", key, value);
+      expect(validatePublicationEvidence(DOCUMENT, { repositoryRoot: root })).toEqual(expected);
+    }
+
+    git(root, "config", "branch.editor-test.vscode-merge-base-command", "ignored");
+    expect(() => validatePublicationEvidence(DOCUMENT, { repositoryRoot: root })).toThrow(
+      /configuration can influence evidence/,
+    );
+  });
+
+  test("continues rejecting Git configuration that can alter command execution or object selection", () => {
+    for (const [key, value] of [
+      ["core.hooksPath", "/tmp/attacker-hooks"],
+      ["alias.rev-parse", "!false"],
+      ["core.useReplaceRefs", "true"],
+    ]) {
+      const root = makeClone();
+      git(root, "config", key, value);
+      expect(() => validatePublicationEvidence(DOCUMENT, { repositoryRoot: root })).toThrow(
+        /configuration can influence evidence/,
+      );
+    }
+  });
+
   test("rejects a present commit unreachable from allowed canonical refs", () => {
     const root = makeClone();
     const tree = git(root, "rev-parse", "HEAD^{tree}");

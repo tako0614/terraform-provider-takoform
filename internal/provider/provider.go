@@ -29,9 +29,10 @@ import (
 
 // Environment variable fallbacks for provider configuration.
 const (
-	envEndpoint = "TAKOFORM_ENDPOINT"
-	envSpace    = "TAKOFORM_SPACE"
-	envToken    = "TAKOFORM_TOKEN"
+	envEndpoint  = "TAKOFORM_ENDPOINT"
+	envSpace     = "TAKOFORM_SPACE"
+	envToken     = "TAKOFORM_TOKEN"
+	envTokenFile = "TAKOFORM_TOKEN_FILE"
 
 	defaultResourceAPITimeout = 12 * time.Minute
 
@@ -91,6 +92,7 @@ type takoformProviderModel struct {
 	Endpoint          types.String `tfsdk:"endpoint"`
 	Space             types.String `tfsdk:"space"`
 	Token             types.String `tfsdk:"token"`
+	TokenFile         types.String `tfsdk:"token_file"`
 	RuntimeInputNonce types.String `tfsdk:"runtime_input_nonce"`
 	RuntimeInputs     types.Map    `tfsdk:"runtime_inputs"`
 }
@@ -130,6 +132,13 @@ func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 				Sensitive: true,
 				Description: "Bearer token sent as `Authorization: Bearer <token>`. " +
 					"May also be set via the " + envToken + " environment variable.",
+			},
+			"token_file": schema.StringAttribute{
+				Optional: true,
+				Description: "Path to a rotating bearer-token file on a run-local filesystem. The file must contain one raw token without a newline, " +
+					"be owned by the provider process user, have no group or other access, and use no symlink or parent-traversal path components. " +
+					"It is opened afresh for every Host request. May also be set via " + envTokenFile +
+					"; cannot be combined with token or " + envToken + ".",
 			},
 			"runtime_input_nonce": schema.StringAttribute{
 				Optional: true,
@@ -171,6 +180,13 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 				"or omit it to use the "+envToken+" environment variable.",
 		)
 	}
+	if cfg.TokenFile.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("token_file"),
+			"Unknown Takoform token file",
+			"The token file path must be known during provider configuration.",
+		)
+	}
 	if cfg.Space.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("space"),
@@ -207,6 +223,15 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 	}
 
 	token := firstNonEmpty(cfg.Token.ValueString(), os.Getenv(envToken))
+	tokenFile := firstNonEmpty(cfg.TokenFile.ValueString(), os.Getenv(envTokenFile))
+	if token != "" && tokenFile != "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("token_file"),
+			"Conflicting Takoform token sources",
+			"Configure either a static token or a token file, not both. Remove the unused provider attribute or environment variable.",
+		)
+		return
+	}
 	space := firstNonEmpty(cfg.Space.ValueString(), os.Getenv(envSpace))
 	runtimeInputNonce := cfg.RuntimeInputNonce.ValueString()
 	runtimeInputs := map[string]string{}
@@ -242,7 +267,15 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 	// provider for the resource-operation timeout (spec/decisions/0018). The
 	// error is recorded rather than fatal here: each resource asserts the lane
 	// and reports the recorded negotiation error with its own diagnostics.
-	v3Client, v3Err := negotiateLane(ctx, endpoint, token, httpClient, discoveryTimeout)
+	var v3Client *clientv3.Client
+	var v3Err error
+	if tokenFile != "" {
+		v3Client, v3Err = negotiateLaneWithTokenSource(ctx, endpoint, httpClient, discoveryTimeout, func() (string, error) {
+			return readBearerTokenFile(tokenFile)
+		})
+	} else {
+		v3Client, v3Err = negotiateLane(ctx, endpoint, token, httpClient, discoveryTimeout)
+	}
 
 	data := &providerData{
 		clientV3:          v3Client,
@@ -299,6 +332,22 @@ func negotiateLane(
 	discoveryCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return configureClientV3(discoveryCtx, endpoint, token, httpClient)
+}
+
+func negotiateLaneWithTokenSource(
+	ctx context.Context,
+	endpoint string,
+	httpClient *http.Client,
+	timeout time.Duration,
+	tokenSource func() (string, error),
+) (*clientv3.Client, error) {
+	discoveryCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	c := clientv3.NewWithOptions(endpoint, "", httpClient, clientv3.Options{TokenSource: tokenSource})
+	if _, err := c.Discover(discoveryCtx); err != nil {
+		return nil, fmt.Errorf("discovering Takoform v1 endpoint %q: %w", endpoint, err)
+	}
+	return c, nil
 }
 
 func configureClientV3(ctx context.Context, endpoint, token string, httpClient *http.Client) (*clientv3.Client, error) {
