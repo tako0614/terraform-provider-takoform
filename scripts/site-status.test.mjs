@@ -17,7 +17,11 @@ import {
   SITE_STATUS_REPOSITORY_PATH,
   verifySiteStatusDocument,
 } from "./site-status.mjs";
-import { stalePublishedProviderStatus } from "./provider-published-docs.mjs";
+import {
+  publishedProviderInstallDocStatusIssues,
+  PUBLISHED_INSTALL_PROSE,
+  stalePublishedProviderStatus,
+} from "./provider-published-docs.mjs";
 import {
   CURRENT_FAMILY_INDEX,
   FAMILY_CANDIDATE_SET,
@@ -32,6 +36,34 @@ import {
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 describe("published Provider documentation wording", () => {
+  test("rejects false unpublished status on every install landing and reference page", () => {
+    expect(PUBLISHED_INSTALL_PROSE).toEqual([
+      "README.md",
+      "docs/index.md",
+      "website/index.md",
+      "website/ja/index.md",
+      "website/docs/index.md",
+      "website/ja/docs/index.md",
+    ]);
+    for (const relativePath of PUBLISHED_INSTALL_PROSE) {
+      const sources = new Map(PUBLISHED_INSTALL_PROSE.map((path) => [path, "Provider 4.1.0 is Registry-published."]));
+      sources.set(relativePath, "The unpublished Provider 4.1.0 candidate adds token_file.");
+      expect(publishedProviderInstallDocStatusIssues(sources, "4.1.0")).toEqual([
+        `${relativePath}: stale unpublished provider status`,
+      ]);
+      if (relativePath.startsWith("website/ja/")) {
+        sources.set(relativePath, "Provider 4.1.0 は未公開です。");
+        expect(publishedProviderInstallDocStatusIssues(sources, "4.1.0")).toEqual([
+          `${relativePath}: stale unpublished provider status`,
+        ]);
+        sources.set(relativePath, "未公開の Provider 4.1.0 を使います。");
+        expect(publishedProviderInstallDocStatusIssues(sources, "4.1.0")).toEqual([
+          `${relativePath}: stale unpublished provider status`,
+        ]);
+      }
+    }
+  });
+
   test("rejects false unpublished status before or after the exact published version", () => {
     expect(stalePublishedProviderStatus("Provider 4.1.0 is unpublished.", "4.1.0")).toBe("stale unpublished provider status");
     expect(stalePublishedProviderStatus("The unpublished Provider 4.1.0 candidate adds token_file.", "4.1.0")).toBe("stale unpublished provider status");

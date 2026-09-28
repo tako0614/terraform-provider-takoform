@@ -21,7 +21,11 @@ import {
   FAMILY_CANDIDATE_SET,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
-import { stalePublishedProviderStatus } from "./provider-published-docs.mjs";
+import {
+  PUBLISHED_INSTALL_PROSE,
+  publishedProviderInstallDocStatusIssues,
+  stalePublishedProviderStatus,
+} from "./provider-published-docs.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -705,22 +709,19 @@ function checkImmutableProviderTagDocs(source, truth) {
 // must not carry a status the publication has already falsified. The same
 // falsified status is refused on the hand-written landing and reference pages
 // in both languages, which are the surfaces a reader reaches first.
-const PUBLISHED_INSTALL_PROSE = [
-  "README.md",
-  "docs/index.md",
-  "website/index.md",
-  "website/ja/index.md",
-  "website/docs/index.md",
-  "website/ja/docs/index.md",
-];
-
 function checkPublishedProviderInstallDocs(providerVersion) {
   checkImmutableProviderTagDocs(
     read(path.join(repositoryRoot, "docs", "index.md")),
     { providerVersion },
   );
-  for (const relativePath of PUBLISHED_INSTALL_PROSE) {
-    const source = read(path.join(repositoryRoot, relativePath));
+  const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
+    relativePath,
+    read(path.join(repositoryRoot, relativePath)),
+  ]));
+  for (const issue of publishedProviderInstallDocStatusIssues(sources, providerVersion)) {
+    fail(issue);
+  }
+  for (const [relativePath, source] of sources) {
     if (hasNotInstallableWording(source)) {
       fail(
         `${relativePath}: says the published Provider cannot be installed from the Registry`,
