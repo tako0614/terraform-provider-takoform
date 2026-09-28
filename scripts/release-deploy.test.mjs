@@ -138,6 +138,8 @@ function nominateOwnerGateTools() {
   for (const path of [
     join(tofuBin, "tofu"),
     join(terraformBin, "terraform"),
+    join(terraformBin, "gh"),
+    join(terraformBin, "cosign"),
     join(goBin, "go"),
     join(goBin, "gofmt"),
     join(goToolDir, "compile"),
@@ -2114,6 +2116,110 @@ describe("owner gate final fence and pinned release tools", () => {
     return null;
   }
 
+  function repeatedFenceFixture() {
+    const ownerGateTools = nominateOwnerGateTools();
+    const state = {
+      ownerChecks: 0,
+      immutableReads: 0,
+      remoteMain: commit,
+      immutableEnabled: true,
+      fingerprint: "exact-external-inputs",
+    };
+    const fake = (executable, args) => {
+      const output = ownerGateToolOutput(ownerGateTools, executable, args);
+      if (output !== null) return output;
+      const version = toolOutput(executable, args);
+      if (version !== null) return version;
+      if (executable === "bun") {
+        expect(args).toEqual(["run", "check:release-owner-gate"]);
+        state.ownerChecks += 1;
+        return "";
+      }
+      if (executable === "gh" && args.join(" ") ===
+          "api repos/tako0614/terraform-provider-takoform/immutable-releases") {
+        state.immutableReads += 1;
+        return JSON.stringify({ enabled: state.immutableEnabled });
+      }
+      if (executable === "git") {
+        if (args.join(" ") === "config --local -z --list") return safeReleaseGitConfiguration();
+        if (args.join(" ") === "rev-parse --path-format=absolute --git-common-dir") {
+          return `${join(repositoryRoot, ".git")}\n`;
+        }
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") return "false\n";
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return "main\n";
+        if (args[0] === "fetch" || args[0] === "cat-file") return "";
+        if (args.join(" ") === "rev-parse HEAD") return `${commit}\n`;
+        if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
+          return `${state.remoteMain}\n`;
+        }
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    return {
+      state,
+      execution: context(fake, { ownerGateInputs: () => state.fingerprint }),
+    };
+  }
+
+  test("reuses one successful exact-input owner gate while refencing each write", () => {
+    const { state, execution } = repeatedFenceFixture();
+    for (let step = 0; step < 4; step += 1) {
+      expect(releaseDeployTestHooks.ownerGateAndFence(execution, commit)).toBe(commit);
+    }
+    expect(state.ownerChecks).toBe(1);
+    expect(state.immutableReads).toBe(4);
+  });
+
+  test("fingerprints installed dependency and nominated tool bytes, not only their versions", () => {
+    const tools = nominateOwnerGateTools();
+    const repo = trustedTemporaryDirectory("gate-input-closure");
+    const dependency = join(repo, "node_modules", "fixture", "index.js");
+    mkdirSync(dirname(dependency), { recursive: true });
+    writeFileSync(dependency, "export const value = 1;\n");
+    const execution = context(() => "", { repo });
+    const first = releaseDeployTestHooks.externalGateInputs(execution);
+    expect(releaseDeployTestHooks.externalGateInputs(execution)).toBe(first);
+    writeFileSync(dependency, "export const value = 2;\n");
+    const changedDependency = releaseDeployTestHooks.externalGateInputs(execution);
+    expect(changedDependency).not.toBe(first);
+    replaceManagedReadOnlyFile(join(tools.tofuBin, "tofu"), "#!/bin/sh\nexit 1\n", 0o500);
+    expect(releaseDeployTestHooks.externalGateInputs(execution)).not.toBe(changedDependency);
+  });
+
+  test("refuses stale owner-gate inputs or a different expected source", () => {
+    const { state, execution } = repeatedFenceFixture();
+    releaseDeployTestHooks.ownerGateAndFence(execution, commit);
+    state.fingerprint = "changed-dependency-or-toolchain";
+    expect(() => releaseDeployTestHooks.ownerGateAndFence(execution, commit)).toThrow(
+      "inputs changed after the complete check",
+    );
+    expect(() => releaseDeployTestHooks.ownerGateAndFence(
+      execution,
+      "89abcdef0123456789abcdef0123456789abcdef",
+    )).toThrow("different expected source commit");
+    expect(state.ownerChecks).toBe(1);
+  });
+
+  test("rechecks origin/main and immutable policy without rerunning the owner gate", () => {
+    const { state, execution } = repeatedFenceFixture();
+    releaseDeployTestHooks.ownerGateAndFence(execution, commit);
+    state.immutableEnabled = false;
+    expect(() => releaseDeployTestHooks.ownerGateAndFence(execution, commit)).toThrow(
+      "immutable releases to be enabled",
+    );
+    state.immutableEnabled = true;
+    state.remoteMain = "89abcdef0123456789abcdef0123456789abcdef";
+    expect(() => releaseDeployTestHooks.ownerGateAndFence(execution, commit)).toThrow(
+      "is not fresh origin/main",
+    );
+    expect(state.ownerChecks).toBe(1);
+    expect(state.immutableReads).toBe(2);
+  });
+
   test("accepts only the canonical HTTPS origin spellings", () => {
     for (const origin of [
       "https://github.com/tako0614/terraform-provider-takoform.git",
@@ -4025,6 +4131,7 @@ describe("local immutable GitHub Release publication", () => {
     const calls = [];
     let published = false;
     let listCalls = 0;
+    let visibilityWaits = 0;
     const remoteAsset = {
       id: 9,
       name: "asset.txt",
@@ -4053,7 +4160,7 @@ describe("local immutable GitHub Release publication", () => {
       calls.push([...args]);
       if (isReleaseList(args)) {
         listCalls += 1;
-        return listCalls === 1
+        return listCalls <= 3
           ? "[[]]"
           : JSON.stringify([
               [
@@ -4117,7 +4224,7 @@ describe("local immutable GitHub Release publication", () => {
       throw new Error(`unexpected gh ${args.join(" ")}`);
     };
     const release = releaseDeployTestHooks.publishReleaseLocally(
-      context(fake),
+      context(fake, { wait: () => { visibilityWaits += 1; } }),
       {
         tag: "v1.0.0",
         assets: fixture.assets,
@@ -4126,6 +4233,7 @@ describe("local immutable GitHub Release publication", () => {
       },
     );
     expect(release.id).toBe(7);
+    expect(visibilityWaits).toBe(2);
     for (const mutation of calls.filter(
       (args) =>
         (args.includes("POST") &&
@@ -4147,6 +4255,103 @@ describe("local immutable GitHub Release publication", () => {
     expect(
       calls.some((args) => args[0] === "release" && args[1] === "upload"),
     ).toBe(false);
+  });
+
+  test("retains the acknowledged draft when list visibility never arrives", () => {
+    const fixture = assetFixture();
+    const calls = [];
+    let waits = 0;
+    const fake = (_executable, args) => {
+      calls.push([...args]);
+      if (isReleaseList(args)) return "[[]]";
+      if (
+        args.includes("POST") &&
+        args.includes("repos/tako0614/terraform-provider-takoform/releases")
+      ) {
+        return JSON.stringify({
+          id: 7,
+          tag_name: "v1.0.0",
+          draft: true,
+          upload_url:
+            "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+        });
+      }
+      if (
+        args[0] === "api" &&
+        args[1] === "repos/tako0614/terraform-provider-takoform/releases/7"
+      ) {
+        return JSON.stringify({ id: 7, tag_name: "v1.0.0", draft: true });
+      }
+      throw new Error(`unexpected gh ${args.join(" ")}`);
+    };
+    const execution = context(fake, {
+      wait: () => {
+        waits += 1;
+      },
+    });
+    expect(() => releaseDeployTestHooks.publishReleaseLocally(
+      execution,
+      {
+        tag: "v1.0.0",
+        assets: fixture.assets,
+        body: "exact release",
+        temporaryRoot: fixture.root,
+      },
+    )).toThrow("expected only release 7:draft, observed none");
+    expect(waits).toBe(11);
+    expect(calls.filter((args) => args.includes("POST"))).toHaveLength(1);
+    expect(calls.some((args) => args.includes("PATCH"))).toBe(false);
+    expect(execution.io.errors).toContain(
+      '"mutationState":"MATCHING_DRAFT_RETAINED"',
+    );
+  });
+
+  test("wrong or competing post-ack identities fail immediately without upload", () => {
+    const fixture = assetFixture();
+    for (const visible of [
+      [{ id: 8, tag_name: "v1.0.0", draft: true }],
+      [{ id: 7, tag_name: "v1.0.0", draft: false }],
+      [
+        { id: 7, tag_name: "v1.0.0", draft: true },
+        { id: 8, tag_name: "v1.0.0", draft: true },
+      ],
+    ]) {
+      const calls = [];
+      let waits = 0;
+      let listCalls = 0;
+      const fake = (_executable, args) => {
+        calls.push([...args]);
+        if (isReleaseList(args)) {
+          listCalls += 1;
+          return JSON.stringify([listCalls === 1 ? [] : visible]);
+        }
+        if (
+          args.includes("POST") &&
+          args.includes("repos/tako0614/terraform-provider-takoform/releases")
+        ) {
+          return JSON.stringify({
+            id: 7,
+            tag_name: "v1.0.0",
+            draft: true,
+            upload_url:
+              "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+          });
+        }
+        throw new Error(`unexpected gh ${args.join(" ")}`);
+      };
+      expect(() => releaseDeployTestHooks.publishReleaseLocally(
+        context(fake, { wait: () => { waits += 1; } }),
+        {
+          tag: "v1.0.0",
+          assets: fixture.assets,
+          body: "exact release",
+          temporaryRoot: fixture.root,
+        },
+      )).toThrow("expected only release 7:draft");
+      expect(waits).toBe(0);
+      expect(calls.filter((args) => args.includes("POST"))).toHaveLength(1);
+      expect(calls.some((args) => args.includes("PATCH"))).toBe(false);
+    }
   });
 
   test("competing exact-tag draft during upload blocks PATCH and is retained", () => {

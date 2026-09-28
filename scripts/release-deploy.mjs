@@ -9,6 +9,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   readdirSync,
   rmSync,
@@ -152,7 +153,7 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, the complete owner check before every dispatch, tag push, or release mutation, a repository immutable-release setting proved enabled at every one of those fences, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
+        "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, one complete owner check for the exact source and unchanged installed dependencies plus selected gate/publication tool bytes per owner invocation, a fresh protected-main and repository immutable-release setting fence before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
       "post-conditions":
         "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, and rechecks the pinned signed tag before VERIFIED",
       reversal:
@@ -181,7 +182,7 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN; every phase accepts one exact forms/revocations/v<semver> tag plus its exact source commit, requires the committed revocation source and checkpoint files, a clean non-shallow current protected main that descends from that source commit, and the pinned gh/cosign toolchain, runs the complete owner check before dispatch and again before every mutation with the repository immutable-release setting proved enabled at each one, consumes only one explicitly named successful revocation-workflow run/attempt, checksum-closes that same-run candidate, verifies its deterministic tag object, source/tooling commit ancestry, and Sigstore identity against the trusted root retained at the tooling commit, and records the exact tag object and every published asset digest",
+        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN; every phase accepts one exact forms/revocations/v<semver> tag plus its exact source commit, requires the committed revocation source and checkpoint files, a clean non-shallow current protected main that descends from that source commit, and the pinned gh/cosign toolchain, runs the complete owner check once for the exact current protected main and unchanged installed dependencies plus selected gate/publication tool bytes per owner invocation, with a fresh protected-main and repository immutable-release setting fence before dispatch and every mutation, consumes only one explicitly named successful revocation-workflow run/attempt, checksum-closes that same-run candidate, verifies its deterministic tag object, source/tooling commit ancestry, and Sigstore identity against the trusted root retained at the tooling commit, and records the exact tag object and every published asset digest",
       "post-conditions":
         "after the create-only tag push and Release publication, publish-revocation requires exact remote tag resolution, one immutable release with the exact id/tag identity, exact API asset digests, and a fresh six-file revocation download identical to the verified candidate; verify-revocation closes the published identity by re-downloading the live release, re-verifying its manifest, checksum closure, deep Go semantic report, and Sigstore bundle, and binding the published source commit to the expected commit and its tooling commit to an ancestor of current protected main",
       reversal:
@@ -1742,12 +1743,114 @@ function runOwnerCheck(context) {
   });
 }
 
-// Every release surface shares one gate: the pinned toolchain, the protected
-// main fence around the complete owner check, and the repository immutable
-// release setting. GitHub only makes releases immutable when the setting was
-// enabled before publication, so it is rechecked at every mutation fence of
-// every surface — a provider tag push under mutable-release policy would burn
-// the version exactly as a Specification one would.
+// The owner gate may be reused only while the inputs outside the committed
+// source tree still have the same bytes. A clean HEAD does not cover installed
+// dependencies or the operator's toolchain. Keep this proof in the invocation
+// context, never in the repository or across release phases.
+function externalGateInputs(context) {
+  const digest = createHash("sha256");
+  const add = (value) => digest.update(JSON.stringify(value)).update("\n");
+  const installed = join(context.repo, "node_modules");
+  const installedRoot = existsSync(installed) ? realpathSync(installed) : null;
+  if (
+    installedRoot &&
+    (installedRoot !== installed || !lstatSync(installed).isDirectory())
+  ) {
+    throw new Error("owner gate installed dependencies must be a real directory");
+  }
+  const visit = (path, relativePath) => {
+    const metadata = lstatSync(path);
+    const mode = metadata.mode & 0o7777;
+    if (metadata.isSymbolicLink()) {
+      const target = realpathSync(path);
+      if (
+        !installedRoot ||
+        (target !== installedRoot && !target.startsWith(`${installedRoot}${sep}`))
+      ) {
+        throw new Error(
+          `owner gate installed dependency link escapes node_modules: ${relativePath}`,
+        );
+      }
+      add([relativePath, "link", mode, readlinkSync(path), target]);
+    } else if (metadata.isDirectory()) {
+      add([relativePath, "directory", mode]);
+      for (const name of readdirSync(path).sort()) {
+        visit(join(path, name), `${relativePath}/${name}`);
+      }
+    } else if (metadata.isFile()) {
+      add([relativePath, "file", mode, fileDigest(path)]);
+    } else {
+      throw new Error(
+        `owner gate installed dependency has an unsupported entry: ${relativePath}`,
+      );
+    }
+  };
+  add(["node_modules", installedRoot === null ? "absent" : "present"]);
+  if (installedRoot) visit(installed, "node_modules");
+  add(["PATH", process.env.PATH]);
+  add(["bun", process.execPath, fileDigest(process.execPath)]);
+  const addSelected = (name, selectedPath) => {
+    const selected = selectedPath
+      .split(delimiter)
+      .filter((directory) => isAbsolute(directory))
+      .map((directory) => join(directory, name))
+      .find((path) => {
+        try {
+          accessSync(path, fsConstants.X_OK);
+          return lstatSync(realpathSync(path)).isFile();
+        } catch {
+          return false;
+        }
+      });
+    if (!selected) {
+      throw new Error(`owner gate required executable is missing: ${name}`);
+    }
+    const resolved = realpathSync(selected);
+    add([name, selected, resolved, fileDigest(resolved)]);
+  };
+  for (const name of ["git", "node", "gh", "cosign", "tofu", "terraform"]) {
+    addSelected(name, process.env.PATH ?? "");
+  }
+  const gpg = trustedGpgExecutable();
+  add(["gpg", gpg, fileDigest(gpg)]);
+  add(["/bin/sh", realpathSync("/bin/sh"), fileDigest("/bin/sh")]);
+  return withTemporaryDirectory("takoform-gate-inputs", (managedHome) => {
+    try {
+      const snapshot = createManagedToolSnapshot({
+        environment: environmentWithoutGitHubAuthority(),
+        managedHome,
+      });
+      createManagedGateState(managedHome);
+      const gateEnvironment = createHardenedGateEnvironment(
+        environmentWithoutGitHubAuthority(),
+        process.execPath,
+        managedHome,
+        {
+          managedToolBin: snapshot.toolBin,
+          goBin: snapshot.go.bin,
+          goRoot: snapshot.go.root,
+        },
+      );
+      for (const name of ["sh", "mktemp", "rm", "mkdir"]) {
+        addSelected(name, gateEnvironment.PATH);
+      }
+      add(["go", snapshot.go.sourceRoot, snapshot.go.sourceManifest]);
+      for (const name of ["tofu", "terraform"]) {
+        add([name, snapshot.tools[name].mode, snapshot.tools[name].sha256]);
+      }
+      return digest.digest("hex");
+    } finally {
+      prepareManagedHomeForRemoval(managedHome);
+    }
+  });
+}
+
+// Every release surface requires a pinned toolchain, a complete owner check,
+// protected main, and repository immutable-release setting. The provider and
+// revocation lanes retain the expensive check only within one invocation and
+// one source/input identity; the Specification lane keeps its existing gate.
+// GitHub only makes releases immutable when the setting was enabled before
+// publication, so that setting is rechecked at every mutation fence.
 function releaseGateAndFence(context, expectedCommit, options, verifyToolchain) {
   verifyToolchain(context);
   assertCurrentProtectedMain(context, expectedCommit, options);
@@ -1758,12 +1861,46 @@ function releaseGateAndFence(context, expectedCommit, options, verifyToolchain) 
 }
 
 function ownerGateAndFence(context, expectedCommit, options) {
-  return releaseGateAndFence(
-    context,
-    expectedCommit,
-    options,
-    verifyLocalReleaseToolchain,
-  );
+  verifyLocalReleaseToolchain(context);
+  if (
+    context.ownerGateProof &&
+    expectedCommit &&
+    expectedCommit !== context.ownerGateProof.commit
+  ) {
+    throw new Error("owner gate cannot reuse a different expected source commit");
+  }
+  const readInputs = context.ownerGateInputs ?? externalGateInputs;
+  let fenced;
+  let fingerprint;
+  if (context.ownerGateProof) {
+    fingerprint = readInputs(context);
+    if (context.ownerGateProof.fingerprint !== fingerprint) {
+      throw new Error(
+        "owner gate source, dependency, or toolchain inputs changed after the complete check",
+      );
+    }
+    fenced = assertCurrentProtectedMain(
+      context,
+      context.ownerGateProof.commit,
+      options,
+    );
+  } else {
+    const current = assertCurrentProtectedMain(context, expectedCommit, options);
+    fingerprint = readInputs(context);
+    runOwnerCheck(context);
+    const after = readInputs(context);
+    if (after !== fingerprint) {
+      throw new Error(
+        "owner gate dependency or toolchain inputs changed during the complete check",
+      );
+    }
+    fenced = assertCurrentProtectedMain(context, current, options);
+  }
+  assertReleaseImmutabilityEnabled(context);
+  if (!context.ownerGateProof) {
+    context.ownerGateProof = { commit: fenced, fingerprint };
+  }
+  return fenced;
 }
 
 function specificationOwnerGateAndFence(context, expectedCommit, options) {
@@ -3337,13 +3474,30 @@ function assertReleaseAbsent(context, tag) {
   }
 }
 
-function assertUniqueReleaseIdentity(context, tag, releaseId, draft) {
-  const releases = releasesByTag(context, tag);
-  if (
-    releases.length !== 1 ||
-    releases[0].id !== releaseId ||
-    releases[0].draft !== draft
-  ) {
+function assertUniqueReleaseIdentity(
+  context,
+  tag,
+  releaseId,
+  draft,
+  { awaitInitialVisibility = false } = {},
+) {
+  // Only an acknowledged create-only POST may wait for an empty list to show
+  // its returned ID. A competing, public, or mismatched identity is never a
+  // visibility delay and must fail without waiting or mutating again.
+  const attempts = awaitInitialVisibility ? 12 : 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const releases = releasesByTag(context, tag);
+    if (
+      releases.length === 1 &&
+      releases[0].id === releaseId &&
+      releases[0].draft === draft
+    ) {
+      return releases[0];
+    }
+    if (awaitInitialVisibility && releases.length === 0 && attempt < attempts) {
+      context.wait(1000);
+      continue;
+    }
     throw new Error(
       `no-overwrite blocked ${tag}: expected only release ${releaseId}:${draft ? "draft" : "public"}, observed ` +
         (releases.length === 0
@@ -3356,7 +3510,6 @@ function assertUniqueReleaseIdentity(context, tag, releaseId, draft) {
               .join(",")),
     );
   }
-  return releases[0];
 }
 
 function expectedAssetMap(assets) {
@@ -3460,9 +3613,19 @@ function downloadAndCompareRelease(context, tag, assets, parent) {
 
 function readExactRetainedDraft(
   context,
-  { releaseId, tag, prerelease = false, body, assets, requireComplete = false },
+  {
+    releaseId,
+    tag,
+    prerelease = false,
+    body,
+    assets,
+    requireComplete = false,
+    awaitInitialVisibility = false,
+  },
 ) {
-  assertUniqueReleaseIdentity(context, tag, releaseId, true);
+  assertUniqueReleaseIdentity(context, tag, releaseId, true, {
+    awaitInitialVisibility,
+  });
   const draft = JSON.parse(
     command(context, "gh", [
       "api",
@@ -3845,6 +4008,7 @@ function publishReleaseLocally(
       prerelease,
       body,
       assets,
+      awaitInitialVisibility: true,
     });
     if (
       initial.draft.assets.length !== 0 ||
@@ -5517,6 +5681,7 @@ export const releaseDeployTestHooks = Object.freeze({
   command,
   dispatchWorkflow,
   expectedFormTagObject,
+  externalGateInputs,
   githubCommandEnvironment,
   githubUploadEnvironment,
   gitPushEnvironment,
