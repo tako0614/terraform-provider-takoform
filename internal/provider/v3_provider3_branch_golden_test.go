@@ -1003,7 +1003,10 @@ func v3Provider3BranchResource(t *testing.T, kind string, data *providerData, de
 	t.Helper()
 	for _, form := range dependencies.CurrentForms {
 		if form.Family.APIVersion() == "edge.forms.takoform.com" && form.Kind == kind {
-			return v3Provider3CurrentResourceHarness(t, form, "", data, dependencies.Codecs)
+			// These vectors are the released Provider 3 branch, including its
+			// diagnostic bytes. Current Provider 4 recovery guidance is tested
+			// separately and must not rewrite this historical fixture.
+			return v3Provider3HistoricalResourceHarness(t, form, "", data, dependencies.Codecs)
 		}
 	}
 	t.Fatalf("Provider 3 branch dependencies have no edge Form %s", kind)

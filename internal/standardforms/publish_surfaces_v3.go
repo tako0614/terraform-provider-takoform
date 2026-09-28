@@ -491,11 +491,16 @@ func v3OutputAttributeSection(form model.Form) string {
 // v3StateContinuitySection documents what a refresh does when the world moved
 // underneath the recorded state: a Form line that advanced, a replaced
 // incarnation, or a mutation the host accepted and has not finished. All three
-// are decided in spec/decisions/0017, and all three share one principle — a
-// refresh never silently changes which resource, or which contract, state names.
+// follow spec/decisions/0017 and its current Provider 4.1 custody amendment.
+// A refresh never silently changes which resource or contract state names.
 func v3StateContinuitySection(kind string) string {
 	return `
 ## State continuity
+
+For Provider 4.1, the accepted-operation rules below supersede historical
+[decision 0017 rule 7](../../spec/decisions/0017-provider-state-survives-form-evolution-and-interruption.md)'s
+"exact resource GET is the final word" fallback. That older decision records an
+earlier Provider behavior; no Host API, Form, or Package identity changes here.
 
 - **Reads dispatch on the recorded FormRef.** ` + "`" + kind + "`" + ` state is addressed under the
   exact ` + "`form_*`" + ` identity it records, not under this build's default create ref, so a
@@ -512,21 +517,30 @@ func v3StateContinuitySection(kind string) string {
   incarnation explicitly, restoring the prior one, or deleting the host-side replacement.
 - **A refresh resumes an unfinished operation.** When ` + "`pending_operation_id`" + ` is
   set, a refresh asks the host about that operation before it reads the resource. While the
-  operation is still running the resource may legitimately not exist yet, so its absence is
-  not treated as deletion and the marker survives; a terminal success is verified against
-  the exact identity and settles state; a terminal failure or an expired operation record
-  defers to an exact read of the resource, which decides.
+  operation is still running, resource absence is not deletion proof. A readable resource
+  with a known UID can refresh fields, but the marker remains until the operation settles.
+  A terminal success supplies a verified result UID; the following resource read must match
+  it before state settles. After a terminal failure, an exact read can settle only when
+  state already has a Host-issued UID; without one, state and the marker remain for explicit
+  resolution. ` + "`operation_not_found`" + ` may mean expiry OR that a different principal cannot
+  address the operation. A same-name resource alone never proves the accepted incarnation:
+  with a known UID, only a matching exact resource can settle; a resource 404 preserves state
+  and the marker and blocks further plans. An accepted response without a usable operation
+  handle also remains blocked until the Host-side outcome is resolved explicitly.
 - **Failed Create may leave a tainted instance.** Provider Read does not clear
   Terraform/OpenTofu taint. A normal plan may therefore propose deletion and recreation
   even after the operation succeeds. Do not apply that replacement as a recovery step.
   A plan alone does not persist refreshed state. Review a saved refresh-only plan for
   resource mutations, then apply that exact state-only plan to persist the observation.
   If the operation marker remains, the identity conflicts, or the intended resource is
-  not verified, stop. Only after verifying the settled resource's exact FormRef, name,
-  Space and UID should an operator consider untainting that exact address, with normal
-  state locking. Then review a fresh normal plan before any resource-changing apply.
-  Do not untaint an unrelated or deliberately tainted instance, or treat an absent
-  resource after failed/expired-operation recovery as successful creation.
+  not verified, stop. Only after a verifiable terminal-success operation and the settled
+  resource's exact FormRef, name, Space and UID should an operator consider
+  untainting that exact address, with normal state locking. Then review a fresh
+  normal plan before any resource-changing apply.
+  Do not untaint an unresolved, unrelated, or deliberately tainted instance, or treat an
+  absent resource after failed/expired-operation recovery as successful creation. A missing
+  operation handle cannot be settled by refresh alone; do not apply a replacement or untaint
+  until the Host-side outcome and pending state are explicitly resolved.
 `
 }
 

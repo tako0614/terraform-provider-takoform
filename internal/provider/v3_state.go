@@ -285,21 +285,43 @@ func (r *v3FormResource) writeV3AcceptedState(
 	}
 	diags.AddWarning(
 		r.form.Kind+" was accepted by the host but did not complete",
-		v3AcceptedRecoveryDetail(accepted, space, values.Name.ValueString(), r.form.Kind),
+		v3AcceptedRecoveryDetail(accepted, space, values.Name.ValueString(), r.form.Kind, r.providerSurface),
 	)
 }
 
 // v3AcceptedRecoveryDetail explains what state now holds and what the operator
 // should do next.
-func v3AcceptedRecoveryDetail(accepted *clientv3.AcceptedError, space, name, kind string) string {
+func v3AcceptedRecoveryDetail(accepted *clientv3.AcceptedError, space, name, kind string, surface v3ProviderSurface) string {
 	if accepted.OperationID == "" {
-		detail := fmt.Sprintf(
+		prefix := fmt.Sprintf(
 			"The host accepted this %s mutation, so %s/%s may exist even though no verified representation came back. "+
-				"State records the name, space, and exact Form identity with an unaddressable pending marker. "+
-				"The Host returned no usable operation handle; resolve the Host-side outcome explicitly before "+
-				"another mutation. Refresh alone cannot settle this state.",
+				"State records the name, space, and exact Form identity with an unaddressable pending marker. ",
 			kind, space, name,
 		)
+		detail := prefix + "The Host returned no usable operation handle; resolve the Host-side outcome explicitly before " +
+			"another mutation. Refresh alone cannot settle this state."
+		if surface == v3ProviderSurfaceCurrent {
+			detail = prefix + "The Host returned no usable operation handle. Refresh alone cannot settle this state. " +
+				"Do not untaint, and do not apply a replacement or another mutation until the submitting principal " +
+				"has verified and explicitly resolved the Host-side outcome and this pending state."
+		}
+		if accepted.UID != "" {
+			detail += " Host uid: " + accepted.UID + "."
+		}
+		return detail
+	}
+	if surface == v3ProviderSurfaceCurrent {
+		detail := fmt.Sprintf(
+			"The host accepted this %s Create for %s/%s, but no verified representation came back. State retains the exact "+
+				"Form identity and operation id. A failed Create may leave this Terraform/OpenTofu instance tainted; "+
+				"refresh does not clear taint, and a normal plan may propose deletion and recreation. Do not apply that replacement. "+
+				"After the Host operation reports success, review a saved refresh-only plan for resource mutations and apply "+
+				"that exact state-only plan. If the operation marker remains or identity conflicts, stop. Only after verifying "+
+				"the settled resource's exact FormRef, name, Space and UID should you consider untainting that exact "+
+				"resource address with state locking. Then review a fresh normal plan before any resource-changing apply.",
+			kind, space, name,
+		)
+		detail += " Host operation: " + accepted.OperationID + "."
 		if accepted.UID != "" {
 			detail += " Host uid: " + accepted.UID + "."
 		}

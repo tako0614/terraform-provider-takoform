@@ -767,6 +767,56 @@ func TestV3AcceptedCreateWithoutTargetUIDSettlesFromMatchingResult(t *testing.T)
 	}
 }
 
+func TestV3AcceptedCreateRecoveryGuidanceIsTaintSafe(t *testing.T) {
+	ctx := context.Background()
+	for _, withoutHandle := range []bool{false, true} {
+		name := "with_handle"
+		if withoutHandle {
+			name = "without_handle"
+		}
+		t.Run(name, func(t *testing.T) {
+			host := newV3FakeHost(t)
+			host.apply202Uncommitted = !withoutHandle
+			host.apply202Malformed = withoutHandle
+			resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+			schemaResponse := v3SchemaOf(t, resource)
+			plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+				"name": types.StringValue("module-worker"), "create_timeout": types.StringValue("400ms"),
+			})
+			created := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}}
+			resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &created)
+			if !created.Diagnostics.HasError() {
+				t.Fatal("accepted Create unexpectedly succeeded")
+			}
+			var guidance string
+			for _, diagnostic := range created.Diagnostics {
+				if strings.Contains(diagnostic.Summary(), "accepted by the host") {
+					guidance = diagnostic.Detail()
+				}
+			}
+			if guidance == "" {
+				t.Fatalf("accepted Create did not explain recovery: %v", created.Diagnostics)
+			}
+			if strings.Contains(guidance, "next plan reconciles") {
+				t.Fatalf("accepted Create promised a safe normal plan despite possible taint: %s", guidance)
+			}
+			if withoutHandle {
+				for _, phrase := range []string{"Refresh alone cannot settle", "Do not untaint", "do not apply a replacement"} {
+					if !strings.Contains(guidance, phrase) {
+						t.Fatalf("unaddressable Create guidance missing %q: %s", phrase, guidance)
+					}
+				}
+			} else {
+				for _, phrase := range []string{"saved refresh-only plan", "exact FormRef, name, Space and UID", "untaint", "fresh normal plan"} {
+					if !strings.Contains(guidance, phrase) {
+						t.Fatalf("accepted Create guidance missing %q: %s", phrase, guidance)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestV3UnaddressableOperationWithoutUIDCannotAdoptByName(t *testing.T) {
 	ctx := context.Background()
 	host := newV3FakeHost(t)
