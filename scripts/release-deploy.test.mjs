@@ -138,6 +138,8 @@ function nominateOwnerGateTools() {
   for (const path of [
     join(tofuBin, "tofu"),
     join(terraformBin, "terraform"),
+    join(terraformBin, "gh"),
+    join(terraformBin, "cosign"),
     join(goBin, "go"),
     join(goBin, "gofmt"),
     join(goToolDir, "compile"),
