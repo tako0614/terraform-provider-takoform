@@ -1,250 +1,44 @@
-# takoform.com website
+# Retained Provider website projection
 
-Static public site for the Takoform project, built with **VitePress** and
-served through a Cloudflare Worker's static-asset support. Cloudflare is used
-only to host `takoform.com` and the immutable public schema URLs; the Takoform
-provider, Service Form API contract, Form Packages, and provider-neutral
-`EdgeWorker` resource do not require Cloudflare. There is no runtime build or
-server-side application: everything under [`public/`](public/) is deployed
-as-is.
+This VitePress tree is retained for generated Provider documentation snapshots,
+compatibility checks, and local preview. It is **not** the source of the current
+`takoform.com` site, and this repository has no active website deploy surface.
+The old `takoform-website` selector is disabled by the active authority
+tombstone; do not use the retained Cloudflare Worker configuration or deploy
+runbook to publish this tree.
 
-## Build
+The current public entrypoint for this Provider is the repository
+[README](../README.md), followed by the [getting-started guide](../docs/getting-started.md)
+and [resource reference](../docs/index.md). The API and common-model-only
+[`takoform.com` site](https://takoform.com/) belongs to
+[`takoform`](https://github.com/tako0614/takoform); individual Edge Form pages
+belong to [`takoform-forms`](https://github.com/tako0614/takoform-forms).
+Neither site publishes this Provider's resource reference. A future
+Provider-specific public site would need its own explicitly owned deploy
+surface and operator-selected routing; this retained tree grants neither.
 
-The VitePress root is this directory. Source pages are the bilingual Markdown
-under `website/` (English at `/`, Japanese at `/ja/`), the theme is
-`website/.vitepress/theme/`, and static passthrough assets — the normative
-schemas, `tako.png`, and `robots.txt` — live in `website/static/`:
+## Local build and preview
 
-```console
-bun install            # pinned lock
-bun run website:build  # vitepress build -> website/public (the committed output)
-bun run website:dev    # local preview
-```
-
-The writer is explicit; portable checks never rewrite the worktree.
-
-`website/public/` is the **committed build output** and the published byte
-set. `bun run check:website-snapshot` proves it is not stale by building the
-committed source fresh (in a throwaway directory under the repository) and
-comparing the whole tree, not only the pages:
-
-| Path class | Comparison |
-| --- | --- |
-| `*.html` | semantic content, with scripts, styles and tags stripped |
-| `hashmap.json` | same page set; every value names a committed asset that exists |
-| `assets/**` | same set of hash-stripped names, plus byte equality wherever the fresh build reproduces the exact hashed name |
-| everything else | **byte equality** — `/.well-known/takoform-site.json`, `sitemap.xml`, `robots.txt`, `tako.png`, `vp-icons.css` and every mirrored spec, forms, formpackage, release and conformance file |
-
-Outside `assets/` the file set must match exactly, so neither an extra
-published file nor a deleted one passes. HTML and `assets/**` cannot be
-compared byte-for-byte because VitePress/Vue scoped-style hashes and Rollup
-chunk names follow the absolute build path; that is the whole of what this
-gate cannot see, and everything production serves outside those two classes is
-compared exactly. The same gate runs again inside the deploy pipeline from a
-managed install home outside the frozen archive.
-
-## Pages
-
-The landing, docs, and specification pages are bilingual through VitePress
-i18n: English at `/`, Japanese at `/ja/`. Canonical provider reference and
-normative specification text remain the Markdown files in the repository; the
-public pages link to those files instead of silently redefining their
-contracts.
-
-The canonical provider reference `docs/index.md` is projected to
-`website/docs/reference.md` and published as `/docs/reference.html`. The
-`/docs/` index itself (`website/docs/index.md`) is a separate hand-written
-quick-start page, not a projection of `docs/index.md`.
-
-[`public/schemas/`](public/schemas/) is generated from the normative
-[`../spec/schemas/`](../spec/schemas/) set. Run
-`bun run sync:public-schemas` from the repository root after a normative schema
-change; the writer fills `website/static/schemas/`, and the VitePress build
-copies it verbatim to the committed output. The public-surface gate requires
-every schema `$id` route to exist in the committed output and be byte-identical.
-Never edit the public copies directly.
-
-## Local preview
+The VitePress root is `website/`. Canonical Provider reference content lives
+under [`docs/`](../docs/); generated copies under `website/` are projections,
+not another documentation authority. The root package scripts still support
+local development and snapshot verification:
 
 ```console
+bun install
 bun run website:dev
+bun run check:website-snapshot
 ```
 
-Preview `/`, `/docs/`, `/spec/`, `/ja/`, and at least one `/schemas/...json`
-URL. A local preview does not publish anything.
+`bun run website:build` is an explicit writer of the committed
+`website/public/` snapshot. Local builds and previews do not publish a site.
+The snapshot gate checks that retained generated pages and assets remain in
+sync with source; it is not publication or a deploy authorization. Keep
+Provider usage guidance in the canonical `README.md` and `docs/` tree.
 
-## Deploy
-
-Production is deployed only through the owning repository's deploy entrypoint:
-
-```console
-TAKOFORM_CLOUDFLARE_ACCOUNT_ID=<32-lowercase-hex-account-id> \
-TAKOFORM_CLOUDFLARE_ZONE_ID=<32-lowercase-hex-zone-id> \
-bun run deploy -- takoform-website \
-  --acknowledge-exclusive-cloudflare-writer
-```
-
-Run it from the repository root. The two IDs are operator-realized identity,
-not secrets, but are still not committed because they select production
-authority. The acknowledgement asserts that protected `main`, the Worker
-deployment, and its custom domains have one writer for the complete attempt.
-It is not a force flag and does not replace any check.
-
-The entrypoint rejects ambient Cloudflare/Wrangler credentials and runtime
-overrides, then binds the local Wrangler OAuth profile to those exact IDs. It
-freezes the exact protected-main commit twice: a Git-metadata-free archive for
-the public bytes and an independent non-local, detached clone for offline Git
-authority. The clone has no remote or object alternates. The retained
-publication and historical-ledger checks run only in that clone; the static website,
-schema, copy, and deploy-safety checks run only in the archive. Both roots are
-clean, exact-commit checked, and re-hashed after validation and before every
-writer. Only the archive is used for the credential scan, digest manifest, and
-upload, and every archive byte is verified against the commit's Git blobs.
-Ignored and untracked files below a publication path are rejected. Wrangler is
-installed from the exact committed `bun.lock` and executed by the fixed
-absolute Node entrypoint; neither a PATH-provided Wrangler nor its environment
-shebang is used.
-
-Before any writer, the deploy re-derives the committed website output with a
-fresh pinned VitePress build (same pattern as `check:website-snapshot`, run in
-a managed install home outside the archive). Every committed page must be
-reproduced semantically, every other published file byte-for-byte, and the
-content-addressed `assets/` set by role, with no extra or missing published
-file. This keeps the published bytes equal to the committed bytes while
-proving they are current with the committed source.
-
-No published byte names a commit. A commit id written into the tree at commit
-time can only name the parent — the commit that carries the bytes does not
-exist while they are produced — and a commit id stamped at deploy time would
-be a byte no reviewer read and no checkout reproduces. The commit is bound to
-the deployed bytes by the Worker version message (`takoform.com <commit>`),
-which the entrypoint sets on upload, verifies on the uploaded version, and
-reads back with an ancestor check on the next deploy, alongside the per-asset
-digests in the deploy result.
-
-Publication is staged: `versions upload --strict` creates a non-public version,
-the source/deployment/domain fences and whole-tree digest are checked again,
-and only that version is then deployed at 100%. Custom domains are changed
-separately through a no-override API request. This avoids Wrangler's
-non-interactive custom-domain override behavior. Do not run `wrangler deploy`,
-`wrangler versions deploy`, or a domain API request directly.
-
-The repository-wide `bun run check` remains required handoff evidence for a
-source change. It is deliberately separate from website publication: its Go,
-gofmt, and OpenTofu checks do not validate the static bytes under `public/` and
-must not block a site-only correction for an unrelated provider failure.
-
-Every normative schema `$id` in
-[`../release/public-schema-identities.json`](../release/public-schema-identities.json)
-is an immutable published identity. Immediately before every Cloudflare
-mutation, the entrypoint binds the current production version message to its
-ancestor source commit and retained identity ledger. Every identity from that
-deployed ledger must still serve the candidate bytes exactly. An identity that
-exists only in the new candidate may be minted from an exact HTTP 404. A
-changed body, missing deployed identity, redirect, any other HTTP response, or
-transport error blocks publication; an existing `$id` is never repaired in
-place. A release that mints a new identity must be repaired forward because
-the previous Worker version is no longer a schema-safe rollback target.
-
-If the schema origin has never been minted, its first deployment is allowed
-only when every schema URL fails specifically with DNS `ENOTFOUND` and the
-operator explicitly acknowledges that one-time mint:
-
-```console
-TAKOFORM_CLOUDFLARE_ACCOUNT_ID=<account-id> \
-TAKOFORM_CLOUDFLARE_ZONE_ID=<zone-id> \
-bun run deploy -- takoform-website \
-  --acknowledge-exclusive-cloudflare-writer \
-  --acknowledge-initial-schema-origin-mint
-```
-
-That acknowledgement is not a force flag. Outside the ID-bound recovery lane,
-the entrypoint rejects it as soon as any schema URL resolves, and it never
-bypasses differing bytes, HTTP 404, a
-redirect, timeout, connection failure, or a partially existing origin. After
-the first mint, use the ordinary deploy command. Before creating the hostname,
-the entrypoint proves the exact no-conflict Cloudflare changeset, Cloudflare
-zone/delegation, ENOTFOUND from every authoritative nameserver, and every
-ledger-listed candidate schema byte through the already-routed apex Worker. It then writes
-the full three-domain closure with both origin and DNS override flags disabled.
-
-If the version is current but the initial domain write or readback becomes
-indeterminate, do not repeat the normal deploy. Use the exact deployment and
-version IDs printed by the failed attempt:
-
-```console
-TAKOFORM_CLOUDFLARE_ACCOUNT_ID=<account-id> \
-TAKOFORM_CLOUDFLARE_ZONE_ID=<zone-id> \
-bun run deploy -- takoform-website \
-  --acknowledge-exclusive-cloudflare-writer \
-  --acknowledge-initial-schema-origin-mint \
-  --recover-initial-schema-domain \
-  --expected-deployment=<deployment-uuid> \
-  --expected-version=<version-uuid>
-```
-
-Recovery uploads and deploys no Worker version. It requires current production
-to equal both IDs, requires that version's committed message and static-only
-resource closure, and checks every ledger-listed candidate schema byte through the apex.
-It creates the domain only from a still-safe absent changeset; if the exact
-domain is already attached it performs readback only. Any competing state
-blocks recovery.
-
-A rollback is permitted only to a version proven to retain all already-minted
-schema bytes. The postreadback covers apex and `www` roots, docs, spec,
-sitemap, static assets, the custom 404 response, every ledger-listed schema identity,
-and the exact three-domain control-plane closure.
-
-[`wrangler.jsonc`](wrangler.jsonc) attaches the `takoform.com` and
-`www.takoform.com` custom domains. It also attaches
-`forms.takoform.com` to publish the normative schema `$id` URLs. This hostname
-is a specification identity and static schema origin, not a central Takoform
-Host API: each actual Host advertises its own versioned, same-origin lifecycle
-endpoints through discovery. The zone and deployment credentials belong to the
-operator and are never committed here.
-
-## Content policy
-
-The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: Core/API `v1.0.1` is published by the
-external [Takoform Core release](https://github.com/tako0614/takoform/releases/tag/v1.0.1)
-on `/v1`; Provider `v4.1.0` is the current published, Registry
-readback-verified typed distribution selecting only the 17 tako0614 Edge Forms;
-Provider `v3.0.0` remains the published, Registry readback-verified typed
-distribution retaining the former 31-resource aggregate across eight families. Provider
-`v2.1.1` remains immutable retained Host API v1beta1 history; Provider `v2.0.0`
-is the published compatibility predecessor; Provider `v1.0.3` is the published
-Legacy client; and the standalone [`takoform-forms`](https://github.com/tako0614/takoform-forms)
-source publishes 17 Edge content-addressed packages from its source tags. Host
-implementation, support, deployment, and adoption remain separate facts. The
-historical Specification 1.1 receipt is retained by the append-only ledger and
-is not a current API/version axis (Specification 1.0 was withdrawn before
-publication and may not be reused); and the 34
-published Form Package identities are immutable Legacy evidence. There is no
-current central Takoform approval or admission. The retained Provider 3
-compatibility projection maps eight versionless families and 31 exact
-Experimental `0.x` FormRefs. The published Provider 4 maps only the
-tako0614 Edge source's 17 Forms: the 16 the retained Provider 3 projection
-carries plus `ObjectBucket`, with `edge.objects` and
-`module-worker.object-bucket`. This repository does not
-assert any host's live catalog. The last published
-historical admission identity is `forms/admissions/v1.0.7`; its exact Git and
-set identities remain pinned as Legacy evidence.
-The frozen Legacy FormRef group is `forms.takoform.com/v1alpha1`. Retained
-provider-v2 Form Package indexes use `packages.forms.takoform.com/v1alpha3`;
-retained Provider 2.1.1/v1beta1 packages use
-`packages.forms.takoform.com/v1alpha4`; current versionless-group packages use
-`packages.forms.takoform.com/v1alpha5` and are published independently of the
-Provider release. Published v1alpha1/v1alpha2 package indexes remain immutable
-Legacy evidence.
-
-`release/version.json` is the Provider `v4.1.0` release descriptor and keeps
-`publicationStatus: candidate-only`; the descriptor must not be presented as
-live publication state. `release/candidates/provider-v4.0.0.json` retains the
-byte-identical candidate record and `release/history/provider-v3.0.0.json`
-retains the Provider 3 writer input. The append-only release identity ledger
-independently establishes `v4.1.0` as the current Registry-published provider
-and retains `v3.0.0` and `v2.1.1` history. Provider releases remain non-normative and cannot close or
-block the historical Specification 1.1 receipt. See
-[`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
-and the repository [`AGENTS.md`](../AGENTS.md).
+The retained source and build output contain historical Host API, schema,
+Form, and Provider pages from the predecessor combined site. Their presence
+does not transfer those authorities back to this repository. See
+[`AGENTS.md`](../AGENTS.md) and the
+[authority tombstone](../release/specification-schema-authority-tombstone.json)
+for the current boundary.
