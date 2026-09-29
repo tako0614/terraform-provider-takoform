@@ -1,6 +1,6 @@
 # Security Policy
 
-Takoform is an **Experimental project**. Provider `v4.0.0` is the current
+Takoform is an **Experimental project**. Provider `v4.1.0` is the current
 Registry-published typed client. Provider `v3.0.0` is retained 31-Form
 aggregate history; provider `v2.1.1` is retained Host API
 v1beta1 history; provider `v2.0.0` is its published compatibility predecessor;
@@ -23,11 +23,11 @@ provider `v2.0.0` remains a historical compatibility predecessor. A fix is alway
 SemVer release on the affected line. Historical release bytes remain available
 for verification and migration; support never means replacing them.
 
-`release/version.json` names the stable `v4.0.0` release target and keeps
+`release/version.json` names the stable `v4.1.0` release target and keeps
 `publicationStatus: candidate-only` as descriptor metadata even after the
 release owner publishes it; it is not live availability state. The retained
 signed release, pinned tag identity, and canonical Registry readback establish
-that `v4.0.0` is the current published provider. Provider publication does not
+that `v4.1.0` is the current published provider. Provider publication does not
 promote the Experimental Forms, publish their Form Packages, or establish Host
 Support, activation, or Cloud availability.
 

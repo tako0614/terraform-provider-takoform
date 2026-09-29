@@ -2,12 +2,12 @@
 
 ## Published Provider and retained Provider history
 
-Provider **v4.0.0** is the current Registry-published Terraform/OpenTofu
+Provider **v4.1.0** is the current Registry-published Terraform/OpenTofu
 Provider at the `tako0614/takoform` address. It selects only the
 17 exact Edge Forms selected from the `tako0614/takoform-forms` set tag
 `forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c` — the 16 Edge Forms
 carried over from Provider 3 plus `ObjectBucket`. Its signed tag, immutable
-GitHub Release, and Registry readback are the `4.0.0` entry of the identity
+GitHub Release, and Registry readback are the `4.1.0` entry of the identity
 ledger below. The 15 removed aggregate
 types and explicit state paths are documented in [v3 to v4 publisher-set
 migration](migrations/v3-to-v4.md). Ordinary AWS, Cloudflare, Kubernetes, and
@@ -23,18 +23,24 @@ each resource keeps an exact FormRef and provider mapping in its release
 identity projection. Provider release, Form Definition publication, package
 publication, and Host deployment are separate owner actions.
 
-`release/version.json` selects the **4.1.0 candidate** for the release
-entrypoints. It keeps `publicationStatus: candidate-only` by the standing
-descriptor convention and is not live publication state. The Registry readback
-recorded in the identity ledger is the availability authority; the published
-version remains **4.0.0** until a new release has that readback.
+`release/version.json` selects **4.1.0** for the release entrypoints. It keeps
+`publicationStatus: candidate-only` by the standing descriptor convention;
+this field is not live publication state. The Registry readback recorded in
+the identity ledger is the availability authority. Its verified 4.1.0 entry
+records the current Registry-published version; 4.0.0 remains retained history.
 `release/candidates/provider-v4.1.0.json` is byte-identical to the current
 descriptor, with its derived 17-Form mapping in
 `release/candidates/provider-v4.1.0-form-identities.json`.
-The 4.1.0 candidate adds a run-local rotating bearer-token file and retains
+The 4.1.0 release source adds a run-local rotating bearer-token file and retains
 accepted pending-operation custody through refresh, including the Resource UID.
 It also carries the failed-Create recovery warning. The Host API, FormRef and
-Form Package identities remain unchanged; this is not Registry publication.
+Form Package identities remain unchanged. Source and tag alone do not establish
+Registry publication.
+The immutable v4.1.0 tag contains pre-publication reference wording that still
+calls 4.1.0 a candidate and points at v4.0.0. This later readback record does
+not rewrite the tagged or Registry-rendered documentation; use the current
+reference and verified ledger for availability. Only a future Provider version
+can carry corrected tagged reference; v4.1.0 remains immutable.
 Token-file mode is supported on Linux, macOS, FreeBSD, OpenBSD, and NetBSD;
 Windows builds retain static-token configuration only.
 The unpublished 4.0.1 candidate descriptor and projection remain source

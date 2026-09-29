@@ -21,6 +21,11 @@ import {
   FAMILY_CANDIDATE_SET,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
+import {
+  PUBLISHED_INSTALL_PROSE,
+  publishedProviderInstallDocStatusIssues,
+  releaseTargetTagDocIssues,
+} from "./provider-published-docs.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -648,22 +653,7 @@ function hasNotInstallableWording(text) {
 }
 
 function checkImmutableProviderTagDocs(source, truth) {
-  const escapedVersion = escapeRegExp(truth.providerVersion);
   const forbidden = [
-    {
-      label: "stale unpublished provider status",
-      pattern: new RegExp(
-        `\\bv?${escapedVersion}\\b[^.\\n]{0,140}\\b(?:unpublished|unavailable)\\b`,
-        "i",
-      ),
-    },
-    {
-      label: "stale not-installable provider status",
-      pattern: new RegExp(
-        `\\bv?${escapedVersion}\\b[^.\\n]{0,140}\\bnot (?:yet )?installable\\b`,
-        "i",
-      ),
-    },
     {
       label: "shallow immutable-tag verification checkout",
       pattern: /^git clone[^\n]*(?:--depth|--shallow)/m,
@@ -709,28 +699,29 @@ function checkImmutableProviderTagDocs(source, truth) {
   }
 }
 
-// The Provider reference in docs/ is rendered into the Registry's own immutable
-// documentation for the published version, so it can never be corrected after
-// the fact: it must carry the verification path for the exact published tag and
-// must not carry a status the publication has already falsified. The same
-// falsified status is refused on the hand-written landing and reference pages
-// in both languages, which are the surfaces a reader reaches first.
-const PUBLISHED_INSTALL_PROSE = [
-  "README.md",
-  "docs/index.md",
-  "website/index.md",
-  "website/ja/index.md",
-  "website/docs/index.md",
-  "website/ja/docs/index.md",
-];
-
-function checkPublishedProviderInstallDocs(providerVersion) {
-  checkImmutableProviderTagDocs(
-    read(path.join(repositoryRoot, "docs", "index.md")),
-    { providerVersion },
-  );
-  for (const relativePath of PUBLISHED_INSTALL_PROSE) {
-    const source = read(path.join(repositoryRoot, relativePath));
+// The Provider reference in docs/ is captured by the release tag. Check the
+// descriptor target before publication, not only the previously published
+// version, so the next tag cannot bake in candidate wording or an old checkout.
+// This checks current source; it cannot rewrite an already-immutable tag.
+// Landing and reference pages in both languages also reject false claims about
+// the already published version.
+function checkPublishedProviderInstallDocs(facts) {
+  const tagDocs = read(path.join(repositoryRoot, "docs", "index.md"));
+  for (const issue of releaseTargetTagDocIssues(
+    tagDocs,
+    facts.providerTarget,
+  )) {
+    fail(`docs/index.md: ${issue}`);
+  }
+  checkImmutableProviderTagDocs(tagDocs, { providerVersion: facts.providerTarget });
+  const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
+    relativePath,
+    read(path.join(repositoryRoot, relativePath)),
+  ]));
+  for (const issue of publishedProviderInstallDocStatusIssues(sources, facts.providerPublished)) {
+    fail(issue);
+  }
+  for (const [relativePath, source] of sources) {
     if (hasNotInstallableWording(source)) {
       fail(
         `${relativePath}: says the published Provider cannot be installed from the Registry`,
@@ -1914,7 +1905,7 @@ checkContractLaneDocumentation();
 checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
-checkPublishedProviderInstallDocs(deriveSiteStatusFacts(repositoryRoot).providerPublished);
+checkPublishedProviderInstallDocs(deriveSiteStatusFacts(repositoryRoot));
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(edgeFamilyRoster);

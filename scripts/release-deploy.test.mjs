@@ -376,7 +376,7 @@ test("the current Provider 4.x target refuses historical 4.0.0 tag phases", () =
   }
 });
 
-test("the current descriptor stays candidate-only without a new publication claim", () => {
+test("the current descriptor stays candidate-only while the ledger records publication", () => {
   const descriptor =
     releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
   expect(descriptor.publicationStatus).toBe("candidate-only");
@@ -387,8 +387,9 @@ test("the current descriptor stays candidate-only without a new publication clai
     ),
   );
   expect(
-    published.entries.some((entry) => entry.version === descriptor.version),
-  ).toBe(false);
+    published.entries.find((entry) => entry.version === descriptor.version)
+      ?.registryReadback?.installation.providerVersion,
+  ).toBe(descriptor.version);
 });
 
 test("retained Provider 4.0.0 identity mutation is refused", () => {

@@ -46,16 +46,17 @@ resource "takoform_module_worker" "api" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-The unpublished Provider 4.1.0 candidate adds `token_file` or
+Provider 4.1.0 adds `token_file` or
 `TAKOFORM_TOKEN_FILE` for a run-local token rotated by atomic file replacement.
 The provider opens it for each Host request. The file must be a regular file
 owned by the provider user with no group/other access, symlink, parent
 traversal, or newline. `token` / `TAKOFORM_TOKEN` and a token file are mutually
-exclusive. Provider 4.0.0 remains the Registry-published static-token option.
+exclusive. Existing Provider 4.0.0 static-token installations remain valid;
+verify the exact Registry version before changing a consumer pin.
 The token-file mode is supported on Linux, macOS, FreeBSD, OpenBSD, and NetBSD;
 Windows keeps the static-token option only.
 
-Provider `4.0.0` is recorded as Registry-published in the
+Provider `4.1.0` is recorded as Registry-published in the
 [Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json), whose entry carries the immutable
 GitHub Release and the Registry readback for that version.
 Availability is verified, not declared by this immutable documentation.
@@ -83,7 +84,7 @@ retains the exact release identities.
 curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v4.0.0
+git checkout --detach v4.1.0
 ```
 
 A source tag, documentation page, or local build alone is not

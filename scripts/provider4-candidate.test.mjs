@@ -106,14 +106,15 @@ test("current Provider 4.x candidate keeps the exact 17 publisher Forms", () => 
       ?.installation.resourceSchemaCount,
   ).toBe(17);
   expect(
-    published.entries.some((entry) => entry.version === current.descriptor.version),
-  ).toBe(false);
+    published.entries.find((entry) => entry.version === current.descriptor.version)
+      ?.registryReadback?.installation.resourceSchemaCount,
+  ).toBe(17);
   expect(
     currentLedger.releases.find((entry) => entry.providerVersion === "4.0.0")?.forms,
   ).toHaveLength(17);
 });
 
-test("generated 4.1.0 identities accept the same 17 Forms without publishing", () => {
+test("generated 4.1.0 identities preserve the published 17-Form readback", () => {
   const synthetic = cloneProviderInputs("provider4-generated");
   try {
     const generated = writeGeneratedCurrentCandidate(synthetic);
@@ -125,7 +126,7 @@ test("generated 4.1.0 identities accept the same 17 Forms without publishing", (
       readJson("release/provider-release-identities.json", synthetic).entries.some(
         (entry) => entry.version === "4.1.0",
       ),
-    ).toBe(false);
+    ).toBe(true);
   } finally {
     removeTemporary(synthetic);
   }
@@ -263,13 +264,6 @@ test("a published current Provider 4.x readback permits only an exact no-op writ
   const synthetic = cloneProviderInputs("provider4-published-current");
   try {
     writeGeneratedCurrentCandidate(synthetic);
-    const published = readJson("release/provider-release-identities.json", synthetic);
-    const historical = published.entries.find((entry) => entry.version === "4.0.0");
-    const currentReadback = JSON.parse(JSON.stringify(historical));
-    currentReadback.version = "4.1.0";
-    currentReadback.tag = "v4.1.0";
-    published.entries.push(currentReadback);
-    writeJson("release/provider-release-identities.json", published, synthetic);
     expect(() => validateProvider4Candidate(synthetic)).not.toThrow();
     const identityPath = path.join(
       synthetic,

@@ -15,7 +15,7 @@ hero:
 ---
 
 Takoform Provider maps typed Terraform/OpenTofu resources to exact Form
-contracts exposed by a compatible Host. Registry Provider **`4.0.0`** keeps the
+contracts exposed by a compatible Host. Registry Provider **`4.1.0`** keeps the
 `tako0614/takoform` address and contains only 17 Forms selected from
 `tako0614/takoform-forms`. Provider `3.0.0` remains immutable 31-resource
 aggregate history. API/Core
