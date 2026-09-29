@@ -30,6 +30,13 @@ metadata.
 | **2.0.0**  | Withdrawn `v1alpha2` epoch   | Immutable Registry history; exact-pin recovery and migration only.                                                      |
 | **1.0.3**  | Withdrawn `v1alpha1` epoch   | Immutable Registry history; exact-pin recovery and migration only.                                                      |
 
+The immutable v4.1.0 tag still contains pre-publication reference wording that
+calls 4.1.0 a candidate and points to the v4.0.0 checkout. This current page
+and the [release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
+record the later verified Registry publication; they do not repair the tagged
+or Registry-rendered copy. Only a future Provider version can carry corrected
+Registry-rendered reference; the v4.1.0 tag remains immutable.
+
 Provider releases are independent of Form definition and package publication.
 For state created by a withdrawn Provider epoch, follow the [v2-to-v3 migration
 boundary](/release/migrations/v2-to-v3.html). For the publisher-set cut, follow

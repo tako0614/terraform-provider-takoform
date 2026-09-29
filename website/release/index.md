@@ -36,6 +36,11 @@ accepted pending-operation custody through refresh, including the Resource UID.
 It also carries the failed-Create recovery warning. The Host API, FormRef and
 Form Package identities remain unchanged. Source and tag alone do not establish
 Registry publication.
+The immutable v4.1.0 tag contains pre-publication reference wording that still
+calls 4.1.0 a candidate and points at v4.0.0. This later readback record does
+not rewrite the tagged or Registry-rendered documentation; use the current
+reference and verified ledger for availability. Only a future Provider version
+can carry corrected tagged reference; v4.1.0 remains immutable.
 Token-file mode is supported on Linux, macOS, FreeBSD, OpenBSD, and NetBSD;
 Windows builds retain static-token configuration only.
 The unpublished 4.0.1 candidate descriptor and projection remain source

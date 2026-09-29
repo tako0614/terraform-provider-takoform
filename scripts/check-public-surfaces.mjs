@@ -24,7 +24,7 @@ import {
 import {
   PUBLISHED_INSTALL_PROSE,
   publishedProviderInstallDocStatusIssues,
-  stalePublishedProviderStatus,
+  releaseTargetTagDocIssues,
 } from "./provider-published-docs.mjs";
 
 const repositoryRoot = path.resolve(
@@ -653,10 +653,6 @@ function hasNotInstallableWording(text) {
 }
 
 function checkImmutableProviderTagDocs(source, truth) {
-  const statusIssue = stalePublishedProviderStatus(source, truth.providerVersion);
-  if (statusIssue !== null) {
-    fail(`docs/index.md: immutable provider tag docs contain ${statusIssue}`);
-  }
   const forbidden = [
     {
       label: "shallow immutable-tag verification checkout",
@@ -709,16 +705,21 @@ function checkImmutableProviderTagDocs(source, truth) {
 // must not carry a status the publication has already falsified. The same
 // falsified status is refused on the hand-written landing and reference pages
 // in both languages, which are the surfaces a reader reaches first.
-function checkPublishedProviderInstallDocs(providerVersion) {
-  checkImmutableProviderTagDocs(
-    read(path.join(repositoryRoot, "docs", "index.md")),
-    { providerVersion },
-  );
+function checkPublishedProviderInstallDocs(facts) {
+  const tagDocs = read(path.join(repositoryRoot, "docs", "index.md"));
+  for (const issue of releaseTargetTagDocIssues(
+    tagDocs,
+    facts.providerTarget,
+    facts.providerPublished,
+  )) {
+    fail(`docs/index.md: ${issue}`);
+  }
+  checkImmutableProviderTagDocs(tagDocs, { providerVersion: facts.providerTarget });
   const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
     relativePath,
     read(path.join(repositoryRoot, relativePath)),
   ]));
-  for (const issue of publishedProviderInstallDocStatusIssues(sources, providerVersion)) {
+  for (const issue of publishedProviderInstallDocStatusIssues(sources, facts.providerPublished)) {
     fail(issue);
   }
   for (const [relativePath, source] of sources) {
@@ -1905,7 +1906,7 @@ checkContractLaneDocumentation();
 checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
-checkPublishedProviderInstallDocs(deriveSiteStatusFacts(repositoryRoot).providerPublished);
+checkPublishedProviderInstallDocs(deriveSiteStatusFacts(repositoryRoot));
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(edgeFamilyRoster);

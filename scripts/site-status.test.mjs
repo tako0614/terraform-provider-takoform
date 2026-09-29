@@ -20,6 +20,7 @@ import {
 import {
   publishedProviderInstallDocStatusIssues,
   PUBLISHED_INSTALL_PROSE,
+  releaseTargetTagDocIssues,
   stalePublishedProviderStatus,
 } from "./provider-published-docs.mjs";
 import {
@@ -36,6 +37,24 @@ import {
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 describe("published Provider documentation wording", () => {
+  test("release-target docs reject the stale tagged 4.1.0 wording before publication", () => {
+    const taggedSource = [
+      "The unpublished Provider 4.1.0 candidate adds token_file.",
+      "Provider 4.0.0 remains the Registry-published static-token option.",
+      "git checkout --detach v4.0.0",
+    ].join("\n");
+    expect(releaseTargetTagDocIssues(taggedSource, "4.1.0", "4.0.0")).toEqual([
+      "release target 4.1.0 has stale unpublished provider status",
+      "release target 4.1.0 docs still claim prior 4.0.0 Registry status",
+      "release target 4.1.0 docs check out v4.0.0 instead of v4.1.0",
+    ]);
+    const neutralSource = [
+      "Provider 4.1.0 adds token_file; availability is proven by Registry readback.",
+      "git checkout --detach v4.1.0",
+    ].join("\n");
+    expect(releaseTargetTagDocIssues(neutralSource, "4.1.0", "4.0.0")).toEqual([]);
+  });
+
   test("rejects false unpublished status on every install landing and reference page", () => {
     expect(PUBLISHED_INSTALL_PROSE).toEqual([
       "README.md",

@@ -30,6 +30,13 @@ state に保持します。Provider resource 名は adapter metadata です。
 | **2.0.0** | withdrawn `v1alpha2` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |
 | **1.0.3** | withdrawn `v1alpha1` epoch | 不変の Registry history。exact-pin recovery と migration のみ。 |
 
+不変の v4.1.0 tag に含まれる reference は公開前の文言のままで、4.1.0 を candidate と呼び、
+v4.0.0 の checkout を案内しています。この現行ページと
+[release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json) は、その後に検証された
+Registry 公開を記録しますが、tag や Registry に表示される tag 由来の文書は修正しません。
+修正された Registry 向け reference は将来の Provider version でのみ提供でき、
+v4.1.0 tag 自体は不変のままです。
+
 Provider release は Form definition / package publication と独立しています。
 withdrawn Provider epoch で作成した state は [v2-to-v3 migration boundary](/release/migrations/v2-to-v3.html)
 を確認してください。Provider 3からProvider 4へ進む前には
