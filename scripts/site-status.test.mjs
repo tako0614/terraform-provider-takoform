@@ -43,16 +43,19 @@ describe("published Provider documentation wording", () => {
       "Provider 4.0.0 remains the Registry-published static-token option.",
       "git checkout --detach v4.0.0",
     ].join("\n");
-    expect(releaseTargetTagDocIssues(taggedSource, "4.1.0", "4.0.0")).toEqual([
+    expect(releaseTargetTagDocIssues(taggedSource, "4.1.0")).toEqual([
       "release target 4.1.0 has stale unpublished provider status",
-      "release target 4.1.0 docs still claim prior 4.0.0 Registry status",
       "release target 4.1.0 docs check out v4.0.0 instead of v4.1.0",
     ]);
     const neutralSource = [
       "Provider 4.1.0 adds token_file; availability is proven by Registry readback.",
       "git checkout --detach v4.1.0",
     ].join("\n");
-    expect(releaseTargetTagDocIssues(neutralSource, "4.1.0", "4.0.0")).toEqual([]);
+    expect(releaseTargetTagDocIssues(neutralSource, "4.1.0")).toEqual([]);
+    expect(releaseTargetTagDocIssues(
+      "Provider 4.1.0 remains Registry-published history.\ngit checkout --detach v4.2.0",
+      "4.2.0",
+    )).toEqual([]);
   });
 
   test("rejects false unpublished status on every install landing and reference page", () => {

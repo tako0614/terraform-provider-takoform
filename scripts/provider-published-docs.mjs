@@ -56,21 +56,11 @@ export function publishedProviderInstallDocStatusIssues(sources, version) {
   });
 }
 
-export function releaseTargetTagDocIssues(source, targetVersion, publishedVersion) {
+export function releaseTargetTagDocIssues(source, targetVersion) {
   const issues = [];
   const targetStatus = stalePublishedProviderStatus(source, targetVersion);
   if (targetStatus !== null) {
     issues.push(`release target ${targetVersion} has ${targetStatus}`);
-  }
-  if (targetVersion !== publishedVersion) {
-    const escapedPublished = publishedVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const priorStatus = new RegExp(
-      `\\bProvider\\s+[^A-Za-z0-9\\n]{0,3}v?${escapedPublished}\\b[^.\\n]{0,140}\\bRegistry-published\\b`,
-      "i",
-    );
-    if (priorStatus.test(source)) {
-      issues.push(`release target ${targetVersion} docs still claim prior ${publishedVersion} Registry status`);
-    }
   }
   const checkout = source.match(/^git checkout --detach v([^\s]+)$/m)?.[1] ?? null;
   if (checkout !== targetVersion) {

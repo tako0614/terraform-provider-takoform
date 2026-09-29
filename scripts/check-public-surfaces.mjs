@@ -699,18 +699,17 @@ function checkImmutableProviderTagDocs(source, truth) {
   }
 }
 
-// The Provider reference in docs/ is rendered into the Registry's own immutable
-// documentation for the published version, so it can never be corrected after
-// the fact: it must carry the verification path for the exact published tag and
-// must not carry a status the publication has already falsified. The same
-// falsified status is refused on the hand-written landing and reference pages
-// in both languages, which are the surfaces a reader reaches first.
+// The Provider reference in docs/ is captured by the release tag. Check the
+// descriptor target before publication, not only the previously published
+// version, so the next tag cannot bake in candidate wording or an old checkout.
+// This checks current source; it cannot rewrite an already-immutable tag.
+// Landing and reference pages in both languages also reject false claims about
+// the already published version.
 function checkPublishedProviderInstallDocs(facts) {
   const tagDocs = read(path.join(repositoryRoot, "docs", "index.md"));
   for (const issue of releaseTargetTagDocIssues(
     tagDocs,
     facts.providerTarget,
-    facts.providerPublished,
   )) {
     fail(`docs/index.md: ${issue}`);
   }
