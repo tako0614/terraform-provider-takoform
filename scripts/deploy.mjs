@@ -5,10 +5,12 @@
 // 共通の obligation と trigger は takos-control の
 // `engineering.policy.json` → `deploy` が正本です。
 //
-//   bun run deploy -- takoform-website
 //   bun run deploy -- takoform-provider-release <phase> ...
 //   bun run deploy -- takoform-form-package-release <phase> ...
-//   bun run deploy -- takoform-specification-release <phase> ...
+//
+// The former website and specification-release selectors are disabled by the
+// active authority tombstone. Retained implementation is not a publication
+// surface; the current API/common-model site belongs to takoform.
 //
 // `--contract` は副作用なしで、この repo が publish できる surface と、それぞれの
 // trigger・義務の果たし方を印字します。
