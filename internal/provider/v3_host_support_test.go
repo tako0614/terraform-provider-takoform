@@ -7,12 +7,15 @@ package provider
 // the reading of a profile and the shape of the refusals.
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 )
 
@@ -116,6 +119,139 @@ func TestV3MaximumLimitNameFollowsTheProfileGrammar(t *testing.T) {
 		if got := v3MaximumLimitName(wire); got != want {
 			t.Errorf("v3MaximumLimitName(%q) = %q, want %q", wire, got, want)
 		}
+	}
+}
+
+// TestV3CollectionLimitNameTracksTheProfileVersion pins the one compatibility
+// seam between retained beta profiles and stable v1. Beta keeps the historical
+// maximum<Field> key; stable reads the desired document's JSON Pointer. A
+// legacy-looking extra key in a stable profile must not shadow the pointer the
+// host actually published, and an omitted pointer remains an undecided limit.
+func TestV3CollectionLimitNameTracksTheProfileVersion(t *testing.T) {
+	t.Parallel()
+	stable := v3SupportProfile{
+		"apiVersion": clientv3.SupportProfileAPIVersion,
+		"limits": map[string]any{
+			"/requiredSensitiveVars":        int64(0),
+			"/maximumRequiredSensitiveVars": int64(99),
+		},
+	}
+	if got := stable.collectionLimitName("requiredSensitiveVars"); got != "/requiredSensitiveVars" {
+		t.Fatalf("stable collection limit key = %q, want /requiredSensitiveVars", got)
+	}
+	if ceiling, published := stable.limit(stable.collectionLimitName("requiredSensitiveVars")); !published || ceiling != 0 {
+		t.Fatalf("stable requiredSensitiveVars ceiling = %d (%v), want 0 (true)", ceiling, published)
+	}
+
+	// The extra legacy-shaped pointer is not the stable capability key. It must
+	// not be consulted as a fallback when the stable pointer is omitted.
+	omitted := v3SupportProfile{
+		"apiVersion": clientv3.SupportProfileAPIVersion,
+		"limits":     map[string]any{"/maximumRequiredSensitiveVars": int64(0)},
+	}
+	if _, published := omitted.limit(omitted.collectionLimitName("requiredSensitiveVars")); published {
+		t.Fatal("stable profile's extra legacy pointer was read as a requiredSensitiveVars ceiling")
+	}
+
+	beta := v3SupportProfile{
+		"apiVersion": "support.takoform.com/v1alpha1",
+		"limits":     map[string]any{"maximumRequiredSensitiveVars": int64(0)},
+	}
+	if got := beta.collectionLimitName("requiredSensitiveVars"); got != "maximumRequiredSensitiveVars" {
+		t.Fatalf("retained beta collection limit key = %q, want maximumRequiredSensitiveVars", got)
+	}
+	if ceiling, published := beta.limit(beta.collectionLimitName("requiredSensitiveVars")); !published || ceiling != 0 {
+		t.Fatalf("retained beta requiredSensitiveVars ceiling = %d (%v), want 0 (true)", ceiling, published)
+	}
+	if got := stable.collectionLimitName(""); got != "" {
+		t.Fatalf("empty stable wire name = %q, want empty", got)
+	}
+}
+
+// TestV3StableRequiredSensitiveVarsLimitRejectsBeforeMutation proves the
+// stable pointer limit is applied to the planned set itself. The check only
+// appends a diagnostic; the fake host therefore records no mutation event.
+// Empty, missing, and unrelated limit declarations retain the profile's
+// omission semantics and do not invent a refusal.
+func TestV3StableRequiredSensitiveVarsLimitRejectsBeforeMutation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	host := newV3FakeHost(t)
+	r := v3TestFormResource(t, "WorkerVersion", newV3TestProviderData(t, host))
+	schemaResponse := v3SchemaOf(t, r)
+	codec, err := r.codecTable().defaultCreate(v3GroupKind{
+		APIVersion: r.form.Family.APIVersion(), Kind: r.form.Kind,
+	})
+	if err != nil {
+		t.Fatalf("WorkerVersion create codec: %v", err)
+	}
+
+	cases := []struct {
+		name      string
+		members   []string
+		limits    map[string]any
+		wantError bool
+	}{
+		{
+			name:      "stable zero rejects one required secret",
+			members:   []string{"SECRET"},
+			limits:    map[string]any{"/requiredSensitiveVars": int64(0)},
+			wantError: true,
+		},
+		{
+			name:    "stable zero accepts an empty set",
+			limits:  map[string]any{"/requiredSensitiveVars": int64(0)},
+			members: nil,
+		},
+		{
+			name:    "missing stable limit remains undecided",
+			members: []string{"SECRET"},
+			limits:  map[string]any{},
+		},
+		{
+			name:    "extra legacy pointer remains unrelated",
+			members: []string{"SECRET"},
+			limits:  map[string]any{"/maximumRequiredSensitiveVars": int64(0)},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+				"required_sensitive_vars": v3StringSetValue(t, testCase.members...),
+			})
+			// Seed the support cache so this exercises the same plan-time entrypoint
+			// as ModifyPlan without requiring a second HTTP fixture. The support
+			// answer is what a stable host's validated FormSupport profile carries.
+			r.data.support = newV3SupportCache()
+			r.data.support.forms[codec.Ref.ExactKey()] = v3SupportAnswer{Profile: map[string]any{
+				"apiVersion": clientv3.SupportProfileAPIVersion,
+				"kind":       "FormSupport",
+				"formRef": map[string]any{
+					"apiVersion":        codec.Ref.APIVersion,
+					"kind":              codec.Ref.Kind,
+					"definitionVersion": codec.Ref.DefinitionVersion,
+					"schemaDigest":      codec.Ref.SchemaDigest,
+				},
+				"operations": []any{"create", "read", "delete"},
+				"limits":     testCase.limits,
+			}}
+			response := frameworkresource.ModifyPlanResponse{Plan: plan}
+			r.v3PlanHostSupport(ctx, &response)
+			if got := response.Diagnostics.HasError(); got != testCase.wantError {
+				t.Fatalf("diagnostics.HasError() = %v, want %v: %v", got, testCase.wantError, response.Diagnostics)
+			}
+			if testCase.wantError {
+				detail := response.Diagnostics.Errors()[0].Detail()
+				for _, want := range []string{"/requiredSensitiveVars", v3CodeLimitExceeded} {
+					if !strings.Contains(detail, want) {
+						t.Errorf("diagnostic detail does not carry %q:\n%s", want, detail)
+					}
+				}
+			}
+			if len(host.events) != 0 || len(host.applySpecs) != 0 {
+				t.Fatalf("limit check caused host mutation: events=%v applySpecs=%v", host.events, host.applySpecs)
+			}
+		})
 	}
 }
 
