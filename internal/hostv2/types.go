@@ -142,6 +142,9 @@ type APIError struct {
 	Status     int
 	Code       string
 	RetryAfter string
+	// OperationID is the validated identifier supplied by the Host in Problem
+	// Details, when present.
+	OperationID string
 }
 
 func (e *APIError) Error() string {
