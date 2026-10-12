@@ -25,14 +25,15 @@ type MatrixReport struct {
 // MatrixFormat identifies the two-CLI evidence shape.
 const MatrixFormat = "takoform.worker-authoring-conformance-matrix@v1"
 
-// RunMatrix drives every scenario under both supported CLIs with a provider
-// built from source.
+// RunMatrix drives every scenario under both supported CLIs with the tagged
+// retained-v1 conformance plugin built from source.
 func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {
 	return RunMatrixWithProvider(ctx, repoRoot, openTofuPath, terraformPath, "")
 }
 
 // RunMatrixWithProvider drives every scenario under both supported CLIs with
-// an explicit already-built provider binary; an empty path builds from source.
+// an explicit already-built provider binary; an empty path builds the tagged
+// retained-v1 fixture from source. Explicit bytes are never substituted.
 func RunMatrixWithProvider(ctx context.Context, repoRoot, openTofuPath, terraformPath, providerBinary string) (MatrixReport, error) {
 	matrix := MatrixReport{Format: MatrixFormat}
 	if providerBinary != "" {
