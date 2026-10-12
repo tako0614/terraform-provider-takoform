@@ -1,3 +1,5 @@
+//go:build native
+
 package mountedv2
 
 import (
