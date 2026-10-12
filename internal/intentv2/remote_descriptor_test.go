@@ -252,6 +252,44 @@ func TestRemoteDescriptorRefusesBothInputsAndBadFileWithoutFallback(t *testing.T
 	}
 }
 
+func TestRemoteDescriptorRotationLimitRefusesBeforeHTTP(t *testing.T) {
+	f, path, endpoint := newDescriptorFixture(t)
+	store := openRemoteFixture(t)
+	files := []remoteFileGrant{{Slot: "intent-one", Endpoint: endpoint, Grant: f.grant}}
+	if err := replaceDescriptor(path, 2048, files); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Read(context.Background(), testBeginRequest().Target); err != nil {
+		t.Fatalf("last allowed sequence rejected: %v", err)
+	}
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{"one past rotation limit", descriptorJSON(t, 2049, files)},
+		{"unsafe JSON integer", bytes.Replace(descriptorJSON(t, 2049, files), []byte(`"sequence":2049`), []byte(`"sequence":9007199254740992`), 1)},
+		{"integer overflow", bytes.Replace(descriptorJSON(t, 2049, files), []byte(`"sequence":2049`), []byte(`"sequence":18446744073709551616`), 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f.mu.Lock()
+			requestsBefore := f.requestCount
+			f.mu.Unlock()
+			if err := replaceDescriptorBytes(path, tc.data); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.Read(context.Background(), testBeginRequest().Target); !errors.Is(err, ErrStoreUnavailable) {
+				t.Fatalf("invalid rotation accepted: %v", err)
+			}
+			f.mu.Lock()
+			requestsAfter := f.requestCount
+			f.mu.Unlock()
+			if requestsAfter != requestsBefore {
+				t.Fatal("invalid rotation reached private-file HTTP")
+			}
+		})
+	}
+}
+
 func descriptorJSON(t *testing.T, sequence uint64, files []remoteFileGrant) []byte {
 	t.Helper()
 	data, err := json.Marshal(struct {

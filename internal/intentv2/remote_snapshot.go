@@ -29,10 +29,11 @@ const (
 )
 
 const (
-	privateRunFilesPath = "/internal/private-run-files/v1"
-	maxRemoteWireBytes  = (maxSnapshotBytes*4)/3 + 8192
-	maxRemoteVersion    = uint64(9007199254740991)
-	maxDescriptorBytes  = 4 << 20
+	privateRunFilesPath   = "/internal/private-run-files/v1"
+	maxRemoteWireBytes    = (maxSnapshotBytes*4)/3 + 8192
+	maxRemoteVersion      = uint64(9007199254740991)
+	maxDescriptorBytes    = 4 << 20
+	maxDescriptorSequence = uint64(2048)
 )
 
 var (
@@ -206,7 +207,7 @@ func readRemoteDescriptor(path, slot string) (remoteDescriptor, error) {
 		Files    *[]remoteFileGrant `json:"files"`
 	}
 	if decodeStrict(raw, &envelope) != nil || envelope.Version == nil || *envelope.Version != 1 ||
-		envelope.Sequence == nil || *envelope.Sequence > maxRemoteVersion || envelope.Files == nil {
+		envelope.Sequence == nil || *envelope.Sequence > maxDescriptorSequence || envelope.Files == nil {
 		return remoteDescriptor{}, ErrStoreUnavailable
 	}
 	selected, endpoints, err := selectRemoteGrant(*envelope.Files, slot)

@@ -33,6 +33,7 @@ type remoteFixture struct {
 	onLostAck      func()
 	resolveGrant   string
 	resolveCount   int
+	requestCount   int
 }
 
 func newRemoteFixture(t *testing.T) (*remoteFixture, *httptest.Server) {
@@ -47,6 +48,7 @@ func newRemoteFixture(t *testing.T) (*remoteFixture, *httptest.Server) {
 func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.requestCount++
 	if r.Header.Get("Authorization") != "Bearer "+f.grant || r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"kind":"authority_rejected"}`))
