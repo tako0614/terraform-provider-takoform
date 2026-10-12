@@ -18,7 +18,7 @@ func testBeginRequest() BeginRequest {
 	return BeginRequest{
 		Target: Target{
 			HostAPI:        "https://host.example/custom/api",
-			PrincipalScope: "integration-account-a",
+			PrincipalScope: testStoreID,
 			Space:          "team-a",
 			Name:           "widget",
 		},
@@ -35,8 +35,8 @@ func testBeginRequest() BeginRequest {
 func initTestStore(t *testing.T) (string, *Store) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "intent-store")
-	if err := Initialize(path, testStoreID); err != nil {
-		t.Fatalf("Initialize() error = %v", err)
+	if err := InitializeBound(path, testStoreID, testStoreBinding()); err != nil {
+		t.Fatalf("InitializeBound() error = %v", err)
 	}
 	store, err := Open(path, testStoreID)
 	if err != nil {

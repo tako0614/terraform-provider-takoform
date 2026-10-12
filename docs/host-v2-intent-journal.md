@@ -9,18 +9,30 @@ request with the saved key after an interruption.
 ## Custody and identity
 
 One journal belongs to one Provider state-management scope. Configure one
-initialized local path and a fixed store ID for that scope. Do not share or
-adopt a journal across unrelated states, and do not infer ownership from a
-matching resource name. `Initialize` is an explicit operator action that
-creates a new store and refuses an existing path. `Open` only verifies an
-existing store and exact store ID; it never creates, repairs, truncates, or
-replaces one. A missing, corrupt, partial, locked, or unavailable store is a
-hard stop before a caller may send a mutation.
+initialized local path and a fixed store ID for that scope. Its immutable
+binding also fixes the exact Host API base URL. The Provider's local
+`PrincipalScope` label must equal the store ID; this prevents relabeling an
+unresolved claim but is not proof that credentials still authenticate as the
+same principal. Do not share or adopt a journal across unrelated states, and
+do not infer ownership from a matching resource name. `InitializeBound` or
+`cmd/intent-store-init` explicitly creates a bound store and refuses an
+existing path. `Open` only verifies an existing store and exact store ID; it
+never creates, repairs, truncates, or replaces one. An explicitly invoked
+`BindEmpty` may bind an existing empty unbound store; it refuses any store
+containing prior intents or imports. Begin refuses unbound stores and any Host
+root or local-scope mismatch. A missing, corrupt, partial, locked, or
+unavailable store is a hard stop before a caller may send a mutation.
 
-The record identity includes the exact Host API root, a caller-declared
-principal-scope label, Space, and resource name. The label is stable binding
-metadata, not proof that credentials still resolve to the same authenticated
-principal. The caller must establish principal continuity independently.
+The small `intent-store-init` command takes only `--path`, `--store-id`, and
+`--host-api`. It performs no network calls and accepts no credentials. For a
+new path it initializes the exact binding; for an existing path it can only
+idempotently retain the exact binding or explicitly bind an empty unbound
+store. It never changes a different existing binding or adopts nonempty
+unbound history.
+
+The record identity includes the exact Host API root, the store-ID-derived
+local scope label, Space, and resource name. The caller must establish
+principal continuity independently.
 Credentials and private-input values are not accepted by the journal API.
 Only private-input names may be retained to match a request; values and hashes
 are never stored. Public JSON must not contain a `privateInputs` member.
@@ -72,15 +84,24 @@ An accepted operation record is not proof that Terraform successfully
 committed resource state. The caller must separately observe and commit the
 result, and later state must retain the journal's store identity/custody. The
 journal does not automatically discover or adopt Host resources by name.
-Pre-existing/imported state needs a later explicit binding flow using
-validated exact-UID Host state; a synthetic Create record or name match is not
-such proof. A recorded accepted/applied operation also does not prove that
-Terraform state was durably committed.
+An import caller supplies its expected exact UID/Form and an already
+authorized Resource read, including its Host API origin. `BindImportedResource`
+checks the origin, route, UID, exact Form, Space, name, and positive safe
+generation against the immutable store binding and target slot. It persists
+this evidence separately from mutation intents—never as a synthetic Create or
+Operation. An imported binding reserves the cross-Form `(space,name)` slot and
+establishes the exact UID/generation/Form for later Update/Delete. An exact
+repeat import is idempotent only while there is no mutation history for that
+slot; re-import after an operation is conservatively refused. Only succeeded
+exact-UID Delete evidence plus Resource absence releases the current slot;
+the import and older UID/action records remain retained. A recorded
+accepted/applied operation also does not prove that Terraform state was
+durably committed.
 
-`Initialize` syncs the newly created store directory's parent, each initial
-file, and the store directory before returning. This is a local filesystem
-durability measure, not a claim of power-loss safety on every filesystem or
-storage device.
+`Initialize` and `InitializeBound` sync the newly created store directory's
+parent, each initial file, and the store directory before returning. This is a
+local filesystem durability measure, not a claim of power-loss safety on every
+filesystem or storage device.
 
 Focused subprocess tests kill a separate OS process after its claim is durable
 and after an accepted Operation is recorded, then reopen the same store and
@@ -92,9 +113,9 @@ recovery, or power-loss guarantees.
 
 ## Bounds and failure handling
 
-The current implementation bounds a snapshot to 16 MiB, history to 4096
-records, public JSON to 1 MiB, private-input names to 256, and waits at most
-five seconds for the cross-process lock. Directory/file ownership, links,
+The current implementation bounds a snapshot to 16 MiB, combined intent and
+import history to 4096 entries, public JSON to 1 MiB, private-input names to
+256, and waits at most five seconds for the cross-process lock. Directory/file ownership, links,
 lock inode, store identity, and directory identity are checked around access.
 An unexpected entry (including an interrupted temporary snapshot), malformed
 record, failed sync, or exceeded bound stops the operation. The package never

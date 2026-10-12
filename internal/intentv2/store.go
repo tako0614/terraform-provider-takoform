@@ -73,6 +73,45 @@ type Target struct {
 	Name           string `json:"name"`
 }
 
+// StoreBinding binds one local journal to an exact Host API root. The local
+// scope label is the immutable storeID; it is not proof of authenticated
+// principal continuity.
+type StoreBinding struct {
+	HostAPI string `json:"hostApi"`
+}
+
+// ImportEvidence is a caller-validated successful exact-UID Resource read.
+// HostAPI identifies the origin from which the caller obtained the evidence;
+// it does not independently prove authentication or authorization.
+type ImportEvidence struct {
+	HostAPI    string
+	Path       string
+	StatusCode int
+	UID        string
+	Form       string
+	Space      string
+	Name       string
+	Generation int64
+}
+
+// ImportRequest couples the caller's exact type/UID selection to the Resource
+// fetched by its authorized Host client.
+type ImportRequest struct {
+	Target   Target
+	UID      string
+	Form     string
+	Evidence ImportEvidence
+}
+
+// ImportBinding records the exact current Resource identity explicitly
+// imported by the caller. It is not a synthesized mutation or Operation.
+type ImportBinding struct {
+	Target     Target `json:"target"`
+	UID        string `json:"uid"`
+	Form       string `json:"form"`
+	Generation int64  `json:"generation"`
+}
+
 // BeginRequest contains only the original public request. Authentication and
 // private-input values are intentionally not accepted by this API.
 type BeginRequest struct {
@@ -161,9 +200,11 @@ type diskHeader struct {
 }
 
 type diskSnapshot struct {
-	Format  string   `json:"format"`
-	StoreID string   `json:"storeId"`
-	Records []Intent `json:"records"`
+	Format  string          `json:"format"`
+	StoreID string          `json:"storeId"`
+	Binding *StoreBinding   `json:"binding,omitempty"`
+	Imports []ImportBinding `json:"imports,omitempty"`
+	Records []Intent        `json:"records"`
 }
 
 // Store must be opened explicitly after Initialize. It is safe for concurrent
@@ -179,6 +220,19 @@ type Store struct {
 // Initialize explicitly creates a new private store directory. It refuses any
 // existing path and never replaces a prior store.
 func Initialize(path, storeID string) error {
+	return initialize(path, storeID, nil)
+}
+
+// InitializeBound explicitly creates a store bound to one Host API root.
+// Existing paths are never replaced or adopted.
+func InitializeBound(path, storeID string, binding StoreBinding) error {
+	if err := validateStoreBinding(binding); err != nil {
+		return err
+	}
+	return initialize(path, storeID, &binding)
+}
+
+func initialize(path, storeID string, binding *StoreBinding) error {
 	if err := validateStoreID(storeID); err != nil {
 		return err
 	}
@@ -191,7 +245,7 @@ func Initialize(path, storeID string) error {
 	if err != nil {
 		return ErrStoreUnavailable
 	}
-	snapshot, err := jsonv2.Marshal(diskSnapshot{Format: storeFormat, StoreID: storeID, Records: []Intent{}})
+	snapshot, err := jsonv2.Marshal(diskSnapshot{Format: storeFormat, StoreID: storeID, Binding: binding, Imports: []ImportBinding{}, Records: []Intent{}})
 	if err != nil {
 		return ErrStoreUnavailable
 	}
@@ -212,7 +266,12 @@ func Open(path, storeID string) (*Store, error) {
 		return nil, ErrStoreUnavailable
 	}
 	s := &Store{dir: dir, path: path, storeID: storeID}
-	if err := s.withSnapshot(context.Background(), false, func(*diskSnapshot) error { return nil }); err != nil {
+	if err := s.withSnapshot(context.Background(), false, func(snapshot *diskSnapshot) error {
+		if snapshot.Binding == nil && (len(snapshot.Records) != 0 || len(snapshot.Imports) != 0) {
+			return ErrStoreIdentity
+		}
+		return nil
+	}); err != nil {
 		_ = dir.close()
 		return nil, err
 	}
@@ -229,6 +288,111 @@ func (s *Store) Close() error {
 	return s.dir.close()
 }
 
+// Binding reads the persisted Host binding under the store lock. The returned
+// value is descriptive only; Begin and import operations revalidate it under
+// their own write lock.
+func (s *Store) Binding(ctx context.Context) (StoreBinding, error) {
+	var result StoreBinding
+	err := s.withSnapshot(ctx, false, func(snapshot *diskSnapshot) error {
+		if snapshot.Binding == nil {
+			return ErrStoreIdentity
+		}
+		result = *snapshot.Binding
+		return nil
+	})
+	return result, err
+}
+
+// BindEmpty explicitly binds an existing unbound, empty store. Repeating the
+// exact binding is idempotent. It cannot adopt nonempty legacy custody.
+func (s *Store) BindEmpty(ctx context.Context, binding StoreBinding) error {
+	if err := validateStoreBinding(binding); err != nil {
+		return err
+	}
+	return s.withSnapshot(ctx, true, func(snapshot *diskSnapshot) error {
+		if snapshot.Binding != nil {
+			if *snapshot.Binding == binding {
+				return nil
+			}
+			return ErrStoreIdentity
+		}
+		if len(snapshot.Records) != 0 || len(snapshot.Imports) != 0 {
+			return ErrStoreIdentity
+		}
+		snapshot.Binding = &binding
+		return nil
+	})
+}
+
+// BindImportedResource durably records an exact current Resource identity
+// supplied by the caller after an authorized Host read. Imports remain
+// separate from mutation records and cannot clear or bypass unresolved intent.
+func (s *Store) BindImportedResource(ctx context.Context, request ImportRequest) (ImportBinding, error) {
+	target, evidence := request.Target, request.Evidence
+	if err := validateTarget(target); err != nil || !validHostID(request.UID) || !validFormURL(request.Form) || !validHostAPIBaseURL(evidence.HostAPI) ||
+		evidence.Path != "/resources/"+evidence.UID || evidence.StatusCode != 200 || !validHostID(evidence.UID) ||
+		!validFormURL(evidence.Form) || evidence.Space != target.Space || evidence.Name != target.Name ||
+		evidence.Generation < 1 || evidence.Generation > maxReplayWindowSeconds {
+		return ImportBinding{}, ErrStoreUnavailable
+	}
+	if request.UID != evidence.UID || request.Form != evidence.Form {
+		return ImportBinding{}, ErrIntentConflict
+	}
+	imported := ImportBinding{Target: target, UID: request.UID, Form: request.Form, Generation: evidence.Generation}
+	var result ImportBinding
+	err := s.withSnapshot(ctx, true, func(snapshot *diskSnapshot) error {
+		if !bindingMatches(snapshot, s.storeID, target) || evidence.HostAPI != snapshot.Binding.HostAPI {
+			return ErrStoreIdentity
+		}
+		for _, prior := range snapshot.Records {
+			if sameTarget(prior.Target, target) {
+				return ErrUnresolvedIntent
+			}
+		}
+		for _, prior := range snapshot.Imports {
+			if sameTarget(prior.Target, target) {
+				if prior == imported {
+					result = prior
+					return nil
+				}
+				return ErrIntentConflict
+			}
+			if prior.Target.HostAPI == target.HostAPI && prior.UID == imported.UID {
+				return ErrIntentConflict
+			}
+		}
+		if len(snapshot.Records)+len(snapshot.Imports) >= maxRecords {
+			return ErrStoreUnavailable
+		}
+		snapshot.Imports = append(snapshot.Imports, imported)
+		result = imported
+		return nil
+	})
+	return result, err
+}
+
+// ReadImportBinding returns the immutable imported identity for a target.
+func (s *Store) ReadImportBinding(ctx context.Context, target Target) (ImportBinding, bool, error) {
+	if err := validateTarget(target); err != nil {
+		return ImportBinding{}, false, err
+	}
+	var result ImportBinding
+	found := false
+	err := s.withSnapshot(ctx, false, func(snapshot *diskSnapshot) error {
+		if !bindingMatches(snapshot, s.storeID, target) {
+			return ErrStoreIdentity
+		}
+		for _, imported := range snapshot.Imports {
+			if sameTarget(imported.Target, target) {
+				result, found = imported, true
+				break
+			}
+		}
+		return nil
+	})
+	return result, found, err
+}
+
 // Begin durably claims a new mutation before returning its random key. An
 // identical unresolved intent returns its original key and timing data; a
 // changed request for that identity fails closed.
@@ -239,6 +403,9 @@ func (s *Store) Begin(ctx context.Context, request BeginRequest) (Intent, error)
 	}
 	var result Intent
 	err = s.withSnapshot(ctx, true, func(snapshot *diskSnapshot) error {
+		if !bindingMatches(snapshot, s.storeID, request.Target) {
+			return ErrStoreIdentity
+		}
 		for i := len(snapshot.Records) - 1; i >= 0; i-- {
 			prior := snapshot.Records[i]
 			if !sameTarget(prior.Target, request.Target) {
@@ -282,7 +449,8 @@ func (s *Store) Begin(ctx context.Context, request BeginRequest) (Intent, error)
 		}
 		latest := latestIntent(snapshot, request.Target)
 		if request.Action == ActionCreate {
-			if latest != nil && latest.Status != StatusDeleteConfirmed {
+			_, _, _, identityFound, identityDeleted := currentIdentity(snapshot, request.Target)
+			if identityFound && !identityDeleted || latest != nil && latest.Status != StatusDeleteConfirmed {
 				return ErrTargetOccupied
 			}
 		} else {
@@ -302,7 +470,7 @@ func (s *Store) Begin(ctx context.Context, request BeginRequest) (Intent, error)
 				return ErrUnresolvedIntent
 			}
 		}
-		if len(snapshot.Records) >= maxRecords {
+		if len(snapshot.Records)+len(snapshot.Imports) >= maxRecords {
 			return ErrStoreUnavailable
 		}
 		key, err := newKey()
@@ -358,6 +526,9 @@ func (s *Store) RecordAccepted(ctx context.Context, id string, ack OperationAck)
 		if index < 0 {
 			return ErrStoreUnavailable
 		}
+		if !bindingMatches(snapshot, s.storeID, record.Target) {
+			return ErrStoreIdentity
+		}
 		if record.Status == StatusAccepted || record.Status == StatusAcceptedFailed {
 			if !sameOperation(record, ack) || !record.RetainUntil.Equal(retainUntil) {
 				return ErrIntentConflict
@@ -406,6 +577,9 @@ func (s *Store) Complete(ctx context.Context, id string, evidence CompletionEvid
 		record, index := findIntent(snapshot, id)
 		if index < 0 {
 			return ErrStoreUnavailable
+		}
+		if !bindingMatches(snapshot, s.storeID, record.Target) {
+			return ErrStoreIdentity
 		}
 		if !sameOperation(record, evidence.Operation) || evidence.Operation.Action != record.Action || retainUntil.Before(record.RetainUntil) || retainUntil.Before(record.InitialRetainUntil) {
 			return ErrIntentConflict
@@ -535,7 +709,11 @@ func (s *Store) verifyPathAndHeader() error {
 func decodeSnapshot(data []byte, storeID string) (diskSnapshot, error) {
 	var snapshot diskSnapshot
 	if len(data) == 0 || len(data) > maxSnapshotBytes || decodeStrict(data, &snapshot) != nil ||
-		snapshot.Format != storeFormat || snapshot.StoreID != storeID || snapshot.Records == nil || len(snapshot.Records) > maxRecords {
+		snapshot.Format != storeFormat || snapshot.StoreID != storeID || snapshot.Records == nil ||
+		len(snapshot.Records)+len(snapshot.Imports) > maxRecords {
+		return diskSnapshot{}, ErrStoreUnavailable
+	}
+	if snapshot.Binding != nil && validateStoreBinding(*snapshot.Binding) != nil || snapshot.Binding == nil && len(snapshot.Imports) != 0 {
 		return diskSnapshot{}, ErrStoreUnavailable
 	}
 	seen := make(map[string]bool, len(snapshot.Records))
@@ -543,7 +721,21 @@ func decodeSnapshot(data []byte, storeID string) (diskSnapshot, error) {
 		if !validStoredIntent(record) || seen[record.ID] {
 			return diskSnapshot{}, ErrStoreUnavailable
 		}
+		if snapshot.Binding != nil && !bindingMatches(&snapshot, storeID, record.Target) {
+			return diskSnapshot{}, ErrStoreUnavailable
+		}
 		seen[record.ID] = true
+	}
+	seenTargets := make(map[Target]bool, len(snapshot.Imports))
+	seenUIDs := make(map[string]bool, len(snapshot.Imports))
+	for _, imported := range snapshot.Imports {
+		if snapshot.Binding == nil || !bindingMatches(&snapshot, storeID, imported.Target) || !validHostID(imported.UID) ||
+			!validFormURL(imported.Form) || imported.Generation < 1 || imported.Generation > maxReplayWindowSeconds ||
+			seenTargets[imported.Target] || seenUIDs[imported.Target.HostAPI+"\x00"+imported.UID] {
+			return diskSnapshot{}, ErrStoreUnavailable
+		}
+		seenTargets[imported.Target] = true
+		seenUIDs[imported.Target.HostAPI+"\x00"+imported.UID] = true
 	}
 	return snapshot, nil
 }
@@ -565,8 +757,7 @@ func validateBegin(r BeginRequest) (BeginRequest, error) {
 		r.AdvertisedReplayWindowSecs <= 0 || r.AdvertisedReplayWindowSecs > maxReplayWindowSeconds {
 		return BeginRequest{}, ErrStoreUnavailable
 	}
-	u, err := url.Parse(r.Target.HostAPI)
-	if err != nil || !u.IsAbs() || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(r.Target.HostAPI, "#") {
+	if !validHostAPIBaseURL(r.Target.HostAPI) {
 		return BeginRequest{}, ErrStoreUnavailable
 	}
 	if r.Action == ActionCreate && (r.UID != "" || r.Generation != "" || r.Method != "POST" || r.Path != "/resources") ||
@@ -613,6 +804,25 @@ func validateTarget(t Target) error {
 		return ErrStoreUnavailable
 	}
 	return nil
+}
+
+func validateStoreBinding(binding StoreBinding) error {
+	if !validHostAPIBaseURL(binding.HostAPI) {
+		return ErrStoreUnavailable
+	}
+	return nil
+}
+
+func bindingMatches(snapshot *diskSnapshot, storeID string, target Target) bool {
+	return snapshot != nil && snapshot.Binding != nil && validateStoreBinding(*snapshot.Binding) == nil &&
+		target.HostAPI == snapshot.Binding.HostAPI && target.PrincipalScope == storeID
+}
+
+func validHostAPIBaseURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.IsAbs() && u.Scheme == "https" && u.Hostname() != "" && u.User == nil &&
+		u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && !strings.ContainsAny(raw, "?#") &&
+		!strings.HasSuffix(u.Path, "/") && isASCII(raw)
 }
 
 func validHostID(value string) bool { return hostIDPattern.MatchString(value) }
@@ -801,6 +1011,11 @@ func currentIdentity(snapshot *diskSnapshot, target Target) (uid, generation, fo
 		}
 		if record.Status == StatusFailedReserved {
 			return record.OperationUID, record.ObservedGeneration, record.Form, true, false
+		}
+	}
+	for _, imported := range snapshot.Imports {
+		if sameTarget(imported.Target, target) {
+			return imported.UID, strconv.FormatInt(imported.Generation, 10), imported.Form, true, false
 		}
 	}
 	return "", "", "", false, false

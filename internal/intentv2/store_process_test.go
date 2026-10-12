@@ -16,7 +16,7 @@ import (
 
 func TestClaimSurvivesAbruptProcessExitBeforeAcknowledgement(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "intent-store")
-	if err := Initialize(path, testStoreID); err != nil {
+	if err := InitializeBound(path, testStoreID, testStoreBinding()); err != nil {
 		t.Fatal(err)
 	}
 	request := testBeginRequest()
@@ -56,7 +56,7 @@ func TestClaimSurvivesAbruptProcessExitBeforeAcknowledgement(t *testing.T) {
 
 func TestAcceptedOperationSurvivesAbruptProcessExitAndCanContinue(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "intent-store")
-	if err := Initialize(path, testStoreID); err != nil {
+	if err := InitializeBound(path, testStoreID, testStoreBinding()); err != nil {
 		t.Fatal(err)
 	}
 	request := testBeginRequest()
@@ -106,7 +106,7 @@ func TestAcceptedOperationSurvivesAbruptProcessExitAndCanContinue(t *testing.T) 
 
 func TestConcurrentProcessesCreateOneWinnerAcrossDifferentForms(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "intent-store")
-	if err := Initialize(path, testStoreID); err != nil {
+	if err := InitializeBound(path, testStoreID, testStoreBinding()); err != nil {
 		t.Fatal(err)
 	}
 	first, firstReader, firstInput := startIntentProcess(t, path, "race", "https://forms.example/WidgetA/1.0.0/")
