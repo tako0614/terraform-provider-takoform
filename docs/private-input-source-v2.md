@@ -19,11 +19,17 @@ inputs for one exact Host `space` and resource `name`:
 The selected keys must equal the caller's expected `requiredSensitiveVars`
 names exactly. The helper returns only those values and writes, logs, persists,
 or hashes none of them; it keeps no package-global copy. The source is bounded
-to 1 MiB, and each value is limited to 1..32768 UTF-8 bytes with no NUL, as in
-the Provider's run-scoped runtime-input contract. WorkerVersion Form does not
-set a maximum number of declared sensitive names; the JSON source bound limits
-the overall input. JSON must be strict UTF-8 with no duplicate keys or invalid
-Unicode. Diagnostics are generic and do not include values or input names.
+to 1 MiB. Each value is limited to 1..32768 UTF-8 bytes with no NUL by the
+Provider's [run-scoped runtime-input policy](resources/worker_version.md#run-scoped-sensitive-inputs);
+WorkerVersion Form independently requires nonempty strings but sets no
+value-length or NUL rule. `Load` itself
+is a generic selector and does not enforce Form-specific declaration counts.
+For WorkerVersion 0.5.0, `requiredSensitiveVars` is limited to 64 names by the
+exact published Form. Callers must pass names from an already validated
+`edgev2` spec; the helper's 65-name selection test is not evidence of a
+Form-valid spec. The 1 MiB source limit bounds the overall input. JSON must be
+strict UTF-8 with no duplicate keys or invalid Unicode. Diagnostics are generic
+and do not include values or input names.
 
 The caller must read this source only in its Apply-time or explicit
 private-input-continuation path, never while planning. This helper does not

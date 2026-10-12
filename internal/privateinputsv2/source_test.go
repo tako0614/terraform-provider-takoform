@@ -77,7 +77,7 @@ func TestLoadRejectsMalformedOrOutOfBoundsSourceWithoutEchoingValues(t *testing.
 	}
 }
 
-func TestLoadAllowsMoreThan64FormDeclaredNames(t *testing.T) {
+func TestLoadSelectsMoreThan64CallerExpectedNames(t *testing.T) {
 	const count = 65
 	want := make([]string, count)
 	var raw strings.Builder
@@ -95,7 +95,7 @@ func TestLoadAllowsMoreThan64FormDeclaredNames(t *testing.T) {
 
 	got, err := Load("prod", "worker", want)
 	if err != nil {
-		t.Fatal("Load() rejected valid names without a Form maxItems bound:", err)
+		t.Fatal("Load() rejected a generic caller selector with 65 names:", err)
 	}
 	if len(got) != count {
 		t.Fatalf("Load() returned %d values, want %d", len(got), count)
