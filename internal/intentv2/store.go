@@ -73,9 +73,9 @@ type Target struct {
 	Name           string `json:"name"`
 }
 
-// StoreBinding binds one local journal to an exact Host API root. The local
-// scope label is the immutable storeID; it is not proof of authenticated
-// principal continuity.
+// StoreBinding binds one journal to an exact Host API root. The caller-scope
+// label is the immutable storeID; it is not proof of authenticated principal
+// continuity.
 type StoreBinding struct {
 	HostAPI string `json:"hostApi"`
 }
@@ -207,11 +207,13 @@ type diskSnapshot struct {
 	Records []Intent        `json:"records"`
 }
 
-// Store must be opened explicitly after Initialize. It is safe for concurrent
-// goroutines and serializes mutations across processes using the OS lock.
+// Store is safe for concurrent goroutines. Local stores must be opened after
+// Initialize and serialize mutations across processes using the OS lock;
+// remote stores use an acknowledged compare-and-swap snapshot instead.
 type Store struct {
 	mu      sync.Mutex
 	dir     *secureDirectory
+	remote  *remoteSnapshotBackend
 	path    string
 	storeID string
 	closed  bool
@@ -285,6 +287,9 @@ func (s *Store) Close() error {
 		return nil
 	}
 	s.closed = true
+	if s.remote != nil {
+		return nil
+	}
 	return s.dir.close()
 }
 
@@ -653,6 +658,9 @@ func (s *Store) withSnapshot(ctx context.Context, write bool, fn func(*diskSnaps
 	defer s.mu.Unlock()
 	if s.closed || ctx == nil {
 		return ErrStoreUnavailable
+	}
+	if s.remote != nil {
+		return s.remote.withSnapshot(ctx, s.storeID, write, fn)
 	}
 	var result error
 	err := s.dir.withLock(ctx, func() error {

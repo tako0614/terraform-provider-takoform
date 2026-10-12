@@ -63,11 +63,38 @@ git checkout --detach v5.0.0
 A source checkout or tag alone is not Registry publication evidence.
 
 `store_id` is a local label, not authentication or proof that a rotated bearer
-token still represents the same Host principal. The configured store is bound
-to the exact Host API root; Configure opens it locally and does not initialize
-it or send HTTP requests. Keep the store available across plans, applies,
-refreshes, and restarts. Loss, corruption, changed path/root/ID, or unresolved
-intent stops mutation rather than silently creating a replacement.
+token still represents the same Host principal. The selected store is bound to
+the exact Host API root. With local `store_path` custody, Configure opens the
+already initialized store locally and sends no HTTP request. Keep it available
+across plans, applies, refreshes, and restarts. Loss, corruption, changed
+path/root/ID, or unresolved intent stops mutation rather than silently creating
+a replacement.
+
+Alternatively, configure exactly one `intent_store_slot` instead of
+`store_path` when the Runner/OpenTofu environment explicitly grants generic
+private-file access for that opaque slot. The Provider does not provision this
+capability; no default Cloud mount or ambient authentication is implied. For
+example, set `intent_store_slot = var.runner_private_slot` only when that exact
+slot is granted. During Configure, before resource planning, remote mode may
+initialize an empty slot with a compare-and-swap snapshot bound to the same
+`store_id` and exact Host API root. This private-store operation is not a Host
+API request, and a mismatch or unresolved commit outcome stops before Host
+mutation. Before each Host mutation, an exact acknowledged durable journal
+commit is required; a lost or unknown commit acknowledgement is accepted only
+after an exact receipt is resolved. Unresolved outcomes refuse mutation.
+
+For example, with `runner_private_slot` granted by the execution environment:
+
+```hcl
+provider "takoform" {
+  endpoint          = "https://host.example"
+  host_api_root     = "https://host.example/apis/forms.takoform.com/v2"
+  token             = var.host_token
+  intent_store_slot = var.runner_private_slot
+  store_id          = var.fixed_caller_scope_id
+  space             = "prod"
+}
+```
 
 ```hcl
 provider "takoform" {

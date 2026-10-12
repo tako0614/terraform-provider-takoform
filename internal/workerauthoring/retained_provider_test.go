@@ -53,10 +53,17 @@ func TestShippingProviderFactoryRemainsV2Only(t *testing.T) {
 	if response.Diagnostics.HasError() {
 		t.Fatal(response.Diagnostics)
 	}
-	for _, field := range []string{"host_api_root", "store_path", "store_id"} {
+	for _, field := range []string{"host_api_root", "store_id"} {
 		attribute, ok := response.Schema.Attributes[field].(schema.StringAttribute)
 		if !ok || !attribute.Required {
 			t.Fatalf("shipping v2 lost required %s", field)
+		}
+	}
+	// Configure, not the schema, enforces exactly one of these two backends.
+	for _, field := range []string{"store_path", "intent_store_slot"} {
+		attribute, ok := response.Schema.Attributes[field].(schema.StringAttribute)
+		if !ok || !attribute.Optional || attribute.Required {
+			t.Fatalf("shipping v2 lost optional intent store backend %s", field)
 		}
 	}
 	if got := len(shipping.Resources(context.Background())); got != 13 {
@@ -99,8 +106,7 @@ func TestExplicitShippingBinaryDoesNotGainRetainedV1Fallback(t *testing.T) {
 	}
 	output, err := h.run(ctx, "validate", "-no-color")
 	if err == nil || !strings.Contains(output, `The argument "host_api_root" is required`) ||
-		!strings.Contains(output, `The argument "store_id" is required`) ||
-		!strings.Contains(output, `The argument "store_path" is required`) {
+		!strings.Contains(output, `The argument "store_id" is required`) {
 		t.Fatalf("explicit shipping v2 binary accepted retained v1 HCL: error=%v\n%s", err, output)
 	}
 }

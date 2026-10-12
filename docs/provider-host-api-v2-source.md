@@ -122,12 +122,13 @@ resource "takoform_queue_consumer" "events" {
 }
 ```
 
-## Local custody before configure
+## Intent-store custody before resource planning
 
-A caller must explicitly initialize one private, absolute-path intent store
-for one fixed management scope and exact Host API root. The store is an
-execution-owner durability obligation; do not put it in an ephemeral directory
-that disappears between plans, applies, refreshes, or process restarts.
+Select exactly one intent-store mode. In local mode, a caller must initialize
+one private, absolute-path store for one fixed management scope and exact Host
+API root. The store is an execution-owner durability obligation; do not put it
+in an ephemeral directory that disappears between plans, applies, refreshes,
+or process restarts.
 
 ```sh
 terraform-provider-takoform intent-store-init \
@@ -166,9 +167,42 @@ resource "takoform_worker_endpoint" "api" {
 }
 ```
 
-Configure validates static values and opens the already initialized store
-locally; it sends no HTTP request. Each resource validates state and custody
-before v2 discovery. Discovery's `baseUrl` must equal `host_api_root` exactly.
+For remote mode, set `intent_store_slot` instead of `store_path`. This is an
+opaque slot name, not a path or credential. It is usable only when the
+Runner/OpenTofu execution environment explicitly grants the Provider generic
+private-file access for that exact slot. The Provider does not provision this
+capability, and no runtime default Cloud mount or ambient authentication is
+implied. For example, with `runner_private_slot` supplied by that explicitly
+capable environment:
+
+```hcl
+provider "takoform" {
+  endpoint          = "https://host.example"
+  host_api_root     = "https://host.example/apis/forms.takoform.com/v2"
+  token             = var.host_token
+  intent_store_slot = var.runner_private_slot
+  store_id          = var.fixed_caller_scope_id
+  space             = "prod"
+}
+```
+
+Exactly one of `store_path` and `intent_store_slot` must be configured. During
+Configure, before resource planning, remote mode reads the selected private
+slot. If it is empty, the Provider attempts a compare-and-swap initialization
+of an empty snapshot bound to the same `store_id` and exact `host_api_root`;
+this is private-store traffic, not a Host API request. A conflict is accepted
+only if the winning snapshot has that exact binding. Malformed, mismatched, or
+unresolved storage state is refused before Host mutation. Local mode instead
+opens the already initialized path and makes no HTTP request.
+
+Before any Host mutation, the journal must have an exact acknowledged durable
+snapshot commit. If a commit acknowledgement is lost or unknown, the Provider
+checks only that exact commit; it proceeds only on an exact receipt and refuses
+to mutate while the outcome remains unresolved. This storage acknowledgement
+is separate from acknowledgement of the Host mutation itself.
+
+Each resource validates state and custody before v2 discovery. Discovery's
+`baseUrl` must equal `host_api_root` exactly.
 The Host's authorized exact Form support and Offering policy are checked for
 a new Create. If Offerings are advertised, set both `offering_id` and
 `offering_revision`; otherwise omit both. There is no default Offering.
