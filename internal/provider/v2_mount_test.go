@@ -381,6 +381,83 @@ func TestV2UIDImportBindsOnlyAuthorizedExactResource(t *testing.T) {
 	}
 }
 
+func TestV2FailedCreateCanRefreshThenExplicitlyDeleteSameUID(t *testing.T) {
+	var server *httptest.Server
+	var deleted bool
+	var deletes atomic.Int32
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		switch req.URL.Path {
+		case hostv2.DiscoveryPath:
+			_ = json.NewEncoder(w).Encode(hostv2.Discovery{API: hostv2.APIVersion, BaseURL: server.URL + "/api/v2", Documentation: "https://host.example/docs", Authentication: hostv2.Authentication{Schemes: []string{"Bearer"}, Documentation: "https://host.example/auth"}, Capabilities: hostv2.Capabilities{}, Limits: hostv2.Limits{MaxRequestBytes: 65536, MaxPageSize: 50, ReplayWindowSeconds: 3600}})
+		case "/api/v2/resources/failed-uid":
+			if req.Method == http.MethodDelete {
+				deletes.Add(1)
+				deleted = true
+				w.Header().Set("Location", server.URL+"/api/v2/operations/op-delete")
+				v2WriteOperationFor(w, "op-delete", "failed-uid", "delete", 2, "succeeded", "complete")
+				return
+			}
+			if deleted {
+				v2WriteNotFound(w)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"uid": "failed-uid", "form": hostv2TestModuleWorkerURL, "space": "prod", "name": "failed", "generation": 1, "observedGeneration": 0, "observedAt": nil, "phase": "error", "spec": map[string]any{}, "observed": map[string]any{}, "output": map[string]any{}, "lastOperation": "op-failed"})
+		case "/api/v2/operations/op-failed":
+			v2WriteOperationFor(w, "op-failed", "failed-uid", "create", 1, "failed", "none")
+		case "/api/v2/operations/op-delete":
+			v2WriteOperationFor(w, "op-delete", "failed-uid", "delete", 2, "succeeded", "complete")
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	defer server.Close()
+	data := v2TestData(t, server)
+	ctx := context.Background()
+	target := intentv2.Target{HostAPI: data.hostAPIRoot, PrincipalScope: data.storeID, Space: "prod", Name: "failed"}
+	intent, err := data.store.Begin(ctx, intentv2.BeginRequest{Target: target, Action: intentv2.ActionCreate, Form: hostv2TestModuleWorkerURL, Method: "POST", Path: "/resources", PublicJSON: []byte(`{"form":"https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/","space":"prod","name":"failed","spec":{}}`), AdvertisedReplayWindowSecs: 3600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retention := time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339)
+	ack := intentv2.OperationAck{ID: "op-failed", ResourceUID: "failed-uid", Action: intentv2.ActionCreate, Generation: 1, Status: "failed", Effect: "none", RetainUntil: retention}
+	if _, err = data.store.RecordAccepted(ctx, intent.ID, ack); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = data.store.Complete(ctx, intent.ID, intentv2.CompletionEvidence{Operation: ack, Resource: intentv2.ResourceObservation{Present: true, Path: "/resources/failed-uid", StatusCode: 200, UID: "failed-uid", Form: hostv2TestModuleWorkerURL, Space: "prod", Name: "failed", Generation: 1, Phase: "error"}}); err != nil {
+		t.Fatal(err)
+	}
+	res, schemaResponse := v2TestResource(t, data, hostv2TestModuleWorkerURL)
+	state := tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}
+	for key, value := range map[string]string{"name": "failed", "space": "prod", "uid": "failed-uid", "form_url": hostv2TestModuleWorkerURL, "host_api_root": data.hostAPIRoot, "store_id": data.storeID, "intent_id": intent.ID, "operation_id": "op-failed", "phase": "error"} {
+		if diags := state.SetAttribute(ctx, path.Root(key), types.StringValue(value)); diags.HasError() {
+			t.Fatal(diags)
+		}
+	}
+	if diags := state.SetAttribute(ctx, path.Root("generation"), types.Int64Value(1)); diags.HasError() {
+		t.Fatal(diags)
+	}
+	read := resource.ReadResponse{State: state}
+	res.Read(ctx, resource.ReadRequest{State: state}, &read)
+	if read.Diagnostics.HasError() {
+		t.Fatalf("failed Resource refresh must permit cleanup: %v", read.Diagnostics)
+	}
+	remove := resource.DeleteResponse{State: read.State}
+	res.Delete(ctx, resource.DeleteRequest{State: read.State}, &remove)
+	if remove.Diagnostics.HasError() || deletes.Load() != 1 {
+		t.Fatalf("same-UID Delete: diagnostics=%v calls=%d", remove.Diagnostics, deletes.Load())
+	}
+}
+
+func v2WriteOperationFor(w http.ResponseWriter, id, uid, action string, generation int64, status, effect string) {
+	body := map[string]any{"id": id, "resourceUid": uid, "action": action, "generation": generation, "status": status, "effect": effect, "createdAt": "2026-10-12T00:00:00Z", "updatedAt": "2026-10-12T00:00:00Z", "retainUntil": time.Now().UTC().Add(3 * time.Hour).Format(time.RFC3339)}
+	if status == "failed" {
+		body["error"] = map[string]string{"code": "backend_error", "message": "managed object unavailable"}
+	}
+	_ = json.NewEncoder(w).Encode(body)
+}
+
 const hostv2TestModuleWorkerURL = "https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/"
 
 func v2WriteOperation(t *testing.T, w http.ResponseWriter, serverURL, action string, generation int64) {
