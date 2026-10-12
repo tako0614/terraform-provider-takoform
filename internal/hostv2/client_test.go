@@ -291,7 +291,7 @@ func TestOfferingSelectionIsExplicitAndGenerationFenceIsSent(t *testing.T) {
 	}
 }
 
-func TestMutationReturnsRetryAfterAsNonSerializedMetadata(t *testing.T) {
+func TestMutationRetryAfterTransportParsingPreservesMaxInt64AndExcludesJSON(t *testing.T) {
 	const retryAfter = "9223372036854775807"
 	var mutationCalls atomic.Int32
 	var server *httptest.Server
@@ -378,7 +378,11 @@ func TestMutationRetryAfterValidationAndZeroForSettledResponse(t *testing.T) {
 					w.Header().Set("Retry-After", test.retryAfter)
 				}
 				w.WriteHeader(test.status)
-				_, _ = io.WriteString(w, `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"queued","effect":"none","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`)
+				operationBody := `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"queued","effect":"none","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`
+				if test.status == http.StatusOK {
+					operationBody = `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"succeeded","effect":"complete","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`
+				}
+				_, _ = io.WriteString(w, operationBody)
 			}))
 			defer server.Close()
 			client := New(server.URL, "token", server.Client())
