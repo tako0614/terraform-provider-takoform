@@ -69,6 +69,38 @@ func TestClientDiscoversV2AndUsesTheAdvertisedBaseURL(t *testing.T) {
 	}
 }
 
+func TestGetSupportRejectsEmptyFormQueryAndFragmentDelimitersBeforeHTTP(t *testing.T) {
+	for _, form := range []string{
+		"https://forms.example/Widget/1.0.0/?",
+		"https://forms.example/Widget/1.0.0/#",
+	} {
+		t.Run(form[len("https://forms.example/Widget/1.0.0/"):], func(t *testing.T) {
+			var apiRequests atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					serveDiscovery(t, w, server.URL+"/api", false)
+					return
+				}
+				apiRequests.Add(1)
+				http.NotFound(w, r)
+			}))
+			defer server.Close()
+
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatalf("Discover() error = %v", err)
+			}
+			if _, err := client.GetSupport(context.Background(), form); err == nil {
+				t.Fatal("GetSupport() accepted a Form URL with an empty query or fragment delimiter")
+			}
+			if got := apiRequests.Load(); got != 0 {
+				t.Fatalf("API requests for invalid Form URL = %d, want 0", got)
+			}
+		})
+	}
+}
+
 func TestDiscoveryRejectsForeignOriginAndV1Documents(t *testing.T) {
 	for name, body := range map[string]func(string) Discovery{
 		"foreign origin": func(string) Discovery { return fixtureDiscovery("https://elsewhere.example/api", false) },

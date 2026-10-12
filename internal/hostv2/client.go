@@ -786,7 +786,7 @@ func decodeResourcePage(data []byte, page *Page[Resource]) error {
 
 func validateFormURL(raw string) error {
 	u, err := url.Parse(raw)
-	if err != nil || !u.IsAbs() || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !isASCII(raw) {
+	if err != nil || !u.IsAbs() || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(raw, "?#") || !isASCII(raw) {
 		return errors.New("takoform v2: Form identity must be an exact absolute HTTPS URL")
 	}
 	return nil
