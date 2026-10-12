@@ -53,7 +53,10 @@ been qualified.
 /resources` with its original envelope; Update is `PUT /resources/{UID}` with a
 spec body; Delete is `DELETE /resources/{UID}` with no body. Update/Delete
 must use the immutable Form and exact UID/generation established by this
-journal; this prerequisite does not import or adopt existing Host resources.
+journal. Existing resources can be bound only through the explicit exact-UID
+import API, using caller-supplied evidence from an already-authorized Host
+Resource read; that structural evidence is not itself proof of authorization.
+The journal never automatically imports or adopts a Host resource by name.
 It durably records a random idempotency key, exact method/path/Form, public
 JSON bytes, private-input name set, target UID/generation fence where
 applicable, and a first pre-send timestamp plus the currently advertised
