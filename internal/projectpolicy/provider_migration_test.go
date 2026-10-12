@@ -182,6 +182,9 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
+	if err := validateCurrentReleaseIdentityAxes(release); err != nil {
+		t.Fatalf("current release descriptor weakens the retained v1 migration boundary: %v", err)
+	}
 	currentVersion, err := semver.Parse(release.Version)
 	if err != nil {
 		t.Fatalf("parse current provider version: %v", err)

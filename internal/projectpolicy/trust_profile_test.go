@@ -2,6 +2,7 @@ package projectpolicy
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -143,6 +144,7 @@ type releaseDescriptor struct {
 	SourceRepository        string `json:"sourceRepository"`
 	FormPublisherRepository string `json:"formPublisherRepository"`
 	FormPublisherCommit     string `json:"formPublisherCommit"`
+	FormIdentityModel       string `json:"formIdentityModel"`
 	FormSetTag              string `json:"formSetTag"`
 	ProviderAddress         string `json:"providerAddress"`
 	CLIMatrix               []struct {
@@ -162,6 +164,67 @@ type releaseDescriptor struct {
 		FormDefinitionVersions string `json:"formDefinitionVersions"`
 		FormPackageVersions    string `json:"formPackageVersions"`
 	} `json:"versioning"`
+}
+
+func validateCurrentReleaseIdentityAxes(current releaseDescriptor) error {
+	if current.Tag != "v"+current.Version {
+		return fmt.Errorf("release tag %q does not match version %q", current.Tag, current.Version)
+	}
+	switch current.SchemaVersion {
+	case 1:
+		if !regexp.MustCompile(`^4\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(current.Version) ||
+			current.FormIdentityModel != "" || current.FormSetTag == "" ||
+			current.Versioning.PortableAPIVersion != "forms.takoform.com/v1" ||
+			current.Versioning.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
+			return fmt.Errorf("Provider 4 requires schema 1, v1 FormRefs and package identity")
+		}
+	case 2:
+		if !regexp.MustCompile(`^5\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(current.Version) ||
+			current.FormIdentityModel != "exact-published-urls" || current.FormSetTag != "" ||
+			current.Versioning.PortableAPIVersion != "forms.takoform.com/v2" ||
+			current.Versioning.FormPackageVersions != "independent-from-form-url" {
+			return fmt.Errorf("Provider 5 requires schema 2, exact published URLs and Host API v2")
+		}
+	default:
+		return fmt.Errorf("unsupported current Provider release schema %d", current.SchemaVersion)
+	}
+	if current.Versioning.ProviderCompatibility != "semver-major" ||
+		current.Versioning.FormDefinitionVersions != "independent-immutable-semver" {
+		return fmt.Errorf("current Provider release version axes are conflated")
+	}
+	return nil
+}
+
+func TestCurrentReleaseIdentityAxesKeepV4AndV5Separate(t *testing.T) {
+	root := repositoryRoot(t)
+	var v4, v5 releaseDescriptor
+	readStrictJSON(t, filepath.Join(root, "release", "candidates", "provider-v4.1.0.json"), &v4)
+	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &v5)
+	for _, descriptor := range []releaseDescriptor{v4, v5} {
+		if err := validateCurrentReleaseIdentityAxes(descriptor); err != nil {
+			t.Fatalf("valid Provider release descriptor rejected: %v", err)
+		}
+	}
+	for _, mutate := range []func(*releaseDescriptor){
+		func(value *releaseDescriptor) { value.FormIdentityModel = "" },
+		func(value *releaseDescriptor) { value.FormSetTag = v4.FormSetTag },
+		func(value *releaseDescriptor) { value.Versioning.PortableAPIVersion = "forms.takoform.com/v1" },
+		func(value *releaseDescriptor) {
+			value.Versioning.FormPackageVersions = v4.Versioning.FormPackageVersions
+		},
+		func(value *releaseDescriptor) { value.SchemaVersion = 1 },
+		func(value *releaseDescriptor) { value.Tag = "v4.1.0" },
+	} {
+		candidate := v5
+		mutate(&candidate)
+		if err := validateCurrentReleaseIdentityAxes(candidate); err == nil {
+			t.Fatalf("mixed Provider 5 release identity accepted: %#v", candidate)
+		}
+	}
+	v4.FormIdentityModel = "exact-published-urls"
+	if err := validateCurrentReleaseIdentityAxes(v4); err == nil {
+		t.Fatal("Provider 4 descriptor accepted Provider 5 URL identity model")
+	}
 }
 
 func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
@@ -237,11 +300,11 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		release.Versioning.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
 		t.Fatalf("retained Provider 3 version streams are not independently locked: %#v", release.Versioning)
 	}
-	if !regexp.MustCompile(`^4\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(current.Version) ||
-		current.Tag != "v"+current.Version ||
-		current.SigningFingerprint != profile.Provider.Signature.Fingerprint ||
-		current.Versioning != release.Versioning {
-		t.Fatalf("current Provider 4 version streams are not independently locked: %#v", current)
+	if err := validateCurrentReleaseIdentityAxes(current); err != nil {
+		t.Fatalf("current Provider release identity axes are unsafe: %v", err)
+	}
+	if current.SigningFingerprint != profile.Provider.Signature.Fingerprint {
+		t.Fatalf("current Provider signer differs from retained trust profile: %#v", current)
 	}
 	if profile.RunnerReport.HostFormat != "takoform.standard-runner-report@v1" ||
 		profile.RunnerReport.ProviderFormat != "takoform.standard-provider-runner-report@v2" ||
@@ -320,6 +383,9 @@ func TestReleaseWorkflowsPinTheReviewedCLIMatrix(t *testing.T) {
 	root := repositoryRoot(t)
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
+	if err := validateCurrentReleaseIdentityAxes(release); err != nil {
+		t.Fatalf("current release descriptor is not a supported Provider major: %v", err)
+	}
 
 	versions := make(map[string]string, len(release.CLIMatrix))
 	for _, entry := range release.CLIMatrix {
