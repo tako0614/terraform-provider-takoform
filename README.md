@@ -96,7 +96,7 @@ private intent store; `store_id` is a local label, not authentication or a
 Host principal. For source evaluation, initialize the local store with:
 
 ```console
-terraform-provider-takoform intent-store-init \
+go run ./cmd/intent-store-init \
   --path "$INTENT_STORE_PATH" \
   --store-id "$CALLER_SCOPE_ID" \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
@@ -127,9 +127,12 @@ an existing v4 workspace or rely on automatic state migration.
 
 ## Resource model
 
-Each resource is a typed Provider mapping to one exact FormRef. Form
-schemas, canonical bytes, and digests stay in the Form contract; Provider
-resource names are adapter metadata.
+In the published Provider 4.1.0/v1 model, each resource maps to one exact
+FormRef; its v4 state records the Form version, kind, definition version, and
+schema digest. Provider 5/v2 instead maps each resource to one exact publisher
+Form URL, recorded in the `form_url` state attribute. Form schemas and
+canonical bytes remain in their respective Form contracts; resource names are
+adapter metadata.
 
 The published v4.1.0 resource table is:
 
