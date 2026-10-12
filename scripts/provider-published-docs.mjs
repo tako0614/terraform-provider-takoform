@@ -74,30 +74,58 @@ export function releaseTargetTagDocIssues(source, targetVersion) {
 // The source docs captured by a Provider 5 tag must describe the selected
 // breaking target. Published Provider 4.1 remains the installation readback;
 // it is not a substitute for the new tag's own adoption reference.
+function h2Sections(source, heading) {
+  const headings = [...source.matchAll(/^## ([^\r\n]+)\r?$/gm)];
+  return headings.flatMap((match, index) => heading.test(match[1])
+    ? [source.slice(match.index, headings[index + 1]?.index ?? source.length)]
+    : []);
+}
+
+function exactCheckoutIssues(section, version, label) {
+  const checkouts = [...section.matchAll(/^git checkout --detach v([^\s]+)$/gm)]
+    .map((match) => match[1]);
+  if (checkouts.length === 0) {
+    return [`${label} docs omit the exact v${version} checkout`];
+  }
+  if (checkouts.length !== 1) {
+    return [`${label} docs contain multiple tag checkouts`];
+  }
+  return checkouts[0] === version ? []
+    : [`${label} docs check out v${checkouts[0]} instead of v${version}`];
+}
+
+export function publishedProviderTagDocIssues(source, publishedVersion) {
+  const sections = h2Sections(source, /^Verify the release$/u);
+  if (sections.length !== 1) {
+    return [`published Provider ${publishedVersion} docs ${sections.length === 0 ? "omit" : "duplicate"} the verification section`];
+  }
+  return exactCheckoutIssues(sections[0], publishedVersion, `published Provider ${publishedVersion}`);
+}
+
 export function provider5TagDocIssues(source, descriptor, candidate) {
   const issues = [];
-  const checkout = source.match(/^git checkout --detach v([^\s]+)$/m)?.[1] ?? null;
-  if (checkout !== descriptor.version) {
-    issues.push(checkout === null
-      ? `release target ${descriptor.version} docs omit the exact ${descriptor.tag} checkout`
-      : `release target ${descriptor.version} docs check out v${checkout} instead of ${descriptor.tag}`);
-  }
-  const major = descriptor.version.split(".")[0];
   const escapedVersion = descriptor.version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const sections = h2Sections(source, new RegExp(`^Provider ${escapedVersion}(?: .*)?$`, "u"));
+  if (sections.length !== 1) {
+    return [`release target ${descriptor.version} docs ${sections.length === 0 ? "omit a dedicated" : "duplicate the"} Provider ${descriptor.version} section`];
+  }
+  const targetSource = sections[0];
+  issues.push(...exactCheckoutIssues(targetSource, descriptor.version, `release target ${descriptor.version}`));
+  const major = descriptor.version.split(".")[0];
   const selectedPin = new RegExp(`^\\s*version\\s*=\\s*"(?:~>\\s*${major}\\.0|=\\s*${escapedVersion})"`, "m");
-  if (!selectedPin.test(source)) {
+  if (!selectedPin.test(targetSource)) {
     issues.push(`release target ${descriptor.version} docs omit a v${major} HCL provider pin`);
   }
-  if (!source.includes(descriptor.versioning.portableApiVersion)) {
+  if (!targetSource.includes(descriptor.versioning.portableApiVersion)) {
     issues.push(`release target ${descriptor.version} docs omit Host API ${descriptor.versioning.portableApiVersion}`);
   }
-  if (!candidate.forms.some(({ formURL }) => source.includes(formURL))) {
+  if (!candidate.forms.some(({ formURL }) => targetSource.includes(formURL))) {
     issues.push(`release target ${descriptor.version} docs omit an exact publisher Form URL`);
   }
-  if (!candidate.forms.some(({ resourceType }) => source.includes(`resource "${resourceType}"`))) {
+  if (!candidate.forms.some(({ resourceType }) => targetSource.includes(`resource "${resourceType}"`))) {
     issues.push(`release target ${descriptor.version} docs omit a registered v${major} HCL resource`);
   }
-  if (!source.includes("Provider 4 state is not automatically translated to Provider 5.")) {
+  if (!targetSource.includes("Provider 4 state is not automatically translated to Provider 5.")) {
     issues.push(`release target ${descriptor.version} docs omit the Provider 4 state boundary`);
   }
   return issues;

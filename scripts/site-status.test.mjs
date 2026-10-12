@@ -21,6 +21,7 @@ import {
   publishedProviderInstallDocStatusIssues,
   PUBLISHED_INSTALL_PROSE,
   provider5TagDocIssues,
+  publishedProviderTagDocIssues,
   releaseTargetTagDocIssues,
   stalePublishedProviderStatus,
 } from "./provider-published-docs.mjs";
@@ -43,16 +44,22 @@ describe("published Provider documentation wording", () => {
     const descriptor = read(repositoryRoot, RELEASE_VERSION);
     const candidate = validateProvider5Candidate(repositoryRoot);
     const source = [
+      "## Provider 5.0.0",
       "Provider 5.0.0 uses forms.takoform.com/v2.",
       `Exact Form URL: ${candidate.forms[0].formURL}`,
       "Provider 4 state is not automatically translated to Provider 5.",
       'version = "~> 5.0"',
       `resource "${candidate.forms[0].resourceType}" "example" {}`,
       "git checkout --detach v5.0.0",
+      "## Verify the release",
+      "git checkout --detach v4.1.0",
     ].join("\n");
     expect(provider5TagDocIssues(source, descriptor, candidate)).toEqual([]);
-    expect(provider5TagDocIssues(source.replace("v5.0.0", "v4.1.0"), descriptor, candidate))
+    expect(publishedProviderTagDocIssues(source, "4.1.0")).toEqual([]);
+    expect(provider5TagDocIssues(source.replace("git checkout --detach v5.0.0", "git checkout --detach v4.1.0"), descriptor, candidate))
       .toContain("release target 5.0.0 docs check out v4.1.0 instead of v5.0.0");
+    expect(publishedProviderTagDocIssues(source.replace("git checkout --detach v4.1.0", "git checkout --detach v5.0.0"), "4.1.0"))
+      .toContain("published Provider 4.1.0 docs check out v5.0.0 instead of v4.1.0");
     for (const omitted of [
       "forms.takoform.com/v2",
       candidate.forms[0].formURL,
@@ -63,6 +70,10 @@ describe("published Provider documentation wording", () => {
       expect(provider5TagDocIssues(source.replace(omitted, ""), descriptor, candidate).length)
         .toBeGreaterThan(0);
     }
+    expect(provider5TagDocIssues(source.replace("## Provider 5.0.0", "## Old Provider"), descriptor, candidate))
+      .toContain("release target 5.0.0 docs omit a dedicated Provider 5.0.0 section");
+    expect(provider5TagDocIssues(`${source}\n## Provider 5.0.0\n`, descriptor, candidate))
+      .toContain("release target 5.0.0 docs duplicate the Provider 5.0.0 section");
   });
 
   test("provider tag workflow runs the public doc guard before tag evidence", () => {
