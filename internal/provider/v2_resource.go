@@ -261,7 +261,7 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 		resp.Diagnostics.AddError("Accepted v2 Create could not be journaled", "The Host may own a Resource. Preserve the store and reconcile the exact Operation; do not create again.")
 		return
 	}
-	resp.State = req.Plan
+	resp.State = tfsdk.State{Schema: req.Plan.Schema, Raw: req.Plan.Raw}
 	r.writePending(ctx, &resp.State, space, name, op, intent.ID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -414,9 +414,6 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 	if intent.Action == intentv2.ActionDelete && op.Status == "succeeded" {
 		state.RemoveResource(ctx)
 		return
-	}
-	if plan.Schema.Attributes != nil && state.Raw.IsNull() {
-		*state = tfsdk.State{Schema: plan.Schema, Raw: plan.Raw}
 	}
 	if op.Status == "failed" {
 		r.writeResource(ctx, state, record, intent.ID, op.ID, diags)
