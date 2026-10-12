@@ -30,6 +30,7 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 
+	discoverMu sync.Mutex
 	mu         sync.RWMutex
 	discovery  Discovery
 	baseURL    string
@@ -50,6 +51,14 @@ func New(endpoint, token string, httpClient *http.Client) *Client {
 // Discover validates the unauthenticated v2 discovery document and stores its
 // exact same-origin API base URL for subsequent requests.
 func (c *Client) Discover(ctx context.Context) (Discovery, error) {
+	c.discoverMu.Lock()
+	defer c.discoverMu.Unlock()
+	c.mu.Lock()
+	c.discovery = Discovery{}
+	c.baseURL = ""
+	c.discovered = false
+	c.mu.Unlock()
+
 	origin, err := c.endpointOrigin()
 	if err != nil {
 		return Discovery{}, err
@@ -294,7 +303,7 @@ func (c *Client) UpdateResource(ctx context.Context, uid, key string, expectedGe
 	if err != nil {
 		return Operation{}, err
 	}
-	if expectedGeneration >= 9007199254740991 {
+	if expectedGeneration >= maxSafeInteger {
 		return Operation{}, errors.New("takoform v2: generation cannot advance beyond the common integer limit")
 	}
 	return c.mutate(ctx, http.MethodPut, base+"/resources/"+uid, "update", uid, key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, body)
@@ -312,7 +321,7 @@ func (c *Client) DeleteResource(ctx context.Context, uid, key string, expectedGe
 	if err != nil {
 		return Operation{}, err
 	}
-	if expectedGeneration >= 9007199254740991 {
+	if expectedGeneration >= maxSafeInteger {
 		return Operation{}, errors.New("takoform v2: generation cannot advance beyond the common integer limit")
 	}
 	return c.mutate(ctx, http.MethodDelete, base+"/resources/"+uid, "delete", uid, key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, nil)
@@ -596,7 +605,7 @@ func validateCreate(input CreateRequest) error {
 }
 
 func validateResource(r Resource) error {
-	if !idPattern.MatchString(r.UID) || !idPattern.MatchString(r.Space) || !idPattern.MatchString(r.Name) || validateFormURL(r.Form) != nil || r.Generation < 1 || r.ObservedGeneration < 0 || r.ObservedGeneration > r.Generation || r.Spec == nil || r.Observed == nil || r.Output == nil || !idPattern.MatchString(r.LastOperation) {
+	if !idPattern.MatchString(r.UID) || !idPattern.MatchString(r.Space) || !idPattern.MatchString(r.Name) || validateFormURL(r.Form) != nil || r.Generation < 1 || r.Generation > maxSafeInteger || r.ObservedGeneration < 0 || r.ObservedGeneration > maxSafeInteger || r.ObservedGeneration > r.Generation || r.Spec == nil || r.Observed == nil || r.Output == nil || !idPattern.MatchString(r.LastOperation) {
 		return errors.New("takoform v2: invalid Resource fields")
 	}
 	switch r.Phase {
@@ -620,7 +629,7 @@ func decodeOperation(data []byte, operation *Operation) error {
 	if err := decodeRequired(data, operation, "id", "resourceUid", "action", "generation", "status", "effect", "createdAt", "updatedAt", "retainUntil"); err != nil {
 		return err
 	}
-	if !idPattern.MatchString(operation.ID) || !idPattern.MatchString(operation.ResourceUID) || operation.Generation < 1 || !validTimestamp(operation.CreatedAt) || !validTimestamp(operation.UpdatedAt) || !validTimestamp(operation.RetainUntil) {
+	if !idPattern.MatchString(operation.ID) || !idPattern.MatchString(operation.ResourceUID) || operation.Generation < 1 || operation.Generation > maxSafeInteger || !validTimestamp(operation.CreatedAt) || !validTimestamp(operation.UpdatedAt) || !validTimestamp(operation.RetainUntil) {
 		return errors.New("invalid Operation identity or timestamps")
 	}
 	switch operation.Action {
