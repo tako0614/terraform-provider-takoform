@@ -114,6 +114,9 @@ type Operation struct {
 	RetainUntil   string          `json:"retainUntil"`
 	Error         *OperationError `json:"error,omitempty"`
 	InputRequired *InputRequired  `json:"inputRequired,omitempty"`
+	// RetryAfterSeconds is response metadata from a 202 mutation response.
+	// It is intentionally excluded from the Host API JSON representation.
+	RetryAfterSeconds int64 `json:"-"`
 }
 
 type OperationError struct {

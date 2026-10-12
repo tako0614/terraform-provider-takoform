@@ -291,6 +291,118 @@ func TestOfferingSelectionIsExplicitAndGenerationFenceIsSent(t *testing.T) {
 	}
 }
 
+func TestMutationReturnsRetryAfterAsNonSerializedMetadata(t *testing.T) {
+	const retryAfter = "9223372036854775807"
+	var mutationCalls atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		mutationCalls.Add(1)
+		if r.Method != http.MethodPost || r.Header.Get("Idempotency-Key") != "intent-key-00000001" {
+			t.Errorf("unexpected mutation request: %s %v", r.Method, r.Header)
+		}
+		var body CreateRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name != "widget" {
+			t.Errorf("unexpected create body: %#v, %v", body, err)
+		}
+		w.Header().Set("Location", server.URL+"/api/operations/op-1")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", retryAfter)
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"queued","effect":"none","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	operation, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+		Form: "https://forms.example/Widget/1.0.0/", Space: "team-a", Name: "widget", Spec: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("CreateResource() error = %v", err)
+	}
+	if operation.RetryAfterSeconds != 9223372036854775807 {
+		t.Fatalf("RetryAfterSeconds = %d, want %s", operation.RetryAfterSeconds, retryAfter)
+	}
+	if mutationCalls.Load() != 1 {
+		t.Fatalf("mutation calls = %d, want exactly one", mutationCalls.Load())
+	}
+
+	encoded, err := json.Marshal(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := wire["retryAfterSeconds"]; exists || len(wire) != 9 {
+		t.Fatalf("serialized Operation contains internal metadata or changed shape: %s", encoded)
+	}
+}
+
+func TestMutationRetryAfterValidationAndZeroForSettledResponse(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		retryAfter string
+		want       int64
+		wantError  bool
+	}{
+		{name: "accepted positive", status: http.StatusAccepted, retryAfter: "17", want: 17},
+		{name: "settled default", status: http.StatusOK},
+		{name: "accepted missing", status: http.StatusAccepted, wantError: true},
+		{name: "accepted zero", status: http.StatusAccepted, retryAfter: "0", wantError: true},
+		{name: "accepted negative", status: http.StatusAccepted, retryAfter: "-1", wantError: true},
+		{name: "accepted decimal", status: http.StatusAccepted, retryAfter: "1.5", wantError: true},
+		{name: "accepted overflow", status: http.StatusAccepted, retryAfter: "9223372036854775808", wantError: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var mutationCalls atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					serveDiscovery(t, w, server.URL+"/api", false)
+					return
+				}
+				mutationCalls.Add(1)
+				w.Header().Set("Location", server.URL+"/api/operations/op-1")
+				w.Header().Set("Content-Type", "application/json")
+				if test.retryAfter != "" {
+					w.Header().Set("Retry-After", test.retryAfter)
+				}
+				w.WriteHeader(test.status)
+				_, _ = io.WriteString(w, `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"queued","effect":"none","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`)
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			operation, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+				Form: "https://forms.example/Widget/1.0.0/", Space: "team-a", Name: "widget", Spec: map[string]any{},
+			})
+			if test.wantError {
+				var indeterminate *IndeterminateError
+				if !errors.As(err, &indeterminate) {
+					t.Fatalf("CreateResource() error = %v, want *IndeterminateError", err)
+				}
+			} else if err != nil || operation.RetryAfterSeconds != test.want {
+				t.Fatalf("CreateResource() = %#v, %v; want RetryAfterSeconds %d", operation, err, test.want)
+			}
+			if mutationCalls.Load() != 1 {
+				t.Fatalf("mutation calls = %d, want exactly one", mutationCalls.Load())
+			}
+		})
+	}
+}
+
 func TestCreateReplayDoesNotRejectOriginalBodyAfterOfferingCapabilityDrift(t *testing.T) {
 	var mutations atomic.Int32
 	var server *httptest.Server
