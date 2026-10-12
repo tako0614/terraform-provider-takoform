@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/edgev2"
@@ -47,6 +49,17 @@ func TestV2ProviderRegistersOnlyExactPublishedEdgeForms(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("resource %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestV2FrameworkProtocolSchemaIsAccepted(t *testing.T) {
+	server := providerserver.NewProtocol6(New("5.0.0")())()
+	response, err := server.GetProviderSchema(context.Background(), &tfprotov6.GetProviderSchemaRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Diagnostics) != 0 {
+		t.Fatalf("v2 protocol schema diagnostics: %#v", response.Diagnostics)
 	}
 }
 
