@@ -49,9 +49,8 @@ func TestV3Provider3ProtocolSchemaMatchesPublishedBinary(t *testing.T) {
 }
 
 // v3Provider3GoldenProvider reconstructs the immutable Provider 3 aggregate
-// solely for its release-golden test. New() intentionally exposes the current
-// publisher-set surface, so historical compatibility evidence must not depend
-// on the current registration set.
+// solely for its release-golden test. New() now exposes fresh Host API v2, so
+// historical compatibility evidence must use the retained v1 constructor.
 type v3Provider3GoldenProvider struct {
 	*takoformProvider
 }
@@ -84,7 +83,7 @@ func (*v3Provider3GoldenProvider) Resources(context.Context) []func() resource.R
 // additive Provider-owned WorkerVersion surface on the current publisher-set
 // lane without changing the immutable Provider 3 aggregate golden above.
 func TestCurrentPublisherProviderProtocolSchemaOwnsApplyOnlyInputs(t *testing.T) {
-	server := providerserver.NewProtocol6(New("4.0.0")())()
+	server := providerserver.NewProtocol6(&takoformProvider{version: "4.0.0"})()
 	response, err := server.GetProviderSchema(context.Background(), &tfprotov6.GetProviderSchemaRequest{})
 	if err != nil {
 		t.Fatal(err)

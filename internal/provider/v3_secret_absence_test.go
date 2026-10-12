@@ -106,7 +106,9 @@ func assertNoSensitiveDataSourceAttributes(t *testing.T, label string, attribute
 
 func TestNoResourceOrDataSourceAttributeIsSensitive(t *testing.T) {
 	ctx := context.Background()
-	takoform := New("1.0.0")()
+	// This assertion covers the retained v1 release surface independently of
+	// the fresh-v2 New() factory.
+	takoform := &takoformProvider{version: "1.0.0"}
 
 	for _, factory := range takoform.Resources(ctx) {
 		candidate := factory()

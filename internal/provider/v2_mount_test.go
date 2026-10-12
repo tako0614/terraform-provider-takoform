@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/hostv2"
 	"github.com/tako0614/terraform-provider-takoform/internal/intentv2"
+	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
 )
 
 func TestV2ProviderRegistersOnlyExactPublishedEdgeForms(t *testing.T) {
@@ -42,6 +44,58 @@ func TestV2ProviderRegistersOnlyExactPublishedEdgeForms(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("resource %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestV2TypedHCLSpecRoundTripsAllThirteenExactForms(t *testing.T) {
+	cases := map[string]string{
+		"takoform_module_worker":                `{}`,
+		"takoform_worker_bundle":                `{"artifact":{"url":"https://artifacts.example/bundle","sha256":"` + strings.Repeat("a", 64) + `"}}`,
+		"takoform_worker_version":               `{"worker":{"resourceUid":"w"},"bundle":{"resourceUid":"b"},"handlers":["fetch"],"vars":{"COUNT":0.1234567890123456789},"requiredSensitiveVars":["API_TOKEN"],"kvBindings":[{"name":"KV","resource":{"resourceUid":"kv"}}]}`,
+		"takoform_worker_deployment":            `{"worker":{"resourceUid":"w"},"versions":[{"workerVersion":{"resourceUid":"v"},"weight":10000}]}`,
+		"takoform_worker_endpoint":              `{"worker":{"resourceUid":"w"}}`,
+		"takoform_worker_cron_trigger":          `{"worker":{"resourceUid":"w"},"cron":"*/5 * * * *"}`,
+		"takoform_edge_kv_namespace":            `{}`,
+		"takoform_edge_object_bucket":           `{}`,
+		"takoform_sqlite_database":              `{}`,
+		"takoform_sqlite_migration_set":         `{"artifact":{"url":"https://artifacts.example/migrations","sha256":"` + strings.Repeat("b", 64) + `"}}`,
+		"takoform_sqlite_migration_application": `{"database":{"resourceUid":"db"},"migrationSet":{"resourceUid":"set"}}`,
+		"takoform_at_least_once_queue":          `{"messageRetentionSeconds":60}`,
+		"takoform_queue_consumer":               `{"queue":{"resourceUid":"q"},"worker":{"resourceUid":"w"},"maxBatchSize":1,"maxBatchTimeoutSeconds":0,"maxConcurrency":1,"maxRetries":0,"retryDelaySeconds":0}`,
+	}
+	ctx := context.Background()
+	for _, def := range v2Forms {
+		t.Run(def.typeName, func(t *testing.T) {
+			decoded, err := jsonv2.Decode([]byte(cases[def.typeName]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wire, ok := decoded.(map[string]any)
+			if !ok {
+				t.Fatal("fixture is not a spec object")
+			}
+			value, err := v2StateSpec(ctx, def, wire)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, schemaResponse := v2TestResource(t, nil, def.form)
+			_ = res
+			plan := v2TestPlan(t, schemaResponse, "app")
+			if value != nil {
+				if diags := plan.SetAttribute(ctx, path.Root("spec"), value); diags.HasError() {
+					t.Fatal(diags)
+				}
+			}
+			roundTrip, err := v2SpecFromPlan(ctx, plan, def)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, _ := jsonv2.Marshal(wire)
+			got, _ := jsonv2.Marshal(roundTrip)
+			if string(got) != string(want) {
+				t.Fatalf("typed projection changed exact spec:\ngot  %s\nwant %s", got, want)
+			}
+		})
 	}
 }
 
@@ -122,7 +176,7 @@ func TestV2ModuleWorkerCreateReadUpdateDelete(t *testing.T) {
 					v2WriteNotFound(w)
 					return
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"uid": "uid-1", "form": hostv2TestModuleWorkerURL, "space": "prod", "name": "app", "generation": generation, "observedGeneration": generation, "observedAt": nil, "phase": "idle", "spec": map[string]any{}, "observed": map[string]any{}, "output": map[string]any{}, "lastOperation": "op-1"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"uid": "uid-1", "form": hostv2TestModuleWorkerURL, "space": "prod", "name": "app", "generation": generation, "observedGeneration": generation, "observedAt": "2026-10-12T00:00:00Z", "phase": "idle", "spec": map[string]any{}, "observed": map[string]any{}, "output": map[string]any{}, "lastOperation": "op-1"})
 			case http.MethodPut:
 				if req.Header.Get("Takoform-Expected-Generation") != "1" {
 					t.Errorf("bad Update fence")
@@ -157,6 +211,21 @@ func TestV2ModuleWorkerCreateReadUpdateDelete(t *testing.T) {
 	if create.Diagnostics.HasError() {
 		t.Fatalf("create: %v", create.Diagnostics)
 	}
+	// Simulate ACK having reached the journal while Terraform never persisted
+	// the returned state. A fresh Create recovers by exact Operation+Resource
+	// reads; it must not send even the old mutation key a second time.
+	recovered := resource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}}
+	res.Create(ctx, resource.CreateRequest{Plan: plan}, &recovered)
+	if recovered.Diagnostics.HasError() || mutationCalls.Load() != 1 {
+		t.Fatalf("ACK state-loss recovery: diagnostics=%v mutations=%d", recovered.Diagnostics, mutationCalls.Load())
+	}
+	generation = 2
+	wrongGeneration := resource.ReadResponse{State: create.State}
+	res.Read(ctx, resource.ReadRequest{State: create.State}, &wrongGeneration)
+	if !wrongGeneration.Diagnostics.HasError() || mutationCalls.Load() != 1 {
+		t.Fatalf("wrong Host generation: diagnostics=%v mutations=%d", wrongGeneration.Diagnostics, mutationCalls.Load())
+	}
+	generation = 1
 	read := resource.ReadResponse{State: create.State}
 	res.Read(ctx, resource.ReadRequest{State: create.State}, &read)
 	if read.Diagnostics.HasError() {
@@ -175,6 +244,140 @@ func TestV2ModuleWorkerCreateReadUpdateDelete(t *testing.T) {
 	}
 	if got := mutationCalls.Load(); got != 3 {
 		t.Fatalf("mutation calls = %d, want 3", got)
+	}
+}
+
+func TestV2PreACKClaimRefusesWithoutHostRequest(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	data := v2TestData(t, server)
+	_, err := data.store.Begin(context.Background(), intentv2.BeginRequest{
+		Target: intentv2.Target{HostAPI: data.hostAPIRoot, PrincipalScope: data.storeID, Space: "prod", Name: "app"},
+		Action: intentv2.ActionCreate, Form: hostv2TestModuleWorkerURL, Method: "POST", Path: "/resources",
+		PublicJSON:                 []byte(`{"form":"https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/","space":"prod","name":"app","spec":{}}`),
+		AdvertisedReplayWindowSecs: 3600,
+	})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	res, schemaResponse := v2TestResource(t, data, hostv2TestModuleWorkerURL)
+	plan := v2TestPlan(t, schemaResponse, "app")
+	response := resource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}}
+	res.Create(context.Background(), resource.CreateRequest{Plan: plan}, &response)
+	if !response.Diagnostics.HasError() || requests.Load() != 0 {
+		t.Fatalf("unknown claim: diagnostics=%v Host requests=%d", response.Diagnostics, requests.Load())
+	}
+}
+
+func TestV2MalformedOrHistoricalStateRefusesBeforeHostAccess(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	data := v2TestData(t, server)
+	res, schemaResponse := v2TestResource(t, data, hostv2TestModuleWorkerURL)
+	ctx := context.Background()
+	for _, version := range []int64{0, 1} {
+		response := resource.UpgradeStateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}}
+		res.UpgradeState(ctx)[version].StateUpgrader(ctx, resource.UpgradeStateRequest{}, &response)
+		if !response.Diagnostics.HasError() {
+			t.Fatalf("legacy version %d was upgraded", version)
+		}
+	}
+	for _, test := range []struct{ name, value string }{
+		{"form_url", "https://edge.forms.takoform.com/forms/ObjectBucket/0.2.0/"},
+		{"form_url", ""},
+		{"host_api_root", server.URL + "/wrong"},
+		{"store_id", "another-store"},
+		{"uid", "bad/uid"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}
+			for key, value := range map[string]string{"name": "app", "space": "prod", "uid": "uid-1", "form_url": hostv2TestModuleWorkerURL, "host_api_root": data.hostAPIRoot, "store_id": data.storeID} {
+				if key == test.name {
+					value = test.value
+				}
+				if diags := state.SetAttribute(ctx, path.Root(key), types.StringValue(value)); diags.HasError() {
+					t.Fatal(diags)
+				}
+			}
+			if diags := state.SetAttribute(ctx, path.Root("generation"), types.Int64Value(1)); diags.HasError() {
+				t.Fatal(diags)
+			}
+			response := resource.ReadResponse{State: state}
+			res.Read(ctx, resource.ReadRequest{State: state}, &response)
+			if !response.Diagnostics.HasError() || requests.Load() != 0 {
+				t.Fatalf("invalid %s: diagnostics=%v Host requests=%d", test.name, response.Diagnostics, requests.Load())
+			}
+		})
+	}
+	t.Run("generation", func(t *testing.T) {
+		state := tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}
+		for key, value := range map[string]string{"name": "app", "space": "prod", "uid": "uid-1", "form_url": hostv2TestModuleWorkerURL, "host_api_root": data.hostAPIRoot, "store_id": data.storeID} {
+			if diags := state.SetAttribute(ctx, path.Root(key), types.StringValue(value)); diags.HasError() {
+				t.Fatal(diags)
+			}
+		}
+		if diags := state.SetAttribute(ctx, path.Root("generation"), types.Int64Value(0)); diags.HasError() {
+			t.Fatal(diags)
+		}
+		response := resource.ReadResponse{State: state}
+		res.Read(ctx, resource.ReadRequest{State: state}, &response)
+		if !response.Diagnostics.HasError() || requests.Load() != 0 {
+			t.Fatalf("invalid generation: diagnostics=%v Host requests=%d", response.Diagnostics, requests.Load())
+		}
+	})
+	if requests.Load() != 0 {
+		t.Fatalf("legacy/malformed state made %d Host requests", requests.Load())
+	}
+}
+
+func TestV2UIDImportBindsOnlyAuthorizedExactResource(t *testing.T) {
+	var server *httptest.Server
+	var mutationCalls atomic.Int32
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		switch req.URL.Path {
+		case hostv2.DiscoveryPath:
+			_ = json.NewEncoder(w).Encode(hostv2.Discovery{API: hostv2.APIVersion, BaseURL: server.URL + "/api/v2", Documentation: "https://host.example/docs", Authentication: hostv2.Authentication{Schemes: []string{"Bearer"}, Documentation: "https://host.example/auth"}, Capabilities: hostv2.Capabilities{}, Limits: hostv2.Limits{MaxRequestBytes: 65536, MaxPageSize: 50, ReplayWindowSeconds: 3600}})
+		case "/api/v2/resources/import-1":
+			if req.Method != http.MethodGet {
+				mutationCalls.Add(1)
+				http.Error(w, "unexpected mutation", 500)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"uid": "import-1", "form": hostv2TestModuleWorkerURL, "space": "prod", "name": "imported", "generation": 5, "observedGeneration": 5, "observedAt": "2026-10-12T00:00:00Z", "phase": "idle", "spec": map[string]any{}, "observed": map[string]any{}, "output": map[string]any{}, "lastOperation": "op-prior"})
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	defer server.Close()
+	data := v2TestData(t, server)
+	res, schemaResponse := v2TestResource(t, data, hostv2TestModuleWorkerURL)
+	ctx := context.Background()
+	importResponse := resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v2RawState(t, schemaResponse)}}
+	res.ImportState(ctx, resource.ImportStateRequest{ID: "import-1"}, &importResponse)
+	if importResponse.Diagnostics.HasError() {
+		t.Fatalf("import ID: %v", importResponse.Diagnostics)
+	}
+	read := resource.ReadResponse{State: importResponse.State}
+	res.Read(ctx, resource.ReadRequest{State: importResponse.State}, &read)
+	if read.Diagnostics.HasError() || mutationCalls.Load() != 0 {
+		t.Fatalf("import Read: diagnostics=%v mutations=%d", read.Diagnostics, mutationCalls.Load())
+	}
+	if got := v3StateString(t, ctx, read.State, "uid").ValueString(); got != "import-1" {
+		t.Fatalf("imported UID = %q", got)
+	}
+	binding, exists, err := data.store.ReadImportBinding(ctx, intentv2.Target{HostAPI: data.hostAPIRoot, PrincipalScope: data.storeID, Space: "prod", Name: "imported"})
+	if err != nil || !exists || binding.UID != "import-1" || binding.Generation != 5 {
+		t.Fatalf("import custody = %+v, exists=%v, err=%v", binding, exists, err)
 	}
 }
 
