@@ -29,11 +29,15 @@ execution-owner durability obligation; do not put it in an ephemeral directory
 that disappears between plans, applies, refreshes, or process restarts.
 
 ```sh
-go run ./cmd/intent-store-init \
+terraform-provider-takoform intent-store-init \
   --path "$INTENT_STORE_PATH" \
   --store-id "$CALLER_SCOPE_ID" \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
 ```
+
+This subcommand is part of the provider binary, so initializing a store does
+not require the Go source tree. From a source checkout, the equivalent command
+is `go run ./cmd/intent-store-init` with the same flags.
 
 The tool refuses mismatched or nonempty unbound stores. `store-id` is a fixed
 local label, **not** authentication or proof that a rotated bearer token has
