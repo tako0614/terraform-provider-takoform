@@ -30,6 +30,9 @@ type remoteFixture struct {
 	redirectURL    string
 	readBarrier    chan struct{}
 	readCount      int
+	onLostAck      func()
+	resolveGrant   string
+	resolveCount   int
 }
 
 func newRemoteFixture(t *testing.T) (*remoteFixture, *httptest.Server) {
@@ -42,13 +45,13 @@ func newRemoteFixture(t *testing.T) (*remoteFixture, *httptest.Server) {
 }
 
 func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if r.Header.Get("Authorization") != "Bearer "+f.grant || r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"kind":"authority_rejected"}`))
 		return
 	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.denied {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"kind":"authority_rejected"}`))
@@ -125,12 +128,17 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if f.ackLoss {
 			f.ackLoss = false
+			if f.onLostAck != nil {
+				f.onLostAck()
+			}
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"kind":"unknown"}`))
 			return
 		}
 		_ = json.NewEncoder(w).Encode(remoteResponse{Kind: "committed", Receipt: &receipt})
 	case privateRunFilesPath + "/resolve":
+		f.resolveCount++
+		f.resolveGrant = r.Header.Get("Authorization")
 		var request struct {
 			ExpectedVersion uint64 `json:"expectedVersion"`
 			CommitID        string `json:"commitId"`
