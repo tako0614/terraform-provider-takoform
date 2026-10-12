@@ -15,7 +15,10 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { deriveSiteStatusFacts } from "../website/.vitepress/site-status.mjs";
+import {
+  deriveLatestPublishedV1Provider,
+  deriveSiteStatusFacts,
+} from "../website/.vitepress/site-status.mjs";
 
 export const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -452,9 +455,9 @@ function addCurrentForm(root, catalog, candidateSetPath, form) {
   });
 }
 
-// This retained FormRef/package inventory follows the Registry-published v1
-// Provider, not the selected v5 URL-only release candidate. The published
-// version is derived and verified by the website status owner.
+// This retained FormRef/package inventory follows the latest Registry-published
+// v1 Provider, not the selected v5 URL-only release. Publication and roster
+// evidence are derived and verified by the website status owner.
 function addProviderFormIdentities(catalog, providerFormLedger, currentProviderVersion) {
   for (const release of providerFormLedger.releases ?? []) {
     if (!isRecord(release) || !Array.isArray(release.forms)) fail(`${PROVIDER_FORM_LEDGER} contains an invalid release`);
@@ -647,13 +650,10 @@ function buildCatalog(root) {
   const providerFormLedger = readJson(root, PROVIDER_FORM_LEDGER);
   const specificationReleaseLedger = readJson(root, SPECIFICATION_RELEASE_LEDGER);
   const familyIndex = readJson(root, FAMILY_INDEX);
-  const publishedV1Version = deriveSiteStatusFacts(root).providerPublished;
-  const publishedV1Roster = (providerFormLedger.releases ?? []).filter(
-    (release) => release?.providerVersion === publishedV1Version && release?.portableApiVersion === HOST_API_V1,
-  );
-  if (publishedV1Roster.length !== 1) {
-    fail(`${PROVIDER_FORM_LEDGER} has no unique v1 FormRef roster for Registry-published Provider ${publishedV1Version}`);
-  }
+  // Validate the latest release on either lane too; a malformed newer v5
+  // readback must not be ignored merely because v1 history is still present.
+  deriveSiteStatusFacts(root);
+  const publishedV1Version = deriveLatestPublishedV1Provider(root).version;
   const catalog = new Map(CLASS_IDS.map((classId) => [classId, new Map()]));
 
   addPublicSchemaIdentities(root, catalog, publicSchemaLedger);
