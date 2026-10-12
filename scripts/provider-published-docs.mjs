@@ -70,3 +70,35 @@ export function releaseTargetTagDocIssues(source, targetVersion) {
   }
   return issues;
 }
+
+// The source docs captured by a Provider 5 tag must describe the selected
+// breaking target. Published Provider 4.1 remains the installation readback;
+// it is not a substitute for the new tag's own adoption reference.
+export function provider5TagDocIssues(source, descriptor, candidate) {
+  const issues = [];
+  const checkout = source.match(/^git checkout --detach v([^\s]+)$/m)?.[1] ?? null;
+  if (checkout !== descriptor.version) {
+    issues.push(checkout === null
+      ? `release target ${descriptor.version} docs omit the exact ${descriptor.tag} checkout`
+      : `release target ${descriptor.version} docs check out v${checkout} instead of ${descriptor.tag}`);
+  }
+  const major = descriptor.version.split(".")[0];
+  const escapedVersion = descriptor.version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const selectedPin = new RegExp(`^\\s*version\\s*=\\s*"(?:~>\\s*${major}\\.0|=\\s*${escapedVersion})"`, "m");
+  if (!selectedPin.test(source)) {
+    issues.push(`release target ${descriptor.version} docs omit a v${major} HCL provider pin`);
+  }
+  if (!source.includes(descriptor.versioning.portableApiVersion)) {
+    issues.push(`release target ${descriptor.version} docs omit Host API ${descriptor.versioning.portableApiVersion}`);
+  }
+  if (!candidate.forms.some(({ formURL }) => source.includes(formURL))) {
+    issues.push(`release target ${descriptor.version} docs omit an exact publisher Form URL`);
+  }
+  if (!candidate.forms.some(({ resourceType }) => source.includes(`resource "${resourceType}"`))) {
+    issues.push(`release target ${descriptor.version} docs omit a registered v${major} HCL resource`);
+  }
+  if (!source.includes("Provider 4 state is not automatically translated to Provider 5.")) {
+    issues.push(`release target ${descriptor.version} docs omit the Provider 4 state boundary`);
+  }
+  return issues;
+}

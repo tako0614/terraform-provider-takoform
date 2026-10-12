@@ -376,6 +376,25 @@ test("the current Provider 4.x target refuses historical 4.0.0 tag phases", () =
   }
 });
 
+test("v5 prepare and tag refuse the old v4-only immutable docs before external commands", () => {
+  for (const [phase, options] of [
+    ["prepare", ["--expected-commit", commit]],
+    ["tag", ["--expected-commit", commit, "--run-id", "1", "--run-attempt", "1"]],
+  ]) {
+    const calls = [];
+    expect(() => runReleaseSurface({
+      surface: "takoform-provider-release",
+      args: [phase, "--tag", "v5.0.0", ...options],
+      repo: repositoryRoot,
+      execFile: (...args) => {
+        calls.push(args);
+        throw new Error("external command must not run before the v5 docs guard");
+      },
+    })).toThrow(/docs\/index\.md: release target 5\.0\.0 docs check out v4\.1\.0 instead of v5\.0\.0/);
+    expect(calls).toHaveLength(0);
+  }
+});
+
 test("the current descriptor stays candidate-only while the ledger records publication", () => {
   const descriptor =
     releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);

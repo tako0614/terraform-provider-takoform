@@ -25,6 +25,7 @@ import {
 import {
   PUBLISHED_INSTALL_PROSE,
   publishedProviderInstallDocStatusIssues,
+  provider5TagDocIssues,
   releaseTargetTagDocIssues,
 } from "./provider-published-docs.mjs";
 
@@ -708,16 +709,14 @@ function checkImmutableProviderTagDocs(source, truth) {
 // the already published version.
 function checkPublishedProviderInstallDocs(facts) {
   const tagDocs = read(path.join(repositoryRoot, "docs", "index.md"));
-  const installableVersion = facts.providerTargetStatus === "candidate-only"
-    ? facts.providerPublished
-    : facts.providerTarget;
-  for (const issue of releaseTargetTagDocIssues(
-    tagDocs,
-    installableVersion,
-  )) {
+  const target = readCurrentProviderRelease(repositoryRoot).descriptor;
+  const issues = target.schemaVersion === 2
+    ? provider5TagDocIssues(tagDocs, target, validateProvider5Candidate(repositoryRoot))
+    : releaseTargetTagDocIssues(tagDocs, target.version);
+  for (const issue of issues) {
     fail(`docs/index.md: ${issue}`);
   }
-  checkImmutableProviderTagDocs(tagDocs, { providerVersion: installableVersion });
+  checkImmutableProviderTagDocs(tagDocs, { providerVersion: target.version });
   const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
     relativePath,
     read(path.join(repositoryRoot, relativePath)),
