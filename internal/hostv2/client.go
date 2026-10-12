@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -201,6 +202,14 @@ func (c *Client) CreateResource(ctx context.Context, key string, input CreateReq
 	if input.PrivateInputs != nil && *input.PrivateInputs == nil {
 		return Operation{}, errors.New("takoform v2: privateInputs must be an object")
 	}
+	if err := validateInputUTF8(input); err != nil {
+		return Operation{}, err
+	}
+	if input.PrivateInputs != nil {
+		if err := c.requireFormPrivateInputs(ctx, input.Form); err != nil {
+			return Operation{}, err
+		}
+	}
 	body, err := marshalRequest(input, discovery.Limits.MaxRequestBytes)
 	if err != nil {
 		return Operation{}, err
@@ -214,7 +223,7 @@ func (c *Client) ReadResource(ctx context.Context, uid string) (Resource, error)
 	if !idPattern.MatchString(uid) {
 		return resource, errors.New("takoform v2: invalid Resource UID")
 	}
-	base, _, err := c.apiBase()
+	base, discovery, err := c.apiBase()
 	if err != nil {
 		return resource, err
 	}
@@ -230,6 +239,9 @@ func (c *Client) ReadResource(ctx context.Context, uid string) (Resource, error)
 	}
 	if err := validateResource(resource); err != nil {
 		return Resource{}, err
+	}
+	if discovery.Capabilities.Offerings != (resource.Offering != nil) {
+		return Resource{}, errors.New("takoform v2: Resource Offering shape does not match advertised capability")
 	}
 	return resource, nil
 }
@@ -274,6 +286,11 @@ func (c *Client) ListResources(ctx context.Context, filters ResourceFilters, opt
 	if err := decodeResourcePage(response.body, &page); err != nil {
 		return Page[Resource]{}, errors.New("takoform v2: malformed Resource page")
 	}
+	for _, resource := range page.Items {
+		if discovery.Capabilities.Offerings != (resource.Offering != nil) {
+			return Page[Resource]{}, errors.New("takoform v2: Resource Offering shape does not match advertised capability")
+		}
+	}
 	return page, nil
 }
 
@@ -299,14 +316,43 @@ func (c *Client) UpdateResource(ctx context.Context, uid, key string, expectedGe
 	if input.PrivateInputs != nil && *input.PrivateInputs == nil {
 		return Operation{}, errors.New("takoform v2: privateInputs must be an object")
 	}
-	body, err := marshalRequest(input, discovery.Limits.MaxRequestBytes)
-	if err != nil {
+	if err := validateInputUTF8(input); err != nil {
 		return Operation{}, err
 	}
 	if expectedGeneration >= maxSafeInteger {
 		return Operation{}, errors.New("takoform v2: generation cannot advance beyond the common integer limit")
 	}
+	if input.PrivateInputs != nil {
+		resource, err := c.ReadResource(ctx, uid)
+		if err != nil {
+			if ctx.Err() != nil {
+				return Operation{}, ctx.Err()
+			}
+			return Operation{}, errors.New("takoform v2: cannot verify Resource Form private-input support")
+		}
+		if err := c.requireFormPrivateInputs(ctx, resource.Form); err != nil {
+			return Operation{}, err
+		}
+	}
+	body, err := marshalRequest(input, discovery.Limits.MaxRequestBytes)
+	if err != nil {
+		return Operation{}, err
+	}
 	return c.mutate(ctx, http.MethodPut, base+"/resources/"+uid, "update", uid, key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, body)
+}
+
+func (c *Client) requireFormPrivateInputs(ctx context.Context, form string) error {
+	support, err := c.GetSupport(ctx, form)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return errors.New("takoform v2: cannot verify exact Form private-input support")
+	}
+	if !support.Supported || !support.PrivateInputs {
+		return errors.New("takoform v2: exact Form does not advertise private-input support")
+	}
+	return nil
 }
 
 // DeleteResource sends one bodyless delete with the caller's generation fence.
@@ -877,6 +923,9 @@ func pageQuery(options PageOptions, maxPageSize int64) (url.Values, error) {
 }
 
 func marshalRequest(input any, limit int64) ([]byte, error) {
+	if err := validateInputUTF8(input); err != nil {
+		return nil, err
+	}
 	body, err := json.Marshal(input)
 	if err != nil {
 		return nil, errors.New("takoform v2: request is not valid JSON")
@@ -885,6 +934,61 @@ func marshalRequest(input any, limit int64) ([]byte, error) {
 		return nil, errors.New("takoform v2: request exceeds Host maxRequestBytes")
 	}
 	return body, nil
+}
+
+func validateInputUTF8(input any) error {
+	if !validUTF8Value(reflect.ValueOf(input), 0) {
+		return errors.New("takoform v2: request contains invalid UTF-8")
+	}
+	return nil
+}
+
+func validUTF8Value(value reflect.Value, depth int) bool {
+	if depth > 1024 {
+		return false
+	}
+	if !value.IsValid() {
+		return true
+	}
+	if value.Type() == reflect.TypeOf(json.RawMessage(nil)) {
+		return utf8.Valid(value.Bytes())
+	}
+	switch value.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		if value.IsNil() {
+			return true
+		}
+		return validUTF8Value(value.Elem(), depth+1)
+	case reflect.String:
+		return utf8.ValidString(value.String())
+	case reflect.Map:
+		if value.IsNil() {
+			return true
+		}
+		iterator := value.MapRange()
+		for iterator.Next() {
+			if !validUTF8Value(iterator.Key(), depth+1) || !validUTF8Value(iterator.Value(), depth+1) {
+				return false
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		for index := 0; index < value.Len(); index++ {
+			if !validUTF8Value(value.Index(index), depth+1) {
+				return false
+			}
+		}
+	case reflect.Struct:
+		for index := 0; index < value.NumField(); index++ {
+			field := value.Type().Field(index)
+			if field.PkgPath != "" || field.Tag.Get("json") == "-" {
+				continue
+			}
+			if !validUTF8Value(value.Field(index), depth+1) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func validateIdempotencyKey(key string) error {

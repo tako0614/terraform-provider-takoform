@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 )
+
+type testNamedString string
 
 func fixtureDiscovery(baseURL string, offerings bool) Discovery {
 	return Discovery{
@@ -719,6 +722,160 @@ func TestResponseGenerationsMustBeSafeIntegers(t *testing.T) {
 			}
 			if err == nil {
 				t.Fatalf("accepted generation above the safe integer limit %s", unsafe)
+			}
+		})
+	}
+}
+
+func TestResourcesRetainOfferingShapeAdvertisedByDiscovery(t *testing.T) {
+	resource := func(withOffering bool) string {
+		offering := ""
+		if withOffering {
+			offering = `,"offering":{"id":"small","revision":"rev-1"}`
+		}
+		return `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget"` + offering + `,"generation":3,"observedGeneration":0,"observedAt":null,"phase":"pending","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`
+	}
+	for _, tc := range []struct {
+		name         string
+		offerings    bool
+		withOffering bool
+		list         bool
+	}{
+		{name: "read missing", offerings: true},
+		{name: "read unexpected", withOffering: true},
+		{name: "list missing", offerings: true, list: true},
+		{name: "list unexpected", withOffering: true, list: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					serveDiscovery(t, w, server.URL+"/api", tc.offerings)
+					return
+				}
+				body := resource(tc.withOffering)
+				if tc.list {
+					body = `{"items":[` + body + `],"nextCursor":null}`
+				}
+				_, _ = io.WriteString(w, body)
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			if tc.list {
+				_, err = client.ListResources(context.Background(), ResourceFilters{}, PageOptions{})
+			} else {
+				_, err = client.ReadResource(context.Background(), "r-1")
+			}
+			if err == nil {
+				t.Fatal("Resource response did not preserve the advertised Offering shape")
+			}
+		})
+	}
+}
+
+func TestPrivateInputsRequireExactFormSupportBeforeMutation(t *testing.T) {
+	const form = "https://forms.example/Widget/1.0.0/"
+	resource := `{"uid":"r-1","form":"` + form + `","space":"team-a","name":"widget","generation":3,"observedGeneration":0,"observedAt":null,"phase":"idle","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`
+	for _, method := range []string{"create", "update"} {
+		t.Run(method, func(t *testing.T) {
+			var supportCalls atomic.Int32
+			var mutationCalls atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case DiscoveryPath:
+					discovery := fixtureDiscovery(server.URL+"/api", false)
+					discovery.Capabilities.PrivateInputs = true
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(discovery)
+				case "/api/support":
+					supportCalls.Add(1)
+					_, _ = fmt.Fprintf(w, `{"form":%q,"supported":true,"operations":["create","update"],"privateInputs":false}`, form)
+				case "/api/resources/r-1":
+					if r.Method == http.MethodGet {
+						_, _ = io.WriteString(w, resource)
+						return
+					}
+					mutationCalls.Add(1)
+				case "/api/resources":
+					mutationCalls.Add(1)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL)
+				}
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			secret := map[string]string{"secret": "private-value"}
+			var err error
+			if method == "create" {
+				_, err = client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+					Form: form, Space: "team-a", Name: "widget", Spec: map[string]any{}, PrivateInputs: &secret,
+				})
+			} else {
+				_, err = client.UpdateResource(context.Background(), "r-1", "intent-key-00000002", 3, UpdateRequest{
+					Spec: map[string]any{}, PrivateInputs: &secret,
+				})
+			}
+			if err == nil || supportCalls.Load() != 1 || mutationCalls.Load() != 0 {
+				t.Fatalf("%s with unsupported Form private inputs: error=%v, support calls=%d, mutations=%d", method, err, supportCalls.Load(), mutationCalls.Load())
+			}
+		})
+	}
+}
+
+func TestMutationRejectsInvalidUTF8InputBeforeSending(t *testing.T) {
+	invalid := string([]byte{0xff})
+	invalidPrivateInputs := map[string]string{"secret": invalid}
+	for name, input := range map[string]struct {
+		spec          map[string]any
+		privateInputs *map[string]string
+	}{
+		"nested string": {spec: map[string]any{"nested": map[string]any{"value": invalid}}},
+		"map key":       {spec: map[string]any{invalid: "value"}},
+		"named string":  {spec: map[string]any{"value": testNamedString(invalid)}},
+		"raw JSON":      {spec: map[string]any{"value": json.RawMessage([]byte{'"', 0xff, '"'})}},
+		"private input": {spec: map[string]any{}, privateInputs: &invalidPrivateInputs},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var mutations atomic.Int32
+			var supportCalls atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					discovery := fixtureDiscovery(server.URL+"/api", false)
+					discovery.Capabilities.PrivateInputs = true
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(discovery)
+					return
+				}
+				if r.Method == http.MethodPost || r.Method == http.MethodPut {
+					mutations.Add(1)
+				}
+				if r.URL.Path == "/api/support" {
+					supportCalls.Add(1)
+				}
+				_, _ = io.WriteString(w, `{"form":"https://forms.example/Widget/1.0.0/","supported":true,"operations":["create","update"],"privateInputs":true}`)
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			_, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+				Form: "https://forms.example/Widget/1.0.0/", Space: "team-a", Name: "widget", Spec: input.spec, PrivateInputs: input.privateInputs,
+			})
+			if err == nil || mutations.Load() != 0 || supportCalls.Load() != 0 {
+				t.Fatalf("CreateResource() error=%v, support calls=%d, mutation calls=%d", err, supportCalls.Load(), mutations.Load())
+			}
+			if strings.Contains(err.Error(), invalid) {
+				t.Fatalf("error echoed invalid caller input: %v", err)
 			}
 		})
 	}
