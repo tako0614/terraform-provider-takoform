@@ -26,7 +26,10 @@ var (
 )
 
 // Client is a thin Host API v2 client. It never retries a mutation or creates
-// an idempotency key on the caller's behalf.
+// an idempotency key on the caller's behalf. Discovery/GetSupport expose
+// current capabilities for planning new intent, but mutations do not gate an
+// already formed caller request on those mutable advertisements; the Host
+// decides whether an exact replay is accepted or rejected.
 type Client struct {
 	endpoint   string
 	token      string
@@ -182,7 +185,7 @@ func (c *Client) ListOfferings(ctx context.Context, form, space string, options 
 }
 
 // CreateResource sends exactly one create request with the caller's key and
-// body. The Host's Offering capability determines whether Offering is required.
+// body. Capability planning remains outside this exact-intent transport method.
 func (c *Client) CreateResource(ctx context.Context, key string, input CreateRequest) (Operation, error) {
 	if err := validateIdempotencyKey(key); err != nil {
 		return Operation{}, err
@@ -190,15 +193,9 @@ func (c *Client) CreateResource(ctx context.Context, key string, input CreateReq
 	if err := validateCreate(input); err != nil {
 		return Operation{}, err
 	}
-	base, discovery, err := c.apiBase()
+	base, _, err := c.apiBase()
 	if err != nil {
 		return Operation{}, err
-	}
-	if discovery.Capabilities.Offerings != (input.Offering != nil) {
-		return Operation{}, errors.New("takoform v2: create must explicitly match the advertised Offering capability")
-	}
-	if input.PrivateInputs != nil && !discovery.Capabilities.PrivateInputs {
-		return Operation{}, errors.New("takoform v2: private inputs are not advertised")
 	}
 	if input.PrivateInputs != nil && *input.PrivateInputs == nil {
 		return Operation{}, errors.New("takoform v2: privateInputs must be an object")
@@ -206,12 +203,7 @@ func (c *Client) CreateResource(ctx context.Context, key string, input CreateReq
 	if err := jsonv2.ValidateValue(input); err != nil {
 		return Operation{}, err
 	}
-	if input.PrivateInputs != nil {
-		if err := c.requireFormPrivateInputs(ctx, input.Form); err != nil {
-			return Operation{}, err
-		}
-	}
-	body, err := marshalRequest(input, discovery.Limits.MaxRequestBytes)
+	body, err := marshalRequest(input)
 	if err != nil {
 		return Operation{}, err
 	}
@@ -224,7 +216,7 @@ func (c *Client) ReadResource(ctx context.Context, uid string) (Resource, error)
 	if !idPattern.MatchString(uid) {
 		return resource, errors.New("takoform v2: invalid Resource UID")
 	}
-	base, discovery, err := c.apiBase()
+	base, _, err := c.apiBase()
 	if err != nil {
 		return resource, err
 	}
@@ -240,9 +232,6 @@ func (c *Client) ReadResource(ctx context.Context, uid string) (Resource, error)
 	}
 	if err := validateResource(resource); err != nil {
 		return Resource{}, err
-	}
-	if discovery.Capabilities.Offerings != (resource.Offering != nil) {
-		return Resource{}, errors.New("takoform v2: Resource Offering shape does not match advertised capability")
 	}
 	return resource, nil
 }
@@ -287,11 +276,6 @@ func (c *Client) ListResources(ctx context.Context, filters ResourceFilters, opt
 	if err := decodeResourcePage(response.body, &page); err != nil {
 		return Page[Resource]{}, errors.New("takoform v2: malformed Resource page")
 	}
-	for _, resource := range page.Items {
-		if discovery.Capabilities.Offerings != (resource.Offering != nil) {
-			return Page[Resource]{}, errors.New("takoform v2: Resource Offering shape does not match advertised capability")
-		}
-	}
 	return page, nil
 }
 
@@ -307,12 +291,9 @@ func (c *Client) UpdateResource(ctx context.Context, uid, key string, expectedGe
 	if input.Spec == nil {
 		return Operation{}, errors.New("takoform v2: update spec is required")
 	}
-	base, discovery, err := c.apiBase()
+	base, _, err := c.apiBase()
 	if err != nil {
 		return Operation{}, err
-	}
-	if input.PrivateInputs != nil && !discovery.Capabilities.PrivateInputs {
-		return Operation{}, errors.New("takoform v2: private inputs are not advertised")
 	}
 	if input.PrivateInputs != nil && *input.PrivateInputs == nil {
 		return Operation{}, errors.New("takoform v2: privateInputs must be an object")
@@ -323,37 +304,11 @@ func (c *Client) UpdateResource(ctx context.Context, uid, key string, expectedGe
 	if expectedGeneration >= maxSafeInteger {
 		return Operation{}, errors.New("takoform v2: generation cannot advance beyond the common integer limit")
 	}
-	if input.PrivateInputs != nil {
-		resource, err := c.ReadResource(ctx, uid)
-		if err != nil {
-			if ctx.Err() != nil {
-				return Operation{}, ctx.Err()
-			}
-			return Operation{}, errors.New("takoform v2: cannot verify Resource Form private-input support")
-		}
-		if err := c.requireFormPrivateInputs(ctx, resource.Form); err != nil {
-			return Operation{}, err
-		}
-	}
-	body, err := marshalRequest(input, discovery.Limits.MaxRequestBytes)
+	body, err := marshalRequest(input)
 	if err != nil {
 		return Operation{}, err
 	}
 	return c.mutate(ctx, http.MethodPut, base+"/resources/"+uid, "update", uid, key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, body)
-}
-
-func (c *Client) requireFormPrivateInputs(ctx context.Context, form string) error {
-	support, err := c.GetSupport(ctx, form)
-	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return errors.New("takoform v2: cannot verify exact Form private-input support")
-	}
-	if !support.Supported || !support.PrivateInputs {
-		return errors.New("takoform v2: exact Form does not advertise private-input support")
-	}
-	return nil
 }
 
 // DeleteResource sends one bodyless delete with the caller's generation fence.
@@ -663,8 +618,8 @@ func validateResource(r Resource) error {
 	if r.ObservedAt != nil && !validTimestamp(*r.ObservedAt) {
 		return errors.New("takoform v2: invalid Resource observation timestamp")
 	}
-	if (r.ObservedGeneration == 0) != (r.ObservedAt == nil) {
-		return errors.New("takoform v2: observedAt must be null exactly before the first verified observation")
+	if r.ObservedGeneration > 0 && r.ObservedAt == nil {
+		return errors.New("takoform v2: verified observedGeneration requires observedAt")
 	}
 	if r.Offering != nil && (!idPattern.MatchString(r.Offering.ID) || r.Offering.Revision == "") {
 		return errors.New("takoform v2: invalid Resource Offering")
@@ -803,7 +758,9 @@ func decodeRequiredNullable(data []byte, destination any, nullable map[string]bo
 			return fmt.Errorf("required field %s must not be null", field)
 		}
 	}
-	return json.Unmarshal(data, destination)
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode(destination)
 }
 
 func decodeResourcePage(data []byte, page *Page[Resource]) error {
@@ -867,13 +824,10 @@ func pageQuery(options PageOptions, maxPageSize int64) (url.Values, error) {
 	return query, nil
 }
 
-func marshalRequest(input any, limit int64) ([]byte, error) {
+func marshalRequest(input any) ([]byte, error) {
 	body, err := jsonv2.Marshal(input)
 	if err != nil {
 		return nil, errors.New("takoform v2: request is not valid JSON")
-	}
-	if int64(len(body)) > limit {
-		return nil, errors.New("takoform v2: request exceeds Host maxRequestBytes")
 	}
 	return body, nil
 }
