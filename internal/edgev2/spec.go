@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
 )
 
 const (
@@ -35,19 +37,29 @@ var urls = []string{ModuleWorkerURL, WorkerBundleURL, WorkerVersionURL, WorkerDe
 // URLs returns the exact published URL identities in stable order.
 func URLs() []string { return append([]string(nil), urls...) }
 
-// URLForResource returns the exact Form URL for a current Terraform resource type.
-func URLForResource(resourceType string) (string, bool) {
+// URLForKind returns the exact published Form URL for an exact Form kind.
+func URLForKind(kind string) (string, bool) {
 	for _, entry := range []struct{ name, url string }{
-		{"takoform_module_worker", ModuleWorkerURL}, {"takoform_worker_bundle", WorkerBundleURL},
-		{"takoform_worker_version", WorkerVersionURL}, {"takoform_worker_deployment", WorkerDeploymentURL},
-		{"takoform_worker_endpoint", WorkerEndpointURL}, {"takoform_worker_cron_trigger", WorkerCronTriggerURL},
-		{"takoform_edge_kv_namespace", EdgeKVNamespaceURL}, {"takoform_edge_object_bucket", ObjectBucketURL},
-		{"takoform_sqlite_database", SQLiteDatabaseURL}, {"takoform_sqlite_migration_set", SQLiteMigrationSetURL},
-		{"takoform_sqlite_migration_application", SQLiteMigrationApplicationURL}, {"takoform_at_least_once_queue", AtLeastOnceQueueURL},
-		{"takoform_queue_consumer", QueueConsumerURL},
+		{"ModuleWorker", ModuleWorkerURL}, {"WorkerBundle", WorkerBundleURL},
+		{"WorkerVersion", WorkerVersionURL}, {"WorkerDeployment", WorkerDeploymentURL},
+		{"WorkerEndpoint", WorkerEndpointURL}, {"WorkerCronTrigger", WorkerCronTriggerURL},
+		{"EdgeKVNamespace", EdgeKVNamespaceURL}, {"ObjectBucket", ObjectBucketURL},
+		{"SQLiteDatabase", SQLiteDatabaseURL}, {"SQLiteMigrationSet", SQLiteMigrationSetURL},
+		{"SQLiteMigrationApplication", SQLiteMigrationApplicationURL}, {"AtLeastOnceQueue", AtLeastOnceQueueURL},
+		{"QueueConsumer", QueueConsumerURL},
 	} {
-		if entry.name == resourceType {
+		if entry.name == kind {
 			return entry.url, true
+		}
+	}
+	return "", false
+}
+
+// KindForURL returns the exact Form kind for a URL in this bounded roster.
+func KindForURL(formURL string) (string, bool) {
+	for _, kind := range []string{"ModuleWorker", "WorkerBundle", "WorkerVersion", "WorkerDeployment", "WorkerEndpoint", "WorkerCronTrigger", "EdgeKVNamespace", "ObjectBucket", "SQLiteDatabase", "SQLiteMigrationSet", "SQLiteMigrationApplication", "AtLeastOnceQueue", "QueueConsumer"} {
+		if url, ok := URLForKind(kind); ok && url == formURL {
+			return kind, true
 		}
 	}
 	return "", false
@@ -126,18 +138,14 @@ var nameRE = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]{0,63}$`)
 var varRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,63}$`)
 var secretNameRE = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
 var digestRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var uidRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
 // Decode validates a closed desired-input shape and returns its typed spec.
 // privateInputs are deliberately not part of this public spec codec.
 func Decode(formURL string, data []byte) (any, error) {
-	var value any
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.UseNumber()
-	if err := d.Decode(&value); err != nil {
+	value, err := jsonv2.Decode(data)
+	if err != nil {
 		return nil, fmt.Errorf("decode spec: %w", err)
-	}
-	if err := d.Decode(new(any)); err != io.EOF {
-		return nil, errors.New("trailing JSON value")
 	}
 	obj, ok := value.(map[string]any)
 	if !ok {
@@ -169,8 +177,9 @@ func Decode(formURL string, data []byte) (any, error) {
 	default:
 		return nil, fmt.Errorf("unsupported exact Form URL %q", formURL)
 	}
-	b, _ := json.Marshal(obj)
-	if err := json.Unmarshal(b, out); err != nil {
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.UseNumber()
+	if err := d.Decode(out); err != nil {
 		return nil, fmt.Errorf("decode typed spec: %w", err)
 	}
 	return out, nil
@@ -178,7 +187,7 @@ func Decode(formURL string, data []byte) (any, error) {
 
 // Encode accepts only the URL-specific typed spec and validates its JSON form.
 func Encode(formURL string, spec any) ([]byte, error) {
-	b, err := json.Marshal(spec)
+	b, err := jsonv2.Marshal(spec)
 	if err != nil {
 		return nil, fmt.Errorf("encode spec: %w", err)
 	}
@@ -287,11 +296,8 @@ func ref(v any) error {
 		return e
 	}
 	s, ok := m["resourceUid"].(string)
-	if !ok || s == "" {
-		return errors.New("resourceUid must be a non-empty string")
-	}
-	if !utf8.ValidString(s) {
-		return errors.New("resourceUid must be valid UTF-8")
+	if !ok || !uidRE.MatchString(s) {
+		return errors.New("resourceUid must match [A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 	}
 	return nil
 }
@@ -328,7 +334,7 @@ func isArtifactURL(raw string) bool {
 		}
 	}
 	u, e := url.Parse(raw)
-	return e == nil && !strings.Contains(raw, "#") && u.Scheme == "https" && u.Host != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == ""
+	return e == nil && !strings.Contains(raw, "#") && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == ""
 }
 
 func validateDeployment(o map[string]any) error {
@@ -622,12 +628,14 @@ func parseInt(s string) (int, error) {
 	if s == "" {
 		return 0, errors.New("empty integer")
 	}
-	n := 0
 	for _, r := range s {
 		if r < '0' || r > '9' {
 			return 0, errors.New("expected decimal integer")
 		}
-		n = n*10 + int(r-'0')
 	}
-	return n, nil
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil || n > uint64(^uint(0)>>1) {
+		return 0, errors.New("decimal integer out of range")
+	}
+	return int(n), nil
 }
