@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -115,7 +116,8 @@ func (r *v2Resource) identity(ctx context.Context, state tfsdk.State, allowImpor
 		!v2IDPattern.MatchString(identity.uid) || !v2IDPattern.MatchString(identity.space) ||
 		(identity.name != "" && !v2IDPattern.MatchString(identity.name)) ||
 		(!identity.importing && (!v2IDPattern.MatchString(identity.name) || identity.generation < 1 || identity.generation > 9007199254740991)) ||
-		(identity.intentID == "") != (identity.operationID == "") {
+		(identity.intentID == "") != (identity.operationID == "") ||
+		identity.importing && identity.intentID != "" {
 		return v2Identity{}, errors.New("v2 state identity, generation, or linkage does not match this exact Provider/Host/Form/store; no Host request was made")
 	}
 	if identity.intentID != "" && !v2KeyPattern.MatchString(identity.intentID) {
@@ -165,18 +167,32 @@ func (r *v2Resource) planNameSpace(ctx context.Context, plan tfsdk.Plan) (string
 }
 
 func (r *v2Resource) offering(ctx context.Context, plan tfsdk.Plan, discovery hostv2.Discovery) (*hostv2.OfferingSelection, error) {
-	var id, rev types.String
-	if plan.GetAttribute(ctx, path.Root("offering_id"), &id).HasError() || plan.GetAttribute(ctx, path.Root("offering_revision"), &rev).HasError() || id.IsUnknown() || rev.IsUnknown() {
-		return nil, errors.New("Offering selection must be known")
+	selection, err := r.configuredOffering(ctx, plan)
+	if err != nil {
+		return nil, err
 	}
 	if !discovery.Capabilities.Offerings {
-		if !id.IsNull() || !rev.IsNull() {
+		if selection != nil {
 			return nil, errors.New("Host does not advertise Offerings; omit both offering fields")
 		}
 		return nil, nil
 	}
-	if id.IsNull() || rev.IsNull() || !v2IDPattern.MatchString(id.ValueString()) || rev.ValueString() == "" {
+	if selection == nil {
 		return nil, errors.New("Host advertises Offerings; both exact offering_id and offering_revision are required")
+	}
+	return selection, nil
+}
+
+func (r *v2Resource) configuredOffering(ctx context.Context, plan tfsdk.Plan) (*hostv2.OfferingSelection, error) {
+	var id, rev types.String
+	if plan.GetAttribute(ctx, path.Root("offering_id"), &id).HasError() || plan.GetAttribute(ctx, path.Root("offering_revision"), &rev).HasError() || id.IsUnknown() || rev.IsUnknown() {
+		return nil, errors.New("Offering selection must be known")
+	}
+	if id.IsNull() && rev.IsNull() {
+		return nil, nil
+	}
+	if id.IsNull() || rev.IsNull() || !v2IDPattern.MatchString(id.ValueString()) || rev.ValueString() == "" {
+		return nil, errors.New("both exact offering_id and offering_revision are required")
 	}
 	return &hostv2.OfferingSelection{ID: id.ValueString(), Revision: rev.ValueString()}, nil
 }
@@ -202,7 +218,7 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 		resp.Diagnostics.AddError("v2 intent store unavailable", "No mutation was sent")
 		return
 	}
-	if len(history) > 0 && (history[len(history)-1].Status == intentv2.StatusClaimed || history[len(history)-1].Status == intentv2.StatusAccepted || history[len(history)-1].Status == intentv2.StatusAcceptedFailed) {
+	if len(history) > 0 && history[len(history)-1].Status != intentv2.StatusDeleteConfirmed {
 		latest := history[len(history)-1]
 		if latest.OperationID == "" {
 			resp.Diagnostics.AddError("Unknown pre-ACK v2 outcome", "An original intent was durably claimed but no Operation ID is known. Do not create a new key, replay, or adopt by name. Reconcile with the Host/operator using the original principal and replay-window evidence.")
@@ -210,6 +226,20 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 		}
 		if latest.Form != r.def.form || latest.Action != intentv2.ActionCreate {
 			resp.Diagnostics.AddError("v2 name slot is occupied", "The durable store binds this Space/name to another Form or action; no mutation was sent")
+			return
+		}
+		if latest.Status == intentv2.StatusFailedReserved {
+			resp.Diagnostics.AddError("v2 failed Create retains UID", "The Host and journal retain this name and UID after failure. Recover by an explicit same-UID update or delete; do not Create again.")
+			return
+		}
+		selection, err := r.configuredOffering(ctx, req.Plan)
+		if err != nil {
+			resp.Diagnostics.AddError("Invalid Offering selection", err.Error())
+			return
+		}
+		plannedPublic, err := jsonv2.Marshal(hostv2.CreateRequest{Form: r.def.form, Space: space, Name: name, Offering: selection, Spec: spec})
+		if err != nil || string(plannedPublic) != string(latest.PublicJSON) {
+			resp.Diagnostics.AddError("v2 Create differs from retained intent", "The saved public request is not equal to this plan. Do not replay, synthesize a new key, or adopt the same name; reconcile the original UID first.")
 			return
 		}
 		if _, err := r.discover(ctx); err != nil {
@@ -355,7 +385,7 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 			return
 		}
 	}
-	op, err := r.data.client.ReadOperation(ctx, intent.OperationID)
+	op, err := r.readOperation(ctx, intent.OperationID)
 	if err != nil {
 		diags.AddError("Accepted v2 Operation unreadable", "The exact Operation must be reconciled under the original principal; no new mutation was sent")
 		return
@@ -382,7 +412,7 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 			diags.AddError("v2 Operation still pending", "Context ended before the accepted Operation settled; retained intent and UID must be reconciled")
 			return
 		}
-		op, err = r.data.client.ReadOperation(ctx, intent.OperationID)
+		op, err = r.readOperation(ctx, intent.OperationID)
 		if err != nil {
 			diags.AddError("Accepted v2 Operation unreadable", "Read and reconcile the exact Operation; no new mutation was sent")
 			return
@@ -400,7 +430,7 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 		observation.StatusCode = 404
 	} else {
 		record, err = r.data.client.ReadResource(ctx, op.ResourceUID)
-		if err != nil || record.Form != r.def.form || record.Space != intent.Target.Space || record.Name != intent.Target.Name || record.Generation != op.Generation {
+		if err != nil || record.Form != r.def.form || record.Space != intent.Target.Space || record.Name != intent.Target.Name || record.Generation != op.Generation || record.LastOperation != op.ID {
 			diags.AddError("v2 Resource evidence mismatch", "Exact UID, Form, Space, name, and generation must match the accepted Operation; state was not adopted")
 			return
 		}
@@ -438,5 +468,25 @@ func v2Wait(ctx context.Context, seconds int64) error {
 		return ctx.Err()
 	case <-timer.C:
 		return nil
+	}
+}
+
+func (r *v2Resource) readOperation(ctx context.Context, id string) (hostv2.Operation, error) {
+	for {
+		op, err := r.data.client.ReadOperation(ctx, id)
+		if err == nil {
+			return op, nil
+		}
+		var apiErr *hostv2.APIError
+		if !errors.As(err, &apiErr) || apiErr.Status != http.StatusTooManyRequests {
+			return hostv2.Operation{}, err
+		}
+		seconds, parseErr := strconv.ParseInt(apiErr.RetryAfter, 10, 64)
+		if parseErr != nil || seconds < 1 {
+			return hostv2.Operation{}, err
+		}
+		if waitErr := v2Wait(ctx, seconds); waitErr != nil {
+			return hostv2.Operation{}, waitErr
+		}
 	}
 }

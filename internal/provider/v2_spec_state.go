@@ -49,7 +49,7 @@ func v2SpecFromPlan(ctx context.Context, plan tfsdk.Plan, def v2FormDef) (map[st
 		return nil, errors.New("typed spec cannot be encoded as strict JSON")
 	}
 	if _, err := edgev2.Decode(def.form, encoded); err != nil {
-		return nil, fmt.Errorf("typed public spec does not match the exact Form: %w", err)
+		return nil, errors.New("typed public spec does not match the exact Form")
 	}
 	return result, nil
 }

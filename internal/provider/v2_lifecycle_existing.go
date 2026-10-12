@@ -60,6 +60,23 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		resp.Diagnostics.AddError("v2 state lacks local custody", "This UID is not backed by an exact stored intent or explicit import; no Host request was made")
 		return
 	}
+	if len(history) > 0 {
+		latest := history[len(history)-1]
+		if latest.Status == intentv2.StatusClaimed && latest.OperationID == "" {
+			resp.Diagnostics.AddError("Unknown pre-ACK v2 outcome", "The durable store has an unknown original claim. Reconcile it under the original principal before any Host read or new intent; no automatic replay or adoption is safe")
+			return
+		}
+		if latest.Form != r.def.form || latest.Status == intentv2.StatusDeleteConfirmed ||
+			(latest.OperationUID != "" && latest.OperationUID != identity.uid) {
+			resp.Diagnostics.AddError("v2 state/journal identity mismatch", "The same Space/name has a different Form, UID, or confirmed deletion; no Host request was made")
+			return
+		}
+		if latest.Status == intentv2.StatusApplied && latest.ResultGeneration != strconv.FormatInt(identity.generation, 10) ||
+			latest.Status == intentv2.StatusFailedReserved && latest.ObservedGeneration != strconv.FormatInt(identity.generation, 10) {
+			resp.Diagnostics.AddError("v2 state/journal generation mismatch", "The state generation differs from durable completion evidence; no Host request was made")
+			return
+		}
+	}
 	if identity.intentID != "" {
 		var pending *intentv2.Intent
 		for i := range history {
@@ -85,8 +102,8 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		return
 	}
 	record, err := r.data.client.ReadResource(ctx, identity.uid)
-	if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space || record.Name != identity.name || record.Generation < identity.generation {
-		resp.Diagnostics.AddError("v2 Resource evidence mismatch", "Exact UID, Form, Space, name, and non-regressing generation are required. A 404/410 does not prove backend effects absent; no state was cleared")
+	if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space || record.Name != identity.name || record.Generation != identity.generation {
+		resp.Diagnostics.AddError("v2 Resource evidence mismatch", "Exact UID, Form, Space, name, and generation are required. A 404/410 does not prove backend effects absent; no state was cleared")
 		return
 	}
 	resp.State = req.State
@@ -117,6 +134,23 @@ func (r *v2Resource) mutateExisting(ctx context.Context, action intentv2.Action,
 	if err != nil || len(history) == 0 && (!hasImport || imported.UID != identity.uid || imported.Form != r.def.form) {
 		diags.AddError("v2 state lacks local custody", "The exact UID is not a locally retained intent or import; no Host request was made")
 		return
+	}
+	if len(history) > 0 {
+		latest := history[len(history)-1]
+		if latest.Form != r.def.form || latest.Status == intentv2.StatusDeleteConfirmed ||
+			(latest.OperationUID != "" && latest.OperationUID != identity.uid) {
+			diags.AddError("v2 state/journal identity mismatch", "The same Space/name is bound to a different Form, UID, or confirmed deletion; no mutation was sent")
+			return
+		}
+		if latest.Status == intentv2.StatusApplied && latest.ResultGeneration != strconv.FormatInt(identity.generation, 10) ||
+			latest.Status == intentv2.StatusFailedReserved && latest.ObservedGeneration != strconv.FormatInt(identity.generation, 10) {
+			diags.AddError("v2 state/journal generation mismatch", "The state generation differs from durable completion evidence; no mutation was sent")
+			return
+		}
+		if identity.intentID != "" && (latest.ID != identity.intentID || latest.OperationID != identity.operationID) {
+			diags.AddError("v2 state/journal Operation mismatch", "The retained Operation linkage differs from this state; no mutation was sent")
+			return
+		}
 	}
 	if len(history) > 0 {
 		latest := history[len(history)-1]
