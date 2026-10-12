@@ -1,4 +1,4 @@
-package main
+package intentstorecli
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ func TestRunInitializesBoundStoreAndRefusesBindingChange(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "intent-store")
 	args := []string{"--path", path, "--store-id", "local-scope-a", "--host-api", "https://host.example/api"}
 	var stdout, stderr bytes.Buffer
-	if code := run(args, &stdout, &stderr); code != 0 || stdout.String() != "intent store ready\n" || stderr.Len() != 0 {
-		t.Fatalf("run(init) code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	if code := Run(args, &stdout, &stderr); code != 0 || stdout.String() != "intent store ready\n" || stderr.Len() != 0 {
+		t.Fatalf("Run(init) code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	store, err := intentv2.Open(path, "local-scope-a")
 	if err != nil {
@@ -27,13 +27,13 @@ func TestRunInitializesBoundStoreAndRefusesBindingChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if code := run(args, &stdout, &stderr); code != 0 {
-		t.Fatalf("run(exact idempotent init) code=%d stderr=%q", code, stderr.String())
+	if code := Run(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("Run(exact idempotent init) code=%d stderr=%q", code, stderr.String())
 	}
 	changed := append([]string(nil), args...)
 	changed[len(changed)-1] = "https://other.example/api"
-	if code := run(changed, &stdout, &stderr); code != 1 {
-		t.Fatalf("run(changed binding) code=%d, want refusal", code)
+	if code := Run(changed, &stdout, &stderr); code != 1 {
+		t.Fatalf("Run(changed binding) code=%d, want refusal", code)
 	}
 	store, err = intentv2.Open(path, "local-scope-a")
 	if err != nil {
@@ -52,8 +52,8 @@ func TestRunExplicitlyBindsOnlyEmptyUnboundStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := []string{"--path", path, "--store-id", "local-scope-b", "--host-api", "https://host.example/api"}
-	if code := run(args, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
-		t.Fatalf("run(bind empty unbound) code=%d", code)
+	if code := Run(args, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("Run(bind empty unbound) code=%d", code)
 	}
 	store, err := intentv2.Open(path, "local-scope-b")
 	if err != nil {
@@ -69,8 +69,8 @@ func TestRunRequiresAllNonSecretIdentityFlags(t *testing.T) {
 	for _, args := range [][]string{
 		{}, {"--path", "/tmp/store", "--store-id", "scope"},
 	} {
-		if code := run(args, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
-			t.Fatalf("run(%q) code=%d, want usage refusal", args, code)
+		if code := Run(args, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
+			t.Fatalf("Run(%q) code=%d, want usage refusal", args, code)
 		}
 	}
 }
