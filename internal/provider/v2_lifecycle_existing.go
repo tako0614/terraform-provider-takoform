@@ -76,6 +76,25 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 			resp.Diagnostics.AddError("v2 state/journal generation mismatch", "The state generation differs from durable completion evidence; no Host request was made")
 			return
 		}
+		if latest.Status == intentv2.StatusFailedReserved {
+			if identity.intentID != latest.ID || identity.operationID != latest.OperationID {
+				resp.Diagnostics.AddError("v2 failed Resource linkage mismatch", "The state must retain the exact failed Operation before a same-UID recovery; no Host request was made")
+				return
+			}
+			if _, err := r.discover(ctx); err != nil {
+				resp.Diagnostics.AddError("v2 discovery refused", err.Error())
+				return
+			}
+			record, err := r.data.client.ReadResource(ctx, identity.uid)
+			if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space ||
+				record.Name != identity.name || record.Generation != identity.generation || record.Phase != "error" || record.LastOperation != latest.OperationID {
+				resp.Diagnostics.AddError("v2 failed Resource evidence mismatch", "The exact retained UID/Form/Space/name/generation/error phase/Operation must still be present; state was not adopted")
+				return
+			}
+			resp.State = req.State
+			r.writeResource(ctx, &resp.State, record, latest.ID, latest.OperationID, &resp.Diagnostics)
+			return
+		}
 	}
 	if identity.intentID != "" {
 		var pending *intentv2.Intent
