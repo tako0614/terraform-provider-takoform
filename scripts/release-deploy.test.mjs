@@ -377,6 +377,21 @@ test("the current Provider 4.x target refuses historical 4.0.0 tag phases", () =
 });
 
 test("v5 prepare and tag refuse the old v4-only immutable docs before external commands", () => {
+  const repo = temporaryDirectory("provider-v4-only-docs");
+  copyProviderIdentityInputs(repo);
+  for (const relativePath of [
+    "internal/edgev2/spec.go",
+    "internal/provider/v2_schema.go",
+  ]) {
+    mkdirSync(dirname(join(repo, relativePath)), { recursive: true });
+    copyFileSync(join(repositoryRoot, relativePath), join(repo, relativePath));
+  }
+  mkdirSync(join(repo, "docs"), { recursive: true });
+  writeFileSync(join(repo, "docs/index.md"), [
+    "# Provider 4.1.0",
+    "## Verify the release",
+    "git checkout --detach v4.1.0",
+  ].join("\n"));
   for (const [phase, options] of [
     ["prepare", ["--expected-commit", commit]],
     ["tag", ["--expected-commit", commit, "--run-id", "1", "--run-attempt", "1"]],
@@ -385,7 +400,7 @@ test("v5 prepare and tag refuse the old v4-only immutable docs before external c
     expect(() => runReleaseSurface({
       surface: "takoform-provider-release",
       args: [phase, "--tag", "v5.0.0", ...options],
-      repo: repositoryRoot,
+      repo,
       execFile: (...args) => {
         calls.push(args);
         throw new Error("external command must not run before the v5 docs guard");
