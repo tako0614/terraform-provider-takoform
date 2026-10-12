@@ -28,6 +28,7 @@ type v2ProviderConfig struct {
 	Space       types.String `tfsdk:"space"`
 	Token       types.String `tfsdk:"token"`
 	StorePath   types.String `tfsdk:"store_path"`
+	StoreSlot   types.String `tfsdk:"intent_store_slot"`
 	StoreID     types.String `tfsdk:"store_id"`
 }
 
@@ -51,12 +52,13 @@ func (p *v2Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 	resp.Schema = schema.Schema{
 		Description: "Takoform Host API v2 Provider for the thirteen exact published Edge Forms. Fresh v2 state only.",
 		Attributes: map[string]schema.Attribute{
-			"endpoint":      schema.StringAttribute{Required: true, Description: "HTTPS Host origin used only for v2 discovery."},
-			"host_api_root": schema.StringAttribute{Required: true, Description: "Exact v2 API root from Host discovery; must match the pre-initialized intent store binding."},
-			"space":         schema.StringAttribute{Optional: true, Description: "Default exact Host Space ID."},
-			"token":         schema.StringAttribute{Required: true, Sensitive: true, Description: "Bearer credential for this Host principal. Not persisted in the intent store."},
-			"store_path":    schema.StringAttribute{Required: true, Description: "Absolute path to an explicitly initialized private intent store. Never created by configure."},
-			"store_id":      schema.StringAttribute{Required: true, Description: "Fixed caller-scope identifier of that store. A label, not authentication proof."},
+			"endpoint":          schema.StringAttribute{Required: true, Description: "HTTPS Host origin used only for v2 discovery."},
+			"host_api_root":     schema.StringAttribute{Required: true, Description: "Exact v2 API root from Host discovery; must match the pre-initialized intent store binding."},
+			"space":             schema.StringAttribute{Optional: true, Description: "Default exact Host Space ID."},
+			"token":             schema.StringAttribute{Required: true, Sensitive: true, Description: "Bearer credential for this Host principal. Not persisted in the intent store."},
+			"store_path":        schema.StringAttribute{Optional: true, Description: "Absolute path to an explicitly initialized private intent store. Mutually exclusive with intent_store_slot."},
+			"intent_store_slot": schema.StringAttribute{Optional: true, Description: "Explicit opaque Runner private-file slot for a remote intent snapshot. Mutually exclusive with store_path."},
+			"store_id":          schema.StringAttribute{Required: true, Description: "Fixed caller-scope identifier of that store. A label, not authentication proof."},
 		},
 	}
 }
@@ -69,10 +71,19 @@ func (p *v2Provider) Configure(ctx context.Context, req provider.ConfigureReques
 	}
 	for name, value := range map[string]types.String{
 		"endpoint": cfg.Endpoint, "host_api_root": cfg.HostAPIRoot,
-		"token": cfg.Token, "store_path": cfg.StorePath, "store_id": cfg.StoreID,
+		"token": cfg.Token, "store_id": cfg.StoreID,
 	} {
 		if value.IsUnknown() || value.IsNull() || value.ValueString() == "" {
-			resp.Diagnostics.AddError("Invalid v2 provider configuration", name+" must be a known, nonempty value before local store open")
+			resp.Diagnostics.AddError("Invalid v2 provider configuration", name+" must be a known, nonempty value before intent store open")
+		}
+	}
+	if cfg.StorePath.IsUnknown() || cfg.StoreSlot.IsUnknown() {
+		resp.Diagnostics.AddError("Invalid v2 intent store selection", "store_path and intent_store_slot must be known at configure time")
+	} else {
+		pathSelected := !cfg.StorePath.IsNull() && cfg.StorePath.ValueString() != ""
+		slotSelected := !cfg.StoreSlot.IsNull() && cfg.StoreSlot.ValueString() != ""
+		if pathSelected == slotSelected {
+			resp.Diagnostics.AddError("Invalid v2 intent store selection", "exactly one of store_path or intent_store_slot must be selected")
 		}
 	}
 	if cfg.Space.IsUnknown() {
@@ -87,19 +98,25 @@ func (p *v2Provider) Configure(ctx context.Context, req provider.ConfigureReques
 		resp.Diagnostics.AddError("Invalid v2 Host identity", err.Error())
 		return
 	}
-	storePath := cfg.StorePath.ValueString()
-	if !filepath.IsAbs(storePath) || filepath.Clean(storePath) != storePath {
-		resp.Diagnostics.AddError("Invalid v2 intent store path", "store_path must be an absolute, clean path to an initialized private store")
-		return
-	}
 	space := cfg.Space.ValueString()
 	if space != "" && !v2IDPattern.MatchString(space) {
 		resp.Diagnostics.AddError("Invalid v2 Space", "space must match the Host API v2 ID grammar")
 		return
 	}
-	store, err := intentv2.Open(storePath, cfg.StoreID.ValueString())
+	var store *intentv2.Store
+	var err error
+	if !cfg.StorePath.IsNull() && cfg.StorePath.ValueString() != "" {
+		storePath := cfg.StorePath.ValueString()
+		if !filepath.IsAbs(storePath) || filepath.Clean(storePath) != storePath {
+			resp.Diagnostics.AddError("Invalid v2 intent store path", "store_path must be an absolute, clean path to an initialized private store")
+			return
+		}
+		store, err = intentv2.Open(storePath, cfg.StoreID.ValueString())
+	} else {
+		store, err = intentv2.OpenRemote(ctx, cfg.StoreSlot.ValueString(), cfg.StoreID.ValueString(), intentv2.StoreBinding{HostAPI: root})
+	}
 	if err != nil {
-		resp.Diagnostics.AddError("v2 intent store unavailable", "Open the explicitly initialized store with the matching path and ID; no Host request was sent")
+		resp.Diagnostics.AddError("v2 intent store unavailable", "Open the selected intent store with the matching ID and Host binding; no Host request was sent")
 		return
 	}
 	binding, err := store.Binding(ctx)
