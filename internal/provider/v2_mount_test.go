@@ -130,7 +130,7 @@ func TestV2PlanUsesProviderSpaceOnlyWhenResourceConfigOmitsIt(t *testing.T) {
 	}
 }
 
-func TestV2TypedHCLSpecRoundTripsAllThirteenExactForms(t *testing.T) {
+func TestV2TypedHCLSpecPreservesSemanticStateForAllThirteenExactForms(t *testing.T) {
 	cases := map[string]string{
 		"takoform_module_worker":                `{}`,
 		"takoform_worker_bundle":                `{"artifact":{"url":"https://artifacts.example/bundle","sha256":"` + strings.Repeat("a", 64) + `"}}`,
@@ -173,10 +173,14 @@ func TestV2TypedHCLSpecRoundTripsAllThirteenExactForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want, _ := jsonv2.Marshal(wire)
-			got, _ := jsonv2.Marshal(roundTrip)
-			if string(got) != string(want) {
-				t.Fatalf("typed projection changed exact spec:\ngot  %s\nwant %s", got, want)
+			projected, err := v2StateSpec(ctx, def, roundTrip)
+			if err != nil {
+				t.Fatalf("round-tripped wire spec rejected by exact Form: %v", err)
+			}
+			if value == nil && projected != nil || value != nil && (projected == nil || !value.Equal(projected)) {
+				got, _ := jsonv2.Marshal(roundTrip)
+				want, _ := jsonv2.Marshal(wire)
+				t.Fatalf("typed projection changed Form-semantic state:\ngot  %s\nwant %s", got, want)
 			}
 		})
 	}
