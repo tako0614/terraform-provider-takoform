@@ -3,8 +3,9 @@
 `internal/privateinputsv2` supplies process-local values to the Provider's Host
 v2 WorkerVersion Apply and accepted-Operation continuation paths. It is an
 internal helper, not an HCL attribute or published API. Those paths call
-`Load` only after the WorkerVersion desired spec has passed `edgev2` validation;
-planning does not read this source. It reads `TAKOFORM_V2_PRIVATE_INPUTS_JSON`
+`Load` or `LoadOptional` only after the WorkerVersion desired spec has passed
+`edgev2` validation; planning does not read this source. It reads
+`TAKOFORM_V2_PRIVATE_INPUTS_JSON`
 only when a caller requests values for one exact Host `space` and resource
 `name`:
 
@@ -19,7 +20,11 @@ only when a caller requests values for one exact Host `space` and resource
 ```
 
 The selected keys must equal the caller's expected `requiredSensitiveVars`
-names exactly. The helper returns only those values and writes, logs, persists,
+names exactly. A fresh Create and accepted `waiting_input` require the full map
+through `Load`. An explicit Update uses `LoadOptional`: if no map is selected
+for that exact Space/name, the Provider omits `privateInputs` and the Host
+retains prior values; a present but malformed or mismatched map is refused.
+The helper returns only selected values and writes, logs, persists,
 or hashes none of them; it keeps no package-global copy. The source is bounded
 to 1 MiB. Each value is limited to 1..32768 UTF-8 bytes with no NUL by the
 Provider's [run-scoped runtime-input policy](resources/worker_version.md#run-scoped-sensitive-inputs);
