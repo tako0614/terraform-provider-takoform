@@ -157,6 +157,36 @@ func TestAuthenticatedCallsRequireAdvertisedBearerScheme(t *testing.T) {
 	}
 }
 
+func TestEmptyBearerCredentialCannotUseBasicOrNoneDiscovery(t *testing.T) {
+	for _, scheme := range []string{"Basic", "None"} {
+		t.Run(scheme, func(t *testing.T) {
+			var apiCalls atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					discovery := fixtureDiscovery(server.URL+"/api", false)
+					discovery.Authentication.Schemes = []string{scheme}
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(discovery)
+					return
+				}
+				apiCalls.Add(1)
+			}))
+			defer server.Close()
+			client := New(server.URL, "", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			_, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+				Form: "https://forms.example/Widget/1.0.0/", Space: "team-a", Name: "widget", Spec: map[string]any{},
+			})
+			if err == nil || apiCalls.Load() != 0 {
+				t.Fatalf("CreateResource() error = %v, API calls = %d", err, apiCalls.Load())
+			}
+		})
+	}
+}
+
 func TestOfferingSelectionIsExplicitAndGenerationFenceIsSent(t *testing.T) {
 	var server *httptest.Server
 	var createCalls atomic.Int32
@@ -427,7 +457,7 @@ func TestResourceAndOperationReadsAndDeleteUseV2Routes(t *testing.T) {
 		case "/api/resources/r-1":
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = io.WriteString(w, `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":2,"observedAt":null,"phase":"pending","spec":{"size":"large"},"observed":{},"output":{},"lastOperation":"op-3"}`)
+				_, _ = io.WriteString(w, `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":0,"observedAt":null,"phase":"pending","spec":{"size":"large"},"observed":{},"output":{},"lastOperation":"op-3"}`)
 				return
 			}
 			if r.Method != http.MethodDelete || r.Header.Get("Takoform-Expected-Generation") != "3" || r.Header.Get("Idempotency-Key") != "intent-key-00000003" {
@@ -453,7 +483,7 @@ func TestResourceAndOperationReadsAndDeleteUseV2Routes(t *testing.T) {
 		t.Fatal(err)
 	}
 	resource, err := client.ReadResource(context.Background(), "r-1")
-	if err != nil || resource.Generation != 3 || resource.ObservedGeneration != 2 {
+	if err != nil || resource.Generation != 3 || resource.ObservedGeneration != 0 || resource.ObservedAt != nil {
 		t.Fatalf("ReadResource() = %#v, %v", resource, err)
 	}
 	operation, err := client.ReadOperation(context.Background(), "op-3")
@@ -463,6 +493,64 @@ func TestResourceAndOperationReadsAndDeleteUseV2Routes(t *testing.T) {
 	operation, err = client.DeleteResource(context.Background(), "r-1", "intent-key-00000003", 3)
 	if err != nil || operation.Generation != 4 {
 		t.Fatalf("DeleteResource() = %#v, %v", operation, err)
+	}
+}
+
+func TestResourceRejectsObservationGenerationWithoutObservationTime(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		_, _ = io.WriteString(w, `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":2,"observedAt":null,"phase":"pending","spec":{},"observed":{},"output":{},"lastOperation":"op-3"}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ReadResource(context.Background(), "r-1"); err == nil {
+		t.Fatal("ReadResource() accepted a verified generation without observedAt")
+	}
+}
+
+func TestWaitingInputOperationRejectsNullNameElements(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"waiting_input","effect":"none","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z","inputRequired":{"names":[null],"reason":"expired"}}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ReadOperation(context.Background(), "op-1"); err == nil {
+		t.Fatal("ReadOperation() accepted null instead of a JSON string name")
+	}
+}
+
+func TestWaitingInputOperationAcceptsFormDefinedStringNamesWithoutCommonGrammar(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"op-1","resourceUid":"r-1","action":"create","generation":1,"status":"waiting_input","effect":"none","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z","inputRequired":{"names":["Form-specific key name"],"reason":"unavailable"}}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	operation, err := client.ReadOperation(context.Background(), "op-1")
+	if err != nil || operation.InputRequired == nil || len(operation.InputRequired.Names) != 1 || operation.InputRequired.Names[0] != "Form-specific key name" {
+		t.Fatalf("ReadOperation() = %#v, %v", operation, err)
 	}
 }
 
