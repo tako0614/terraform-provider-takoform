@@ -82,6 +82,14 @@ file, and the store directory before returning. This is a local filesystem
 durability measure, not a claim of power-loss safety on every filesystem or
 storage device.
 
+Focused subprocess tests kill a separate OS process after its claim is durable
+and after an accepted Operation is recorded, then reopen the same store and
+verify retained identity and continuation. A separate two-process fixture
+contends on one name with different Forms and expects only one unresolved
+winner. These tests cover this journal's local process boundary only; they do
+not establish OpenTofu/Provider state durability, Host behavior, backend
+recovery, or power-loss guarantees.
+
 ## Bounds and failure handling
 
 The current implementation bounds a snapshot to 16 MiB, history to 4096
