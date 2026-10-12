@@ -435,17 +435,15 @@ func (c *Client) apiBase() (string, Discovery, error) {
 	if !c.discovered {
 		return "", Discovery{}, errors.New("takoform v2: Discover must succeed before API requests")
 	}
-	if c.token != "" {
-		bearerAdvertised := false
-		for _, scheme := range c.discovery.Authentication.Schemes {
-			if strings.EqualFold(scheme, "Bearer") {
-				bearerAdvertised = true
-				break
-			}
+	bearerAdvertised := false
+	for _, scheme := range c.discovery.Authentication.Schemes {
+		if strings.EqualFold(scheme, "Bearer") {
+			bearerAdvertised = true
+			break
 		}
-		if !bearerAdvertised {
-			return "", Discovery{}, errors.New("takoform v2: configured Bearer credential is not advertised by the Host")
-		}
+	}
+	if !bearerAdvertised || c.token == "" {
+		return "", Discovery{}, errors.New("takoform v2: API access requires an advertised Bearer scheme and configured credential")
 	}
 	return c.baseURL, c.discovery, nil
 }
@@ -609,6 +607,9 @@ func validateResource(r Resource) error {
 	if r.ObservedAt != nil && !validTimestamp(*r.ObservedAt) {
 		return errors.New("takoform v2: invalid Resource observation timestamp")
 	}
+	if (r.ObservedGeneration == 0) != (r.ObservedAt == nil) {
+		return errors.New("takoform v2: observedAt must be null exactly before the first verified observation")
+	}
 	if r.Offering != nil && (!idPattern.MatchString(r.Offering.ID) || r.Offering.Revision == "") {
 		return errors.New("takoform v2: invalid Resource Offering")
 	}
@@ -654,6 +655,9 @@ func decodeOperation(data []byte, operation *Operation) error {
 		if err := requireNestedObjectKeys(fields["inputRequired"], "names", "reason"); err != nil {
 			return err
 		}
+		if err := validateInputRequiredNames(fields["inputRequired"]); err != nil {
+			return err
+		}
 	} else if operation.InputRequired != nil {
 		return errors.New("inputRequired is valid only while waiting_input")
 	}
@@ -663,6 +667,27 @@ func decodeOperation(data []byte, operation *Operation) error {
 	if operation.Error != nil {
 		if err := requireNestedObjectKeys(fields["error"], "code", "message"); err != nil || operation.Error.Code == "" || operation.Error.Message == "" {
 			return errors.New("invalid Operation error")
+		}
+	}
+	return nil
+}
+
+func validateInputRequiredNames(raw json.RawMessage) error {
+	var inputRequired map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &inputRequired); err != nil {
+		return err
+	}
+	var names []json.RawMessage
+	if err := json.Unmarshal(inputRequired["names"], &names); err != nil || len(names) == 0 {
+		return errors.New("inputRequired.names must be a non-empty array of strings")
+	}
+	for _, nameJSON := range names {
+		var value any
+		if err := json.Unmarshal(nameJSON, &value); err != nil {
+			return errors.New("inputRequired.names elements must be JSON strings")
+		}
+		if _, ok := value.(string); !ok {
+			return errors.New("inputRequired.names elements must be JSON strings")
 		}
 	}
 	return nil
