@@ -100,7 +100,7 @@ type takoformProviderModel struct {
 // New returns a provider factory bound to a build version.
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &takoformProvider{version: version}
+		return &v2Provider{version: version}
 	}
 }
 
