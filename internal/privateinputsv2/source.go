@@ -30,54 +30,67 @@ var errInvalidSource = errors.New("takoform v2: invalid private-input source")
 // Space and resource name. An absent source is valid only when no values are
 // expected. The returned map is caller-owned; this helper does not retain it.
 func Load(space, resourceName string, expectedNames []string) (map[string]string, error) {
+	selected, present, err := loadSelected(space, resourceName, expectedNames)
+	if err != nil {
+		return nil, err
+	}
+	if !present {
+		if len(expectedNames) != 0 {
+			return nil, errInvalidSource
+		}
+		return map[string]string{}, nil
+	}
+	return selected, nil
+}
+
+// LoadOptional selects a map for a new explicit Update. Absence means the
+// Provider must omit privateInputs so the Host retains prior values. A
+// selected map that is present but incomplete or malformed is an error, never
+// silently treated as omission. Create and waiting_input use Load instead.
+func LoadOptional(space, resourceName string, expectedNames []string) (map[string]string, bool, error) {
+	return loadSelected(space, resourceName, expectedNames)
+}
+
+func loadSelected(space, resourceName string, expectedNames []string) (map[string]string, bool, error) {
 	if !validHostIdentifier(space) || !validHostIdentifier(resourceName) || !validExpectedNames(expectedNames) {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 
 	raw, present := os.LookupEnv(EnvironmentVariable)
 	if !present {
-		if len(expectedNames) == 0 {
-			return map[string]string{}, nil
-		}
-		return nil, errInvalidSource
+		return nil, false, nil
 	}
 	if len(raw) > MaxDocumentBytes {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 
 	value, err := jsonv2.Decode([]byte(raw))
 	if err != nil {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 	root, ok := value.(map[string]any)
 	if !ok || !validDocumentShape(root) {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 
 	selectedSpace, ok := root[space]
 	if !ok {
-		if len(expectedNames) == 0 {
-			return map[string]string{}, nil
-		}
-		return nil, errInvalidSource
+		return nil, false, nil
 	}
 	resources, ok := selectedSpace.(map[string]any)
 	if !ok {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 	selectedResource, ok := resources[resourceName]
 	if !ok {
-		if len(expectedNames) == 0 {
-			return map[string]string{}, nil
-		}
-		return nil, errInvalidSource
+		return nil, false, nil
 	}
 	inputs, ok := selectedResource.(map[string]any)
 	if !ok {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 	if len(inputs) != len(expectedNames) {
-		return nil, errInvalidSource
+		return nil, false, errInvalidSource
 	}
 
 	wanted := make(map[string]struct{}, len(expectedNames))
@@ -87,15 +100,15 @@ func Load(space, resourceName string, expectedNames []string) (map[string]string
 	selected := make(map[string]string, len(inputs))
 	for name, rawValue := range inputs {
 		if _, ok := wanted[name]; !ok {
-			return nil, errInvalidSource
+			return nil, false, errInvalidSource
 		}
 		value, ok := rawValue.(string)
 		if !ok || !validPrivateValue(value) {
-			return nil, errInvalidSource
+			return nil, false, errInvalidSource
 		}
 		selected[name] = value
 	}
-	return selected, nil
+	return selected, true, nil
 }
 
 func validHostIdentifier(value string) bool {

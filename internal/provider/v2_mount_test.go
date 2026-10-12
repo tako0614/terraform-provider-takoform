@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/hostv2"
 	"github.com/tako0614/terraform-provider-takoform/internal/intentv2"
 	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
+	"github.com/tako0614/terraform-provider-takoform/internal/privateinputsv2"
 )
 
 func TestV2ProviderRegistersOnlyExactPublishedEdgeForms(t *testing.T) {
@@ -44,6 +46,27 @@ func TestV2ProviderRegistersOnlyExactPublishedEdgeForms(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("resource %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestV2WorkerVersionUpdatePrivateInputsAreOptionalButExactWhenSelected(t *testing.T) {
+	resource := &v2Resource{}
+	spec := map[string]any{"requiredSensitiveVars": []any{"API_TOKEN"}}
+	if err := os.Unsetenv(privateinputsv2.EnvironmentVariable); err != nil {
+		t.Fatal(err)
+	}
+	got, names, err := resource.privateInputsForUpdate("prod", "worker", spec)
+	if err != nil || got != nil || names != nil {
+		t.Fatalf("absent source: inputs=%v names=%v error=%v; want omitted inputs", got, names, err)
+	}
+	t.Setenv(privateinputsv2.EnvironmentVariable, `{"prod":{"worker":{"API_TOKEN":"secret"}}}`)
+	got, names, err = resource.privateInputsForUpdate("prod", "worker", spec)
+	if err != nil || got == nil || (*got)["API_TOKEN"] != "secret" || len(names) != 1 {
+		t.Fatalf("selected source: inputs=%v names=%v error=%v", got, names, err)
+	}
+	t.Setenv(privateinputsv2.EnvironmentVariable, `{"prod":{"worker":{"OTHER":"secret"}}}`)
+	if got, names, err = resource.privateInputsForUpdate("prod", "worker", spec); err == nil || got != nil || names != nil {
+		t.Fatalf("mismatched selected source accepted: inputs=%v names=%v error=%v", got, names, err)
 	}
 }
 

@@ -93,9 +93,11 @@ Space/name/input-name map only in the Provider process at apply or same-Operatio
 continuation time through `TAKOFORM_V2_PRIVATE_INPUTS_JSON`. The source shape
 and constraints are in [the private-input source note](private-input-source-v2.md).
 Values do not enter `spec`, HCL resource attributes, Terraform state, the
-intent store, or diagnostics. Missing values stop a fresh mutation; a Host
-`waiting_input` Operation receives the entire original map on that same
-Operation, never a replacement Create/Update.
+intent store, or diagnostics. A fresh Create requires the full map. An explicit
+Update may omit `privateInputs` to retain the Host's prior values; a selected
+map must still match the declaration exactly. A Host `waiting_input` Operation
+requires the entire original map on that same Operation, never a replacement
+Create/Update.
 
 This source and its local fixture tests do not establish a normal Takosumi
 Runner's store initialization, persistent filesystem custody, private-input

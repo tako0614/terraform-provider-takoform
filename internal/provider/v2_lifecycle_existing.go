@@ -267,9 +267,9 @@ func (r *v2Resource) mutateExisting(ctx context.Context, action intentv2.Action,
 }
 
 func (r *v2Resource) privateInputsForUpdate(space, name string, spec map[string]any) (*map[string]string, []string, error) {
-	// Updates with no declared private names omit privateInputs. When names
-	// are declared, this major requires an exact apply-time map; it never
-	// reads or reconstructs values from state or journal.
+	// Updates with no selected process-local map omit privateInputs so the
+	// Host retains prior values. A selected map must exactly match the
+	// declaration; values are never recovered from state or journal.
 	if _, ok := spec["requiredSensitiveVars"]; !ok {
 		return nil, nil, nil
 	}
@@ -288,9 +288,12 @@ func (r *v2Resource) privateInputsForUpdate(space, name string, spec map[string]
 		}
 		names = append(names, value)
 	}
-	values, err := privateinputsv2.Load(space, name, names)
+	values, present, err := privateinputsv2.LoadOptional(space, name, names)
 	if err != nil {
-		return nil, nil, errors.New("exact apply-time private-input map is unavailable")
+		return nil, nil, errors.New("invalid selected apply-time private-input map")
+	}
+	if !present {
+		return nil, nil, nil
 	}
 	return &values, names, nil
 }

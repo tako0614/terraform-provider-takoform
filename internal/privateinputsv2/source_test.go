@@ -139,3 +139,31 @@ func TestLoadRejectsInvalidSelectorsAndExpectedNames(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadOptionalOmitsAbsentUpdateSourceButRejectsPresentMismatch(t *testing.T) {
+	if err := os.Unsetenv(EnvironmentVariable); err != nil {
+		t.Fatal(err)
+	}
+	if got, present, err := LoadOptional("prod", "worker", []string{"API_TOKEN"}); err != nil || present || got != nil {
+		t.Fatalf("absent optional map = %#v, present=%v, err=%v", got, present, err)
+	}
+	t.Setenv(EnvironmentVariable, `{"prod":{"other":{"API_TOKEN":"another-resource"}}}`)
+	if got, present, err := LoadOptional("prod", "worker", []string{"API_TOKEN"}); err != nil || present || got != nil {
+		t.Fatalf("unselected optional map = %#v, present=%v, err=%v", got, present, err)
+	}
+	t.Setenv(EnvironmentVariable, `{"prod":{"worker":{"API_TOKEN":"value"}}}`)
+	if got, present, err := LoadOptional("prod", "worker", []string{"API_TOKEN"}); err != nil || !present || got["API_TOKEN"] != "value" {
+		t.Fatalf("selected optional map = %#v, present=%v, err=%v", got, present, err)
+	}
+	for _, raw := range []string{
+		`{"prod":{"worker":{}}}`,
+		`{"prod":{"worker":{"OTHER":"wrong"}}}`,
+		`{"prod":{"worker":{"API_TOKEN":null}}}`,
+		`{"prod":{"worker":{"API_TOKEN":""}}}`,
+	} {
+		t.Setenv(EnvironmentVariable, raw)
+		if _, _, err := LoadOptional("prod", "worker", []string{"API_TOKEN"}); err == nil || strings.Contains(err.Error(), "API_TOKEN") {
+			t.Fatalf("malformed selected map accepted or leaked name: %v", err)
+		}
+	}
+}
