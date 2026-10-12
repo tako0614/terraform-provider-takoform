@@ -1,11 +1,18 @@
-# Host API v2 Provider source (fresh installs only)
+# Provider 5 consumer reference (unpublished candidate)
 
-This source tree mounts the thirteen exact published Edge Form URLs from the
-`takoform-forms` publisher on Host API `forms.takoform.com/v2`. It is a new
-Provider-major implementation candidate, **not** a Registry release or a claim
-that a Host currently supports any of those Forms. The published Provider
-4.1.0 remains an immutable v1 client. This source never negotiates v1, falls
-back to v1, or translates old state/Form identities.
+This source checkout is the intended fresh-install Provider 5.0.0 candidate.
+It maps thirteen exact published Edge Form URLs from the `takoform-forms`
+publisher to Terraform/OpenTofu resources and sends Host requests only through
+Host API `forms.takoform.com/v2`. Provider 5.0.0 is **not currently published
+to the Terraform Registry**. Provider 4.1.0 remains the published v1 client;
+this v2 implementation neither negotiates nor falls back to v1. A compatible
+Host must independently advertise support for each exact Form before use.
+
+The Host API identity and discovery path are defined in the Provider's
+[v2 protocol identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
+and [HTTP client](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/client.go).
+These links describe the client implementation; they are not a claim that a
+particular Host implements or supports the API.
 
 The mounted Terraform/OpenTofu resource type names are
 `takoform_module_worker`, `takoform_worker_bundle`,
@@ -21,6 +28,99 @@ identities; it neither publishes artifact bytes nor grants the Host permission
 to fetch arbitrary sources. WorkerVersion's arbitrary public `vars` value is
 authored as `spec.vars_json`, validated as strict JSON by the exact Form codec.
 
+| Terraform resource | Exact publisher Form URL |
+| --- | --- |
+| `takoform_module_worker` | [ModuleWorker 0.3.0](https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/) |
+| `takoform_worker_bundle` | [WorkerBundle 0.2.0](https://edge.forms.takoform.com/forms/WorkerBundle/0.2.0/) |
+| `takoform_worker_version` | [WorkerVersion 0.5.0](https://edge.forms.takoform.com/forms/WorkerVersion/0.5.0/) |
+| `takoform_worker_deployment` | [WorkerDeployment 0.4.0](https://edge.forms.takoform.com/forms/WorkerDeployment/0.4.0/) |
+| `takoform_worker_endpoint` | [WorkerEndpoint 0.3.0](https://edge.forms.takoform.com/forms/WorkerEndpoint/0.3.0/) |
+| `takoform_worker_cron_trigger` | [WorkerCronTrigger 0.3.0](https://edge.forms.takoform.com/forms/WorkerCronTrigger/0.3.0/) |
+| `takoform_edge_kv_namespace` | [EdgeKVNamespace 0.2.0](https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.2.0/) |
+| `takoform_edge_object_bucket` | [ObjectBucket 0.2.0](https://edge.forms.takoform.com/forms/ObjectBucket/0.2.0/) |
+| `takoform_sqlite_database` | [SQLiteDatabase 0.2.0](https://edge.forms.takoform.com/forms/SQLiteDatabase/0.2.0/) |
+| `takoform_sqlite_migration_set` | [SQLiteMigrationSet 0.2.0](https://edge.forms.takoform.com/forms/SQLiteMigrationSet/0.2.0/) |
+| `takoform_sqlite_migration_application` | [SQLiteMigrationApplication 0.2.0](https://edge.forms.takoform.com/forms/SQLiteMigrationApplication/0.2.0/) |
+| `takoform_at_least_once_queue` | [AtLeastOnceQueue 0.2.0](https://edge.forms.takoform.com/forms/AtLeastOnceQueue/0.2.0/) |
+| `takoform_queue_consumer` | [QueueConsumer 0.3.0](https://edge.forms.takoform.com/forms/QueueConsumer/0.3.0/) |
+
+### Example: Worker identity and deployment relationships
+
+Resource references use exact Host-assigned UIDs, not name lookup. These
+references let Terraform order the resources and pass those UIDs to the
+Provider:
+
+```hcl
+resource "takoform_module_worker" "api" {
+  name = "api"
+}
+
+resource "takoform_worker_bundle" "api" {
+  name = "api-bundle"
+  spec = {
+    artifact = {
+      url    = var.bundle_url
+      sha256 = var.bundle_sha256
+    }
+  }
+}
+
+resource "takoform_worker_version" "api" {
+  name = "api-v1"
+  spec = {
+    worker   = { resource_uid = takoform_module_worker.api.uid }
+    bundle   = { resource_uid = takoform_worker_bundle.api.uid }
+    handlers = ["fetch"]
+  }
+}
+
+resource "takoform_worker_deployment" "api" {
+  name = "api-live"
+  spec = {
+    worker = { resource_uid = takoform_module_worker.api.uid }
+    versions = [{
+      worker_version = { resource_uid = takoform_worker_version.api.uid }
+      weight         = 10000
+    }]
+  }
+}
+
+resource "takoform_worker_endpoint" "api" {
+  name = "api-endpoint"
+  spec = {
+    worker = { resource_uid = takoform_module_worker.api.uid }
+  }
+}
+```
+
+`bundle_url` and `bundle_sha256` must identify the same artifact; the example
+does not publish or upload it. The Host assigns and returns the worker UID.
+The deployment references the worker and version, while the endpoint references
+the worker; the Host controls resulting endpoint and runtime behavior.
+
+For a queue relationship, `takoform_queue_consumer.spec.queue` and `.worker`
+also take exact UIDs:
+
+```hcl
+resource "takoform_at_least_once_queue" "events" {
+  name = "events"
+  spec = { message_retention_seconds = 86400 }
+}
+
+resource "takoform_queue_consumer" "events" {
+  name = "events-consumer"
+  spec = {
+    queue                     = { resource_uid = takoform_at_least_once_queue.events.uid }
+    worker                    = { resource_uid = takoform_module_worker.api.uid }
+    max_batch_size            = 10
+    max_batch_timeout_seconds = 5
+    max_concurrency           = 1
+    max_retries               = 3
+    retry_delay_seconds       = 10
+  }
+}
+```
+
 ## Local custody before configure
 
 A caller must explicitly initialize one private, absolute-path intent store
@@ -35,9 +135,10 @@ terraform-provider-takoform intent-store-init \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
 ```
 
-This subcommand is part of the provider binary, so initializing a store does
-not require the Go source tree. From a source checkout, the equivalent command
-is `go run ./cmd/intent-store-init` with the same flags.
+The built Provider 5 candidate binary includes this subcommand, so initializing
+a store does not require the Go source tree. From a source checkout,
+`go run ./cmd/intent-store-init` accepts the same flags. Neither invocation
+is a Terraform Registry installation method.
 
 The tool refuses mismatched or nonempty unbound stores. `store-id` is a fixed
 local label, **not** authentication or proof that a rotated bearer token has
