@@ -121,7 +121,12 @@ bun run check
 ```
 
 Generated resource pages and examples are reproducible from the checked-in
-Form catalog. These commands are read-only.
+Form catalog. These commands are read-only. The worker-authoring matrix uses an
+explicitly tagged, local retained-v1 plugin to test the published v1 HCL and
+stable-v1 reference Host; it does not exercise the shipping v2-only `New()`
+entrypoint. `--provider-binary` instead tests the exact caller-supplied binary
+without substituting that retained plugin. The native v2 fixture is a separate
+tagged check (`go test -tags native ./native-fixture/mounted-v2`).
 
 ## License
 

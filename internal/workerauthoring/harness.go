@@ -1,7 +1,7 @@
 // Package workerauthoring drives the Edge Platform Family authoring surface —
-// the current stable resources and the repository `worker-app` module — through a
-// REAL Terraform-compatible CLI against the deterministic stable-v1 reference
-// host.
+// the retained stable-v1 resources and the repository `worker-app` module —
+// through a REAL Terraform-compatible CLI against the deterministic stable-v1
+// reference host.
 //
 // It exists because two of the properties the authoring surface promises are
 // not decidable from the provider's unit tests. Whether an immutable revision
@@ -11,7 +11,8 @@
 // applies. Both need the real planner, the real graph, and a real host.
 //
 // Nothing here is publishable evidence: the host is a disposable in-process
-// reference implementation and the provider is built from the working tree.
+// reference implementation and the default provider is an explicitly tagged
+// retained-v1 conformance plugin built from the working tree.
 package workerauthoring
 
 import (
@@ -38,11 +39,9 @@ const stablePortableHostCorpus = "conformance/takoform-v1/family-host/edge/porta
 // provider under.
 const ProviderAddress = "registry.terraform.io/tako0614/takoform"
 
-// developmentProviderVersion labels binaries built from the publisher-set
-// source checkout. release/version.json describes immutable Provider 3 release
-// tooling and must not relabel a breaking next-major development binary as
-// 3.0.0.
-const developmentProviderVersion = "4.0.0-dev"
+// retainedConformanceProviderVersion identifies only the explicitly tagged
+// stable-v1 test plugin. It is not the shipping v2 Provider or a release.
+const retainedConformanceProviderVersion = "4.1.0-retained-v1-conformance"
 
 // CLIIdentity is the exact CLI one scenario ran under.
 type CLIIdentity struct {
@@ -138,7 +137,7 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 			h.Close()
 			return nil, fmt.Errorf("copy explicit provider binary: %w", err)
 		}
-	} else if output, err := buildProvider(ctx, repoRoot, developmentProviderVersion, binary); err != nil {
+	} else if output, err := buildRetainedV1ConformanceProvider(ctx, repoRoot, retainedConformanceProviderVersion, binary); err != nil {
 		h.Close()
 		return nil, fmt.Errorf("build provider binary: %w\n%s", err, output)
 	}
@@ -226,7 +225,7 @@ func identifyCLI(ctx context.Context, requested string) (string, CLIIdentity, er
 	return "", CLIIdentity{}, errors.New("unsupported Terraform-compatible CLI product")
 }
 
-func buildProvider(ctx context.Context, repoRoot, version, outputPath string) (string, error) {
+func buildRetainedV1ConformanceProvider(ctx context.Context, repoRoot, version, outputPath string) (string, error) {
 	environment := make([]string, 0, len(os.Environ())+1)
 	for _, item := range os.Environ() {
 		if strings.HasPrefix(item, "CGO_ENABLED=") {
@@ -236,7 +235,8 @@ func buildProvider(ctx context.Context, repoRoot, version, outputPath string) (s
 	}
 	environment = append(environment, "CGO_ENABLED=0")
 	return runCommand(ctx, repoRoot, environment, "go", "build",
-		"-buildvcs=false", "-ldflags", "-X main.version="+version, "-o", outputPath, ".")
+		"-buildvcs=false", "-tags=retained_v1_conformance", "-ldflags", "-X main.version="+version,
+		"-o", outputPath, "./cmd/worker-authoring-conformance/retained-v1-provider")
 }
 
 func sanitizedEnvironment() []string {
