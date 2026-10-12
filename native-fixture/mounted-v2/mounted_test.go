@@ -21,20 +21,23 @@ import (
 
 const form = "https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/"
 const queueForm = "https://edge.forms.takoform.com/forms/AtLeastOnceQueue/0.2.0/"
+const privateForm = "https://edge.forms.takoform.com/forms/WorkerVersion/0.5.0/"
+const privateSentinel = "fixture-private-input-value"
 const apiPath = "/apis/forms.takoform.com/v2"
 
 type fixtureHost struct {
-	mu         sync.Mutex
-	server     *httptest.Server
-	mode       string
-	mutations  int
-	reads      int
-	uid        string
-	generation int
-	lastAction string
-	opID       string
-	exists     bool
-	retention  int
+	mu          sync.Mutex
+	server      *httptest.Server
+	mode        string
+	mutations   int
+	reads       int
+	uid         string
+	generation  int
+	lastAction  string
+	opID        string
+	exists      bool
+	retention   int
+	privateSeen bool
 }
 
 func newFixtureHost(t *testing.T, mode string) *fixtureHost {
@@ -42,6 +45,9 @@ func newFixtureHost(t *testing.T, mode string) *fixtureHost {
 	h := &fixtureHost{mode: mode, uid: "uid-exact-1"}
 	if mode == "update" {
 		h.uid = "uid-queue-1"
+	}
+	if mode == "private" {
+		h.uid = "uid-version-1"
 	}
 	h.server = httptest.NewTLSServer(http.HandlerFunc(h.serve))
 	t.Cleanup(h.server.Close)
@@ -57,32 +63,43 @@ func (h *fixtureHost) serve(w http.ResponseWriter, r *http.Request) {
 	if h.mode == "update" {
 		wantForm, wantName = queueForm, "queue"
 	}
+	if h.mode == "private" {
+		wantForm, wantName = privateForm, "version"
+	}
 	if r.URL.Path != "/.well-known/takoform/v2" && r.Header.Get("Authorization") != "Bearer fixture-token" {
 		h.problem(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform/v2":
-		h.write(w, map[string]any{"api": "forms.takoform.com/v2", "baseUrl": h.server.URL + apiPath, "documentation": "https://host.example/docs", "authentication": map[string]any{"schemes": []string{"Bearer"}, "documentation": "https://host.example/auth"}, "capabilities": map[string]any{"offerings": false, "previews": false, "privateInputs": false}, "limits": map[string]any{"maxRequestBytes": 65536, "maxPageSize": 50, "replayWindowSeconds": 3600}})
+		h.write(w, map[string]any{"api": "forms.takoform.com/v2", "baseUrl": h.server.URL + apiPath, "documentation": "https://host.example/docs", "authentication": map[string]any{"schemes": []string{"Bearer"}, "documentation": "https://host.example/auth"}, "capabilities": map[string]any{"offerings": false, "previews": false, "privateInputs": h.mode == "private"}, "limits": map[string]any{"maxRequestBytes": 65536, "maxPageSize": 50, "replayWindowSeconds": 3600}})
 	case r.Method == http.MethodGet && r.URL.Path == apiPath+"/support":
 		if r.URL.Query().Get("form") != wantForm {
 			h.problem(w, http.StatusNotFound, "form_unknown")
 			return
 		}
-		h.write(w, map[string]any{"form": wantForm, "supported": true, "operations": []string{"create", "read", "update", "delete"}, "privateInputs": false})
+		h.write(w, map[string]any{"form": wantForm, "supported": true, "operations": []string{"create", "read", "update", "delete"}, "privateInputs": h.mode == "private"})
 	case r.Method == http.MethodPost && r.URL.Path == apiPath+"/resources":
 		if r.Header.Get("Idempotency-Key") == "" || h.exists {
 			h.problem(w, http.StatusConflict, "conflict")
 			return
 		}
 		var request struct {
-			Form  string `json:"form"`
-			Space string `json:"space"`
-			Name  string `json:"name"`
+			Form          string            `json:"form"`
+			Space         string            `json:"space"`
+			Name          string            `json:"name"`
+			PrivateInputs map[string]string `json:"privateInputs"`
 		}
 		if json.NewDecoder(r.Body).Decode(&request) != nil || request.Form != wantForm || request.Space != "prod" || request.Name != wantName {
 			h.problem(w, http.StatusBadRequest, "invalid")
 			return
+		}
+		if h.mode == "private" {
+			if request.PrivateInputs["API_TOKEN"] != privateSentinel || len(request.PrivateInputs) != 1 {
+				h.problem(w, http.StatusBadRequest, "private_input_missing")
+				return
+			}
+			h.privateSeen = true
 		}
 		h.mutations++
 		h.exists = true
@@ -109,6 +126,9 @@ func (h *fixtureHost) serve(w http.ResponseWriter, r *http.Request) {
 		spec := map[string]any{}
 		if h.mode == "update" {
 			spec["messageRetentionSeconds"] = h.retention
+		}
+		if h.mode == "private" {
+			spec = map[string]any{"worker": map[string]any{"resourceUid": "worker-uid"}, "bundle": map[string]any{"resourceUid": "bundle-uid"}, "handlers": []string{"fetch"}, "vars": map[string]any{"a": 2, "z": 1}, "requiredSensitiveVars": []string{"API_TOKEN"}}
 		}
 		h.write(w, map[string]any{"uid": h.uid, "form": wantForm, "space": "prod", "name": wantName, "generation": h.generation, "observedGeneration": h.generation, "observedAt": "2026-10-12T00:00:00Z", "phase": "idle", "spec": spec, "observed": map[string]any{}, "output": map[string]any{}, "lastOperation": h.opID})
 	case r.Method == http.MethodPut && r.URL.Path == apiPath+"/resources/"+h.uid && h.mode == "update":
@@ -166,16 +186,18 @@ func (h *fixtureHost) counts() (int, int) {
 	defer h.mu.Unlock()
 	return h.mutations, h.reads
 }
+func (h *fixtureHost) sawPrivateInput() bool { h.mu.Lock(); defer h.mu.Unlock(); return h.privateSeen }
 
 type runner struct {
-	t         *testing.T
-	root      string
-	dir       string
-	pluginDir string
-	certFile  string
-	storePath string
-	marker    string
-	retention int
+	t             *testing.T
+	root          string
+	dir           string
+	pluginDir     string
+	certFile      string
+	storePath     string
+	marker        string
+	retention     int
+	privateInputs bool
 }
 
 func TestMountedV2NativeProcessCustody(t *testing.T) {
@@ -277,6 +299,30 @@ func TestMountedV2NativeProcessCustody(t *testing.T) {
 		}
 		r.assertSecretAbsent()
 	})
+	t.Run("worker-version-process-private-input-absence", func(t *testing.T) {
+		host := newFixtureHost(t, "private")
+		r := setupRunner(t, root, host, false)
+		r.privateInputs = true
+		r.runOK("init", "init", "-input=false", "-no-color")
+		r.runOK("saved-plan", "plan", "-input=false", "-no-color", "-out=saved.tfplan")
+		r.assertSecretAbsent()
+		r.assertDecodedSecretAbsent("saved plan", r.runOK("decoded-plan", "show", "-json", "saved.tfplan").output)
+		r.runOK("create", "apply", "-input=false", "-no-color", "-auto-approve")
+		if !host.sawPrivateInput() {
+			t.Fatal("Host did not receive process-only private input")
+		}
+		r.assertSecretAbsent()
+		r.assertDecodedSecretAbsent("state", r.runOK("decoded-state", "show", "-json").output)
+		journal, err := os.ReadFile(filepath.Join(r.storePath, "state.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.assertDecodedSecretAbsent("journal", string(journal))
+		r.runOK("delete", "destroy", "-input=false", "-no-color", "-auto-approve")
+		if mutations, _ := host.counts(); mutations != 2 {
+			t.Fatalf("WorkerVersion create+delete mutations=%d", mutations)
+		}
+	})
 }
 
 func setupRunner(t *testing.T, root string, h *fixtureHost, crash bool) runner {
@@ -357,6 +403,23 @@ resource "takoform_at_least_once_queue" "x" {
 			t.Fatal(err)
 		}
 	}
+	if h.mode == "private" {
+		hcl = strings.Replace(hcl, `resource "takoform_module_worker" "x" {
+  name = "app"
+}`, `resource "takoform_worker_version" "x" {
+  name = "version"
+  spec = {
+    worker = { resource_uid = "worker-uid" }
+    bundle = { resource_uid = "bundle-uid" }
+    handlers = ["fetch"]
+    vars_json = "{\"z\":1.0,\"a\":2}"
+    required_sensitive_vars = ["API_TOKEN"]
+  }
+}`, 1)
+		if err := os.WriteFile(filepath.Join(r.dir, "main.tf"), []byte(hcl), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return r
 }
 
@@ -410,6 +473,9 @@ func (r runner) run(label string, args ...string) result {
 	if r.retention != 0 {
 		cmd.Env = append(cmd.Env, "TF_VAR_retention="+strconv.Itoa(r.retention))
 	}
+	if r.privateInputs {
+		cmd.Env = append(cmd.Env, `TAKOFORM_V2_PRIVATE_INPUTS_JSON={"prod":{"version":{"API_TOKEN":"`+privateSentinel+`"}}}`)
+	}
 	if label == "apply" && strings.Contains(r.t.Name(), "post-ack") {
 		cmd.Env = append(cmd.Env, "NATIVE_V2_EXIT_AFTER_ACK="+r.marker)
 	}
@@ -437,11 +503,11 @@ func (r runner) assertSecretAbsent() {
 			}
 			r.t.Fatal(err)
 		}
-		if bytes.Contains(data, []byte("fixture-token")) {
+		if bytes.Contains(data, []byte("fixture-token")) || bytes.Contains(data, []byte(privateSentinel)) {
 			r.t.Fatalf("credential appeared in %s", name)
 		}
 	}
-	if data, err := os.ReadFile(filepath.Join(r.dir, "saved.tfplan")); err == nil && bytes.Contains(data, []byte("fixture-token")) {
+	if data, err := os.ReadFile(filepath.Join(r.dir, "saved.tfplan")); err == nil && (bytes.Contains(data, []byte("fixture-token")) || bytes.Contains(data, []byte(privateSentinel))) {
 		r.t.Fatal("credential appeared in saved plan")
 	}
 	err := filepath.WalkDir(r.storePath, func(path string, entry os.DirEntry, err error) error {
@@ -455,13 +521,27 @@ func (r runner) assertSecretAbsent() {
 		if err != nil {
 			return err
 		}
-		if bytes.Contains(data, []byte("fixture-token")) {
+		if bytes.Contains(data, []byte("fixture-token")) || bytes.Contains(data, []byte(privateSentinel)) {
 			return fmt.Errorf("credential appeared in journal %s", path)
 		}
 		return nil
 	})
 	if err != nil {
 		r.t.Fatal(err)
+	}
+}
+func (r runner) assertDecodedSecretAbsent(label, document string) {
+	r.t.Helper()
+	var value any
+	if err := json.Unmarshal([]byte(document), &value); err != nil {
+		r.t.Fatalf("%s not decoded JSON: %v", label, err)
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	if bytes.Contains(canonical, []byte(privateSentinel)) || bytes.Contains(canonical, []byte("fixture-token")) {
+		r.t.Fatalf("private value appeared in decoded %s", label)
 	}
 }
 func (r runner) assertJournalContains(want string) {
