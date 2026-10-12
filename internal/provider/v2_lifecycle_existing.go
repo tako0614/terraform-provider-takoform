@@ -270,29 +270,29 @@ func (r *v2Resource) privateInputsForUpdate(space, name string, spec map[string]
 	// Updates with no selected process-local map omit privateInputs so the
 	// Host retains prior values. A selected map must exactly match the
 	// declaration; values are never recovered from state or journal.
-	if _, ok := spec["requiredSensitiveVars"]; !ok {
-		return nil, nil, nil
-	}
 	// Discovery and support were already checked for a fresh Create, but
 	// their mutable advertisements are not replay authority for an Update.
 	// A fresh explicit Update is checked by the Host itself.
-	items, ok := spec["requiredSensitiveVars"].([]any)
-	if !ok || len(items) == 0 {
-		return nil, nil, nil
-	}
-	names := make([]string, 0, len(items))
-	for _, item := range items {
-		value, ok := item.(string)
+	var names []string
+	if rawNames, declared := spec["requiredSensitiveVars"]; declared {
+		items, ok := rawNames.([]any)
 		if !ok {
-			return nil, nil, errors.New("invalid private-input name")
+			return nil, nil, errors.New("invalid private-input declaration")
 		}
-		names = append(names, value)
+		names = make([]string, 0, len(items))
+		for _, item := range items {
+			value, ok := item.(string)
+			if !ok {
+				return nil, nil, errors.New("invalid private-input name")
+			}
+			names = append(names, value)
+		}
 	}
 	values, present, err := privateinputsv2.LoadOptional(space, name, names)
 	if err != nil {
 		return nil, nil, errors.New("invalid selected apply-time private-input map")
 	}
-	if !present {
+	if !present || len(names) == 0 {
 		return nil, nil, nil
 	}
 	return &values, names, nil

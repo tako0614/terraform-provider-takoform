@@ -328,28 +328,30 @@ func (r *v2Resource) privateInputs(space, name string, spec map[string]any, disc
 	if r.def.form != "https://edge.forms.takoform.com/forms/WorkerVersion/0.5.0/" {
 		return nil, nil, nil
 	}
-	raw, present := spec["requiredSensitiveVars"]
-	if !present {
-		return nil, nil, nil
-	}
-	items, ok := raw.([]any)
-	if !ok || len(items) == 0 {
-		return nil, nil, nil
-	}
-	names := make([]string, 0, len(items))
-	for _, item := range items {
-		name, ok := item.(string)
+	var names []string
+	if raw, present := spec["requiredSensitiveVars"]; present {
+		items, ok := raw.([]any)
 		if !ok {
 			return nil, nil, errors.New("required sensitive input names are invalid")
 		}
-		names = append(names, name)
+		names = make([]string, 0, len(items))
+		for _, item := range items {
+			name, ok := item.(string)
+			if !ok {
+				return nil, nil, errors.New("required sensitive input names are invalid")
+			}
+			names = append(names, name)
+		}
 	}
-	if !discovery.Capabilities.PrivateInputs || !support.PrivateInputs {
+	if len(names) != 0 && (!discovery.Capabilities.PrivateInputs || !support.PrivateInputs) {
 		return nil, nil, errors.New("Host and exact Form must both advertise private-input support")
 	}
 	values, err := privateinputsv2.Load(space, name, names)
 	if err != nil {
 		return nil, nil, errors.New("the exact apply-time private-input map is unavailable; no mutation was sent")
+	}
+	if len(names) == 0 {
+		return nil, nil, nil
 	}
 	return &values, names, nil
 }
