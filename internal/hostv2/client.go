@@ -352,6 +352,68 @@ func (c *Client) ReadOperation(ctx context.Context, id string) (Operation, error
 	return operation, nil
 }
 
+// ContinuePrivateInputs sends the entire original private-input map to the
+// same accepted Operation. It deliberately does not discover, check Form
+// support, add a key or generation, or retry the request.
+func (c *Client) ContinuePrivateInputs(ctx context.Context, original Operation, privateInputs map[string]string) (Operation, error) {
+	if !idPattern.MatchString(original.ID) || !idPattern.MatchString(original.ResourceUID) || original.Generation < 1 || original.Generation > maxSafeInteger {
+		return Operation{}, errors.New("takoform v2: invalid Operation identity for private-input continuation")
+	}
+	switch original.Action {
+	case "create", "update", "delete":
+	default:
+		return Operation{}, errors.New("takoform v2: invalid Operation action for private-input continuation")
+	}
+	switch original.Status {
+	case "queued", "running", "waiting_input", "reconciling":
+	default:
+		return Operation{}, errors.New("takoform v2: private inputs cannot continue a terminal or unknown Operation")
+	}
+	if privateInputs == nil {
+		return Operation{}, errors.New("takoform v2: original privateInputs map is required")
+	}
+	request := struct {
+		PrivateInputs map[string]string `json:"privateInputs"`
+	}{PrivateInputs: privateInputs}
+	if err := jsonv2.ValidateValue(request); err != nil {
+		return Operation{}, errors.New("takoform v2: private-input request is not valid JSON")
+	}
+	body, err := marshalRequest(request)
+	if err != nil {
+		return Operation{}, err
+	}
+	base, _, err := c.apiBase()
+	if err != nil {
+		return Operation{}, err
+	}
+	response, err := c.do(ctx, http.MethodPut, base+"/operations/"+original.ID+"/private-inputs", body, true, maxResponseBytes)
+	if err != nil {
+		return Operation{}, &IndeterminateError{Action: "private-input continuation"}
+	}
+	if response.status != http.StatusOK {
+		if response.status >= 400 && response.status < 500 {
+			apiError, validProblem := response.validProblemError()
+			if validProblem {
+				if apiError.OperationID != "" && apiError.OperationID != original.ID {
+					return Operation{}, &IndeterminateError{Action: "private-input continuation"}
+				}
+				return Operation{}, apiError
+			}
+		}
+		return Operation{}, &IndeterminateError{Action: "private-input continuation"}
+	}
+	var operation Operation
+	if err := decodeOperation(response.body, &operation); err != nil || operation.ID != original.ID || operation.ResourceUID != original.ResourceUID || operation.Action != original.Action || operation.Generation != original.Generation {
+		return Operation{}, &IndeterminateError{Action: "private-input continuation"}
+	}
+	switch operation.Status {
+	case "queued", "running", "waiting_input", "reconciling":
+		return operation, nil
+	default:
+		return Operation{}, &IndeterminateError{Action: "private-input continuation"}
+	}
+}
+
 func (c *Client) mutate(ctx context.Context, method, target, action, expectedUID, key, generation string, acceptedGeneration int64, body []byte) (Operation, error) {
 	var empty Operation
 	headers := make(http.Header)
@@ -498,18 +560,29 @@ func (r httpResponse) validProblemError() (*APIError, bool) {
 		return nil, false
 	}
 	var problem struct {
-		Type   string `json:"type"`
-		Title  string `json:"title"`
-		Status int    `json:"status"`
-		Code   string `json:"code"`
+		Type        string  `json:"type"`
+		Title       string  `json:"title"`
+		Status      int     `json:"status"`
+		Code        string  `json:"code"`
+		OperationID *string `json:"operationId"`
 	}
 	if decodeRequired(r.body, &problem, "type", "title", "status", "code") != nil || problem.Type != "about:blank" || problem.Title == "" || problem.Status != r.status {
+		return nil, false
+	}
+	if validateOptionalObject(r.body, "operationId") != nil {
+		return nil, false
+	}
+	if problem.OperationID != nil && !idPattern.MatchString(*problem.OperationID) {
 		return nil, false
 	}
 	if !validProblemCode(r.status, problem.Code) {
 		return nil, false
 	}
-	return &APIError{Status: r.status, Code: problem.Code, RetryAfter: r.header.Get("Retry-After")}, true
+	apiError := &APIError{Status: r.status, Code: problem.Code, RetryAfter: r.header.Get("Retry-After")}
+	if problem.OperationID != nil {
+		apiError.OperationID = *problem.OperationID
+	}
+	return apiError, true
 }
 
 func validProblemCode(status int, code string) bool {
