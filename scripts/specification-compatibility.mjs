@@ -15,6 +15,8 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { deriveSiteStatusFacts } from "../website/.vitepress/site-status.mjs";
+
 export const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -45,7 +47,6 @@ const PUBLIC_DOCUMENT_LEDGER = "release/published-document-lanes.json";
 const PUBLIC_SCHEMA_LEDGER = "release/public-schema-identities.json";
 const PROVIDER_RELEASE_LEDGER = "release/provider-release-identities.json";
 const PROVIDER_FORM_LEDGER = "release/provider-form-identities.json";
-const PROVIDER_DESCRIPTOR = "release/version.json";
 const SPECIFICATION_RELEASE_LEDGER = "release/specification-releases.json";
 const FAMILY_INDEX = "forms/candidates/current-family-index.json";
 
@@ -451,10 +452,9 @@ function addCurrentForm(root, catalog, candidateSetPath, form) {
   });
 }
 
-// The current Provider is whichever release the descriptor selects, not a
-// literal major: its embedded Forms are the current unpublished-candidate
-// projection, while every other release in the append-only ledger is retained
-// history for a withdrawn or superseded Provider identity.
+// This retained FormRef/package inventory follows the Registry-published v1
+// Provider, not the selected v5 URL-only release candidate. The published
+// version is derived and verified by the website status owner.
 function addProviderFormIdentities(catalog, providerFormLedger, currentProviderVersion) {
   for (const release of providerFormLedger.releases ?? []) {
     if (!isRecord(release) || !Array.isArray(release.forms)) fail(`${PROVIDER_FORM_LEDGER} contains an invalid release`);
@@ -647,16 +647,19 @@ function buildCatalog(root) {
   const providerFormLedger = readJson(root, PROVIDER_FORM_LEDGER);
   const specificationReleaseLedger = readJson(root, SPECIFICATION_RELEASE_LEDGER);
   const familyIndex = readJson(root, FAMILY_INDEX);
-  const providerDescriptor = readJson(root, PROVIDER_DESCRIPTOR);
-  if (typeof providerDescriptor.version !== "string" || providerDescriptor.version === "") {
-    fail(`${PROVIDER_DESCRIPTOR} has no current Provider version`);
+  const publishedV1Version = deriveSiteStatusFacts(root).providerPublished;
+  const publishedV1Roster = (providerFormLedger.releases ?? []).filter(
+    (release) => release?.providerVersion === publishedV1Version && release?.portableApiVersion === HOST_API_V1,
+  );
+  if (publishedV1Roster.length !== 1) {
+    fail(`${PROVIDER_FORM_LEDGER} has no unique v1 FormRef roster for Registry-published Provider ${publishedV1Version}`);
   }
   const catalog = new Map(CLASS_IDS.map((classId) => [classId, new Map()]));
 
   addPublicSchemaIdentities(root, catalog, publicSchemaLedger);
   addPublishedDocumentIdentities(catalog, documentLedger);
   addCurrentFamilies(root, catalog, familyIndex);
-  addProviderFormIdentities(catalog, providerFormLedger, providerDescriptor.version);
+  addProviderFormIdentities(catalog, providerFormLedger, publishedV1Version);
   addCandidateContracts(root, catalog, familyIndex);
   addProviderVersions(catalog, providerReleaseLedger);
   addSpecificationIdentities(catalog, specificationReleaseLedger);

@@ -1,6 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { deriveSiteStatusFacts } from "../website/.vitepress/site-status.mjs";
 
 import {
   CLASS_IDS,
@@ -22,6 +34,31 @@ const SPECIFICATION_LEDGER = JSON.parse(
 
 function clone(value) {
   return structuredClone(value);
+}
+
+function withProviderReleaseLedger(edit, run) {
+  const root = mkdtempSync(path.join(tmpdir(), "takoform-spec-compat-"));
+  try {
+    for (const entry of readdirSync(ROOT)) {
+      if ([".git", "node_modules", "release"].includes(entry)) continue;
+      symlinkSync(path.join(ROOT, entry), path.join(root, entry));
+    }
+    mkdirSync(path.join(root, "release"));
+    for (const entry of readdirSync(path.join(ROOT, "release"))) {
+      if (entry === "provider-release-identities.json") {
+        copyFileSync(path.join(ROOT, "release", entry), path.join(root, "release", entry));
+      } else {
+        symlinkSync(path.join(ROOT, "release", entry), path.join(root, "release", entry));
+      }
+    }
+    const ledgerPath = path.join(root, "release/provider-release-identities.json");
+    const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+    edit(ledger);
+    writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
+    return run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 describe("Specification 1.1 compatibility manifest", () => {
@@ -142,12 +179,14 @@ describe("Specification 1.1 compatibility manifest", () => {
     expect(canonicalJson(generateManifest(ROOT))).toBe(canonicalJson(MANIFEST));
   });
 
-  test("shared Forms keep current status and publication across a Provider minor", () => {
+  test("selected v5 leaves the latest Registry-published v1 FormRef projection intact", () => {
     const descriptor = JSON.parse(readFileSync(path.join(ROOT, "release/version.json"), "utf8"));
     const ledger = JSON.parse(readFileSync(path.join(ROOT, "release/provider-form-identities.json"), "utf8"));
-    const current = ledger.releases.find((entry) => entry.providerVersion === descriptor.version);
+    const publishedVersion = deriveSiteStatusFacts(ROOT).providerPublished;
+    const current = ledger.releases.find((entry) => entry.providerVersion === publishedVersion);
     const retained = ledger.releases.find((entry) => entry.providerVersion === "4.0.0");
-    expect(descriptor.version).toBe("4.1.0");
+    expect(descriptor.version).toBe("5.0.0");
+    expect(publishedVersion).toBe("4.1.0");
     expect(current.forms).toHaveLength(17);
     expect(current.forms).toEqual(retained.forms);
     const entries = generateManifest(ROOT).classes.find((entry) => entry.id === "form-package").entries;
@@ -161,5 +200,18 @@ describe("Specification 1.1 compatibility manifest", () => {
       });
       expect(matches[0].migration.reason).not.toContain("retained Provider 4.0.0");
     }
+  });
+
+  test("malformed Registry publication proof cannot select a v1 FormRef projection", () => {
+    expect(() => withProviderReleaseLedger((ledger) => {
+      const latest = ledger.entries.find((entry) => entry.version === "4.1.0");
+      latest.registryReadback = {};
+    }, (root) => generateManifest(root))).toThrow("Provider 4.1.0 Registry readback is incomplete");
+  });
+
+  test("missing Registry publication proof cannot select a v1 FormRef projection", () => {
+    expect(() => withProviderReleaseLedger((ledger) => {
+      for (const entry of ledger.entries) delete entry.registryReadback;
+    }, (root) => generateManifest(root))).toThrow("no retained Registry-readback release");
   });
 });
