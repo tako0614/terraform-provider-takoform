@@ -47,17 +47,17 @@ func v2Artifact() schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{Required: true, Attributes: map[string]schema.Attribute{"url": v2String(true), "sha256": v2String(true)}}
 }
 func v2JSONString() schema.StringAttribute {
-	return schema.StringAttribute{Optional: true, CustomType: v2JSONSemanticStringType{}, Default: stringdefault.StaticString("{}")}
+	return schema.StringAttribute{Optional: true, Computed: true, CustomType: v2JSONSemanticStringType{}, Default: stringdefault.StaticString("{}")}
 }
 func v2SetString(required bool, defaultEmpty bool) schema.SetAttribute {
-	attribute := schema.SetAttribute{Required: required, Optional: !required, ElementType: schema.StringAttribute{}.GetType()}
+	attribute := schema.SetAttribute{Required: required, Optional: !required, Computed: defaultEmpty && !required, ElementType: schema.StringAttribute{}.GetType()}
 	if defaultEmpty {
 		attribute.Default = v2EmptySetDefault(attribute)
 	}
 	return attribute
 }
 func v2Binding() schema.SetNestedAttribute {
-	attribute := schema.SetNestedAttribute{Optional: true, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"name": v2String(true), "resource": v2Ref()}}}
+	attribute := schema.SetNestedAttribute{Optional: true, Computed: true, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"name": v2String(true), "resource": v2Ref()}}}
 	attribute.Default = v2EmptySetDefault(attribute)
 	return attribute
 }
@@ -95,7 +95,7 @@ var v2Forms = []v2FormDef{
 	{"takoform_sqlite_database", edgev2.SQLiteDatabaseURL, nil},
 	{"takoform_sqlite_migration_set", edgev2.SQLiteMigrationSetURL, map[string]schema.Attribute{"artifact": v2Artifact()}},
 	{"takoform_sqlite_migration_application", edgev2.SQLiteMigrationApplicationURL, map[string]schema.Attribute{"database": v2Ref(), "migration_set": v2Ref()}},
-	{"takoform_at_least_once_queue", edgev2.AtLeastOnceQueueURL, map[string]schema.Attribute{"delivery_delay_seconds": schema.Int64Attribute{Optional: true, Default: int64default.StaticInt64(0)}, "message_retention_seconds": v2Int(true)}},
+	{"takoform_at_least_once_queue", edgev2.AtLeastOnceQueueURL, map[string]schema.Attribute{"delivery_delay_seconds": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0)}, "message_retention_seconds": v2Int(true)}},
 	{"takoform_queue_consumer", edgev2.QueueConsumerURL, map[string]schema.Attribute{
 		"queue": v2Ref(), "worker": v2Ref(), "max_batch_size": v2Int(true), "max_batch_timeout_seconds": v2Int(true),
 		"max_concurrency": v2Int(true), "max_retries": v2Int(true), "retry_delay_seconds": v2Int(true), "dead_letter_queue": v2OptionalRef(),
