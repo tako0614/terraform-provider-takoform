@@ -63,6 +63,62 @@ Availability is verified, not declared by this immutable documentation.
 The exact removal and state boundary is documented in the
 [v3-to-v4 migration guide](../release/migrations/v3-to-v4.md).
 
+## Provider 5.0.0 candidate (unpublished)
+
+This source checkout contains a fresh-install Provider 5 candidate for Host API
+`forms.takoform.com/v2` and thirteen exact Edge Forms. It is not a Registry
+release: Provider 5.0.0 is not currently available for installation, and this
+documentation does not establish that a Host supports the Forms. Provider 4.1.0
+remains the published v1 Provider. **Provider 4 state is not automatically translated to Provider 5.** Keep existing v4 state with v4 unless an operator
+plans and verifies a separate migration.
+
+The v2 wire namespace is `forms.takoform.com/v2`; it is separate from each
+versioned Form URL. For example, the exact
+[ModuleWorker 0.3.0 Form](https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/)
+is one of the thirteen URLs mounted by the candidate.
+
+The v5 configuration and lifecycle boundaries are in the
+[Provider 5 consumer reference](provider-host-api-v2-source.md). A minimal
+version pin and resource show the intended source contract; do not apply this
+example against a Host until it advertises and authorizes the exact Forms:
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "takoform" {
+  endpoint      = "https://host.example"
+  host_api_root = "https://host.example/apis/forms.takoform.com/v2"
+  token         = var.host_token
+  store_path    = var.absolute_private_store_path
+  store_id      = var.fixed_caller_scope_id
+  space         = "prod"
+}
+
+resource "takoform_module_worker" "api" {
+  name = "api"
+}
+```
+
+For a published release, verify the Registry version before changing a
+consumer pin. Source-tag verification is separate; after the intended tag is
+published, the exact source checkout is:
+
+```sh
+git clone https://github.com/tako0614/terraform-provider-takoform.git
+cd terraform-provider-takoform
+git checkout --detach v5.0.0
+```
+
+The `v5.0.0` tag does not currently exist. A source tag, local build, or
+candidate page is not evidence of Registry publication.
+
 ## Resource reference
 
 ### Edge (17)
