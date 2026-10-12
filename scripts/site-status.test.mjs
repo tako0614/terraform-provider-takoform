@@ -60,6 +60,8 @@ describe("published Provider documentation wording", () => {
       .toContain("release target 5.0.0 docs check out v4.1.0 instead of v5.0.0");
     expect(publishedProviderTagDocIssues(source.replace("git checkout --detach v4.1.0", "git checkout --detach v5.0.0"), "4.1.0"))
       .toContain("published Provider 4.1.0 docs check out v5.0.0 instead of v4.1.0");
+    expect(provider5TagDocIssues(source.replace("Provider 5.0.0 uses", "The unpublished Provider 5.0.0 candidate uses"), descriptor, candidate))
+      .toContain("release target 5.0.0 has stale unpublished provider status");
     for (const omitted of [
       "forms.takoform.com/v2",
       candidate.forms[0].formURL,

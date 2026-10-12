@@ -111,6 +111,10 @@ export function provider5TagDocIssues(source, descriptor, candidate) {
   }
   const targetSource = sections[0];
   issues.push(...exactCheckoutIssues(targetSource, descriptor.version, `release target ${descriptor.version}`));
+  const staleStatus = stalePublishedProviderStatus(targetSource, descriptor.version);
+  if (staleStatus !== null) {
+    issues.push(`release target ${descriptor.version} has ${staleStatus}`);
+  }
   const major = descriptor.version.split(".")[0];
   const selectedPin = new RegExp(`^\\s*version\\s*=\\s*"(?:~>\\s*${major}\\.0|=\\s*${escapedVersion})"`, "m");
   if (!selectedPin.test(targetSource)) {
