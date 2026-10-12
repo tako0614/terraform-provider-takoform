@@ -447,6 +447,7 @@ func (c *Client) mutate(ctx context.Context, method, target, action, expectedUID
 		if err != nil || retryAfter <= 0 {
 			return empty, &IndeterminateError{Action: action}
 		}
+		operation.RetryAfterSeconds = retryAfter
 	}
 	if err := c.validateOperationLocation(response.header.Get("Location"), operation.ID); err != nil {
 		return empty, &IndeterminateError{Action: action}
