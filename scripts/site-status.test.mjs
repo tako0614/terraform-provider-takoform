@@ -20,6 +20,7 @@ import {
 import {
   publishedProviderInstallDocStatusIssues,
   PUBLISHED_INSTALL_PROSE,
+  provider5TagDocIssues,
   releaseTargetTagDocIssues,
   stalePublishedProviderStatus,
 } from "./provider-published-docs.mjs";
@@ -33,10 +34,51 @@ import {
   prepareSiteStatus,
   renderSiteStatusDocument,
 } from "../website/.vitepress/site-status.mjs";
+import { validateProvider5Candidate } from "./provider5-candidate.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 describe("published Provider documentation wording", () => {
+  test("selected Provider 5 tag docs must contain v2 adoption and state boundaries", () => {
+    const descriptor = read(repositoryRoot, RELEASE_VERSION);
+    const candidate = validateProvider5Candidate(repositoryRoot);
+    const source = [
+      "Provider 5.0.0 uses forms.takoform.com/v2.",
+      `Exact Form URL: ${candidate.forms[0].formURL}`,
+      "Provider 4 state is not automatically translated to Provider 5.",
+      'version = "~> 5.0"',
+      `resource "${candidate.forms[0].resourceType}" "example" {}`,
+      "git checkout --detach v5.0.0",
+    ].join("\n");
+    expect(provider5TagDocIssues(source, descriptor, candidate)).toEqual([]);
+    expect(provider5TagDocIssues(source.replace("v5.0.0", "v4.1.0"), descriptor, candidate))
+      .toContain("release target 5.0.0 docs check out v4.1.0 instead of v5.0.0");
+    for (const omitted of [
+      "forms.takoform.com/v2",
+      candidate.forms[0].formURL,
+      'version = "~> 5.0"',
+      `resource "${candidate.forms[0].resourceType}" "example" {}`,
+      "Provider 4 state is not automatically translated to Provider 5.",
+    ]) {
+      expect(provider5TagDocIssues(source.replace(omitted, ""), descriptor, candidate).length)
+        .toBeGreaterThan(0);
+    }
+  });
+
+  test("provider tag workflow runs the public doc guard before tag evidence", () => {
+    const workflow = readFileSync(
+      path.join(repositoryRoot, ".github/workflows/provider-release-tag.yml"),
+      "utf8",
+    );
+    const preflight = workflow.slice(
+      workflow.indexOf("\n  candidate-preflight:\n"),
+      workflow.indexOf("\n  tag:\n", workflow.indexOf("\njobs:\n")),
+    );
+    expect(preflight).toContain("bun scripts/check-public-surfaces.mjs");
+    expect(preflight.indexOf("bun scripts/check-public-surfaces.mjs"))
+      .toBeLessThan(preflight.indexOf("go -C cmd/provider-release run . build"));
+  });
+
   test("release-target docs reject the stale tagged 4.1.0 wording before publication", () => {
     const taggedSource = [
       "The unpublished Provider 4.1.0 candidate adds token_file.",

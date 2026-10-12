@@ -98,6 +98,7 @@ jobs:
           set -euo pipefail
           go mod verify
           bun scripts/provider5-candidate.mjs --check
+          bun scripts/check-public-surfaces.mjs
           go test ./...
           go run ./cmd/worker-authoring-conformance render-matrix \
             --opentofu tofu --terraform terraform > "$RUNNER_TEMP/worker-authoring-matrix.json"

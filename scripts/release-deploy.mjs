@@ -47,6 +47,10 @@ import {
   validateProvider4ReleaseDescriptor,
   validateProvider5ReleaseDescriptor,
 } from "./provider-release-descriptor.mjs";
+import {
+  provider5TagDocIssues,
+  releaseTargetTagDocIssues,
+} from "./provider-published-docs.mjs";
 
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
@@ -4552,7 +4556,18 @@ export function providerReleaseBody(descriptor) {
   );
 }
 
+function assertProviderTagDocs(repo, descriptor) {
+  const source = readFileSync(join(repo, "docs/index.md"), "utf8");
+  const issues = descriptor.schemaVersion === 2
+    ? provider5TagDocIssues(source, descriptor, validateProvider5Candidate(repo))
+    : releaseTargetTagDocIssues(source, descriptor.version);
+  if (issues.length > 0) {
+    throw new Error(`docs/index.md: ${issues.join("; ")}`);
+  }
+}
+
 function providerPrepare(context, options, descriptor) {
+  assertProviderTagDocs(context.repo, descriptor);
   const commit = assertCurrentProtectedMain(
     context,
     options["expected-commit"],
@@ -4579,6 +4594,7 @@ function providerPrepare(context, options, descriptor) {
 }
 
 function providerTag(context, options, descriptor) {
+  assertProviderTagDocs(context.repo, descriptor);
   const expectedCommit = options["expected-commit"];
   assertCurrentProtectedMain(context, expectedCommit);
   assertTagAbsent(context, descriptor.tag);
