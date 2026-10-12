@@ -20,6 +20,7 @@ import {
 } from "./specification-release.mjs";
 import {
   FAMILY_CANDIDATE_SET,
+  deriveLatestPublishedV1Provider,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
 import {
@@ -711,7 +712,8 @@ function checkPublishedProviderInstallDocs(facts) {
   for (const issue of issues) {
     fail(`docs/index.md: ${issue}`);
   }
-  for (const issue of publishedProviderTagDocIssues(tagDocs, facts.providerPublished)) {
+  const publishedV1 = deriveLatestPublishedV1Provider(repositoryRoot);
+  for (const issue of publishedProviderTagDocIssues(tagDocs, publishedV1.version)) {
     fail(`docs/index.md: ${issue}`);
   }
   checkImmutableProviderTagDocs(tagDocs);
@@ -1069,7 +1071,12 @@ function checkWebsiteDocsProjection(formDocNames) {
 // generated surface carried it. A Form now cannot be added or removed without
 // every one of these learning about it.
 function checkHandWrittenInventories(familyRoster) {
-  const publishedProvider = deriveSiteStatusFacts(repositoryRoot).providerPublished;
+  const facts = deriveSiteStatusFacts(repositoryRoot);
+  const publishedProvider = facts.providerPublished;
+  const publishedV1 = deriveLatestPublishedV1Provider(repositoryRoot);
+  const publishedResourceCount = publishedProvider === publishedV1.version
+    ? publishedV1.formRoster.forms.length
+    : validateProvider5Candidate(repositoryRoot).forms.length;
   const familyKinds = familyRoster.map(({ kind }) => kind);
   const familyDocNames = familyRoster.map(({ docName }) => docName);
   const familySlugs = familyRoster.map(({ slug }) => slug);
@@ -1109,7 +1116,7 @@ function checkHandWrittenInventories(familyRoster) {
       label: "the English landing inventory",
       required: [
         { needle: `**\`${publishedProvider}\`**`, subject: "current Provider" },
-        { needle: "| Edge | 17 |", subject: "Edge count" },
+        { needle: `| Edge | ${publishedResourceCount} |`, subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
     },
@@ -1118,7 +1125,7 @@ function checkHandWrittenInventories(familyRoster) {
       label: "the Japanese landing inventory",
       required: [
         { needle: `**\`${publishedProvider}\`**`, subject: "current Provider" },
-        { needle: "| Edge | 17 |", subject: "Edge count" },
+        { needle: `| Edge | ${publishedResourceCount} |`, subject: "Edge count" },
         { needle: "Provider reference", subject: "Provider reference" },
       ],
     },
@@ -1939,9 +1946,13 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   const siteStatus = deriveSiteStatusFacts(repositoryRoot);
+  const publishedV1 = deriveLatestPublishedV1Provider(repositoryRoot);
+  const publishedResourceCount = siteStatus.providerPublished === publishedV1.version
+    ? publishedV1.formRoster.forms.length
+    : validateProvider5Candidate(repositoryRoot).forms.length;
   console.log(
     `Public surfaces OK: Specification 1.1 is ${siteStatus.specificationReleaseStatus}, ` +
-      `the Registry-published Provider v${siteStatus.providerPublished} selects 17 tako0614 Edge Forms, Provider v3.0.0 ` +
+      `the Registry-published Provider v${siteStatus.providerPublished} selects ${publishedResourceCount} tako0614 Edge Forms, Provider v3.0.0 ` +
       "retains the 31-Form Registry history, Provider v2.1.1 remains retained history, and docs, examples, website links, and normative schema URLs are consistent.",
   );
 }

@@ -32,6 +32,7 @@ import {
   SITE_STATUS_DEPRECATED_FIELDS,
   SITE_STATUS_FIELDS,
   deriveSiteStatusFacts,
+  deriveLatestPublishedV1Provider,
   prepareSiteStatus,
   renderSiteStatusDocument,
 } from "../website/.vitepress/site-status.mjs";
@@ -168,6 +169,7 @@ function fixture(mutate) {
     for (const relativePath of [
       RELEASE_VERSION,
       `release/candidates/provider-v${release.version}.json`,
+      `release/candidates/provider-v${release.version}-form-identities.json`,
       "release/provider-release-identities.json",
       "release/provider-form-identities.json",
       "release/specification-releases.json",
@@ -461,6 +463,87 @@ describe("read-only site status preparation", () => {
 });
 
 describe("Provider target and Registry publication derivation", () => {
+  function appendV5Readback(root, patch = () => {}) {
+    const ledgerPath = "release/provider-release-identities.json";
+    const ledger = read(root, ledgerPath);
+    const entry = structuredClone(ledger.entries.find((candidate) => candidate.version === "4.1.0"));
+    entry.version = "5.0.0";
+    entry.tag = "v5.0.0";
+    entry.tagObject = "5".repeat(40);
+    entry.commit = "6".repeat(40);
+    entry.registryReadback.githubRelease.url =
+      "https://github.com/tako0614/terraform-provider-takoform/releases/tag/v5.0.0";
+    entry.registryReadback.registry.downloadUrl =
+      "https://registry.terraform.io/v1/providers/tako0614/takoform/5.0.0/download/linux/amd64";
+    entry.registryReadback.installation.providerVersion = "5.0.0";
+    entry.registryReadback.installation.resourceSchemaCount = 13;
+    patch(entry);
+    ledger.entries.push(entry);
+    write(root, ledgerPath, ledger);
+  }
+
+  test("a verified v5 Registry readback advances latest Provider without changing the v1 roster", () => {
+    const result = fixture((root) => {
+      appendV5Readback(root);
+      return {
+        facts: deriveSiteStatusFacts(root),
+        v1: deriveLatestPublishedV1Provider(root),
+      };
+    });
+    expect(result.facts.providerPublished).toBe("5.0.0");
+    expect(result.facts.providerTargetStatus).toBe("registry-published");
+    expect(result.v1.version).toBe("4.1.0");
+    expect(result.v1.formRoster.portableApiVersion).toBe("forms.takoform.com/v1");
+    expect(result.v1.formRoster.forms).toHaveLength(17);
+  });
+
+  test("future v5 publication checks v5 status prose while retaining the v4 verification section", () => {
+    const { facts, v1 } = fixture((root) => {
+      appendV5Readback(root);
+      return { facts: deriveSiteStatusFacts(root), v1: deriveLatestPublishedV1Provider(root) };
+    });
+    const docs = readFileSync(path.join(repositoryRoot, "docs/index.md"), "utf8");
+    expect(publishedProviderTagDocIssues(docs, v1.version)).toEqual([]);
+    expect(publishedProviderTagDocIssues(docs, facts.providerPublished))
+      .toContain("published Provider 5.0.0 docs check out v4.1.0 instead of v5.0.0");
+    const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
+      relativePath, "Provider 5.0.0 availability is verified by Registry readback. Provider 4.1.0 is retained history.",
+    ]));
+    expect(publishedProviderInstallDocStatusIssues(sources, facts.providerPublished)).toEqual([]);
+    sources.set("docs/index.md", "Provider 5.0.0 is an unpublished candidate.");
+    expect(publishedProviderInstallDocStatusIssues(sources, facts.providerPublished))
+      .toEqual(["docs/index.md: stale unpublished provider status"]);
+  });
+
+  test("published v5 refuses malformed proof, URL roster, or schema count without v4 fallback", () => {
+    for (const patch of [
+      (entry) => { entry.registryReadback.registry.downloadUrl = "https://invalid.example/5.0.0"; },
+      (entry) => { entry.registryReadback.installation.resourceSchemaCount = 17; },
+      (entry) => { entry.registryReadback.installation.schemaSha256 = "bad"; },
+    ]) {
+      expect(() => fixture((root) => {
+        appendV5Readback(root, patch);
+        return deriveSiteStatusFacts(root);
+      })).toThrow();
+    }
+    expect(() => fixture((root) => {
+      appendV5Readback(root);
+      const pathToCandidate = "release/candidates/provider-v5.0.0-form-identities.json";
+      const candidate = read(root, pathToCandidate);
+      candidate.forms.pop();
+      write(root, pathToCandidate, candidate);
+      return deriveSiteStatusFacts(root);
+    })).toThrow(/exact 13-URL Provider 5\.0\.0 candidate contract/u);
+    expect(() => fixture((root) => {
+      appendV5Readback(root);
+      const pathToCandidate = "release/candidates/provider-v5.0.0-form-identities.json";
+      const candidate = read(root, pathToCandidate);
+      candidate.forms[0].formURL = candidate.forms[0].formURL.replace("0.2.0/", "0.2.1/");
+      write(root, pathToCandidate, candidate);
+      return deriveSiteStatusFacts(root);
+    })).toThrow(/exact 13-URL Provider 5\.0\.0 candidate contract/u);
+  });
+
   test("a descriptor alone does not promote published availability", () => {
     const facts = fixture((root) => {
       const ledgerPath = "release/provider-release-identities.json";
@@ -574,7 +657,7 @@ describe("the gate refuses", () => {
     });
     expect(
       failures.some((failure) =>
-        failure.includes("Registry schema count differs from its published Form roster"),
+        failure.includes("Registry schema count differs from its published v1 FormRef roster"),
       ),
     ).toBe(true);
   });

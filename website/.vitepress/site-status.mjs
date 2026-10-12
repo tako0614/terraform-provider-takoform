@@ -65,6 +65,12 @@ const BLOCKER_LEDGER = "spec/publication-blockers.json";
 export const RELEASE_VERSION = "release/version.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
 const PROVIDER_FORM_IDENTITIES = "release/provider-form-identities.json";
+const PROVIDER_V1_API = "forms.takoform.com/v1";
+const PROVIDER_V2_API = "forms.takoform.com/v2";
+// Exact published URL roster from the v5 publisher object, independently
+// pinned by scripts/provider5-candidate.mjs before any release build.
+const PROVIDER_V5_URL_ROSTER_SHA256 =
+  "bccbbc829927857e108f4827814311bdbefef27b9780ad8fb2ca7d22c5cc39ca";
 const SPECIFICATION_RELEASES = "release/specification-releases.json";
 
 export const SITE_STATUS_FIELDS = [
@@ -207,6 +213,71 @@ function validateCurrentProviderRegistryReadback(entry) {
   return entry;
 }
 
+function providerReleaseEntries(repositoryRoot) {
+  const ledger = readJson(repositoryRoot, PROVIDER_RELEASE_IDENTITIES);
+  const entries = Array.isArray(ledger.entries) ? ledger.entries : [];
+  if (new Set(entries.map((entry) => entry?.version)).size !== entries.length) {
+    throw new Error(`${PROVIDER_RELEASE_IDENTITIES}: duplicate Provider version`);
+  }
+  return entries;
+}
+
+function latestPublishedV1FromEntries(entries, formIdentityLedger) {
+  const v1Rosters = (formIdentityLedger.releases ?? []).filter(
+    (release) => release?.portableApiVersion === PROVIDER_V1_API,
+  );
+  const versions = new Set(v1Rosters.map((release) => release.providerVersion));
+  if (versions.size !== v1Rosters.length) {
+    throw new Error(`${PROVIDER_FORM_IDENTITIES}: duplicate v1 FormRef roster`);
+  }
+  const releaseEntry = entries.filter((entry) =>
+    entry != null && Object.hasOwn(entry, "registryReadback") && versions.has(entry.version)
+  ).at(-1);
+  if (!releaseEntry) {
+    throw new Error(`${PROVIDER_RELEASE_IDENTITIES}: no Registry-readback v1 Provider roster`);
+  }
+  validateCurrentProviderRegistryReadback(releaseEntry);
+  const formRoster = v1Rosters.find((release) => release.providerVersion === releaseEntry.version);
+  if (!Array.isArray(formRoster?.forms) ||
+      releaseEntry.registryReadback.installation.resourceSchemaCount !== formRoster.forms.length) {
+    throw new Error(
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${releaseEntry.version} Registry schema count differs from its published v1 FormRef roster`,
+    );
+  }
+  return { version: releaseEntry.version, releaseEntry, formRoster };
+}
+
+// The newest Registry version may use URL identities instead of v1 FormRefs.
+// This separate readback-backed selection preserves the latest v1 roster for
+// compatibility reports without mislabeling it as the latest Provider.
+export function deriveLatestPublishedV1Provider(repositoryRoot) {
+  return latestPublishedV1FromEntries(
+    providerReleaseEntries(repositoryRoot),
+    readJson(repositoryRoot, PROVIDER_FORM_IDENTITIES),
+  );
+}
+
+function publishedV5URLRoster(repositoryRoot, descriptor) {
+  const pathToCandidate = `release/candidates/provider-v${descriptor.version}-form-identities.json`;
+  const candidate = readJson(repositoryRoot, pathToCandidate);
+  const forms = candidate.forms;
+  if (candidate.format !== "takoform.provider-candidate-form-urls@v1" ||
+      candidate.providerVersion !== descriptor.version ||
+      candidate.portableApiVersion !== PROVIDER_V2_API ||
+      candidate.formPublisherRepository !== descriptor.formPublisherRepository ||
+      candidate.formPublisherCommit !== descriptor.formPublisherCommit ||
+      !Array.isArray(forms) || forms.length !== 13 ||
+      new Set(forms.map((form) => form?.resourceType)).size !== 13 ||
+      new Set(forms.map((form) => form?.formURL)).size !== 13 ||
+      forms.some((form) => !/^takoform_[a-z0-9_]+$/u.test(form?.resourceType ?? "") ||
+        !/^https:\/\/edge\.forms\.takoform\.com\/forms\/[A-Za-z][A-Za-z0-9]*\/[0-9]+\.[0-9]+\.[0-9]+\/$/u.test(form?.formURL ?? "")) ||
+      createHash("sha256").update(JSON.stringify(forms.map((form) => form.formURL).sort())).digest("hex") !==
+        PROVIDER_V5_URL_ROSTER_SHA256) {
+    throw new Error(`${pathToCandidate}: expected the exact 13-URL Provider ${descriptor.version} candidate contract`);
+  }
+  return forms;
+}
+
 /**
  * deriveSiteStatusFacts reads every release, protocol, family and package fact
  * out of the repository. Nothing here is a literal a human keeps in step by
@@ -275,14 +346,7 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     ? "released"
     : "candidate-open";
 
-  const releaseIdentities = readJson(repositoryRoot, PROVIDER_RELEASE_IDENTITIES);
-  const releaseIdentityEntries = Array.isArray(releaseIdentities.entries)
-    ? releaseIdentities.entries
-    : [];
-  if (new Set(releaseIdentityEntries.map((entry) => entry?.version)).size !==
-      releaseIdentityEntries.length) {
-    throw new Error(`${PROVIDER_RELEASE_IDENTITIES}: duplicate Provider version`);
-  }
+  const releaseIdentityEntries = providerReleaseEntries(repositoryRoot);
   const publishedEntries = releaseIdentityEntries.filter((entry) =>
     entry != null && Object.hasOwn(entry, "registryReadback")
   );
@@ -387,28 +451,33 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     (total, family) => total + family.forms.length,
     0,
   );
-  // The installed schema is compared against the published Provider's own Form
-  // roster, not against currentFormCount. currentFormCount is the retained
+  // The installed schema is compared against the published Provider's own
+  // identity roster (v1 FormRefs or v5 exact URLs), not currentFormCount. That is the retained
   // aggregate corpus this repository still carries; the published Provider
   // registers exactly the Forms its own identity ledger release names, and a
   // Provider that selects a publisher subset is expected to differ from the
   // aggregate. The roster is the only count the Registry readback can falsify.
   const providerFormIdentities = readJson(repositoryRoot, PROVIDER_FORM_IDENTITIES);
-  const publishedProviderReleases = (providerFormIdentities.releases ?? []).filter(
-    (release) => release?.providerVersion === providerPublished,
+  latestPublishedV1FromEntries(releaseIdentityEntries, providerFormIdentities);
+  const publishedMajor = stableVersionParts(providerPublished)?.[1];
+  if (publishedMajor === "5" && providerPublished !== releaseVersion.version) {
+    throw new Error(`${PROVIDER_RELEASE_IDENTITIES}: published Provider ${providerPublished} is not the selected URL candidate`);
+  }
+  const publishedV1Rosters = (providerFormIdentities.releases ?? []).filter(
+    (release) => release?.providerVersion === providerPublished && release?.portableApiVersion === PROVIDER_V1_API,
   );
-  const publishedProviderRelease = publishedProviderReleases[0];
-  if (publishedProviderReleases.length !== 1 || !Array.isArray(publishedProviderRelease?.forms)) {
-    throw new Error(
-      `${PROVIDER_FORM_IDENTITIES}: expected one Form roster for the published Provider ${providerPublished}`,
-    );
+  const publishedRoster = publishedMajor === "5"
+    ? publishedV5URLRoster(repositoryRoot, releaseVersion)
+    : publishedV1Rosters.length === 1 ? publishedV1Rosters[0].forms : null;
+  if (!Array.isArray(publishedRoster)) {
+    throw new Error(`${PROVIDER_FORM_IDENTITIES}: expected one Form roster for the published Provider ${providerPublished}`);
   }
   if (
     providerPublishedEntry.registryReadback.installation.resourceSchemaCount !==
-      publishedProviderRelease.forms.length
+      publishedRoster.length
   ) {
     throw new Error(
-      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerPublished} Registry schema count differs from its published Form roster`,
+      `${PROVIDER_RELEASE_IDENTITIES}: Provider ${providerPublished} Registry schema count differs from its published ${publishedMajor === "5" ? "URL" : "FormRef"} roster`,
     );
   }
 
