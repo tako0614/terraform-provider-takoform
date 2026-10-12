@@ -1,10 +1,12 @@
 # Provider v2 process-local private-input source
 
-`internal/privateinputsv2` is an internal Provider source helper for a future
-Host v2 WorkerVersion caller. It is not mounted in a Terraform resource,
-registered as a Provider capability, or a public API. It reads
-`TAKOFORM_V2_PRIVATE_INPUTS_JSON` only when the caller explicitly asks for
-inputs for one exact Host `space` and resource `name`:
+`internal/privateinputsv2` supplies process-local values to the Provider's Host
+v2 WorkerVersion Apply and accepted-Operation continuation paths. It is an
+internal helper, not an HCL attribute or published API. Those paths call
+`Load` only after the WorkerVersion desired spec has passed `edgev2` validation;
+planning does not read this source. It reads `TAKOFORM_V2_PRIVATE_INPUTS_JSON`
+only when a caller requests values for one exact Host `space` and resource
+`name`:
 
 ```json
 {
@@ -31,16 +33,19 @@ Form-valid spec. The 1 MiB source limit bounds the overall input. JSON must be
 strict UTF-8 with no duplicate keys or invalid Unicode. Diagnostics are generic
 and do not include values or input names.
 
-The caller must read this source only in its Apply-time or explicit
-private-input-continuation path, never while planning. This helper does not
-create a Host operation, retry or replay one, or decide whether a value matches
-an earlier submission. If a Host has already accepted a WorkerVersion
-operation and requests private-input continuation, the caller must continue
-that exact Operation using the existing Host v2 client and its entire original
-map. Host authorization and value equality remain Host decisions.
+For an accepted Operation in `waiting_input`, the caller reloads the source
+and passes the entire original map to the existing Host v2 client for that
+same Operation. The helper does not retain or prove the original values; the
+Host authorizes the continuation and checks equality. If the original map is
+unavailable, the caller must stop and reconcile that Operation rather than
+creating a new one or replaying a mutation.
 
 The environment source is process-local input, not durable storage or a
 transport guarantee. Callers and runners remain responsible for controlling
 which process receives it and for not placing its values in plans, state,
-journals, logs, diagnostics, command arguments, or persistent files. This
-package makes no process-memory erasure claim.
+journals, logs, diagnostics, command arguments, or persistent files. The
+intent journal may retain private-input names, but not values or value hashes.
+This package makes no process-memory erasure claim. Its focused Go tests verify
+local source selection and validation only; they do not qualify native
+OpenTofu behavior, Runner input delivery or non-persistence, or live Host
+interoperability/support.
