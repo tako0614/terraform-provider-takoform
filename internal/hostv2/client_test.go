@@ -259,7 +259,7 @@ func TestOfferingSelectionIsExplicitAndGenerationFenceIsSent(t *testing.T) {
 	}
 }
 
-func TestOfferingHostRejectsCreateWithoutExplicitSelection(t *testing.T) {
+func TestCreateReplayDoesNotRejectOriginalBodyAfterOfferingCapabilityDrift(t *testing.T) {
 	var mutations atomic.Int32
 	var server *httptest.Server
 	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -268,6 +268,16 @@ func TestOfferingHostRejectsCreateWithoutExplicitSelection(t *testing.T) {
 			return
 		}
 		mutations.Add(1)
+		if r.Method != http.MethodPost || r.Header.Get("Idempotency-Key") != "intent-key-00000001" {
+			t.Errorf("unexpected replay method/key: %s %q", r.Method, r.Header.Get("Idempotency-Key"))
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil || string(body) != `{"form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","spec":{}}` {
+			t.Errorf("unexpected replay body: %s (%v)", body, err)
+		}
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"type":"about:blank","title":"Rejected","status":400,"code":"invalid_request"}`)
 	}))
 	defer server.Close()
 	client := New(server.URL, "token", server.Client())
@@ -277,7 +287,8 @@ func TestOfferingHostRejectsCreateWithoutExplicitSelection(t *testing.T) {
 	_, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
 		Form: "https://forms.example/Widget/1.0.0/", Space: "team-a", Name: "widget", Spec: map[string]any{},
 	})
-	if err == nil || mutations.Load() != 0 {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || mutations.Load() != 1 {
 		t.Fatalf("CreateResource() error = %v, mutation calls = %d", err, mutations.Load())
 	}
 }
@@ -727,107 +738,162 @@ func TestResponseGenerationsMustBeSafeIntegers(t *testing.T) {
 	}
 }
 
-func TestResourcesRetainOfferingShapeAdvertisedByDiscovery(t *testing.T) {
-	resource := func(withOffering bool) string {
-		offering := ""
-		if withOffering {
-			offering = `,"offering":{"id":"small","revision":"rev-1"}`
+func TestResourceReadsPreserveRetainedOfferingAcrossCapabilityDrift(t *testing.T) {
+	resource := `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","offering":{"id":"small","revision":"rev-1"},"generation":3,"observedGeneration":0,"observedAt":null,"phase":"pending","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
 		}
-		return `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget"` + offering + `,"generation":3,"observedGeneration":0,"observedAt":null,"phase":"pending","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`
+		if r.URL.Path == "/api/resources" {
+			_, _ = io.WriteString(w, `{"items":[`+resource+`],"nextCursor":null}`)
+			return
+		}
+		_, _ = io.WriteString(w, resource)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range []struct {
-		name         string
-		offerings    bool
-		withOffering bool
-		list         bool
-	}{
-		{name: "read missing", offerings: true},
-		{name: "read unexpected", withOffering: true},
-		{name: "list missing", offerings: true, list: true},
-		{name: "list unexpected", withOffering: true, list: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var server *httptest.Server
-			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == DiscoveryPath {
-					serveDiscovery(t, w, server.URL+"/api", tc.offerings)
-					return
-				}
-				body := resource(tc.withOffering)
-				if tc.list {
-					body = `{"items":[` + body + `],"nextCursor":null}`
-				}
-				_, _ = io.WriteString(w, body)
-			}))
-			defer server.Close()
-			client := New(server.URL, "token", server.Client())
-			if _, err := client.Discover(context.Background()); err != nil {
-				t.Fatal(err)
-			}
-			var err error
-			if tc.list {
-				_, err = client.ListResources(context.Background(), ResourceFilters{}, PageOptions{})
-			} else {
-				_, err = client.ReadResource(context.Background(), "r-1")
-			}
-			if err == nil {
-				t.Fatal("Resource response did not preserve the advertised Offering shape")
-			}
-		})
+	got, err := client.ReadResource(context.Background(), "r-1")
+	if err != nil || got.Offering == nil || got.Offering.ID != "small" {
+		t.Fatalf("ReadResource() = %#v, %v; retained Offering was lost", got, err)
+	}
+	page, err := client.ListResources(context.Background(), ResourceFilters{}, PageOptions{})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Offering == nil || page.Items[0].Offering.ID != "small" {
+		t.Fatalf("ListResources() = %#v, %v; retained Offering was lost", page, err)
 	}
 }
 
-func TestPrivateInputsRequireExactFormSupportBeforeMutation(t *testing.T) {
+func TestResourceArbitraryMapsPreserveJSONNumberPrecision(t *testing.T) {
+	const precise = `0.12345678901234567890123456789`
+	resource := `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":0,"observedAt":null,"phase":"pending","spec":{"precise":` + precise + `},"observed":{"precise":` + precise + `},"output":{"precise":` + precise + `},"lastOperation":"op-1"}`
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		if r.URL.Path == "/api/resources" {
+			_, _ = io.WriteString(w, `{"items":[`+resource+`],"nextCursor":null}`)
+			return
+		}
+		_, _ = io.WriteString(w, resource)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, maps ...map[string]any) {
+		t.Helper()
+		for _, values := range maps {
+			if got, ok := values["precise"].(json.Number); !ok || got.String() != precise {
+				t.Fatalf("precise value = %#v (%T), want exact json.Number %s", values["precise"], values["precise"], precise)
+			}
+		}
+	}
+	item, err := client.ReadResource(context.Background(), "r-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, item.Spec, item.Observed, item.Output)
+	page, err := client.ListResources(context.Background(), ResourceFilters{}, PageOptions{})
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("ListResources() = %#v, %v", page, err)
+	}
+	check(t, page.Items[0].Spec, page.Items[0].Observed, page.Items[0].Output)
+}
+
+func TestResourceAllowsTimestampForNegativeObservation(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		_, _ = io.WriteString(w, `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":0,"observedAt":"2026-10-12T12:00:00Z","phase":"idle","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	resource, err := client.ReadResource(context.Background(), "r-1")
+	if err != nil || resource.ObservedGeneration != 0 || resource.ObservedAt == nil {
+		t.Fatalf("ReadResource() = %#v, %v; negative observation timestamp was rejected", resource, err)
+	}
+}
+
+func TestMutationsReplayExactCallerIntentAcrossCapabilityAndLimitDrift(t *testing.T) {
 	const form = "https://forms.example/Widget/1.0.0/"
 	resource := `{"uid":"r-1","form":"` + form + `","space":"team-a","name":"widget","generation":3,"observedGeneration":0,"observedAt":null,"phase":"idle","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`
-	for _, method := range []string{"create", "update"} {
-		t.Run(method, func(t *testing.T) {
-			var supportCalls atomic.Int32
-			var mutationCalls atomic.Int32
-			var server *httptest.Server
-			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case DiscoveryPath:
-					discovery := fixtureDiscovery(server.URL+"/api", false)
-					discovery.Capabilities.PrivateInputs = true
-					w.Header().Set("Content-Type", "application/json")
-					_ = json.NewEncoder(w).Encode(discovery)
-				case "/api/support":
-					supportCalls.Add(1)
-					_, _ = fmt.Fprintf(w, `{"form":%q,"supported":true,"operations":["create","update"],"privateInputs":false}`, form)
-				case "/api/resources/r-1":
-					if r.Method == http.MethodGet {
-						_, _ = io.WriteString(w, resource)
-						return
-					}
-					mutationCalls.Add(1)
-				case "/api/resources":
-					mutationCalls.Add(1)
-				default:
-					t.Errorf("unexpected request %s %s", r.Method, r.URL)
-				}
-			}))
-			defer server.Close()
-			client := New(server.URL, "token", server.Client())
-			if _, err := client.Discover(context.Background()); err != nil {
-				t.Fatal(err)
+	const createBody = `{"form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","offering":{"id":"small","revision":"rev-7"},"spec":{"size":"small"},"privateInputs":{"secret":"private-value"}}`
+	const updateBody = `{"spec":{"size":"medium"},"privateInputs":{"secret":"private-value"}}`
+	var posts, puts, resourceGets, supportGets atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case DiscoveryPath:
+			discovery := fixtureDiscovery(server.URL+"/api", false)
+			discovery.Capabilities.PrivateInputs = false
+			discovery.Limits.MaxRequestBytes = 1
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(discovery)
+		case "/api/support":
+			supportGets.Add(1)
+			_, _ = io.WriteString(w, `{"form":"https://forms.example/Widget/1.0.0/","supported":true,"operations":["create","update"],"privateInputs":false}`)
+		case "/api/resources":
+			posts.Add(1)
+			body, err := io.ReadAll(r.Body)
+			if err != nil || r.Method != http.MethodPost || r.Header.Get("Idempotency-Key") != "intent-key-00000001" || string(body) != createBody {
+				t.Errorf("create replay changed method/key/body: method=%s key=%q body=%s err=%v", r.Method, r.Header.Get("Idempotency-Key"), body, err)
 			}
-			secret := map[string]string{"secret": "private-value"}
-			var err error
-			if method == "create" {
-				_, err = client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
-					Form: form, Space: "team-a", Name: "widget", Spec: map[string]any{}, PrivateInputs: &secret,
-				})
-			} else {
-				_, err = client.UpdateResource(context.Background(), "r-1", "intent-key-00000002", 3, UpdateRequest{
-					Spec: map[string]any{}, PrivateInputs: &secret,
-				})
+			writeMutationOperation(w, server.URL, "op-create", "r-1", "create", 1)
+		case "/api/resources/r-1":
+			if r.Method == http.MethodGet {
+				resourceGets.Add(1)
+				_, _ = io.WriteString(w, resource)
+				return
 			}
-			if err == nil || supportCalls.Load() != 1 || mutationCalls.Load() != 0 {
-				t.Fatalf("%s with unsupported Form private inputs: error=%v, support calls=%d, mutations=%d", method, err, supportCalls.Load(), mutationCalls.Load())
+			puts.Add(1)
+			body, err := io.ReadAll(r.Body)
+			if r.Method != http.MethodPut || r.Header.Get("Idempotency-Key") != "intent-key-00000002" || r.Header.Get("Takoform-Expected-Generation") != "3" || string(body) != updateBody || err != nil {
+				t.Errorf("update replay changed method/key/generation/body: method=%s key=%q generation=%q body=%s err=%v", r.Method, r.Header.Get("Idempotency-Key"), r.Header.Get("Takoform-Expected-Generation"), body, err)
 			}
-		})
+			writeMutationOperation(w, server.URL, "op-update", "r-1", "update", 4)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL)
+		}
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
 	}
+	secret := map[string]string{"secret": "private-value"}
+	if _, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+		Form: form, Space: "team-a", Name: "widget", Offering: &OfferingSelection{ID: "small", Revision: "rev-7"},
+		Spec: map[string]any{"size": "small"}, PrivateInputs: &secret,
+	}); err != nil {
+		t.Fatalf("CreateResource() replay error = %v", err)
+	}
+	if _, err := client.UpdateResource(context.Background(), "r-1", "intent-key-00000002", 3, UpdateRequest{
+		Spec: map[string]any{"size": "medium"}, PrivateInputs: &secret,
+	}); err != nil {
+		t.Fatalf("UpdateResource() replay error = %v", err)
+	}
+	if posts.Load() != 1 || puts.Load() != 1 || resourceGets.Load() != 0 || supportGets.Load() != 0 {
+		t.Fatalf("mutation/preflight counts: POST=%d PUT=%d resource GET=%d support GET=%d", posts.Load(), puts.Load(), resourceGets.Load(), supportGets.Load())
+	}
+}
+
+func writeMutationOperation(w http.ResponseWriter, origin, id, uid, action string, generation int64) {
+	w.Header().Set("Location", origin+"/api/operations/"+id)
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = fmt.Fprintf(w, `{"id":%q,"resourceUid":%q,"action":%q,"generation":%d,"status":"succeeded","effect":"complete","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`, id, uid, action, generation)
 }
 
 func TestMutationRejectsInvalidUTF8InputBeforeSending(t *testing.T) {
