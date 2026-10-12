@@ -12,7 +12,8 @@ import {
   PUBLIC_SCHEMA_ROUTE,
 } from "./public-schema-manifest.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
-import { readCurrentProvider4Release } from "./provider-release-descriptor.mjs";
+import { readCurrentProviderRelease, readCurrentProvider4Release } from "./provider-release-descriptor.mjs";
+import { validateProvider5Candidate } from "./provider5-candidate.mjs";
 import {
   RELEASE_STATE_NEUTRAL_SOURCE_PATHS,
   staleSpecificationReleaseWording,
@@ -707,13 +708,16 @@ function checkImmutableProviderTagDocs(source, truth) {
 // the already published version.
 function checkPublishedProviderInstallDocs(facts) {
   const tagDocs = read(path.join(repositoryRoot, "docs", "index.md"));
+  const installableVersion = facts.providerTargetStatus === "candidate-only"
+    ? facts.providerPublished
+    : facts.providerTarget;
   for (const issue of releaseTargetTagDocIssues(
     tagDocs,
-    facts.providerTarget,
+    installableVersion,
   )) {
     fail(`docs/index.md: ${issue}`);
   }
-  checkImmutableProviderTagDocs(tagDocs, { providerVersion: facts.providerTarget });
+  checkImmutableProviderTagDocs(tagDocs, { providerVersion: installableVersion });
   const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
     relativePath,
     read(path.join(repositoryRoot, relativePath)),
@@ -1722,7 +1726,16 @@ if (
     "release/history/provider-v3.0.0.json: retained Provider 3 writer input drifted",
   );
 }
-const currentProviderRelease = readCurrentProvider4Release(repositoryRoot);
+// The public v4 reference remains the currently Registry-published roster.
+// Check the v5 successor independently without projecting unpublished URL
+// identities as the published v4 package-backed documentation surface.
+const successorProviderRelease = readCurrentProviderRelease(repositoryRoot);
+if (successorProviderRelease.descriptor.schemaVersion === 2) {
+  validateProvider5Candidate(repositoryRoot);
+}
+const currentProviderRelease = successorProviderRelease.descriptor.schemaVersion === 2
+  ? readCurrentProvider4Release(repositoryRoot)
+  : successorProviderRelease;
 const releaseVersion = currentProviderRelease.descriptor;
 
 // Provider 3's eight-family index and identity projection are immutable

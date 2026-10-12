@@ -35,7 +35,7 @@
     "sync:publisher-provider-artifacts": "bun scripts/publisher-provider-artifacts.mjs --write",
     "check:publisher-provider-artifacts": "bun scripts/publisher-provider-artifacts.mjs --check",
     "sync:provider4-candidate": "bun scripts/provider4-candidate.mjs --write",
-    "check:provider4-candidate": "bun scripts/provider4-candidate.mjs --check && bun test scripts/provider4-candidate.test.mjs",
+    "check:provider4-candidate": "bun scripts/provider4-candidate.mjs --check && bun scripts/provider5-candidate.mjs --check && bun test scripts/provider4-candidate.test.mjs scripts/provider5-candidate.test.mjs",
     "sync:form-contract-continuity": "bun scripts/form-contract-continuity.mjs --write",
     "check:form-contract-continuity": "bun scripts/form-contract-continuity.mjs --check",
     "fmt": "gofmt -w . && tofu fmt -recursive examples && tofu fmt -recursive modules",

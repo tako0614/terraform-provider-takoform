@@ -53,11 +53,11 @@ describe("the committed ledger", () => {
     // Provider 4's unpublished candidate and the immutable published history
     // of Provider 3.0.0 and Provider 2.1.1 are separate facts.
     expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
-      formCount: 17,
+      formCount: 13,
       candidateFormCount: 31,
       retainedProvider3FormCount: 31,
       retainedFormCount: 15,
-      version: "4.1.0",
+      version: "5.0.0",
     });
   });
 

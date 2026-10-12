@@ -30,13 +30,13 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if !isStableProvider4Version(desc.Version) {
-		t.Fatalf("current provider release descriptor must be stable Provider 4 SemVer, got %q", desc.Version)
+	if !providerV5StableVersionPattern.MatchString(desc.Version) {
+		t.Fatalf("current provider release descriptor must be stable Provider 5 SemVer, got %q", desc.Version)
 	}
-	if desc.Versioning.PortableAPIVersion != "forms.takoform.com/v1" {
-		t.Fatalf("current provider candidate must target stable Host API v1, got %q", desc.Versioning.PortableAPIVersion)
+	if desc.Versioning.PortableAPIVersion != "forms.takoform.com/v2" {
+		t.Fatalf("current provider candidate must target Host API v2, got %q", desc.Versioning.PortableAPIVersion)
 	}
-	if err := validateVersioningPolicy(desc.Versioning); err != nil {
+	if err := validateProvider5VersioningPolicy(desc.Versioning); err != nil {
 		t.Fatalf("versioning policy: %v", err)
 	}
 }
@@ -91,7 +91,7 @@ func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedHistory(t *tes
 	}
 	var current *providerIdentityRelease
 	for index := range ledger.Releases {
-		if ledger.Releases[index].ProviderVersion == desc.Version {
+		if ledger.Releases[index].ProviderVersion == "4.1.0" {
 			current = &ledger.Releases[index]
 			break
 		}
@@ -99,7 +99,10 @@ func TestProviderIdentityLedgerPinsExactCurrentFamiliesAndRetainedHistory(t *tes
 	if current == nil || current.PortableAPIVersion != providerHostAPIVersion ||
 		current.Family != "" || len(current.Families) != 1 || current.Families[0] != providerPublisherFamily ||
 		current.FormMaturity != "experimental" || len(current.Forms) != 17 {
-		t.Fatalf("unexpected current Provider 4 identity release: %#v", current)
+		t.Fatalf("unexpected retained Provider 4.1.0 identity release: %#v", current)
+	}
+	if desc.Version != "5.0.0" || desc.FormIdentityModel != "exact-published-urls" {
+		t.Fatalf("unexpected current Provider 5 identity model: %#v", desc)
 	}
 }
 
@@ -110,6 +113,10 @@ func TestProviderIdentityLedgerRejectsDigestDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	copyFile(t, filepath.Join(repo, descriptorPath), filepath.Join(fixture, descriptorPath))
+	if err := os.MkdirAll(filepath.Join(fixture, "release", "candidates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFile(t, filepath.Join(repo, "release/candidates/provider-v5.0.0.json"), filepath.Join(fixture, "release/candidates/provider-v5.0.0.json"))
 	copyFile(t, filepath.Join(repo, providerIdentityLedgerPath), filepath.Join(fixture, providerIdentityLedgerPath))
 	copyFile(t, filepath.Join(repo, "release", "keys", "provider-signing-key.asc"), filepath.Join(fixture, "release/keys/provider-signing-key.asc"))
 	var ledger map[string]any
@@ -1324,7 +1331,7 @@ func provider4LedgerFixture(t *testing.T, version string) (string, descriptor) {
 	repo := testRepoRoot(t)
 	fixture := t.TempDir()
 	for _, relativePath := range []string{
-		descriptorPath,
+		"release/candidates/provider-v4.1.0.json",
 		providerIdentityLedgerPath,
 		providerPublisherClosurePath,
 		providerPublisherProjectionPath,
@@ -1335,6 +1342,7 @@ func provider4LedgerFixture(t *testing.T, version string) (string, descriptor) {
 		}
 		copyFile(t, filepath.Join(repo, relativePath), target)
 	}
+	copyFile(t, filepath.Join(repo, "release/candidates/provider-v4.1.0.json"), filepath.Join(fixture, descriptorPath))
 
 	descriptorRaw, err := os.ReadFile(filepath.Join(fixture, descriptorPath))
 	if err != nil {

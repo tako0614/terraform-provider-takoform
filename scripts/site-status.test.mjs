@@ -197,9 +197,9 @@ describe("the committed status document", () => {
     expect(document.currentFamilyCount).toBe(8);
     expect(document.currentFormCount).toBe(31);
     expect(document.providerPublished).toBe("4.1.0");
-    expect(document.providerTarget).toBe("4.1.0");
-    expect(document.providerTargetStatus).toBe("registry-published");
-    expect(document.edgePreviewProvider).toBe("4.1.0-candidate-only");
+    expect(document.providerTarget).toBe("5.0.0");
+    expect(document.providerTargetStatus).toBe("candidate-only");
+    expect(document.edgePreviewProvider).toBe("5.0.0-candidate-only");
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -414,18 +414,18 @@ describe("Provider target and Registry publication derivation", () => {
       write(root, ledgerPath, ledger);
       return deriveSiteStatusFacts(root);
     });
-    expect(facts.providerTarget).toBe("4.1.0");
+    expect(facts.providerTarget).toBe("5.0.0");
     expect(facts.providerTargetStatus).toBe("candidate-only");
     expect(facts.providerPublished).toBe("4.0.0");
     expect(facts.providerCurrent).toBe("4.0.0");
   });
 
-  test("the exact complete Registry readback promotes the target", () => {
+  test("the retained Registry readback does not promote the v5 target", () => {
     const facts = fixture((root) => deriveSiteStatusFacts(root));
-    expect(facts.providerTarget).toBe("4.1.0");
+    expect(facts.providerTarget).toBe("5.0.0");
     expect(facts.providerPublished).toBe("4.1.0");
-    expect(facts.providerTargetStatus).toBe("registry-published");
-    expect(facts.edgePreviewProvider).toBe("4.1.0-candidate-only");
+    expect(facts.providerTargetStatus).toBe("candidate-only");
+    expect(facts.edgePreviewProvider).toBe("5.0.0-candidate-only");
   });
 
   test("an incomplete new readback cannot silently fall back to the old release", () => {
@@ -458,14 +458,14 @@ describe("Provider target and Registry publication derivation", () => {
       { version: "4.0.1-rc.1" },
       { version: "4.0.1+build" },
       { version: "../4.0.1" },
-      { version: "5.0.0" },
+      { version: "6.0.0" },
       { tag: "v4.0.0" },
       { publicationStatus: "registry-published" },
     ]) {
       expect(() => fixture((root) => {
         write(root, RELEASE_VERSION, { ...read(root, RELEASE_VERSION), ...patch });
         return deriveSiteStatusFacts(root);
-      })).toThrow("expected an exact stable Provider 4 version");
+      })).toThrow("expected an exact stable Provider 4 or 5 version");
     }
   });
 
@@ -477,7 +477,7 @@ describe("Provider target and Registry publication derivation", () => {
         JSON.stringify(release),
       );
       return deriveSiteStatusFacts(root);
-    })).toThrow("bytes differ from release/candidates/provider-v4.1.0.json");
+    })).toThrow("bytes differ from release/candidates/provider-v5.0.0.json");
   });
 });
 
@@ -504,7 +504,7 @@ describe("Specification release status derivation", () => {
     expect(status.hostApiPublicationStatus).toBe("unpublished-candidate");
     expect(status.formMaturity).toBe("experimental");
     expect(status.formPackagePublicationStatus).toBe("unpublished");
-    expect(status.providerTargetStatus).toBe("registry-published");
+    expect(status.providerTargetStatus).toBe("candidate-only");
   });
 });
 

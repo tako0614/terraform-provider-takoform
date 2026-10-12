@@ -84,6 +84,7 @@ type providerPublisherProjection struct {
 var (
 	semverPattern                  = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
 	providerV4StableVersionPattern = regexp.MustCompile(`^4\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+	providerV5StableVersionPattern = regexp.MustCompile(`^5\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 	requestIDPattern               = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
@@ -158,19 +159,23 @@ type providerCandidateID struct {
 }
 
 type descriptor struct {
-	SchemaVersion      int                `json:"schemaVersion"`
-	Version            string             `json:"version"`
-	Tag                string             `json:"tag"`
-	SourceRepository   string             `json:"sourceRepository"`
-	ProviderAddress    string             `json:"providerAddress"`
-	CLIMatrix          []cliCompatibility `json:"cliMatrix"`
-	GoModule           string             `json:"goModule"`
-	GoVersion          string             `json:"goVersion"`
-	SigningFingerprint string             `json:"signingFingerprint"`
-	PublicKeyPath      string             `json:"publicKeyPath"`
-	Platforms          []string           `json:"platforms"`
-	PublicationStatus  string             `json:"publicationStatus"`
-	Versioning         versioningPolicy   `json:"versioning"`
+	SchemaVersion           int                `json:"schemaVersion"`
+	Version                 string             `json:"version"`
+	Tag                     string             `json:"tag"`
+	SourceRepository        string             `json:"sourceRepository"`
+	FormPublisherRepository string             `json:"formPublisherRepository"`
+	FormPublisherCommit     string             `json:"formPublisherCommit"`
+	FormIdentityModel       string             `json:"formIdentityModel,omitempty"`
+	FormSetTag              string             `json:"formSetTag,omitempty"`
+	ProviderAddress         string             `json:"providerAddress"`
+	CLIMatrix               []cliCompatibility `json:"cliMatrix"`
+	GoModule                string             `json:"goModule"`
+	GoVersion               string             `json:"goVersion"`
+	SigningFingerprint      string             `json:"signingFingerprint"`
+	PublicKeyPath           string             `json:"publicKeyPath"`
+	Platforms               []string           `json:"platforms"`
+	PublicationStatus       string             `json:"publicationStatus"`
+	Versioning              versioningPolicy   `json:"versioning"`
 }
 
 type sourceEvidence struct {
@@ -1169,14 +1174,25 @@ func loadDescriptor(repo string) (descriptor, error) {
 	if err != nil {
 		return value, err
 	}
-	if err := json.Unmarshal(raw, &value); err != nil {
+	if err := decodeStrictJSON(raw, &value); err != nil {
 		return value, err
 	}
-	if value.SchemaVersion != 1 || !semverPattern.MatchString(value.Version) {
+	if !semverPattern.MatchString(value.Version) {
 		return value, errors.New("release descriptor has invalid schemaVersion or semver")
 	}
-	if err := validateProvider4Version(value.Version); err != nil {
-		return value, err
+	if value.SchemaVersion == 2 {
+		if !providerV5StableVersionPattern.MatchString(value.Version) ||
+			value.FormPublisherRepository != "github.com/tako0614/takoform-forms" ||
+			value.FormPublisherCommit != "cfd376b724803dd2e5d112669b84589c0de517e0" ||
+			value.FormIdentityModel != "exact-published-urls" || value.FormSetTag != "" {
+			return value, errors.New("Provider 5 descriptor has invalid stable version or exact URL publisher identity")
+		}
+	} else if value.SchemaVersion == 1 {
+		if err := validateProvider4Version(value.Version); err != nil {
+			return value, err
+		}
+	} else {
+		return value, errors.New("release descriptor has unsupported schemaVersion")
 	}
 	if value.Tag != "v"+value.Version {
 		return value, errors.New("release tag must equal v<version> for Terraform Registry discovery")
@@ -1189,7 +1205,13 @@ func loadDescriptor(repo string) (descriptor, error) {
 	if err := validateCLIMatrix(value.CLIMatrix); err != nil {
 		return value, err
 	}
-	if err := validateVersioningPolicy(value.Versioning); err != nil {
+	var policyErr error
+	if value.SchemaVersion == 2 {
+		policyErr = validateProvider5VersioningPolicy(value.Versioning)
+	} else {
+		policyErr = validateVersioningPolicy(value.Versioning)
+	}
+	if err := policyErr; err != nil {
 		return value, err
 	}
 	if value.SigningFingerprint != "3510E75E05BBCC303B92D77934FC18AC897FB709" ||
@@ -1205,6 +1227,13 @@ func loadDescriptor(repo string) (descriptor, error) {
 	}
 	if value.PublicationStatus != "candidate-only" || len(value.Platforms) == 0 {
 		return value, errors.New("release descriptor must remain candidate-only with platforms")
+	}
+	if value.SchemaVersion == 2 {
+		mirrorPath := filepath.Join(repo, "release", "candidates", "provider-v"+value.Version+".json")
+		mirror, err := os.ReadFile(mirrorPath)
+		if err != nil || !bytes.Equal(raw, mirror) {
+			return value, fmt.Errorf("Provider 5 descriptor is not byte-identical to %s", mirrorPath)
+		}
 	}
 	seen := map[string]bool{}
 	for _, platform := range value.Platforms {
@@ -1256,6 +1285,16 @@ func validateVersioningPolicy(policy versioningPolicy) error {
 		policy.FormDefinitionVersions != "independent-immutable-semver" ||
 		policy.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
 		return errors.New("release descriptor conflates independent version streams")
+	}
+	return nil
+}
+
+func validateProvider5VersioningPolicy(policy versioningPolicy) error {
+	if policy.ProviderCompatibility != "semver-major" ||
+		policy.PortableAPIVersion != "forms.takoform.com/v2" ||
+		policy.FormDefinitionVersions != "independent-immutable-semver" ||
+		policy.FormPackageVersions != "independent-from-form-url" {
+		return errors.New("Provider 5 release descriptor conflates independent version streams")
 	}
 	return nil
 }
@@ -1501,6 +1540,7 @@ var frozenLedgerEntryDigests = map[string]string{
 	"2.1.1": "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
 	"3.0.0": "sha256:165f9377f0a37d1994d96e28c7494dc71dc4e6457d0679229a7f1819c17f77fb",
 	"4.0.0": "sha256:76086ec15b12c9d7c8e9cb4cc281d08f006ae2028fbee5b3bbac85bc59bbc2c6",
+	"4.1.0": "sha256:10a0be0093298acf248b39e1dd3bf4799a918ef2758470bd8a77628ecc02d8e4",
 }
 
 func assertFrozenLedgerEntries(raw []byte) error {
@@ -1536,7 +1576,11 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	// This loader serves the current writer. Historical ledger entries retain
 	// their own SemVer semantics, but another current major must never bypass
 	// the publisher-selected roster validator below.
-	if err := validateProvider4Version(desc.Version); err != nil {
+	if desc.SchemaVersion == 2 {
+		if !providerV5StableVersionPattern.MatchString(desc.Version) {
+			return ledger, errors.New("Provider 5 requires exact stable major-5 semver")
+		}
+	} else if err := validateProvider4Version(desc.Version); err != nil {
 		return ledger, err
 	}
 	raw, err := os.ReadFile(filepath.Join(repo, providerIdentityLedgerPath))
@@ -1610,6 +1654,12 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 				return ledger, err
 			}
 		}
+	}
+	if desc.SchemaVersion == 2 {
+		if _, err := command(repo, nil, "bun", "scripts/provider5-candidate.mjs", "--check"); err != nil {
+			return ledger, fmt.Errorf("verify exact Provider 5 URL candidate: %w", err)
+		}
+		return ledger, nil
 	}
 	if current == nil || current.PortableAPIVersion != desc.Versioning.PortableAPIVersion {
 		return ledger, errors.New("provider Form identity ledger has no release matching the descriptor")
