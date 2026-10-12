@@ -91,6 +91,72 @@ func TestDiscoveryRejectsForeignOriginAndV1Documents(t *testing.T) {
 	}
 }
 
+func TestDiscoveryRejectsEmptyQueryAndFragmentDelimitersInBaseURL(t *testing.T) {
+	for _, suffix := range []string{"?", "#"} {
+		t.Run("delimiter_"+suffix, func(t *testing.T) {
+			var apiCalls atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					serveDiscovery(t, w, server.URL+"/api"+suffix, false)
+					return
+				}
+				apiCalls.Add(1)
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err == nil {
+				t.Fatal("Discover() accepted a baseUrl ending in an empty query or fragment delimiter")
+			}
+			if apiCalls.Load() != 0 {
+				t.Fatalf("authenticated API calls after invalid discovery = %d", apiCalls.Load())
+			}
+		})
+	}
+}
+
+func TestDiscoveryRejectsNullRequiredCapability(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			_, _ = io.WriteString(w, `{"api":"forms.takoform.com/v2","baseUrl":"`+server.URL+`/api","documentation":"https://host.example/docs","authentication":{"schemes":["Bearer"],"documentation":"https://host.example/auth"},"capabilities":{"offerings":null,"previews":false,"privateInputs":false},"limits":{"maxRequestBytes":65536,"maxPageSize":50,"replayWindowSeconds":3600}}`)
+			return
+		}
+		t.Errorf("authenticated API request sent after malformed discovery: %s", r.URL)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err == nil {
+		t.Fatal("Discover() accepted null for required capabilities.offerings")
+	}
+}
+
+func TestAuthenticatedCallsRequireAdvertisedBearerScheme(t *testing.T) {
+	var apiCalls atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			discovery := fixtureDiscovery(server.URL+"/api", false)
+			discovery.Authentication.Schemes = []string{"Basic"}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(discovery)
+			return
+		}
+		apiCalls.Add(1)
+	}))
+	defer server.Close()
+	client := New(server.URL, "configured-token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.GetSupport(context.Background(), "https://forms.example/Widget/1.0.0/"); err == nil {
+		t.Fatal("GetSupport() sent an authenticated request without an advertised Bearer scheme")
+	}
+	if apiCalls.Load() != 0 {
+		t.Fatalf("authenticated API calls = %d, want 0", apiCalls.Load())
+	}
+}
+
 func TestOfferingSelectionIsExplicitAndGenerationFenceIsSent(t *testing.T) {
 	var server *httptest.Server
 	var createCalls atomic.Int32
@@ -180,6 +246,82 @@ func TestOfferingHostRejectsCreateWithoutExplicitSelection(t *testing.T) {
 	})
 	if err == nil || mutations.Load() != 0 {
 		t.Fatalf("CreateResource() error = %v, mutation calls = %d", err, mutations.Load())
+	}
+}
+
+func TestSupportRejectsNullRequiredBoolean(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		_, _ = io.WriteString(w, `{"form":"https://forms.example/Widget/1.0.0/","supported":null,"operations":[],"privateInputs":false}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.GetSupport(context.Background(), "https://forms.example/Widget/1.0.0/"); err == nil {
+		t.Fatal("GetSupport() accepted null for required supported flag")
+	}
+}
+
+func TestSupportRejectsNullPrivateInputsBoolean(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		_, _ = io.WriteString(w, `{"form":"https://forms.example/Widget/1.0.0/","supported":false,"operations":[],"privateInputs":null}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.GetSupport(context.Background(), "https://forms.example/Widget/1.0.0/"); err == nil {
+		t.Fatal("GetSupport() accepted null for required privateInputs flag")
+	}
+}
+
+func TestOfferingPageRejectsNullRequiredLabel(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", true)
+			return
+		}
+		_, _ = io.WriteString(w, `{"items":[{"id":"small","revision":"rev-1","form":"https://forms.example/Widget/1.0.0/","label":null,"description":"Small"}],"nextCursor":null}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ListOfferings(context.Background(), "https://forms.example/Widget/1.0.0/", "team-a", PageOptions{}); err == nil {
+		t.Fatal("ListOfferings() accepted null for required label")
+	}
+}
+
+func TestOfferingPageRejectsNullRequiredDescription(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", true)
+			return
+		}
+		_, _ = io.WriteString(w, `{"items":[{"id":"small","revision":"rev-1","form":"https://forms.example/Widget/1.0.0/","label":"Small","description":null}],"nextCursor":null}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ListOfferings(context.Background(), "https://forms.example/Widget/1.0.0/", "team-a", PageOptions{}); err == nil {
+		t.Fatal("ListOfferings() accepted null for required description")
 	}
 }
 
@@ -285,7 +427,7 @@ func TestResourceAndOperationReadsAndDeleteUseV2Routes(t *testing.T) {
 		case "/api/resources/r-1":
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = io.WriteString(w, `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":2,"observedAt":"2026-10-12T12:00:00Z","phase":"pending","spec":{"size":"large"},"observed":{},"output":{},"lastOperation":"op-3"}`)
+				_, _ = io.WriteString(w, `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":3,"observedGeneration":2,"observedAt":null,"phase":"pending","spec":{"size":"large"},"observed":{},"output":{},"lastOperation":"op-3"}`)
 				return
 			}
 			if r.Method != http.MethodDelete || r.Header.Get("Takoform-Expected-Generation") != "3" || r.Header.Get("Idempotency-Key") != "intent-key-00000003" {
@@ -321,6 +463,89 @@ func TestResourceAndOperationReadsAndDeleteUseV2Routes(t *testing.T) {
 	operation, err = client.DeleteResource(context.Background(), "r-1", "intent-key-00000003", 3)
 	if err != nil || operation.Generation != 4 {
 		t.Fatalf("DeleteResource() = %#v, %v", operation, err)
+	}
+}
+
+func TestUpdateOperationMustBelongToRequestedResource(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			serveDiscovery(t, w, server.URL+"/api", false)
+			return
+		}
+		w.Header().Set("Location", server.URL+"/api/operations/op-2")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"op-2","resourceUid":"other-resource","action":"update","generation":2,"status":"succeeded","effect":"complete","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_, err := client.UpdateResource(context.Background(), "r-1", "intent-key-00000002", 1, UpdateRequest{Spec: map[string]any{"size": "large"}})
+	var indeterminate *IndeterminateError
+	if !errors.As(err, &indeterminate) {
+		t.Fatalf("UpdateResource() error = %T %v, want *IndeterminateError", err, err)
+	}
+}
+
+func TestMutationRequiresValidProblemResponseBeforeClassifyingRejection(t *testing.T) {
+	tests := []struct {
+		name         string
+		contentType  string
+		body         string
+		wantAPIError bool
+		wantCode     string
+	}{
+		{name: "proxy HTML", contentType: "text/html", body: `<html>not found</html>`},
+		{name: "malformed problem", contentType: "application/problem+json", body: `{"type":"about:blank","status":404,"code":`},
+		{name: "null problem title", contentType: "application/problem+json", body: `{"type":"about:blank","title":null,"status":404,"code":"not_found"}`},
+		{name: "valid problem", contentType: "application/problem+json", body: `{"type":"about:blank","title":"Not Found","status":404,"code":"not_found"}`, wantAPIError: true, wantCode: "not_found"},
+		{name: "untrusted problem code", contentType: "application/problem+json", body: `{"type":"about:blank","title":"Not Found","status":404,"code":"private-input-secret"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var mutations atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					serveDiscovery(t, w, server.URL+"/api", false)
+					return
+				}
+				mutations.Add(1)
+				w.Header().Set("Content-Type", test.contentType)
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = io.WriteString(w, test.body)
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			_, err := client.CreateResource(context.Background(), "intent-key-00000001", CreateRequest{
+				Form: "https://forms.example/Widget/1.0.0/", Space: "team-a", Name: "widget", Spec: map[string]any{},
+			})
+			if mutations.Load() != 1 {
+				t.Fatalf("mutation calls = %d, want 1", mutations.Load())
+			}
+			if test.wantAPIError {
+				var apiError *APIError
+				if !errors.As(err, &apiError) || apiError.Code != test.wantCode {
+					t.Fatalf("CreateResource() error = %#v, want APIError code %q", err, test.wantCode)
+				}
+				if strings.Contains(err.Error(), apiError.Code) {
+					t.Fatalf("CreateResource() diagnostic included host code: %v", err)
+				}
+			} else {
+				var indeterminate *IndeterminateError
+				if !errors.As(err, &indeterminate) {
+					t.Fatalf("CreateResource() error = %T %v, want *IndeterminateError", err, err)
+				}
+				if strings.Contains(err.Error(), "private-input-secret") {
+					t.Fatalf("CreateResource() error leaked response content: %v", err)
+				}
+			}
+		})
 	}
 }
 
