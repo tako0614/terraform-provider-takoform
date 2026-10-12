@@ -144,8 +144,5 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
-	if e.Code == "" {
-		return "takoform v2: host returned HTTP error"
-	}
-	return "takoform v2: host returned HTTP error " + e.Code
+	return "takoform v2: host returned an HTTP error"
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -146,7 +147,7 @@ func (c *Client) ListOfferings(ctx context.Context, form, space string, options 
 	if response.status != http.StatusOK {
 		return page, response.apiError()
 	}
-	if err := decodeRequired(response.body, &page, "items", "nextCursor"); err != nil || page.Items == nil {
+	if err := decodeRequiredNullable(response.body, &page, map[string]bool{"nextCursor": true}, "items", "nextCursor"); err != nil || page.Items == nil {
 		return Page[Offering]{}, errors.New("takoform v2: malformed Offering page")
 	}
 	var pageEnvelope struct {
@@ -195,7 +196,7 @@ func (c *Client) CreateResource(ctx context.Context, key string, input CreateReq
 	if err != nil {
 		return Operation{}, err
 	}
-	return c.mutate(ctx, http.MethodPost, base+"/resources", "create", key, "", 1, body)
+	return c.mutate(ctx, http.MethodPost, base+"/resources", "create", "", key, "", 1, body)
 }
 
 // ReadResource reads one Host-owned Resource by UID.
@@ -215,7 +216,7 @@ func (c *Client) ReadResource(ctx context.Context, uid string) (Resource, error)
 	if response.status != http.StatusOK {
 		return resource, response.apiError()
 	}
-	if err := decodeRequired(response.body, &resource, "uid", "form", "space", "name", "generation", "observedGeneration", "observedAt", "phase", "spec", "observed", "output", "lastOperation"); err != nil || resource.UID != uid || validateOptionalObject(response.body, "offering") != nil {
+	if err := decodeRequiredNullable(response.body, &resource, map[string]bool{"observedAt": true}, "uid", "form", "space", "name", "generation", "observedGeneration", "observedAt", "phase", "spec", "observed", "output", "lastOperation"); err != nil || resource.UID != uid || validateOptionalObject(response.body, "offering") != nil {
 		return Resource{}, errors.New("takoform v2: malformed Resource response")
 	}
 	if err := validateResource(resource); err != nil {
@@ -296,7 +297,7 @@ func (c *Client) UpdateResource(ctx context.Context, uid, key string, expectedGe
 	if expectedGeneration >= 9007199254740991 {
 		return Operation{}, errors.New("takoform v2: generation cannot advance beyond the common integer limit")
 	}
-	return c.mutate(ctx, http.MethodPut, base+"/resources/"+uid, "update", key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, body)
+	return c.mutate(ctx, http.MethodPut, base+"/resources/"+uid, "update", uid, key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, body)
 }
 
 // DeleteResource sends one bodyless delete with the caller's generation fence.
@@ -314,7 +315,7 @@ func (c *Client) DeleteResource(ctx context.Context, uid, key string, expectedGe
 	if expectedGeneration >= 9007199254740991 {
 		return Operation{}, errors.New("takoform v2: generation cannot advance beyond the common integer limit")
 	}
-	return c.mutate(ctx, http.MethodDelete, base+"/resources/"+uid, "delete", key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, nil)
+	return c.mutate(ctx, http.MethodDelete, base+"/resources/"+uid, "delete", uid, key, strconv.FormatInt(expectedGeneration, 10), expectedGeneration+1, nil)
 }
 
 // ReadOperation reads an accepted Operation. It never starts or resumes work.
@@ -340,7 +341,7 @@ func (c *Client) ReadOperation(ctx context.Context, id string) (Operation, error
 	return operation, nil
 }
 
-func (c *Client) mutate(ctx context.Context, method, target, action, key, generation string, acceptedGeneration int64, body []byte) (Operation, error) {
+func (c *Client) mutate(ctx context.Context, method, target, action, expectedUID, key, generation string, acceptedGeneration int64, body []byte) (Operation, error) {
 	var empty Operation
 	headers := make(http.Header)
 	headers.Set("Idempotency-Key", key)
@@ -355,13 +356,17 @@ func (c *Client) mutate(ctx context.Context, method, target, action, key, genera
 		if response.status < 400 || response.status >= 500 {
 			return empty, &IndeterminateError{Action: action}
 		}
-		return empty, response.apiError()
+		apiError, validProblem := response.validProblemError()
+		if !validProblem {
+			return empty, &IndeterminateError{Action: action}
+		}
+		return empty, apiError
 	}
 	var operation Operation
 	if err := decodeOperation(response.body, &operation); err != nil {
 		return empty, &IndeterminateError{Action: action}
 	}
-	if operation.Action != action || operation.Generation != acceptedGeneration {
+	if operation.Action != action || operation.ResourceUID == "" || expectedUID != "" && operation.ResourceUID != expectedUID || operation.Generation != acceptedGeneration {
 		return empty, &IndeterminateError{Action: action}
 	}
 	if response.status == http.StatusAccepted {
@@ -430,6 +435,18 @@ func (c *Client) apiBase() (string, Discovery, error) {
 	if !c.discovered {
 		return "", Discovery{}, errors.New("takoform v2: Discover must succeed before API requests")
 	}
+	if c.token != "" {
+		bearerAdvertised := false
+		for _, scheme := range c.discovery.Authentication.Schemes {
+			if strings.EqualFold(scheme, "Bearer") {
+				bearerAdvertised = true
+				break
+			}
+		}
+		if !bearerAdvertised {
+			return "", Discovery{}, errors.New("takoform v2: configured Bearer credential is not advertised by the Host")
+		}
+	}
 	return c.baseURL, c.discovery, nil
 }
 
@@ -460,15 +477,67 @@ type httpResponse struct {
 }
 
 func (r httpResponse) apiError() error {
+	if parsed, ok := r.validProblemError(); ok {
+		return parsed
+	}
+	return &APIError{Status: r.status, RetryAfter: r.header.Get("Retry-After")}
+}
+
+func (r httpResponse) validProblemError() (*APIError, bool) {
+	contentType, _, err := mime.ParseMediaType(r.header.Get("Content-Type"))
+	if err != nil || contentType != "application/problem+json" {
+		return nil, false
+	}
 	var problem struct {
 		Type   string `json:"type"`
+		Title  string `json:"title"`
 		Status int    `json:"status"`
 		Code   string `json:"code"`
 	}
-	if decodeRequired(r.body, &problem, "type", "title", "status", "code") == nil && problem.Type == "about:blank" && problem.Status == r.status && problem.Code != "" {
-		return &APIError{Status: r.status, Code: problem.Code, RetryAfter: r.header.Get("Retry-After")}
+	if decodeRequired(r.body, &problem, "type", "title", "status", "code") != nil || problem.Type != "about:blank" || problem.Title == "" || problem.Status != r.status {
+		return nil, false
 	}
-	return &APIError{Status: r.status, RetryAfter: r.header.Get("Retry-After")}
+	if !validProblemCode(r.status, problem.Code) {
+		return nil, false
+	}
+	return &APIError{Status: r.status, Code: problem.Code, RetryAfter: r.header.Get("Retry-After")}, true
+}
+
+func validProblemCode(status int, code string) bool {
+	switch status {
+	case http.StatusBadRequest:
+		return code == "invalid_request"
+	case http.StatusUnauthorized:
+		return code == "unauthenticated"
+	case http.StatusForbidden:
+		return code == "forbidden"
+	case http.StatusNotFound:
+		return code == "not_found" || code == "capability_unavailable"
+	case http.StatusMethodNotAllowed:
+		return code == "method_not_allowed"
+	case http.StatusConflict:
+		switch code {
+		case "name_conflict", "generation_conflict", "resource_busy", "idempotency_conflict", "offering_changed", "dependency_conflict", "private_inputs_conflict", "private_inputs_unverifiable", "operation_terminal", "cursor_expired":
+			return true
+		}
+	case http.StatusGone:
+		return code == "gone"
+	case http.StatusRequestEntityTooLarge:
+		return code == "request_too_large"
+	case http.StatusUnsupportedMediaType:
+		return code == "unsupported_media_type"
+	case http.StatusUnprocessableEntity:
+		return code == "unsupported_form" || code == "invalid_spec" || code == "capability_required"
+	case http.StatusPreconditionRequired:
+		return code == "expected_generation_required"
+	case http.StatusTooManyRequests:
+		return code == "rate_limited"
+	case http.StatusServiceUnavailable:
+		return code == "temporarily_unavailable"
+	case http.StatusInternalServerError:
+		return code == "internal_error"
+	}
+	return false
 }
 
 func validateDiscovery(d Discovery, origin string) error {
@@ -487,7 +556,7 @@ func validateDiscovery(d Discovery, origin string) error {
 		return errors.New("takoform v2: invalid discovery baseUrl")
 	}
 	base, err := url.Parse(d.BaseURL)
-	if err != nil || !base.IsAbs() || base.Scheme != "https" || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || !isASCII(d.BaseURL) || !sameOriginURL(base, mustParseURL(origin)) {
+	if err != nil || !base.IsAbs() || base.Scheme != "https" || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || strings.ContainsAny(d.BaseURL, "?#") || !isASCII(d.BaseURL) || !sameOriginURL(base, mustParseURL(origin)) {
 		return errors.New("takoform v2: discovery baseUrl must be an absolute same-origin HTTPS URL")
 	}
 	return nil
@@ -621,14 +690,22 @@ func requireNestedObjectKeys(raw json.RawMessage, required ...string) error {
 		return errors.New("nested value must be an object")
 	}
 	for _, key := range required {
-		if _, ok := object[key]; !ok {
+		value, ok := object[key]
+		if !ok {
 			return errors.New("nested object is missing a required field")
+		}
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return errors.New("nested required field must not be null")
 		}
 	}
 	return nil
 }
 
 func decodeRequired(data []byte, destination any, required ...string) error {
+	return decodeRequiredNullable(data, destination, nil, required...)
+}
+
+func decodeRequiredNullable(data []byte, destination any, nullable map[string]bool, required ...string) error {
 	if err := rejectInvalidOrDuplicateJSON(data); err != nil {
 		return err
 	}
@@ -637,15 +714,19 @@ func decodeRequired(data []byte, destination any, required ...string) error {
 		return errors.New("response must be a JSON object")
 	}
 	for _, field := range required {
-		if _, ok := fields[field]; !ok {
+		raw, ok := fields[field]
+		if !ok {
 			return fmt.Errorf("missing required field %s", field)
+		}
+		if !nullable[field] && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return fmt.Errorf("required field %s must not be null", field)
 		}
 	}
 	return json.Unmarshal(data, destination)
 }
 
 func decodeResourcePage(data []byte, page *Page[Resource]) error {
-	if err := decodeRequired(data, page, "items", "nextCursor"); err != nil || page.Items == nil {
+	if err := decodeRequiredNullable(data, page, map[string]bool{"nextCursor": true}, "items", "nextCursor"); err != nil || page.Items == nil {
 		return errors.New("invalid page envelope")
 	}
 	var envelope struct {
@@ -657,7 +738,7 @@ func decodeResourcePage(data []byte, page *Page[Resource]) error {
 	required := []string{"uid", "form", "space", "name", "generation", "observedGeneration", "observedAt", "phase", "spec", "observed", "output", "lastOperation"}
 	for index, raw := range envelope.Items {
 		var resource Resource
-		if err := decodeRequired(raw, &resource, required...); err != nil || validateResource(resource) != nil || validateOptionalObject(raw, "offering") != nil {
+		if err := decodeRequiredNullable(raw, &resource, map[string]bool{"observedAt": true}, required...); err != nil || validateResource(resource) != nil || validateOptionalObject(raw, "offering") != nil {
 			return errors.New("invalid Resource page item")
 		}
 		page.Items[index] = resource
