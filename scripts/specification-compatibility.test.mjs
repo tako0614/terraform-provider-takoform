@@ -209,6 +209,33 @@ describe("Specification 1.1 compatibility manifest", () => {
     }, (root) => generateManifest(root))).toThrow("Provider 4.1.0 Registry readback is incomplete");
   });
 
+  test("a later Registry-published v5 does not replace the retained v1 FormRef projection", () => {
+    withProviderReleaseLedger((ledger) => {
+      const v5 = clone(ledger.entries.find((entry) => entry.version === "4.1.0"));
+      v5.version = "5.0.0";
+      v5.tag = "v5.0.0";
+      v5.tagObject = "a".repeat(40);
+      v5.commit = "b".repeat(40);
+      v5.registryReadback.githubRelease.url =
+        "https://github.com/tako0614/terraform-provider-takoform/releases/tag/v5.0.0";
+      v5.registryReadback.registry.downloadUrl =
+        "https://registry.terraform.io/v1/providers/tako0614/takoform/5.0.0/download/linux/amd64";
+      v5.registryReadback.installation.providerVersion = "5.0.0";
+      v5.registryReadback.installation.resourceSchemaCount = 13;
+      ledger.entries.push(v5);
+    }, (root) => {
+      expect(deriveSiteStatusFacts(root).providerPublished).toBe("5.0.0");
+      const forms = generateManifest(root).classes.find((entry) => entry.id === "form-package").entries;
+      const objectBucket = forms.find((entry) =>
+        entry.formRef?.kind === "ObjectBucket" && entry.formRef?.apiVersion === "edge.forms.takoform.com"
+      );
+      expect(objectBucket).toMatchObject({
+        status: "unpublished-candidate",
+        publication: "unpublished-candidate",
+      });
+    });
+  });
+
   test("missing Registry publication proof cannot select a v1 FormRef projection", () => {
     expect(() => withProviderReleaseLedger((ledger) => {
       for (const entry of ledger.entries) delete entry.registryReadback;
