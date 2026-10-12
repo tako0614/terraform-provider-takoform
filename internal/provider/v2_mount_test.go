@@ -47,6 +47,49 @@ func TestV2ProviderRegistersOnlyExactPublishedEdgeForms(t *testing.T) {
 	}
 }
 
+func TestV2PlanUsesProviderSpaceOnlyWhenResourceConfigOmitsIt(t *testing.T) {
+	server := httptest.NewTLSServer(http.NotFoundHandler())
+	defer server.Close()
+	data := v2TestData(t, server)
+	res, schemaResponse := v2TestResource(t, data, hostv2TestModuleWorkerURL)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name       string
+		configured types.String
+		wantKnown  bool
+	}{
+		{"omitted", types.StringNull(), true},
+		{"explicit unknown", types.StringUnknown(), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configPlan := v2TestPlan(t, schemaResponse, "app")
+			if diags := configPlan.SetAttribute(ctx, path.Root("space"), tc.configured); diags.HasError() {
+				t.Fatal(diags)
+			}
+			config := tfsdk.Config{Schema: schemaResponse.Schema, Raw: configPlan.Raw}
+			plan := v2TestPlan(t, schemaResponse, "app")
+			if diags := plan.SetAttribute(ctx, path.Root("space"), types.StringUnknown()); diags.HasError() {
+				t.Fatal(diags)
+			}
+			response := resource.ModifyPlanResponse{Plan: plan}
+			res.ModifyPlan(ctx, resource.ModifyPlanRequest{Config: config, Plan: plan}, &response)
+			if response.Diagnostics.HasError() {
+				t.Fatalf("ModifyPlan: %v", response.Diagnostics)
+			}
+			var space types.String
+			if diags := response.Plan.GetAttribute(ctx, path.Root("space"), &space); diags.HasError() {
+				t.Fatal(diags)
+			}
+			if tc.wantKnown && (space.IsUnknown() || space.ValueString() != "prod") {
+				t.Fatalf("omitted resource space did not resolve provider default: %v", space)
+			}
+			if !tc.wantKnown && !space.IsUnknown() {
+				t.Fatalf("explicit unknown space was replaced: %v", space)
+			}
+		})
+	}
+}
+
 func TestV2TypedHCLSpecRoundTripsAllThirteenExactForms(t *testing.T) {
 	cases := map[string]string{
 		"takoform_module_worker":                `{}`,

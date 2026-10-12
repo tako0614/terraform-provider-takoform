@@ -25,6 +25,7 @@ var _ resource.Resource = (*v2Resource)(nil)
 var _ resource.ResourceWithConfigure = (*v2Resource)(nil)
 var _ resource.ResourceWithImportState = (*v2Resource)(nil)
 var _ resource.ResourceWithUpgradeState = (*v2Resource)(nil)
+var _ resource.ResourceWithModifyPlan = (*v2Resource)(nil)
 
 type v2Resource struct {
 	def  v2FormDef
@@ -44,6 +45,22 @@ func (r *v2Resource) Configure(_ context.Context, req resource.ConfigureRequest,
 		return
 	}
 	r.data = data
+}
+
+// Resolve only an omitted Resource Space from the configured provider default.
+// An explicitly unknown expression must remain unknown; guessing the default
+// would silently choose a different Host management scope.
+func (r *v2Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.data == nil || r.data.space == "" || req.Plan.Raw.IsNull() {
+		return
+	}
+	var configured types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("space"), &configured)...)
+	if resp.Diagnostics.HasError() || !configured.IsNull() {
+		return
+	}
+	resp.Plan = req.Plan
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("space"), types.StringValue(r.data.space))...)
 }
 
 // Historical v0/v1 states have no exact Host API v2 identity or durable intent
