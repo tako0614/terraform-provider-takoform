@@ -91,9 +91,14 @@ automatically translated to Provider 5.
 
 The [Provider 5 consumer reference](docs/provider-host-api-v2-source.md) lists
 all 13 resource-to-Form URL mappings and lifecycle boundaries. Its v2
-configuration requires the exact Host API root and an explicitly initialized
-private intent store; `store_id` is a local label, not authentication or a
-Host principal. For source evaluation, initialize the local store with:
+configuration requires the exact Host API root and exactly one private
+intent-store mode. Select either an initialized absolute
+`store_path`, or an explicit `intent_store_slot` backed by a Runner/OpenTofu
+environment that grants generic private-file access for that slot. The remote
+capability is not provisioned by the Provider and is not implied by a Cloud
+runtime or ambient credentials. `store_id` is a local label, not
+authentication or a Host principal. For local custody, initialize the store
+with:
 
 ```console
 go run ./cmd/intent-store-init \
@@ -103,8 +108,8 @@ go run ./cmd/intent-store-init \
 ```
 
 This command initializes local store custody; it does not contact a Host or
-install the Provider. A source-built v5 Provider block has this shape; it is
-not a Registry installation declaration:
+install the Provider. A local-mode source-built v5 Provider block has this
+shape; it is not a Registry installation declaration:
 
 ```hcl
 provider "takoform" {
@@ -120,6 +125,29 @@ resource "takoform_module_worker" "api" {
   name = "api"
 }
 ```
+
+Remote custody uses the same fixed `store_id` and exact Host API root, but only
+when the execution environment explicitly grants private-file access for the
+selected opaque slot. During Configure, before resource planning, the Provider
+may initialize an absent slot with an empty snapshot bound to that identity
+using compare-and-swap. This is private-store traffic, not a Host API request;
+an existing mismatch or unresolved store commit stops before Host mutation.
+For example, set `intent_store_slot = var.runner_private_slot` instead of
+`store_path` only when the Runner/OpenTofu environment grants that exact slot.
+For example:
+
+```hcl
+provider "takoform" {
+  endpoint          = "https://host.example"
+  host_api_root     = "https://host.example/apis/forms.takoform.com/v2"
+  token             = var.host_token
+  intent_store_slot = var.runner_private_slot
+  store_id          = var.fixed_caller_scope_id
+  space             = "prod"
+}
+```
+
+The local initializer above applies only to `store_path` mode.
 
 The Host must advertise and authorize the exact Form/API contract used; this
 repository does not claim that a Host does. Do not use this v2 configuration in
