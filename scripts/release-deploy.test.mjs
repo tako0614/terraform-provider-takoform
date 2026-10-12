@@ -390,7 +390,7 @@ test("v5 prepare and tag refuse the old v4-only immutable docs before external c
         calls.push(args);
         throw new Error("external command must not run before the v5 docs guard");
       },
-    })).toThrow(/docs\/index\.md: release target 5\.0\.0 docs check out v4\.1\.0 instead of v5\.0\.0/);
+    })).toThrow(/docs\/index\.md: release target 5\.0\.0 docs omit a dedicated Provider 5\.0\.0 section/);
     expect(calls).toHaveLength(0);
   }
 });

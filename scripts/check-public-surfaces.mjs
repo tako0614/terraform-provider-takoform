@@ -25,6 +25,7 @@ import {
 import {
   PUBLISHED_INSTALL_PROSE,
   publishedProviderInstallDocStatusIssues,
+  publishedProviderTagDocIssues,
   provider5TagDocIssues,
   releaseTargetTagDocIssues,
 } from "./provider-published-docs.mjs";
@@ -654,7 +655,7 @@ function hasNotInstallableWording(text) {
   );
 }
 
-function checkImmutableProviderTagDocs(source, truth) {
+function checkImmutableProviderTagDocs(source) {
   const forbidden = [
     {
       label: "shallow immutable-tag verification checkout",
@@ -676,12 +677,6 @@ function checkImmutableProviderTagDocs(source, truth) {
       label: "canonical Registry version endpoint",
       pattern:
         /https:\/\/registry\.terraform\.io\/v1\/providers\/tako0614\/takoform\/versions/,
-    },
-    {
-      label: "exact provider tag checkout",
-      pattern: new RegExp(
-        `git checkout --detach v${escapeRegExp(truth.providerVersion)}`,
-      ),
     },
     {
       label: "full provider source clone",
@@ -716,7 +711,10 @@ function checkPublishedProviderInstallDocs(facts) {
   for (const issue of issues) {
     fail(`docs/index.md: ${issue}`);
   }
-  checkImmutableProviderTagDocs(tagDocs, { providerVersion: target.version });
+  for (const issue of publishedProviderTagDocIssues(tagDocs, facts.providerPublished)) {
+    fail(`docs/index.md: ${issue}`);
+  }
+  checkImmutableProviderTagDocs(tagDocs);
   const sources = new Map(PUBLISHED_INSTALL_PROSE.map((relativePath) => [
     relativePath,
     read(path.join(repositoryRoot, relativePath)),
