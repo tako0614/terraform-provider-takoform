@@ -1,5 +1,29 @@
 # Release
 
+## Provider 5 source candidate (not published)
+
+`release/version.json` selects stable **5.0.0** for the owning Provider release
+entrypoint. It is a breaking, v2-only source candidate targeting Host API
+`forms.takoform.com/v2`; `publicationStatus: candidate-only` does not assert a
+signed tag, GitHub Release, Registry entry, or installability. The byte-identical
+descriptor mirror is `release/candidates/provider-v5.0.0.json`. The separate
+`provider-v5.0.0-form-identities.json` pins the thirteen exact published Edge
+Form URLs and their Terraform resource names, derived from the registered v2
+source. It records the `takoform-forms` publisher commit
+`cfd376b724803dd2e5d112669b84589c0de517e0`; URL identity is not a v1
+FormRef/package-digest identity. The API source checkpoint is
+`ba0bf1c4c7f1f89f7ebc4b7082a169760c904d54` in the owning `takoform`
+repository. Source selection alone does not prove Host support or public
+artifact retention.
+
+Existing Provider 4.1.0 state is not upgraded or translated. A fresh v5 caller
+must explicitly initialize and retain its private v2 intent store and supply
+the required Host root/scope. See [the v2 source contract](../docs/provider-host-api-v2-source.md).
+The established `bun run deploy -- takoform-provider-release` path retains
+exact-commit checks, signed-tag and immutable-asset no-overwrite fences,
+Registry absence check, and post-publication readback; its prepare/tag/publish
+phases require separate operator authority and have not been run for v5.
+
 ## Published Provider and retained Provider history
 
 Provider **v4.1.0** is the current Registry-published Terraform/OpenTofu
@@ -23,14 +47,12 @@ each resource keeps an exact FormRef and provider mapping in its release
 identity projection. Provider release, Form Definition publication, package
 publication, and Host deployment are separate owner actions.
 
-`release/version.json` selects **4.1.0** for the release entrypoints. It keeps
-`publicationStatus: candidate-only` by the standing descriptor convention;
-this field is not live publication state. The Registry readback recorded in
-the identity ledger is the availability authority. Its verified 4.1.0 entry
-records the current Registry-published version; 4.0.0 remains retained history.
-`release/candidates/provider-v4.1.0.json` is byte-identical to the current
-descriptor, with its derived 17-Form mapping in
+The historical `release/candidates/provider-v4.1.0.json` descriptor remains
+the released v4.1.0 source identity, with its derived 17-Form mapping in
 `release/candidates/provider-v4.1.0-form-identities.json`.
+The Registry readback recorded in the identity ledger is the availability
+authority. Its verified 4.1.0 entry records the current Registry-published
+version; 4.0.0 remains retained history.
 The 4.1.0 release source adds a run-local rotating bearer-token file and retains
 accepted pending-operation custody through refresh, including the Resource UID.
 It also carries the failed-Create recovery warning. The Host API, FormRef and

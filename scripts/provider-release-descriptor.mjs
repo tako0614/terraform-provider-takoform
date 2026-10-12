@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -27,6 +28,9 @@ const VERSIONING_KEYS = [
 ];
 const STABLE_PROVIDER4_VERSION =
   /^4\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?![\s\S])/u;
+const STABLE_PROVIDER5_VERSION =
+  /^5\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?![\s\S])/u;
+const V5_PUBLISHER_COMMIT = "cfd376b724803dd2e5d112669b84589c0de517e0";
 
 function fail(message) {
   throw new Error(`Provider 4 release descriptor: ${message}`);
@@ -122,6 +126,58 @@ export function validateProvider4ReleaseDescriptor(value) {
   return value;
 }
 
+export function validateProvider5ReleaseDescriptor(value) {
+  if (!hasExactKeys(value, [
+    "schemaVersion", "version", "tag", "sourceRepository",
+    "formPublisherRepository", "formPublisherCommit", "formIdentityModel",
+    "providerAddress", "cliMatrix", "goModule", "goVersion",
+    "signingFingerprint", "publicKeyPath", "platforms",
+    "publicationStatus", "versioning",
+  ]) || value.schemaVersion !== 2 ||
+      typeof value.version !== "string" || !STABLE_PROVIDER5_VERSION.test(value.version) ||
+      value.tag !== `v${value.version}`) {
+    fail("v5 descriptor requires schemaVersion 2 and exact stable Provider 5.x tag");
+  }
+  if (value.sourceRepository !== SOURCE_REPOSITORY ||
+      value.formPublisherRepository !== FORM_PUBLISHER_REPOSITORY ||
+      value.formPublisherCommit !== V5_PUBLISHER_COMMIT ||
+      value.formIdentityModel !== "exact-published-urls" ||
+      Object.hasOwn(value, "formSetTag") ||
+      value.providerAddress !== PROVIDER_ADDRESS || value.goModule !== GO_MODULE ||
+      value.signingFingerprint !== SIGNING_FINGERPRINT ||
+      value.publicKeyPath !== "release/keys/provider-signing-key.asc" ||
+      value.publicationStatus !== "candidate-only") {
+    fail("v5 repository, URL identity model, provider, signer, or candidate status is invalid");
+  }
+  if (!Array.isArray(value.platforms) ||
+      JSON.stringify([...value.platforms].sort()) !== JSON.stringify([...PROVIDER_PLATFORMS].sort())) {
+    fail("v5 platforms must be the exact Provider release platform set");
+  }
+  if (!hasExactKeys(value.versioning, VERSIONING_KEYS) ||
+      value.versioning.providerCompatibility !== "semver-major" ||
+      value.versioning.portableApiVersion !== "forms.takoform.com/v2" ||
+      value.versioning.formDefinitionVersions !== "independent-immutable-semver" ||
+      value.versioning.formPackageVersions !== "independent-from-form-url") {
+    fail("v5 versioning must preserve independent Provider, Host API, and Form URL axes");
+  }
+  if (!Array.isArray(value.cliMatrix) || value.cliMatrix.length !== 2 ||
+      new Set(value.cliMatrix.map((entry) => entry?.product)).size !== 2 ||
+      value.cliMatrix.some((entry) => !isRecord(entry) ||
+        !["OpenTofu", "Terraform"].includes(entry.product) ||
+        entry.providerAddress !== PROVIDER_ADDRESS ||
+        typeof entry.version !== "string" || entry.version === "")) {
+    fail("v5 cliMatrix must contain one OpenTofu and one Terraform FQN entry");
+  }
+  return value;
+}
+
+export function providerCandidatePaths(version) {
+  if (STABLE_PROVIDER4_VERSION.test(version)) return provider4CandidatePaths(version);
+  if (!STABLE_PROVIDER5_VERSION.test(version)) fail("current version must be stable Provider 4.x or 5.x");
+  const base = `release/candidates/provider-v${version}`;
+  return { descriptorPath: `${base}.json`, formIdentitiesPath: `${base}-form-identities.json` };
+}
+
 /**
  * Derive all versioned candidate paths from one validated Provider 4 version.
  */
@@ -147,7 +203,7 @@ function parseDescriptor(bytes) {
  * corresponding versioned candidate descriptor.  No candidate path is chosen
  * before the current descriptor has passed pure validation.
  */
-export function readCurrentProvider4Release(repoRoot) {
+export function readCurrentProviderRelease(repoRoot) {
   if (typeof repoRoot !== "string" || repoRoot === "") {
     fail("repoRoot must be a non-empty filesystem path");
   }
@@ -157,11 +213,12 @@ export function readCurrentProvider4Release(repoRoot) {
   } catch (error) {
     fail(`release/version.json is not readable (${error.message})`);
   }
-  const descriptor = validateProvider4ReleaseDescriptor(
-    parseDescriptor(descriptorBytes),
-  );
+  const parsed = parseDescriptor(descriptorBytes);
+  const descriptor = parsed?.schemaVersion === 2
+    ? validateProvider5ReleaseDescriptor(parsed)
+    : validateProvider4ReleaseDescriptor(parsed);
   const { descriptorPath: candidateDescriptorPath, formIdentitiesPath: candidateFormIdentitiesPath } =
-    provider4CandidatePaths(descriptor.version);
+    providerCandidatePaths(descriptor.version);
   let candidateBytes;
   try {
     candidateBytes = readFileSync(join(repoRoot, candidateDescriptorPath));
@@ -176,6 +233,30 @@ export function readCurrentProvider4Release(repoRoot) {
   return {
     descriptor,
     descriptorPath: DESCRIPTOR_PATH,
+    candidateDescriptorPath,
+    candidateFormIdentitiesPath,
+  };
+}
+
+// Retained Provider 4.1.0 is immutable published history. Its descriptor is
+// read from the versioned historical candidate, never selected for v5 writes.
+export function readCurrentProvider4Release(repoRoot) {
+  const candidateDescriptorPath = "release/candidates/provider-v4.1.0.json";
+  const bytes = readFileSync(join(repoRoot, candidateDescriptorPath));
+  if (createHash("sha256").update(bytes).digest("hex") !==
+      "40cc9a96cfae2196dc45c1b0b597e2447344d5caf02b18149941b9be18608d60") {
+    fail("immutable Provider 4.1.0 descriptor bytes changed");
+  }
+  const descriptor = validateProvider4ReleaseDescriptor(parseDescriptor(bytes));
+  if (descriptor.version !== "4.1.0") fail("retained Provider 4.1.0 descriptor drifted");
+  const candidateFormIdentitiesPath = provider4CandidatePaths(descriptor.version).formIdentitiesPath;
+  if (createHash("sha256").update(readFileSync(join(repoRoot, candidateFormIdentitiesPath))).digest("hex") !==
+      "22c56394444bcd58ad88291abc3ab44244522eb33133defcef210f61c43e186f") {
+    fail("immutable Provider 4.1.0 Form identity bytes changed");
+  }
+  return {
+    descriptor,
+    descriptorPath: candidateDescriptorPath,
     candidateDescriptorPath,
     candidateFormIdentitiesPath,
   };

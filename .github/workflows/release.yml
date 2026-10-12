@@ -129,6 +129,7 @@ jobs:
           test -z "$(git -C release-source status --porcelain=v1 --untracked-files=all)"
           test "$(jq -r .tag release-source/release/version.json)" = "$RELEASE_TAG"
           jq -e '.publicationStatus == "candidate-only"' release-source/release/version.json > /dev/null
+          (cd release-source && bun scripts/provider5-candidate.mjs --check)
           go -C release-source run ./cmd/standard-form-conformance verify
           go -C release-source/cmd/provider-release test ./...
           go -C release-source/cmd/provider-release run . verify-source --expected-trigger-tag "$RELEASE_TAG"

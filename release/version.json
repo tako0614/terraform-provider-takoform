@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
-  "version": "4.1.0",
-  "tag": "v4.1.0",
+  "schemaVersion": 2,
+  "version": "5.0.0",
+  "tag": "v5.0.0",
   "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
   "formPublisherRepository": "github.com/tako0614/takoform-forms",
-  "formPublisherCommit": "3231633605b737ce5279d7fc020b4780568e7091",
-  "formSetTag": "forms/sets/e7f8a39311dd011b8467e97e7f300cabb9a6b06c",
+  "formPublisherCommit": "cfd376b724803dd2e5d112669b84589c0de517e0",
+  "formIdentityModel": "exact-published-urls",
   "providerAddress": "registry.terraform.io/tako0614/takoform",
   "cliMatrix": [
     {
@@ -33,8 +33,8 @@
   "publicationStatus": "candidate-only",
   "versioning": {
     "providerCompatibility": "semver-major",
-    "portableApiVersion": "forms.takoform.com/v1",
+    "portableApiVersion": "forms.takoform.com/v2",
     "formDefinitionVersions": "independent-immutable-semver",
-    "formPackageVersions": "content-addressed-current-retained-legacy-semver"
+    "formPackageVersions": "independent-from-form-url"
   }
 }

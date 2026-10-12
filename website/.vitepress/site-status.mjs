@@ -216,12 +216,12 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseVersion = readJson(repositoryRoot, RELEASE_VERSION);
   const providerReleaseTarget = releaseVersion.version;
   if (
-    stableVersionParts(providerReleaseTarget)?.[1] !== "4" ||
+    !["4", "5"].includes(stableVersionParts(providerReleaseTarget)?.[1]) ||
     releaseVersion.tag !== `v${providerReleaseTarget}` ||
     releaseVersion.publicationStatus !== "candidate-only"
   ) {
     throw new Error(
-      `${RELEASE_VERSION}: expected an exact stable Provider 4 version, matching tag and candidate-only publicationStatus`,
+      `${RELEASE_VERSION}: expected an exact stable Provider 4 or 5 version, matching tag and candidate-only publicationStatus`,
     );
   }
   // Keep this module self-contained for isolated website copies. The complete

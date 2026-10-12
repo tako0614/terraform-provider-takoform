@@ -1,0 +1,22 @@
+{
+  "format": "takoform.provider-candidate-form-urls@v1",
+  "providerVersion": "5.0.0",
+  "portableApiVersion": "forms.takoform.com/v2",
+  "formPublisherRepository": "github.com/tako0614/takoform-forms",
+  "formPublisherCommit": "cfd376b724803dd2e5d112669b84589c0de517e0",
+  "forms": [
+    { "resourceType": "takoform_at_least_once_queue", "formURL": "https://edge.forms.takoform.com/forms/AtLeastOnceQueue/0.2.0/" },
+    { "resourceType": "takoform_edge_kv_namespace", "formURL": "https://edge.forms.takoform.com/forms/EdgeKVNamespace/0.2.0/" },
+    { "resourceType": "takoform_edge_object_bucket", "formURL": "https://edge.forms.takoform.com/forms/ObjectBucket/0.2.0/" },
+    { "resourceType": "takoform_module_worker", "formURL": "https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/" },
+    { "resourceType": "takoform_queue_consumer", "formURL": "https://edge.forms.takoform.com/forms/QueueConsumer/0.3.0/" },
+    { "resourceType": "takoform_sqlite_database", "formURL": "https://edge.forms.takoform.com/forms/SQLiteDatabase/0.2.0/" },
+    { "resourceType": "takoform_sqlite_migration_application", "formURL": "https://edge.forms.takoform.com/forms/SQLiteMigrationApplication/0.2.0/" },
+    { "resourceType": "takoform_sqlite_migration_set", "formURL": "https://edge.forms.takoform.com/forms/SQLiteMigrationSet/0.2.0/" },
+    { "resourceType": "takoform_worker_bundle", "formURL": "https://edge.forms.takoform.com/forms/WorkerBundle/0.2.0/" },
+    { "resourceType": "takoform_worker_cron_trigger", "formURL": "https://edge.forms.takoform.com/forms/WorkerCronTrigger/0.3.0/" },
+    { "resourceType": "takoform_worker_deployment", "formURL": "https://edge.forms.takoform.com/forms/WorkerDeployment/0.4.0/" },
+    { "resourceType": "takoform_worker_endpoint", "formURL": "https://edge.forms.takoform.com/forms/WorkerEndpoint/0.3.0/" },
+    { "resourceType": "takoform_worker_version", "formURL": "https://edge.forms.takoform.com/forms/WorkerVersion/0.5.0/" }
+  ]
+}

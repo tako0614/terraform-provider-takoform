@@ -45,6 +45,7 @@ function cloneProviderInputs(prefix = "provider4-candidate") {
     "release/candidates/provider-v4.0.0-form-identities.json",
     "release/candidates/provider-v4.0.1.json",
     "release/candidates/provider-v4.1.0.json",
+    "release/candidates/provider-v4.1.0-form-identities.json",
     "internal/provider/artifacts/publisher/closure.json",
     "internal/provider/artifacts/publisher/projection.json",
   ];
@@ -132,7 +133,7 @@ test("generated 4.1.0 identities preserve the published 17-Form readback", () =>
   }
 });
 
-test("the current descriptor is the path authority and rejects a mirror mismatch", () => {
+test("retained v4 descriptor stays independent of the new current descriptor", () => {
   const synthetic = cloneProviderInputs("provider4-path-authority");
   try {
     const current = readCurrentProvider4Release(synthetic);
@@ -148,16 +149,14 @@ test("the current descriptor is the path authority and rejects a mirror mismatch
       path.join(synthetic, "release/version.json"),
       `${readFileSync(path.join(synthetic, "release/version.json"), "utf8")}\n`,
     );
-    expect(() => readCurrentProvider4Release(synthetic)).toThrow(
-      /byte-identical/u,
-    );
+    expect(() => readCurrentProvider4Release(synthetic)).not.toThrow();
   } finally {
     removeTemporary(synthetic);
   }
 });
 
 test("Provider 4 descriptor validation rejects malformed versions, tags, and identity drift", () => {
-  const descriptor = readJson("release/version.json");
+  const descriptor = readJson("release/candidates/provider-v4.1.0.json");
   expect(validateProvider4ReleaseDescriptor(descriptor)).toBe(descriptor);
   for (const version of [
     "4.0.1-rc.1",

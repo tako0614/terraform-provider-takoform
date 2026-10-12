@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { validateProviderIdentityLedger } from "./release-deploy.mjs";
-import { readCurrentProvider4Release } from "./provider-release-descriptor.mjs";
+import { readCurrentProviderRelease } from "./provider-release-descriptor.mjs";
 import process from "node:process";
 
 export const BLOCKER_LEDGER = "spec/publication-blockers.json";
@@ -320,7 +320,7 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
 // keeps Provider 3.0.0's exact 31 and Provider 2.1.1's exact fifteen
 // identities immutable history.
 export function assertProviderReleaseCandidate(repositoryRoot) {
-  const { descriptor } = readCurrentProvider4Release(repositoryRoot);
+  const { descriptor } = readCurrentProviderRelease(repositoryRoot);
   const retainedProvider3Descriptor = JSON.parse(
     readFileSync(
       path.join(repositoryRoot, "release/history/provider-v3.0.0.json"),
@@ -335,10 +335,10 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   );
   if (
     descriptor.publicationStatus !== "candidate-only" ||
-    descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1"
+    !["forms.takoform.com/v1", "forms.takoform.com/v2"].includes(descriptor.versioning?.portableApiVersion)
   ) {
     fail(
-      "provider release descriptor is not candidate-only stable Provider 4.x on Host API v1",
+      "provider release descriptor is not a candidate-only stable Provider release on its declared Host API",
     );
   }
   if (
@@ -397,6 +397,9 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   const retainedProvider4 = identities.releases.find(
     (entry) => entry.providerVersion === "4.0.0",
   );
+  const retainedProvider41 = identities.releases.find(
+    (entry) => entry.providerVersion === "4.1.0",
+  );
   const retained = identities.releases.find(
     (entry) => entry.providerVersion === "2.1.1",
   );
@@ -406,11 +409,14 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   // Registry-published Provider 3 identity unguarded.
   if (
     identities.format !== "takoform.provider-form-identities@v1" ||
-    embedded?.portableApiVersion !== descriptor.versioning.portableApiVersion ||
-    embedded?.families?.length !== 1 ||
-    embedded?.families?.[0] !== "edge.forms.takoform.com" ||
-    embedded?.formMaturity !== "experimental" ||
-    embedded?.forms?.length !== 17 ||
+    (descriptor.schemaVersion === 2
+      ? identities.currentURLCandidate?.portableApiVersion !== "forms.takoform.com/v2" ||
+        identities.currentURLCandidate?.forms?.length !== 13
+      : embedded?.portableApiVersion !== descriptor.versioning.portableApiVersion ||
+        embedded?.families?.length !== 1 ||
+        embedded?.families?.[0] !== "edge.forms.takoform.com" ||
+        embedded?.formMaturity !== "experimental" ||
+        embedded?.forms?.length !== 17) ||
     retainedProvider3?.families?.length !== 8 ||
     retainedProvider3?.formMaturity !== "experimental" ||
     retainedProvider3?.forms?.length !== 31 ||
@@ -418,15 +424,16 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     retainedProvider4?.families?.[0] !== "edge.forms.takoform.com" ||
     retainedProvider4?.formMaturity !== "experimental" ||
     retainedProvider4?.forms?.length !== 17 ||
+    retainedProvider41?.forms?.length !== 17 ||
     retained?.family !== "edge.forms.takoform.com/v1beta1" ||
     retained?.forms?.length !== 15
   ) {
     fail(
-      "Provider 4 current identities or Provider 3.0.0/2.1.1 retained identities drifted",
+      "current Provider candidate or retained Provider 4.1.0/4.0.0/3.0.0/2.1.1 identities drifted",
     );
   }
   return {
-    formCount: embedded.forms.length,
+    formCount: descriptor.schemaVersion === 2 ? identities.currentURLCandidate.forms.length : embedded.forms.length,
     candidateFormCount,
     retainedProvider3FormCount: retainedProvider3.forms.length,
     retainedFormCount: retained.forms.length,
@@ -477,8 +484,11 @@ function main() {
     .map(([priority, count]) => `${priority}=${count}`)
     .join(" ");
   const traceability = summarizeTraceability(ledger);
+  const selectedIdentity = provider.version.startsWith("5.")
+    ? "exact published Edge Form URLs"
+    : "exact publisher-selected Experimental Forms";
   console.log(
-    `retained Provider/Form Package policy OK: Provider v${provider.version} locks ${provider.formCount} exact publisher-selected Experimental Forms, ` +
+    `retained Provider/Form Package policy OK: Provider v${provider.version} locks ${provider.formCount} ${selectedIdentity}, ` +
       `the retained local candidate lane carries ${provider.candidateFormCount}, Provider 3.0.0 retains ${provider.retainedProvider3FormCount}, ` +
       `and Provider 2.1.1 retains ${provider.retainedFormCount}; ` +
       `${open.length} separate package/public-service obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ` +

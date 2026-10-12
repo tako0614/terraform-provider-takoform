@@ -41,9 +41,11 @@ import {
   validateSpecificationRecoveryPath,
 } from "./specification-release.mjs";
 import { generateProvider4Identities } from "./provider4-candidate.mjs";
+import { validateProvider5Candidate } from "./provider5-candidate.mjs";
 import {
-  readCurrentProvider4Release,
+  readCurrentProviderRelease,
   validateProvider4ReleaseDescriptor,
+  validateProvider5ReleaseDescriptor,
 } from "./provider-release-descriptor.mjs";
 
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
@@ -71,6 +73,8 @@ const PROVIDER_V300_LEDGER_DIGEST =
 // to the next stable Provider 4.x candidate.
 const PROVIDER_V400_LEDGER_DIGEST =
   "sha256:76086ec15b12c9d7c8e9cb4cc281d08f006ae2028fbee5b3bbac85bc59bbc2c6";
+const PROVIDER_V410_LEDGER_DIGEST =
+  "sha256:10a0be0093298acf248b39e1dd3bf4799a918ef2758470bd8a77628ecc02d8e4";
 const PROVIDER_WITHDRAWN_V1ALPHA2_RESOURCE_TYPES = new Set([
   "takoform_edge_worker",
   "takoform_relational_database",
@@ -2470,6 +2474,10 @@ export function validateProviderIdentityLedger(repo, descriptor) {
     ) {
       throw new Error("immutable provider 4.0.0 identity ledger entry changed");
     }
+    if (release.providerVersion === "4.1.0" &&
+        sha256(Buffer.from(JSON.stringify(recursivelySorted(release)))) !== PROVIDER_V410_LEDGER_DIGEST) {
+      throw new Error("immutable provider 4.1.0 identity ledger entry changed");
+    }
     // FormRef uniqueness is per release: a later major legitimately carries
     // forward the exact FormRefs an earlier major published, and the identity
     // that must stay unique inside one release is the FormRef-to-resource-type
@@ -2508,6 +2516,13 @@ export function validateProviderIdentityLedger(repo, descriptor) {
       }
       formRefs.add(refKey);
     }
+  }
+  if (descriptor.schemaVersion === 2) {
+    const currentURLCandidate = validateProvider5Candidate(repo);
+    if (!ledger.releases.some((entry) => entry.providerVersion === "4.1.0")) {
+      throw new Error("retained Provider 4.1.0 identity is missing");
+    }
+    return { ...ledger, currentURLCandidate };
   }
   const projection = loadProviderRosterProjection(repo, descriptor);
   if (
@@ -2552,7 +2567,7 @@ export function validateProviderIdentityLedger(repo, descriptor) {
 }
 
 export function readProviderDescriptor(repo) {
-  const { descriptor } = readCurrentProvider4Release(repo);
+  const { descriptor } = readCurrentProviderRelease(repo);
   if (
     typeof descriptor !== "object" ||
     descriptor === null ||
@@ -2589,11 +2604,11 @@ export function readProviderDescriptor(repo) {
   );
   if (
     descriptor.versioning.providerCompatibility !== "semver-major" ||
-    descriptor.versioning.portableApiVersion !== PROVIDER_HOST_API ||
+    !["forms.takoform.com/v1", "forms.takoform.com/v2"].includes(descriptor.versioning.portableApiVersion) ||
     descriptor.versioning.formDefinitionVersions !==
       "independent-immutable-semver" ||
     descriptor.versioning.formPackageVersions !==
-      "content-addressed-current-retained-legacy-semver"
+      (descriptor.schemaVersion === 2 ? "independent-from-form-url" : "content-addressed-current-retained-legacy-semver")
   ) {
     throw new Error(
       "provider release descriptor conflates independent version streams",
@@ -4500,6 +4515,14 @@ function publicAssets(root, names) {
 }
 
 export function providerReleaseBody(descriptor) {
+  if (descriptor?.schemaVersion === 2) {
+    validateProvider5ReleaseDescriptor(descriptor);
+    return (
+      `Signed deterministic Takoform Provider v${descriptor.version} release. Provider publication does not publish a Host API or any Form URL.\n\n` +
+      `Breaking upgrade from Provider v4.1.0: this Provider uses Host API forms.takoform.com/v2 and the thirteen exact published Edge Form URLs pinned in release/candidates/provider-v${descriptor.version}-form-identities.json. Provider v4.1.0 state must remain on v4.1.0 or be explicitly removed under its own lifecycle before a fresh v5 install; there is no automatic v1-to-v2 state, Form, or API translation. Initialize and retain the v2 private intent store and its caller scope before configuration; unresolved pre-ACK intent is a halt, not permission for a new mutation key. See docs/provider-host-api-v2-source.md.\n\n` +
+      `Publisher source github.com/tako0614/takoform-forms at ${descriptor.formPublisherCommit}; this candidate does not assert live Host support, artifact availability, or Registry publication.`
+    );
+  }
   validateProvider4ReleaseDescriptor(descriptor);
   if (
     descriptor?.tag !== `v${descriptor?.version}` ||
@@ -4664,7 +4687,12 @@ function providerPublish(context, options, descriptor) {
   // Independent second copy of the body facts on purpose: the release body is
   // immutable once published, so the builder and the publisher assert the same
   // contract separately rather than sharing one statement of it.
-  if (
+  if (descriptor.schemaVersion === 2 ? (
+    !releaseBody.includes("Provider v4.1.0 state") ||
+    !releaseBody.includes("forms.takoform.com/v2") ||
+    !releaseBody.includes(descriptor.formPublisherCommit) ||
+    !releaseBody.includes(`release/candidates/provider-v${descriptor.version}-form-identities.json`)
+  ) : (
     !releaseBody.includes(`Provider v${descriptor.version}`) ||
     !releaseBody.includes(PROVIDER_HOST_API) ||
     !releaseBody.includes(
@@ -4683,9 +4711,9 @@ function providerPublish(context, options, descriptor) {
     !releaseBody.includes(
       "Provider 2.1.1 and 3.0.0 identities remain immutable history",
     )
-  ) {
+  )) {
     throw new Error(
-      "provider release body omits the exact v4 publisher-set identity and migration contract",
+      "provider release body omits the exact selected identity and migration contract",
     );
   }
   assertCurrentProtectedMain(context, expectedCommit);

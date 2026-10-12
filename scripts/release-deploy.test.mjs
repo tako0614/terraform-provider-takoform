@@ -255,7 +255,7 @@ function canonicalLedgerDigest(value) {
 
 test("provider v4 release body names the publisher-set identity and v3 migration boundary", () => {
   const descriptor = JSON.parse(
-    readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
+    readFileSync(join(repositoryRoot, "release/candidates/provider-v4.1.0.json"), "utf8"),
   );
   const body = providerReleaseBody(descriptor);
   expect(body).toContain(`Provider ${descriptor.tag}`);
@@ -294,9 +294,9 @@ test("provider v4 release body names the publisher-set identity and v3 migration
 test("provider descriptor and identity ledger are exact current and retained release inputs", () => {
   const descriptor =
     releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
-  expect(descriptor.version).toBe("4.1.0");
+  expect(descriptor.version).toBe("5.0.0");
   expect(descriptor.versioning.portableApiVersion).toBe(
-    "forms.takoform.com/v1",
+    "forms.takoform.com/v2",
   );
   const releases = releaseDeployTestHooks.validateProviderIdentityLedger(
     repositoryRoot,
@@ -306,7 +306,7 @@ test("provider descriptor and identity ledger are exact current and retained rel
     releases.find((release) => release.providerVersion === "2.1.1")?.forms,
   ).toHaveLength(15);
   const current = releases.find(
-    (release) => release.providerVersion === descriptor.version,
+    (release) => release.providerVersion === "4.1.0",
   );
   expect(current?.families).toEqual(["edge.forms.takoform.com"]);
   expect(current?.forms).toHaveLength(17);
@@ -332,7 +332,7 @@ test("provider descriptor and identity ledger are exact current and retained rel
 
 test("provider body rejects malformed and non-Provider-4 targets", () => {
   const descriptor = JSON.parse(
-    readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
+    readFileSync(join(repositoryRoot, "release/candidates/provider-v4.1.0.json"), "utf8"),
   );
   for (const [version, tag] of [
     ["4.0.1-rc.1", "v4.0.1-rc.1"],
@@ -371,7 +371,7 @@ test("the current Provider 4.x target refuses historical 4.0.0 tag phases", () =
           throw new Error("the historical tag must be rejected first");
         },
       }),
-    ).toThrow(/--tag must exactly match release\/version\.json \(v4\.1\.0\)/);
+    ).toThrow(/--tag must exactly match release\/version\.json \(v5\.0\.0\)/);
     expect(calls).toHaveLength(0);
   }
 });
@@ -386,10 +386,11 @@ test("the current descriptor stays candidate-only while the ledger records publi
       "utf8",
     ),
   );
+  expect(published.entries.find((entry) => entry.version === descriptor.version)).toBeUndefined();
   expect(
-    published.entries.find((entry) => entry.version === descriptor.version)
+    published.entries.find((entry) => entry.version === "4.1.0")
       ?.registryReadback?.installation.providerVersion,
-  ).toBe(descriptor.version);
+  ).toBe("4.1.0");
 });
 
 test("retained Provider 4.0.0 identity mutation is refused", () => {
@@ -404,6 +405,19 @@ test("retained Provider 4.0.0 identity mutation is refused", () => {
   writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
   expect(() => releaseDeployTestHooks.readProviderDescriptor(root)).toThrow(
     "immutable provider 4.0.0 identity ledger entry changed",
+  );
+});
+
+test("published Provider 4.1.0 identity mutation is refused while v5 is current", () => {
+  const root = trustedTemporaryDirectory("provider-v410-lock");
+  copyProviderIdentityInputs(root);
+  const ledgerPath = join(root, "release/provider-form-identities.json");
+  const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+  ledger.releases.find((entry) => entry.providerVersion === "4.1.0")
+    .forms[0].packageDigest = `sha256:${"0".repeat(64)}`;
+  writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
+  expect(() => releaseDeployTestHooks.readProviderDescriptor(root)).toThrow(
+    "immutable provider 4.1.0 identity ledger entry changed",
   );
 });
 
