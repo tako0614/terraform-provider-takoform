@@ -4,10 +4,17 @@ import (
 	"context"
 	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/edgev2"
 )
@@ -39,8 +46,27 @@ func v2OptionalRef() schema.SingleNestedAttribute {
 func v2Artifact() schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{Required: true, Attributes: map[string]schema.Attribute{"url": v2String(true), "sha256": v2String(true)}}
 }
-func v2Binding() schema.ListNestedAttribute {
-	return schema.ListNestedAttribute{Optional: true, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"name": v2String(true), "resource": v2Ref()}}}
+func v2JSONString() schema.StringAttribute {
+	return schema.StringAttribute{Optional: true, CustomType: v2JSONSemanticStringType{}, Default: stringdefault.StaticString("{}")}
+}
+func v2SetString(required bool, defaultEmpty bool) schema.SetAttribute {
+	attribute := schema.SetAttribute{Required: required, Optional: !required, ElementType: schema.StringAttribute{}.GetType()}
+	if defaultEmpty {
+		attribute.Default = v2EmptySetDefault(attribute)
+	}
+	return attribute
+}
+func v2Binding() schema.SetNestedAttribute {
+	attribute := schema.SetNestedAttribute{Optional: true, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"name": v2String(true), "resource": v2Ref()}}}
+	attribute.Default = v2EmptySetDefault(attribute)
+	return attribute
+}
+func v2EmptySetDefault(attribute schema.Attribute) defaults.Set {
+	setType, ok := attribute.GetType().(basetypes.SetType)
+	if !ok {
+		panic("v2 empty collection default requires a set attribute")
+	}
+	return setdefault.StaticValue(types.SetValueMust(setType.ElemType, []attr.Value{}))
 }
 
 var v2Forms = []v2FormDef{
@@ -48,9 +74,9 @@ var v2Forms = []v2FormDef{
 	{"takoform_worker_bundle", edgev2.WorkerBundleURL, map[string]schema.Attribute{"artifact": v2Artifact()}},
 	{"takoform_worker_version", edgev2.WorkerVersionURL, map[string]schema.Attribute{
 		"worker": v2Ref(), "bundle": v2OptionalRef(),
-		"handlers":                schema.ListAttribute{Required: true, ElementType: schema.StringAttribute{}.GetType()},
-		"vars_json":               v2String(false),
-		"required_sensitive_vars": schema.ListAttribute{Optional: true, ElementType: schema.StringAttribute{}.GetType()},
+		"handlers":                v2SetString(true, false),
+		"vars_json":               v2JSONString(),
+		"required_sensitive_vars": v2SetString(false, true),
 		"kv_bindings":             v2Binding(), "sqlite_bindings": v2Binding(), "bucket_bindings": v2Binding(),
 		"queue_producer_bindings": v2Binding(), "service_bindings": v2Binding(), "actor_bindings": v2Binding(), "workflow_bindings": v2Binding(),
 		"assets": schema.SingleNestedAttribute{Optional: true, Attributes: map[string]schema.Attribute{
@@ -58,7 +84,7 @@ var v2Forms = []v2FormDef{
 		}},
 	}},
 	{"takoform_worker_deployment", edgev2.WorkerDeploymentURL, map[string]schema.Attribute{
-		"worker": v2Ref(), "versions": schema.ListNestedAttribute{Required: true, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+		"worker": v2Ref(), "versions": schema.SetNestedAttribute{Required: true, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 			"worker_version": v2Ref(), "weight": v2Int(true),
 		}}},
 	}},
@@ -69,7 +95,7 @@ var v2Forms = []v2FormDef{
 	{"takoform_sqlite_database", edgev2.SQLiteDatabaseURL, nil},
 	{"takoform_sqlite_migration_set", edgev2.SQLiteMigrationSetURL, map[string]schema.Attribute{"artifact": v2Artifact()}},
 	{"takoform_sqlite_migration_application", edgev2.SQLiteMigrationApplicationURL, map[string]schema.Attribute{"database": v2Ref(), "migration_set": v2Ref()}},
-	{"takoform_at_least_once_queue", edgev2.AtLeastOnceQueueURL, map[string]schema.Attribute{"delivery_delay_seconds": v2Int(false), "message_retention_seconds": v2Int(true)}},
+	{"takoform_at_least_once_queue", edgev2.AtLeastOnceQueueURL, map[string]schema.Attribute{"delivery_delay_seconds": schema.Int64Attribute{Optional: true, Default: int64default.StaticInt64(0)}, "message_retention_seconds": v2Int(true)}},
 	{"takoform_queue_consumer", edgev2.QueueConsumerURL, map[string]schema.Attribute{
 		"queue": v2Ref(), "worker": v2Ref(), "max_batch_size": v2Int(true), "max_batch_timeout_seconds": v2Int(true),
 		"max_concurrency": v2Int(true), "max_retries": v2Int(true), "retry_delay_seconds": v2Int(true), "dead_letter_queue": v2OptionalRef(),

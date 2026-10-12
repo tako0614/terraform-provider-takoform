@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -40,7 +41,7 @@ func v2SpecFromPlan(ctx context.Context, plan tfsdk.Plan, def v2FormDef) (map[st
 	if value.IsNull() || value.IsUnknown() {
 		return nil, errors.New("typed spec must be known")
 	}
-	result, err := v2ObjectToWire(value, def.spec)
+	result, err := v2ObjectToWire(ctx, value, def.spec)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +55,7 @@ func v2SpecFromPlan(ctx context.Context, plan tfsdk.Plan, def v2FormDef) (map[st
 	return result, nil
 }
 
-func v2ObjectToWire(value types.Object, attrs map[string]schema.Attribute) (map[string]any, error) {
+func v2ObjectToWire(ctx context.Context, value types.Object, attrs map[string]schema.Attribute) (map[string]any, error) {
 	out := make(map[string]any)
 	for key, attribute := range attrs {
 		item := value.Attributes()[key]
@@ -65,11 +66,15 @@ func v2ObjectToWire(value types.Object, attrs map[string]schema.Attribute) (map[
 			continue
 		}
 		if key == "vars_json" {
-			str, ok := item.(types.String)
+			str, ok := item.(basetypes.StringValuable)
 			if !ok {
 				return nil, errors.New("vars_json must be a string")
 			}
-			parsed, err := jsonv2.Decode([]byte(str.ValueString()))
+			stringValue, diags := str.ToStringValue(ctx)
+			if diags.HasError() {
+				return nil, errors.New("vars_json must be a string")
+			}
+			parsed, err := jsonv2.Decode([]byte(stringValue.ValueString()))
 			if err != nil {
 				return nil, errors.New("vars_json must be strict JSON")
 			}
@@ -80,7 +85,7 @@ func v2ObjectToWire(value types.Object, attrs map[string]schema.Attribute) (map[
 			out["vars"] = obj
 			continue
 		}
-		wire, err := v2ValueToWire(item, attribute)
+		wire, err := v2ValueToWire(ctx, item, attribute)
 		if err != nil {
 			return nil, fmt.Errorf("spec.%s: %w", key, err)
 		}
@@ -89,13 +94,17 @@ func v2ObjectToWire(value types.Object, attrs map[string]schema.Attribute) (map[
 	return out, nil
 }
 
-func v2ValueToWire(value attr.Value, attribute schema.Attribute) (any, error) {
+func v2ValueToWire(ctx context.Context, value attr.Value, attribute schema.Attribute) (any, error) {
 	if value.IsUnknown() || value.IsNull() {
 		return nil, errors.New("required value is unknown or null")
 	}
 	switch v := value.(type) {
-	case types.String:
-		return v.ValueString(), nil
+	case basetypes.StringValuable:
+		stringValue, diags := v.ToStringValue(ctx)
+		if diags.HasError() {
+			return nil, errors.New("invalid string value")
+		}
+		return stringValue.ValueString(), nil
 	case types.Int64:
 		return json.Number(fmt.Sprintf("%d", v.ValueInt64())), nil
 	case types.Bool:
@@ -105,26 +114,54 @@ func v2ValueToWire(value attr.Value, attribute schema.Attribute) (any, error) {
 		if !ok {
 			return nil, errors.New("unexpected nested object")
 		}
-		return v2ObjectToWire(v, nested.Attributes)
+		return v2ObjectToWire(ctx, v, nested.Attributes)
 	case types.List:
-		out := make([]any, 0, len(v.Elements()))
-		for _, item := range v.Elements() {
-			var itemAttribute schema.Attribute
-			if nested, ok := attribute.(schema.ListNestedAttribute); ok {
-				itemAttribute = schema.SingleNestedAttribute{Attributes: nested.NestedObject.Attributes}
-			} else {
-				itemAttribute = schema.StringAttribute{}
-			}
-			converted, err := v2ValueToWire(item, itemAttribute)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, converted)
-		}
-		return out, nil
+		return v2CollectionToWire(ctx, v.Elements(), attribute, false)
+	case types.Set:
+		return v2CollectionToWire(ctx, v.Elements(), attribute, true)
 	default:
 		return nil, errors.New("unsupported typed spec attribute")
 	}
+}
+
+func v2CollectionToWire(ctx context.Context, elements []attr.Value, attribute schema.Attribute, unordered bool) ([]any, error) {
+	var itemAttribute schema.Attribute
+	switch nested := attribute.(type) {
+	case schema.ListNestedAttribute:
+		itemAttribute = schema.SingleNestedAttribute{Attributes: nested.NestedObject.Attributes}
+	case schema.SetNestedAttribute:
+		itemAttribute = schema.SingleNestedAttribute{Attributes: nested.NestedObject.Attributes}
+	default:
+		itemAttribute = schema.StringAttribute{}
+	}
+	out := make([]any, 0, len(elements))
+	for _, item := range elements {
+		converted, err := v2ValueToWire(ctx, item, itemAttribute)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, converted)
+	}
+	if unordered {
+		var sortErr error
+		sort.Slice(out, func(i, j int) bool {
+			left, err := jsonv2.Marshal(out[i])
+			if err != nil {
+				sortErr = err
+				return false
+			}
+			right, err := jsonv2.Marshal(out[j])
+			if err != nil {
+				sortErr = err
+				return false
+			}
+			return string(left) < string(right)
+		})
+		if sortErr != nil {
+			return nil, errors.New("unordered collection cannot be encoded as strict JSON")
+		}
+	}
+	return out, nil
 }
 
 func v2StateSpec(ctx context.Context, def v2FormDef, spec map[string]any) (attr.Value, error) {
@@ -148,6 +185,22 @@ func v2ObjectFromWire(ctx context.Context, attrs map[string]schema.Attribute, wi
 		attrTypes[key] = schemaAttr.GetType()
 		item, exists := wire[v2WireName(key)]
 		if !exists {
+			if key == "vars_json" {
+				values[key] = v2JSONSemanticStringValue{StringValue: types.StringValue("{}")}
+				continue
+			}
+			if _, isSet := schemaAttr.(schema.SetAttribute); isSet {
+				values[key] = v2EmptySetValue(schemaAttr)
+				continue
+			}
+			if _, isSet := schemaAttr.(schema.SetNestedAttribute); isSet {
+				values[key] = v2EmptySetValue(schemaAttr)
+				continue
+			}
+			if key == "delivery_delay_seconds" {
+				values[key] = types.Int64Value(0)
+				continue
+			}
 			values[key] = v2Null(schemaAttr.GetType())
 			continue
 		}
@@ -156,7 +209,8 @@ func v2ObjectFromWire(ctx context.Context, attrs map[string]schema.Attribute, wi
 			if err != nil {
 				return types.Object{}, err
 			}
-			values[key] = types.StringValue(string(encoded))
+			customValue, _ := (v2JSONSemanticStringType{}).ValueFromString(ctx, types.StringValue(string(encoded)))
+			values[key] = customValue
 			continue
 		}
 		converted, err := v2ValueFromWire(ctx, schemaAttr, item)
@@ -178,6 +232,13 @@ func v2ValueFromWire(ctx context.Context, attribute schema.Attribute, wire any) 
 		value, ok := wire.(string)
 		if !ok {
 			return nil, errors.New("expected string")
+		}
+		if typed.CustomType != nil {
+			customValue, diags := typed.CustomType.ValueFromString(ctx, types.StringValue(value))
+			if diags.HasError() {
+				return nil, errors.New("invalid custom string value")
+			}
+			return customValue, nil
 		}
 		return types.StringValue(value), nil
 	case schema.Int64Attribute:
@@ -220,6 +281,24 @@ func v2ValueFromWire(ctx context.Context, attribute schema.Attribute, wire any) 
 			return nil, errors.New("invalid list")
 		}
 		return result, nil
+	case schema.SetAttribute:
+		list, ok := wire.([]any)
+		if !ok {
+			return nil, errors.New("expected string set")
+		}
+		values := make([]attr.Value, 0, len(list))
+		for _, item := range list {
+			value, ok := item.(string)
+			if !ok {
+				return nil, errors.New("expected string set")
+			}
+			values = append(values, types.StringValue(value))
+		}
+		result, diags := types.SetValue(typed.ElementType, values)
+		if diags.HasError() {
+			return nil, errors.New("invalid set")
+		}
+		return result, nil
 	case schema.ListNestedAttribute:
 		list, ok := wire.([]any)
 		if !ok {
@@ -246,13 +325,49 @@ func v2ValueFromWire(ctx context.Context, attribute schema.Attribute, wire any) 
 			return nil, errors.New("invalid nested list")
 		}
 		return result, nil
+	case schema.SetNestedAttribute:
+		list, ok := wire.([]any)
+		if !ok {
+			return nil, errors.New("expected nested set")
+		}
+		values := make([]attr.Value, 0, len(list))
+		for _, item := range list {
+			object, ok := item.(map[string]any)
+			if !ok {
+				return nil, errors.New("expected object in set")
+			}
+			value, err := v2ObjectFromWire(ctx, typed.NestedObject.Attributes, object)
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, value)
+		}
+		setType, ok := typed.GetType().(basetypes.SetType)
+		if !ok {
+			return nil, errors.New("invalid nested set schema")
+		}
+		result, diags := types.SetValue(setType.ElemType, values)
+		if diags.HasError() {
+			return nil, errors.New("invalid nested set")
+		}
+		return result, nil
 	default:
 		return nil, errors.New("unsupported typed spec attribute")
 	}
 }
 
+func v2EmptySetValue(attribute schema.Attribute) types.Set {
+	setType, ok := attribute.GetType().(basetypes.SetType)
+	if !ok {
+		panic("v2 empty collection state requires a set attribute")
+	}
+	return types.SetValueMust(setType.ElemType, []attr.Value{})
+}
+
 func v2Null(t attr.Type) attr.Value {
 	switch typed := t.(type) {
+	case v2JSONSemanticStringType:
+		return v2JSONSemanticStringValue{StringValue: types.StringNull()}
 	case basetypes.StringType:
 		return types.StringNull()
 	case basetypes.Int64Type:
@@ -263,6 +378,8 @@ func v2Null(t attr.Type) attr.Value {
 		return types.ObjectNull(typed.AttrTypes)
 	case basetypes.ListType:
 		return types.ListNull(typed.ElemType)
+	case basetypes.SetType:
+		return types.SetNull(typed.ElemType)
 	default:
 		panic("unsupported v2 schema type")
 	}
