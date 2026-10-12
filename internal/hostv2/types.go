@@ -6,6 +6,7 @@ const (
 	APIVersion       = "forms.takoform.com/v2"
 	DiscoveryPath    = "/.well-known/takoform/v2"
 	maxResponseBytes = 8 * 1024 * 1024
+	maxSafeInteger   = 9007199254740991
 )
 
 type Discovery struct {

@@ -656,4 +656,72 @@ func TestContextCancellationStopsRequest(t *testing.T) {
 	}
 }
 
+func TestFailedRediscoveryInvalidatesPreviouslyAcceptedAPIBase(t *testing.T) {
+	var discoveryCalls atomic.Int32
+	var authenticatedCalls atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DiscoveryPath {
+			if discoveryCalls.Add(1) == 1 {
+				serveDiscovery(t, w, server.URL+"/api", false)
+				return
+			}
+			serveDiscovery(t, w, "https://elsewhere.example/api", false)
+			return
+		}
+		authenticatedCalls.Add(1)
+		_, _ = io.WriteString(w, `{"form":"https://forms.example/Widget/1.0.0/","supported":true,"operations":["read"],"privateInputs":false}`)
+	}))
+	defer server.Close()
+	client := New(server.URL, "token", server.Client())
+	if _, err := client.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Discover(context.Background()); err == nil {
+		t.Fatal("Discover() unexpectedly accepted a foreign API base")
+	}
+	if _, err := client.GetSupport(context.Background(), "https://forms.example/Widget/1.0.0/"); err == nil {
+		t.Fatal("GetSupport() used a stale API base after failed rediscovery")
+	}
+	if authenticatedCalls.Load() != 0 {
+		t.Fatalf("authenticated API calls after failed rediscovery = %d, want 0", authenticatedCalls.Load())
+	}
+}
+
+func TestResponseGenerationsMustBeSafeIntegers(t *testing.T) {
+	const unsafe = `9007199254740992`
+	for name, routeAndBody := range map[string]struct{ path, body string }{
+		"resource":  {"/api/resources/r-1", `{"uid":"r-1","form":"https://forms.example/Widget/1.0.0/","space":"team-a","name":"widget","generation":` + unsafe + `,"observedGeneration":0,"observedAt":null,"phase":"pending","spec":{},"observed":{},"output":{},"lastOperation":"op-1"}`},
+		"operation": {"/api/operations/op-1", `{"id":"op-1","resourceUid":"r-1","action":"create","generation":` + unsafe + `,"status":"reconciling","effect":"unknown","createdAt":"2026-10-12T12:00:00Z","updatedAt":"2026-10-12T12:00:01Z","retainUntil":"2026-10-13T12:00:01Z"}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var server *httptest.Server
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == DiscoveryPath {
+					serveDiscovery(t, w, server.URL+"/api", false)
+					return
+				}
+				if r.URL.Path != routeAndBody.path {
+					t.Errorf("unexpected request path %q", r.URL.Path)
+				}
+				_, _ = io.WriteString(w, routeAndBody.body)
+			}))
+			defer server.Close()
+			client := New(server.URL, "token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			if name == "resource" {
+				_, err = client.ReadResource(context.Background(), "r-1")
+			} else {
+				_, err = client.ReadOperation(context.Background(), "op-1")
+			}
+			if err == nil {
+				t.Fatalf("accepted generation above the safe integer limit %s", unsafe)
+			}
+		})
+	}
+}
+
 var _ = strings.Contains
