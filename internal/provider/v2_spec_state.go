@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/edgev2"
 	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
@@ -236,7 +237,7 @@ func v2ValueFromWire(ctx context.Context, attribute schema.Attribute, wire any) 
 			}
 			values = append(values, value)
 		}
-		listType, ok := typed.GetType().(types.ListType)
+		listType, ok := typed.GetType().(basetypes.ListType)
 		if !ok {
 			return nil, errors.New("invalid nested list schema")
 		}
@@ -252,15 +253,15 @@ func v2ValueFromWire(ctx context.Context, attribute schema.Attribute, wire any) 
 
 func v2Null(t attr.Type) attr.Value {
 	switch typed := t.(type) {
-	case types.StringType:
+	case basetypes.StringType:
 		return types.StringNull()
-	case types.Int64Type:
+	case basetypes.Int64Type:
 		return types.Int64Null()
-	case types.BoolType:
+	case basetypes.BoolType:
 		return types.BoolNull()
-	case types.ObjectType:
+	case basetypes.ObjectType:
 		return types.ObjectNull(typed.AttrTypes)
-	case types.ListType:
+	case basetypes.ListType:
 		return types.ListNull(typed.ElemType)
 	default:
 		panic("unsupported v2 schema type")
