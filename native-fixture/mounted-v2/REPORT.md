@@ -8,10 +8,14 @@ From this Provider worktree, with OpenTofu 1.12.3, Go 1.26.0, the pinned local m
 
 ```sh
 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOCACHE=/root/hdd/go-cache \
-  go test -count=1 -v ./native-fixture/mounted-v2
+  go test -tags native -count=1 -v ./native-fixture/mounted-v2
 ```
 
-Observed: all five subtests passed together in **10.454 s**, including local plugin and `intent-store-init` builds. Toolchain: OpenTofu `v1.12.3 linux_amd64`, Go `go1.26.0 linux/amd64`. The Provider binary uses the repository's `main.go` with version `5.0.0` set at build time. `tofu init -plugin-dir` installs only the local temporary plugin. The test uses a unique temporary module and a separately preinitialized, exact-root-bound intent store for each case. Its TLS certificate is trusted only by child CLI/Provider processes through `SSL_CERT_FILE`; no global trust or insecure-TLS setting is changed.
+This test file is guarded by the `native` build tag. The portable `go test ./...`
+package inventory excludes this OpenTofu-dependent fixture; native qualification
+must be invoked explicitly and must fail if its required `tofu` binary is absent.
+
+Observed with the explicit `native` tag: all five subtests passed together in **8.267 s**, including local plugin and `intent-store-init` builds. Toolchain: OpenTofu `v1.12.3 linux_amd64`, Go `go1.26.0 linux/amd64`. The Provider binary uses the repository's `main.go` with version `5.0.0` set at build time. `tofu init -plugin-dir` installs only the local temporary plugin. The test uses a unique temporary module and a separately preinitialized, exact-root-bound intent store for each case. Its TLS certificate is trusted only by child CLI/Provider processes through `SSL_CERT_FILE`; no global trust or insecure-TLS setting is changed.
 
 The minimal HCL under test has `provider "takoform"` with local HTTPS `endpoint` and `host_api_root`, `token = var.token`, the absolute store path, `store_id = "fixed-scope"`, and `space = "prod"`; `takoform_module_worker.x` has only `name = "app"`. The token variable is ephemeral and supplied through this process's `TF_VAR_token`. The separate update case uses typed `takoform_at_least_once_queue` with `message_retention_seconds` 60 then 120, since ModuleWorker has an empty spec and cannot honestly demonstrate an in-place update.
 
