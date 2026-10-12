@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
+	"github.com/tako0614/terraform-provider-takoform/internal/edgev2"
 	"github.com/tako0614/terraform-provider-takoform/internal/hostv2"
 	"github.com/tako0614/terraform-provider-takoform/internal/intentv2"
 	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
@@ -67,6 +68,22 @@ func TestV2WorkerVersionUpdatePrivateInputsAreOptionalButExactWhenSelected(t *te
 	t.Setenv(privateinputsv2.EnvironmentVariable, `{"prod":{"worker":{"OTHER":"secret"}}}`)
 	if got, names, err = resource.privateInputsForUpdate("prod", "worker", spec); err == nil || got != nil || names != nil {
 		t.Fatalf("mismatched selected source accepted: inputs=%v names=%v error=%v", got, names, err)
+	}
+	for _, noNames := range []map[string]any{{}, {"requiredSensitiveVars": []any{}}} {
+		if got, names, err = resource.privateInputsForUpdate("prod", "worker", noNames); err == nil || got != nil || names != nil {
+			t.Fatalf("undeclared selected source accepted: inputs=%v names=%v error=%v", got, names, err)
+		}
+	}
+}
+
+func TestV2WorkerVersionCreateRejectsUndeclaredSelectedPrivateInputs(t *testing.T) {
+	resource := &v2Resource{def: v2FormDef{form: edgev2.WorkerVersionURL}}
+	t.Setenv(privateinputsv2.EnvironmentVariable, `{"prod":{"worker":{"API_TOKEN":"secret"}}}`)
+	for _, noNames := range []map[string]any{{}, {"requiredSensitiveVars": []any{}}} {
+		got, names, err := resource.privateInputs("prod", "worker", noNames, hostv2.Discovery{}, hostv2.Support{})
+		if err == nil || got != nil || names != nil {
+			t.Fatalf("undeclared selected Create input accepted: inputs=%v names=%v error=%v", got, names, err)
+		}
 	}
 }
 
