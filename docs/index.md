@@ -63,19 +63,21 @@ Availability is verified, not declared by this immutable documentation.
 The exact removal and state boundary is documented in the
 [v3-to-v4 migration guide](../release/migrations/v3-to-v4.md).
 
-## Provider 5.0.0 candidate (unpublished)
+## Provider 5.0.0
 
-This source checkout contains a fresh-install Provider 5 candidate for Host API
-`forms.takoform.com/v2` and thirteen exact Edge Forms. It is not a Registry
-release: Provider 5.0.0 is not currently available for installation, and this
-documentation does not establish that a Host supports the Forms. Provider 4.1.0
-remains the published v1 Provider. **Provider 4 state is not automatically translated to Provider 5.** Keep existing v4 state with v4 unless an operator
-plans and verifies a separate migration.
+Provider 5.0.0 is a fresh-install Provider for Host API
+`forms.takoform.com/v2` and thirteen exact Edge Forms. Registry availability is
+determined by the live listing and exact-version readback, not this reference.
+Check both before installing or pinning 5.0.0. Until that version is listed,
+evaluate the source checkout or a local build rather than attempting Registry
+installation.
+This reference does not establish that a Host supports the Forms. Provider
+4.1.0 remains the published v1 Provider. **Provider 4 state is not automatically translated to Provider 5.** Keep existing v4 state with v4 unless an operator plans and verifies a separate migration.
 
 The v2 wire namespace is `forms.takoform.com/v2`; it is separate from each
 versioned Form URL. For example, the exact
 [ModuleWorker 0.3.0 Form](https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/)
-is one of the thirteen URLs mounted by the candidate.
+is one of the thirteen URLs mounted by Provider 5.0.0.
 
 The v5 configuration and lifecycle boundaries are in the
 [Provider 5 consumer reference](provider-host-api-v2-source.md). A minimal
@@ -106,9 +108,10 @@ resource "takoform_module_worker" "api" {
 }
 ```
 
-For a published release, verify the Registry version before changing a
-consumer pin. Source-tag verification is separate; after the intended tag is
-published, the exact source checkout is:
+After the exact Provider version is listed in the Registry, verify that
+version before changing a consumer pin. Source-tag verification is separate;
+when the `v5.0.0` tag resolves to the intended reviewed source, the exact
+checkout is:
 
 ```sh
 git clone https://github.com/tako0614/terraform-provider-takoform.git
@@ -116,8 +119,7 @@ cd terraform-provider-takoform
 git checkout --detach v5.0.0
 ```
 
-The `v5.0.0` tag does not currently exist. A source tag, local build, or
-candidate page is not evidence of Registry publication.
+A source tag or local build alone is not evidence of Registry publication.
 
 ## Resource reference
 

@@ -1,12 +1,14 @@
 # Provider 5 consumer reference
 
-Provider 5.0.0 is an unpublished fresh-install candidate. The published
-Provider 4.1.0 remains the v1 client. Provider 5 targets Host API
-`forms.takoform.com/v2`; this page does not claim that a particular Host
-supports that API or any listed Form. **Provider 4 state is not automatically
-translated to Provider 5.**
+Provider 5.0.0 is a fresh-install Provider for Host API
+`forms.takoform.com/v2`; this page does not establish current Registry
+availability or that a particular Host supports the API or any listed Form.
+Check the live Registry listing and exact-version readback before installing
+or pinning 5.0.0. Until then, evaluate from source or a local build. The
+published Provider 4.1.0 remains the v1 client. **Provider 4 state is not
+automatically translated to Provider 5.**
 
-The exact v2 API identity and discovery path are in the candidate's [protocol
+The exact v2 API identity and discovery path are in the Provider's [protocol
 identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
 and [HTTP client](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/client.go).
 The 13 mapped publisher Forms are:
@@ -35,7 +37,7 @@ WorkerVersion's public `vars` object is configured as strict-JSON
 
 ## Source evaluation and Registry installation
 
-For candidate development, initialize one private, absolute-path intent store
+For source development, initialize one private, absolute-path intent store
 for the fixed local management scope and exact Host API root. The source
 checkout command is:
 
@@ -46,20 +48,19 @@ go run ./cmd/intent-store-init \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
 ```
 
-The built candidate binary exposes the same initializer as
+The built Provider binary exposes the same initializer as
 `terraform-provider-takoform intent-store-init --path "$INTENT_STORE_PATH"
 --store-id "$CALLER_SCOPE_ID" --host-api
 "https://host.example/apis/forms.takoform.com/v2"`. Neither command installs
-the Provider from the Registry. Provider 5.0.0 is not currently Registry
-available. After publication only, verify its Registry version and source tag
-separately; the intended source verification command is:
+the Provider through the Registry. Once the exact version appears in the
+Registry listing, verify it separately. When the `v5.0.0` tag resolves to the
+intended reviewed source, the source verification command is:
 
 ```sh
 git checkout --detach v5.0.0
 ```
 
-The `v5.0.0` tag does not currently exist. A local source build or tag alone
-is not Registry publication evidence.
+A source checkout or tag alone is not Registry publication evidence.
 
 `store_id` is a local label, not authentication or proof that a rotated bearer
 token still represents the same Host principal. The configured store is bound

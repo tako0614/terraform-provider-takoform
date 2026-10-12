@@ -1,12 +1,13 @@
-# Provider 5 consumer reference (unpublished candidate)
+# Provider 5 consumer reference
 
-This source checkout is the intended fresh-install Provider 5.0.0 candidate.
-It maps thirteen exact published Edge Form URLs from the `takoform-forms`
-publisher to Terraform/OpenTofu resources and sends Host requests only through
-Host API `forms.takoform.com/v2`. Provider 5.0.0 is **not currently published
-to the Terraform Registry**. Provider 4.1.0 remains the published v1 client;
-this v2 implementation neither negotiates nor falls back to v1. A compatible
-Host must independently advertise support for each exact Form before use.
+Provider 5.0.0 is a fresh-install Provider for Host API
+`forms.takoform.com/v2`. It maps thirteen exact published Edge Form URLs from
+the `takoform-forms` publisher to Terraform/OpenTofu resources and never
+negotiates or falls back to v1. Check the live Registry listing and exact
+version readback before installing or pinning 5.0.0; this reference does not
+state current Registry availability. Provider 4.1.0 remains the published v1
+client. A compatible Host must independently advertise support for each exact
+Form before use.
 
 The Host API identity and discovery path are defined in the Provider's
 [v2 protocol identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
@@ -135,10 +136,10 @@ terraform-provider-takoform intent-store-init \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
 ```
 
-The built Provider 5 candidate binary includes this subcommand, so initializing
-a store does not require the Go source tree. From a source checkout,
+A locally built Provider binary exposes this subcommand, so initializing a
+store does not require the Go source tree. From a source checkout,
 `go run ./cmd/intent-store-init` accepts the same flags. Neither invocation
-is a Terraform Registry installation method.
+installs the Provider through the Terraform Registry.
 
 The tool refuses mismatched or nonempty unbound stores. `store-id` is a fixed
 local label, **not** authentication or proof that a rotated bearer token has
