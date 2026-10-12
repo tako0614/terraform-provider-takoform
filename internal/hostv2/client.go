@@ -10,13 +10,14 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
 )
 
 var (
@@ -202,7 +203,7 @@ func (c *Client) CreateResource(ctx context.Context, key string, input CreateReq
 	if input.PrivateInputs != nil && *input.PrivateInputs == nil {
 		return Operation{}, errors.New("takoform v2: privateInputs must be an object")
 	}
-	if err := validateInputUTF8(input); err != nil {
+	if err := jsonv2.ValidateValue(input); err != nil {
 		return Operation{}, err
 	}
 	if input.PrivateInputs != nil {
@@ -316,7 +317,7 @@ func (c *Client) UpdateResource(ctx context.Context, uid, key string, expectedGe
 	if input.PrivateInputs != nil && *input.PrivateInputs == nil {
 		return Operation{}, errors.New("takoform v2: privateInputs must be an object")
 	}
-	if err := validateInputUTF8(input); err != nil {
+	if err := jsonv2.ValidateValue(input); err != nil {
 		return Operation{}, err
 	}
 	if expectedGeneration >= maxSafeInteger {
@@ -762,7 +763,7 @@ func validateOptionalObject(data []byte, names ...string) error {
 }
 
 func requireNestedObjectKeys(raw json.RawMessage, required ...string) error {
-	if err := rejectInvalidOrDuplicateJSON(raw); err != nil {
+	if err := jsonv2.Validate(raw); err != nil {
 		return err
 	}
 	var object map[string]json.RawMessage
@@ -786,7 +787,7 @@ func decodeRequired(data []byte, destination any, required ...string) error {
 }
 
 func decodeRequiredNullable(data []byte, destination any, nullable map[string]bool, required ...string) error {
-	if err := rejectInvalidOrDuplicateJSON(data); err != nil {
+	if err := jsonv2.Validate(data); err != nil {
 		return err
 	}
 	var fields map[string]json.RawMessage
@@ -824,62 +825,6 @@ func decodeResourcePage(data []byte, page *Page[Resource]) error {
 		page.Items[index] = resource
 	}
 	return nil
-}
-
-func rejectInvalidOrDuplicateJSON(data []byte) error {
-	if !utf8.Valid(data) {
-		return errors.New("invalid UTF-8")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := consumeJSONValue(decoder); err != nil {
-		return err
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return errors.New("trailing JSON data")
-	}
-	return nil
-}
-
-func consumeJSONValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return err
-	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		seen := make(map[string]bool)
-		for decoder.More() {
-			keyToken, err := decoder.Token()
-			if err != nil {
-				return err
-			}
-			key, ok := keyToken.(string)
-			if !ok || seen[key] {
-				return errors.New("invalid or duplicate JSON object key")
-			}
-			seen[key] = true
-			if err := consumeJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		_, err = decoder.Token()
-		return err
-	case '[':
-		for decoder.More() {
-			if err := consumeJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		_, err = decoder.Token()
-		return err
-	default:
-		return errors.New("unexpected JSON delimiter")
-	}
 }
 
 func validateFormURL(raw string) error {
@@ -923,10 +868,7 @@ func pageQuery(options PageOptions, maxPageSize int64) (url.Values, error) {
 }
 
 func marshalRequest(input any, limit int64) ([]byte, error) {
-	if err := validateInputUTF8(input); err != nil {
-		return nil, err
-	}
-	body, err := json.Marshal(input)
+	body, err := jsonv2.Marshal(input)
 	if err != nil {
 		return nil, errors.New("takoform v2: request is not valid JSON")
 	}
@@ -934,61 +876,6 @@ func marshalRequest(input any, limit int64) ([]byte, error) {
 		return nil, errors.New("takoform v2: request exceeds Host maxRequestBytes")
 	}
 	return body, nil
-}
-
-func validateInputUTF8(input any) error {
-	if !validUTF8Value(reflect.ValueOf(input), 0) {
-		return errors.New("takoform v2: request contains invalid UTF-8")
-	}
-	return nil
-}
-
-func validUTF8Value(value reflect.Value, depth int) bool {
-	if depth > 1024 {
-		return false
-	}
-	if !value.IsValid() {
-		return true
-	}
-	if value.Type() == reflect.TypeOf(json.RawMessage(nil)) {
-		return utf8.Valid(value.Bytes())
-	}
-	switch value.Kind() {
-	case reflect.Interface, reflect.Pointer:
-		if value.IsNil() {
-			return true
-		}
-		return validUTF8Value(value.Elem(), depth+1)
-	case reflect.String:
-		return utf8.ValidString(value.String())
-	case reflect.Map:
-		if value.IsNil() {
-			return true
-		}
-		iterator := value.MapRange()
-		for iterator.Next() {
-			if !validUTF8Value(iterator.Key(), depth+1) || !validUTF8Value(iterator.Value(), depth+1) {
-				return false
-			}
-		}
-	case reflect.Slice, reflect.Array:
-		for index := 0; index < value.Len(); index++ {
-			if !validUTF8Value(value.Index(index), depth+1) {
-				return false
-			}
-		}
-	case reflect.Struct:
-		for index := 0; index < value.NumField(); index++ {
-			field := value.Type().Field(index)
-			if field.PkgPath != "" || field.Tag.Get("json") == "-" {
-				continue
-			}
-			if !validUTF8Value(value.Field(index), depth+1) {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func validateIdempotencyKey(key string) error {
