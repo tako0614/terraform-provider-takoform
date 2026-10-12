@@ -45,6 +45,7 @@ import {
   CANONICAL_ORIGIN,
   SPECIFICATION_PREREQUISITES,
 } from "./publication-evidence.mjs";
+import { deriveLatestPublishedV1Provider } from "../website/.vitepress/site-status.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const sourceCommit = "a".repeat(40);
@@ -376,7 +377,8 @@ describe("Specification 1.1 owner ledger", () => {
     const readme = readFileSync(path.join(ROOT, "README.md"), "utf8");
     expect(readme).toContain("# Takoform Provider");
     expect(readme).toContain("## Quick start");
-    expect(readme).toContain('version = "~> 4.0"');
+    const publishedV1 = deriveLatestPublishedV1Provider(ROOT);
+    expect(readme).toContain(`version = "= ${publishedV1.version}"`);
     expect(readme).toContain(
       "Provider `4.1.0` is published on the Terraform Registry",
     );

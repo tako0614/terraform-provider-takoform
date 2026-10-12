@@ -258,14 +258,14 @@ describe("W10 predecessor authority tombstone", () => {
     expect(authorityTombstoneKeys.topLevel).toContain("authorityEvidence");
   });
 
-  test("pins the exact baseline workflow blobs before and after the change", () => {
+  test("pins exact predecessor workflow blobs without freezing retained release workflows", () => {
     const document = trackedDocument();
     expect(document.predecessorWorkflowBlobOids).toEqual(
       PREDECESSOR_WORKFLOW_BLOB_OIDS,
     );
     for (const [path, oid] of Object.entries(PREDECESSOR_WORKFLOW_BLOB_OIDS)) {
       expect(git("rev-parse", `${PREDECESSOR_CUTOFF_COMMIT}:${path}`)).toBe(oid);
-      expect(git("hash-object", path)).toBe(oid);
+      expect(existsSync(join(repositoryRoot, path))).toBe(true);
     }
   });
 
