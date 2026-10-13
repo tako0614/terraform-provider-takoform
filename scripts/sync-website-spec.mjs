@@ -96,6 +96,9 @@ function transformLink(target) {
     return target;
   }
   let rewritten = stripped;
+  if (rewritten === "ja/getting-started.md") {
+    return "/ja/docs/getting-started.md";
+  }
   const schemaMatch = rewritten.match(
     /^(\.\.\/|\.\.\/\.\.\/)schemas\/([^/?#]+\.json)([?#].*)?$/,
   );
@@ -123,6 +126,9 @@ function transformLink(target) {
   ) {
     return null;
   }
+  // Canonical docs may link to a curated page under the repository's
+  // website/ tree. On the site that page is rooted at /, not /website/.
+  rewritten = rewritten.replace(/^(?:\.\.\/)+website\//, "/");
   rewritten = rewritten.replace(/README\.md$/i, "index.md");
   return rewritten;
 }

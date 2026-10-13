@@ -2,6 +2,13 @@ English: [日本語](ja/getting-started.md)
 
 # Manage a published Form from HCL
 
+This walkthrough uses Registry-published Provider 4.1.0 and the Host API v1
+contract. Provider 5.0.0 is the current source target, but its release ledger
+still marks it candidate-only; it has a separate Host API v2 configuration and
+fresh-install state model. See the
+[Provider 5 consumer reference](provider-host-api-v2-source.md) for that path.
+Provider 4 state is not automatically migrated to Provider 5.
+
 This guide introduces a small Terraform/OpenTofu module with one Random
 Provider resource and one Takoform resource. The example is
 [`examples/getting-started/main.tf`](../examples/getting-started/main.tf).
@@ -68,11 +75,13 @@ endpoint or credentials.
 ## Provider versions and Form identities
 
 In the example, `version = "~> 4.0"` constrains the Provider package to the
-4.x line. `tofu init` records the selected Provider package and checksums in
-`.terraform.lock.hcl`; commit that lock file with a real module. This version
-constraint is **not** a Form pin. The Provider release maps each resource type
-to an exact FormRef; state records the API version, kind, definition version,
-and schema digest used by that resource. For this example, the mapping is
+4.x line; Provider 4.1.0 is the published release documented here. For a
+fixed selection, use `version = "= 4.1.0"`. `tofu init` records the selected
+Provider package and checksums in `.terraform.lock.hcl`; commit that lock file
+with a real module. This version constraint is **not** a Form pin. The Provider
+release maps each resource type to an exact FormRef; state records the API
+version, kind, definition version, and schema digest used by that resource.
+For this example, the mapping is
 `edge.forms.takoform.com/EdgeKVNamespace`, definition `0.1.0`. See the
 [resource reference](resources/edge_kv_namespace.md#exact-formref) for the
 complete identity and state behavior.
@@ -95,7 +104,7 @@ apply those inputs.
 ## Next
 
 - Browse the [complete resource reference](index.md#resource-reference) and
-  [Provider-to-Form mapping inventory](../forms/README.md).
+  [Provider-to-Form mapping inventory](https://github.com/tako0614/terraform-provider-takoform/blob/main/forms/README.md).
 - Read the [Takoform Host API](https://takoform.com/en/host-api/) separately
   when you need the provider-neutral Host contract.
 - Before upgrading Provider 3, read the

@@ -1,34 +1,44 @@
-# Host v2 intent journal prerequisite
+# Provider 5 Host v2 intent journal
 
-`internal/intentv2` is an unmounted prerequisite for a future Host API v2
-resource lifecycle. It stores mutation intent; it does not send HTTP, decide
-whether a request may be replayed, perform retries, or establish Host support.
-The caller remains responsible for deciding whether to send the exact saved
-request with the saved key after an interruption.
+`internal/intentv2` is mounted by the Provider 5 Host API v2 resource lifecycle
+to retain mutation claims, accepted Operation evidence, and import bindings.
+The Provider records a claim before sending a Host mutation and records an
+accepted Operation before settling Terraform state. The journal package itself
+does not send HTTP, authorize replay, perform retries, or establish Host
+support; the Provider caller owns those decisions and stops when an outcome is
+unresolved. The same store rules back both the local path and the explicit
+Runner private-file mode described in the
+[snapshot backend note](provider-private-snapshot-backend.md).
 
 ## Custody and identity
 
-One journal belongs to one Provider state-management scope. Configure one
-initialized local path and a fixed store ID for that scope. Its immutable
-binding also fixes the exact Host API base URL. The Provider's local
-`PrincipalScope` label must equal the store ID; this prevents relabeling an
-unresolved claim but is not proof that credentials still authenticate as the
-same principal. Do not share or adopt a journal across unrelated states, and
-do not infer ownership from a matching resource name. `InitializeBound` or
-`cmd/intent-store-init` explicitly creates a bound store and refuses an
-existing path. `Open` only verifies an existing store and exact store ID; it
-never creates, repairs, truncates, or replaces one. An explicitly invoked
-`BindEmpty` may bind an existing empty unbound store; it refuses any store
-containing prior intents or imports. Begin refuses unbound stores and any Host
-root or local-scope mismatch. A missing, corrupt, partial, locked, or
-unavailable store is a hard stop before a caller may send a mutation.
+One journal belongs to one Provider state-management scope. In local mode,
+configure one initialized private path; in remote mode, configure one explicit
+opaque slot. Both modes use a fixed store ID and an immutable binding to the
+exact Host API base URL. The Provider's local `PrincipalScope` label must equal
+the store ID; this prevents relabeling an unresolved claim but is not proof
+that credentials still authenticate as the same principal. Do not share or
+adopt a journal across unrelated states, and do not infer ownership from a
+matching resource name. `InitializeBound` or `cmd/intent-store-init`
+explicitly creates a local bound store and refuses an existing path. `Open`
+only verifies an existing local store and exact store ID; it never creates,
+repairs, truncates, or replaces one. An explicitly invoked `BindEmpty` may bind
+an existing empty unbound local store; it refuses any store containing prior
+intents or imports. Remote mode opens the selected slot and may initialize it
+only when that slot is absent, using conditional creation and accepting a
+concurrent winner only when its snapshot has the exact binding. Begin refuses
+unbound stores and any Host root or local-scope mismatch. A missing, corrupt,
+partial, locked, or unavailable store is a hard stop before a caller may send a
+mutation.
 
 The small `intent-store-init` command takes only `--path`, `--store-id`, and
 `--host-api`. It performs no network calls and accepts no credentials. For a
-new path it initializes the exact binding; for an existing path it can only
-idempotently retain the exact binding or explicitly bind an empty unbound
-store. It never changes a different existing binding or adopts nonempty
-unbound history.
+new local path it initializes the exact binding; for an existing path it can
+only idempotently retain the exact binding or explicitly bind an empty
+unbound store. It never changes a different existing binding or adopts
+nonempty unbound history. Remote mode does not use this command; Provider
+Configure performs the absent-slot conditional initialization described in
+the backend note.
 
 The record identity includes the exact Host API root, the store-ID-derived
 local scope label, Space, and resource name. The caller must establish
@@ -37,15 +47,17 @@ Credentials and private-input values are not accepted by the journal API.
 Only private-input names may be retained to match a request; values and hashes
 are never stored. Public JSON must not contain a `privateInputs` member.
 
-The store and files must be owned by the current OS user and private to that
-user. The POSIX backend is build-tagged for Linux, macOS, FreeBSD, OpenBSD, and
-NetBSD, but this implementation run exercised runtime behavior only on Linux.
-Windows was compile-checked and its non-POSIX backend fails closed at runtime;
-other OS builds and runtimes remain unverified. This does not change the v1
-Provider's platform support. Network filesystems are unsupported. File and
-directory sync plus atomic replacement reduce local-filesystem loss windows,
-but power-loss guarantees depend on filesystem and device behavior and have not
-been qualified.
+For the local backend, the store and files must be owned by the current OS user
+and private to that user. The POSIX backend is build-tagged for Linux, macOS,
+FreeBSD, OpenBSD, and NetBSD, but this implementation run exercised runtime
+behavior only on Linux. Windows was compile-checked and its non-POSIX backend
+fails closed at runtime; other OS builds and runtimes remain unverified. This
+does not change the v1 Provider's platform support. Network filesystems are
+unsupported. File and directory sync plus atomic replacement reduce
+local-filesystem loss windows, but power-loss guarantees depend on filesystem
+and device behavior and have not been qualified. Remote snapshot durability
+and grant behavior belong to the selected Runner private-file service; this
+Provider implementation does not qualify its production behavior.
 
 ## Mutation claims and recovery
 
@@ -101,10 +113,11 @@ the import and older UID/action records remain retained. A recorded
 accepted/applied operation also does not prove that Terraform state was
 durably committed.
 
-`Initialize` and `InitializeBound` sync the newly created store directory's
-parent, each initial file, and the store directory before returning. This is a
-local filesystem durability measure, not a claim of power-loss safety on every
-filesystem or storage device.
+`Initialize` and `InitializeBound` sync the newly created local store
+directory's parent, each initial file, and the store directory before
+returning. This is a local filesystem durability measure, not a claim of
+power-loss safety on every filesystem or storage device. Remote initialization
+uses the backend's conditional commit and receipt rules instead.
 
 Focused subprocess tests kill a separate OS process after its claim is durable
 and after an accepted Operation is recorded, then reopen the same store and

@@ -7,8 +7,9 @@
 //   bun run sync:website-docs --write   # copy canonical docs into the site
 //   bun run sync:website-docs --check   # verify the committed copies match
 //
-// The copies are byte-identical projections of the canonical files; the check
-// mode is also exercised by check-public-surfaces.mjs.
+// Resource copies are byte-identical. Editorial guides rewrite links to the
+// matching site routes; the Japanese guide lives under the Japanese locale.
+// The check mode is also exercised by check-public-surfaces.mjs.
 //
 // Naming note: `sync-website-spec.mjs` projects the canonical provider
 // reference `docs/index.md` to `website/docs/reference.md`, because the site's `/docs/` index
@@ -17,7 +18,7 @@
 // edit the canonical `docs/` tree for reference content and the
 // `website/docs/index.md` page for the quick-start surface.
 
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,6 +41,23 @@ const resourceDocs = readdirSync(
   .sort();
 
 const projections = [
+  ...[
+    "getting-started.md",
+    "ja/getting-started.md",
+    "provider-host-api-v2-source.md",
+    "host-v2-intent-journal.md",
+    "private-input-source-v2.md",
+    "provider-private-snapshot-backend.md",
+  ].map((name) => ({
+    canonical: path.join(repositoryRoot, "docs", name),
+    site: name === "ja/getting-started.md"
+      ? path.join(repositoryRoot, "website", "ja", "docs", "getting-started.md")
+      : path.join(repositoryRoot, "website", "docs", name),
+  })),
+  {
+    canonical: path.join(repositoryRoot, "examples", "getting-started", "main.tf"),
+    site: path.join(repositoryRoot, "website", "static", "examples", "getting-started", "main.tf"),
+  },
   {
     canonical: path.join(
       repositoryRoot,
@@ -82,6 +100,30 @@ const projections = [
     ),
   })),
 ];
+
+const siteRoutes = new Map(projections.map(({ canonical, site }) => [
+  canonical,
+  "/" + path.relative(path.join(repositoryRoot, "website"), site)
+    .split(path.sep).join("/").replace(/^static\//, ""),
+]));
+siteRoutes.set(path.join(repositoryRoot, "docs", "index.md"), "/docs/reference.md");
+
+function projectedBytes({ canonical }) {
+  const bytes = readFileSync(canonical);
+  if (!canonical.endsWith(".md") || path.dirname(canonical).endsWith(`${path.sep}resources`)) {
+    return bytes;
+  }
+  const rewritten = bytes.toString("utf8").replace(
+    /(\[[^\]]*\])\(([^)\s]+)\)/g,
+    (match, label, target) => {
+      if (/^(?:[a-z]+:|\/|#)/i.test(target)) return match;
+      const [file, fragment] = target.split("#", 2);
+      const route = siteRoutes.get(path.resolve(path.dirname(canonical), file));
+      return route === undefined ? match : `${label}(${route}${fragment === undefined ? "" : `#${fragment}`})`;
+    },
+  );
+  return Buffer.from(rewritten, "utf8");
+}
 
 // The projection is a MIRROR, not an append: these site trees hold
 // projected files and nothing else. Copying alone cannot express that, so a
@@ -128,9 +170,10 @@ function orphanedSiteFiles() {
 }
 
 if (mode === "--write") {
-  for (const { canonical, site } of projections) {
+  for (const projection of projections) {
+    const { site } = projection;
     mkdirSync(path.dirname(site), { recursive: true });
-    copyFileSync(canonical, site);
+    writeFileSync(site, projectedBytes(projection));
   }
   for (const orphan of orphanedSiteFiles()) {
     rmSync(orphan);
@@ -155,7 +198,7 @@ for (const { canonical, site } of projections) {
   let expected;
   let actual;
   try {
-    expected = readFileSync(canonical);
+    expected = projectedBytes({ canonical, site });
   } catch (error) {
     drift.push(`${path.relative(repositoryRoot, canonical)}: canonical missing (${error.message})`);
     continue;

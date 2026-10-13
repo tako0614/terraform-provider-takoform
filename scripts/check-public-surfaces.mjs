@@ -397,19 +397,18 @@ function checkHtmlFiles() {
 }
 
 function checkResourceInventory(expectedFormNames) {
-  const familyLabels = new Map([
-    ["edge.forms.takoform.com", "Edge"],
-    ["function.forms.takoform.com", "Function"],
-    ["container.forms.takoform.com", "Container"],
-    ["queue.forms.takoform.com", "Queue"],
-    ["schedule.forms.takoform.com", "Schedule"],
-    ["table.forms.takoform.com", "Table"],
-    ["topic.forms.takoform.com", "Topic"],
-    ["vector.forms.takoform.com", "Vector"],
-  ]);
-  const familyCounts = new Map();
-  for (const { group } of currentFormRoster) {
-    familyCounts.set(group, (familyCounts.get(group) ?? 0) + 1);
+  const publishedV1 = deriveLatestPublishedV1Provider(repositoryRoot);
+  const targets = [{
+    version: publishedV1.version,
+    lane: currentProviderRelease.descriptor.versioning.portableApiVersion,
+    count: publishedV1.formRoster.forms.length,
+  }];
+  if (successorProviderRelease.descriptor.schemaVersion === 2) {
+    targets.push({
+      version: successorProviderRelease.descriptor.version,
+      lane: successorProviderRelease.descriptor.versioning.portableApiVersion,
+      count: validateProvider5Candidate(repositoryRoot).forms.length,
+    });
   }
   for (const [page, label] of [
     ["index.html", "website/public/index.html English resource counts"],
@@ -418,14 +417,13 @@ function checkResourceInventory(expectedFormNames) {
       "website/public/ja/index.html Japanese resource counts",
     ],
   ]) {
-    const text = visibleHtmlText(read(path.join(publicRoot, page)));
-    if (!text.includes("Provider 3") || !text.includes("31")) {
-      fail(`${label}: missing the retained Provider 3 aggregate count`);
-    }
-    for (const [group, count] of familyCounts) {
-      const family = familyLabels.get(group) ?? group;
-      if (!new RegExp(`${family}\\s+${count}\\b`, "u").test(text)) {
-        fail(`${label}: missing ${family} count ${count}`);
+    const rows = [...read(path.join(publicRoot, page)).matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)]
+      .map(([, row]) => [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)]
+        .map(([, cell]) => visibleHtmlText(cell).trim()));
+    for (const { version, lane, count } of targets) {
+      if (!rows.some((cells) => cells[1] === version && cells[2] === lane &&
+        new RegExp(`(?:^|[^0-9])${count}(?:[^0-9]|$)`, "u").test(cells[3] ?? ""))) {
+        fail(`${label}: missing Provider ${version} / ${lane} / ${count} resource row`);
       }
     }
   }
@@ -1060,8 +1058,8 @@ function checkWebsiteDocsProjection(formDocNames) {
   }
 }
 
-// Every hand-written inventory of the resource set, and what each one must say
-// about a Form for a reader to be able to find it.
+// The canonical reference and sidebar carry the full resource roster.
+// Curated overviews link there rather than maintaining duplicate rosters.
 //
 // The generated trees (docs/resources, examples/resources, the site
 // projections) were already compared against the roster derived from the
@@ -1071,12 +1069,6 @@ function checkWebsiteDocsProjection(formDocNames) {
 // generated surface carried it. A Form now cannot be added or removed without
 // every one of these learning about it.
 function checkHandWrittenInventories(familyRoster) {
-  const facts = deriveSiteStatusFacts(repositoryRoot);
-  const publishedProvider = facts.providerPublished;
-  const publishedV1 = deriveLatestPublishedV1Provider(repositoryRoot);
-  const publishedResourceCount = publishedProvider === publishedV1.version
-    ? publishedV1.formRoster.forms.length
-    : validateProvider5Candidate(repositoryRoot).forms.length;
   const familyKinds = familyRoster.map(({ kind }) => kind);
   const familyDocNames = familyRoster.map(({ docName }) => docName);
   const familySlugs = familyRoster.map(({ slug }) => slug);
@@ -1095,8 +1087,15 @@ function checkHandWrittenInventories(familyRoster) {
     },
     {
       file: "website/docs/index.md",
-      label: "the English resource reference",
-      required: resourceDocLinks(familyDocNames),
+      label: "the English reference navigation",
+      required: [{ needle: "/docs/reference.html#resource-reference", subject: "canonical resource reference" }],
+    },
+    {
+      file: "docs/index.md",
+      label: "the canonical resource reference",
+      required: familyDocNames.map((name) => ({
+        needle: `resources/${name}.md`, subject: name,
+      })),
     },
     {
       file: "website/forms/index.md",
@@ -1108,25 +1107,23 @@ function checkHandWrittenInventories(familyRoster) {
     },
     {
       file: "website/ja/docs/index.md",
-      label: "the Japanese resource reference",
-      required: resourceDocLinks(familyDocNames),
+      label: "the Japanese reference navigation",
+      required: [{ needle: "/docs/reference.html#resource-reference", subject: "canonical resource reference" }],
     },
     {
       file: "website/index.md",
       label: "the English landing inventory",
       required: [
-        { needle: `**\`${publishedProvider}\`**`, subject: "current Provider" },
-        { needle: `| Edge | ${publishedResourceCount} |`, subject: "Edge count" },
-        { needle: "Provider reference", subject: "Provider reference" },
+        { needle: "/docs/reference.html", subject: "Provider reference" },
+        { needle: "/docs/versions.html", subject: "version selection" },
       ],
     },
     {
       file: "website/ja/index.md",
       label: "the Japanese landing inventory",
       required: [
-        { needle: `**\`${publishedProvider}\`**`, subject: "current Provider" },
-        { needle: `| Edge | ${publishedResourceCount} |`, subject: "Edge count" },
-        { needle: "Provider reference", subject: "Provider reference" },
+        { needle: "/docs/reference.html", subject: "Provider reference" },
+        { needle: "/ja/docs/versions.html", subject: "version selection" },
       ],
     },
     {

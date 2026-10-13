@@ -25,7 +25,7 @@ not another documentation authority. The root package scripts still support
 local development and snapshot verification:
 
 ```console
-bun install
+bun install --frozen-lockfile
 bun run website:dev
 bun run check:website-snapshot
 ```
@@ -42,3 +42,25 @@ does not transfer those authorities back to this repository. See
 [`AGENTS.md`](../AGENTS.md) and the
 [authority tombstone](../release/specification-schema-authority-tombstone.json)
 for the current boundary.
+
+## Edit and regenerate
+
+| Content | Edit here | Projection writer |
+| --- | --- | --- |
+| Provider reference | `docs/index.md` | `bun run sync:website-spec` → `website/docs/reference.md` |
+| Getting started and v5 notes | `docs/*.md`, `docs/ja/getting-started.md` | `bun run sync:website-docs` → matching site paths (the Japanese guide uses `website/ja/docs/`) |
+| Resource pages and examples | Provider-owned catalog renderer | Regenerate the catalog, then `bun run sync:website-docs` |
+| Retained spec and proposal routes | Frozen source/history | `bun run sync:website-spec` renders non-authoritative stubs |
+| Landing pages, navigation, glossary, versions | Curated `website/` Markdown and `.vitepress/config.mts` | `bun run website:build` |
+
+Do not hand-edit generated copies or `website/public/`. After source edits,
+run the projection writers, then `bun run website:build` and `bun run check`.
+The snapshot check builds in temporary directories and does not rewrite source.
+The build writer preserves the frozen public page and its asset dependencies
+listed in `scripts/frozen-public-identities.mjs`.
+
+Published v4.1.0 guidance and source-v5 evaluation have separate navigation.
+The seventeen generated resource pages remain the v4 / Host API v1 reference;
+the v5 consumer reference describes the default source-built plugin's thirteen
+exact Form URL mappings. Local projection changes do not publish either a
+Provider version or a documentation site.

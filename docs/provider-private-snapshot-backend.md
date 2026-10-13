@@ -12,14 +12,16 @@ The v2 Host Provider has two explicit, mutually exclusive intent-store modes:
 
 For remote mode, the Runner supplies exactly one private descriptor source.
 `TAKOSUMI_PRIVATE_RUN_FILES_FILE` names an absolute file in a private,
-Runner-owned directory. Its complete JSON envelope is
+Runner-owned directory. Its complete JSON envelope has this shape:
 `{"version":1,"sequence":0,"files":[{"slot":"...","endpoint":"...","grant":"..."}]}`.
-The Runner starts at sequence zero and atomically replaces its 0600 regular
-file with an increasing sequence when it renews grants. The Provider reopens
-and validates that file before every read, commit and receipt resolve, pins
-the initial slot/endpoint set, accepts exact same-sequence replay, and rejects
-rollback, changed identities, malformed data or insecure files. No grant is
-cached from this file. The envelope is limited to 4 MiB and 256 slots.
+The Provider validates version 1 and a sequence no greater than 2048, then
+atomically pins the first observed sequence, bytes, and slot/endpoint set. It
+reopens and validates the file before every read, commit, and receipt resolve;
+it accepts an exact same-sequence replay, rejects rollback or changed bytes at
+the same sequence, and permits an increased sequence only with the same
+slot/endpoint set. The Runner should atomically replace its 0600 regular file
+with an increasing sequence when it renews grants. No grant is cached from
+this file. The envelope is limited to 4 MiB and 256 slots.
 
 The original `TAKOSUMI_PRIVATE_RUN_FILES` JSON array of
 `{ "slot": "...", "endpoint": "...", "grant": "..." }` remains an explicit,

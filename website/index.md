@@ -2,55 +2,35 @@
 layout: home
 
 hero:
-  name: Takoform
-  text: One typed provider. Any compatible host.
-  tagline: Portable, host-neutral resource contracts for Terraform and OpenTofu.
+  name: Takoform Provider
+  text: Manage exact Forms from HCL.
+  tagline: Typed Terraform and OpenTofu resources for a compatible Takoform Host.
   actions:
     - theme: brand
-      text: Use the provider
-      link: /docs/
+      text: Get started with 4.1.0
+      link: /docs/getting-started.html
     - theme: alt
-      text: Read Core v1.0.1
-      link: https://github.com/tako0614/takoform/tree/v1.0.1/spec
+      text: Evaluate Provider 5
+      link: /docs/provider-host-api-v2-source.html
 ---
 
-Takoform Provider maps typed Terraform/OpenTofu resources to exact Form
-contracts exposed by a compatible Host. Registry Provider **`4.1.0`** keeps the
-`tako0614/takoform` address and contains only 17 Forms selected from
-`tako0614/takoform-forms`. Provider `3.0.0` remains immutable 31-resource
-aggregate history. API/Core
-**`v1.0.1`** stays on `forms.takoform.com/v1`.
+Takoform Provider connects ordinary Terraform/OpenTofu configuration to exact
+Form contracts served by your Host. Use it beside other Providers and connect
+resources through the HCL dependency graph.
 
-## Install and use
+| Use | Provider | Host API | Resources |
+| --- | --- | --- | --- |
+| Registry installation | **4.1.0** | `forms.takoform.com/v1` | 17 exact Edge Forms |
+| Source evaluation | **5.0.0** | `forms.takoform.com/v2` | 13 exact Edge Form URLs |
 
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "~> 4.0"
-    }
-  }
-}
+The Host supplies the endpoint, Space, authentication, and implementation.
+Start with the [Random + Takoform guide](/docs/getting-started.html); Random
+needs no cloud credentials. See [Versions and compatibility](/docs/versions.html)
+before changing a Provider pin. Provider 4 state is not automatically
+translated to Provider 5.
 
-provider "takoform" {
-  endpoint = "https://forms.example.com"
-  space    = "prod"
-}
-
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
-```
-
-## Resource reference
-
-| Publisher family | Provider 4 mappings |
-| --- | ---: |
-| Edge | 17 |
-
-Read the [Provider reference](/docs/), [Provider mapping inventory](/forms/), and
-[conformance evidence](/conformance/) for generated contracts and executable
-checks. See [Versions and compatibility](/docs/versions.html) for retained
-releases and migration. AWS, Cloudflare, Kubernetes, and other providers are
-declared natively beside Takoform in the same OpenTofu module.
+The [Provider reference](/docs/reference.html) documents the published v4
+resources. The [Provider 5 consumer reference](/docs/provider-host-api-v2-source.html)
+documents the source-v5 schema, private intent store, and lifecycle. Form
+publication belongs to its publisher; Host support must be verified separately.
+For the provider-neutral contract, read the [Host API documentation](https://takoform.com/en/host-api/).

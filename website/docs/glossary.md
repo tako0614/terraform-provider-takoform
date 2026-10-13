@@ -1,12 +1,16 @@
 ---
 page_title: "Takoform glossary"
-description: "Common terms used across the Takoform documentation and specification"
+description: "Provider terms for published v4 references and source-v5 evaluation"
 ---
 
 # Glossary
 
-Common terms used across the Takoform documentation. Definitions here are
-summaries; the normative Core source is [Core v1.0.1](https://github.com/tako0614/takoform/tree/v1.0.1/spec).
+These summaries primarily describe the published Provider 4 / Host API v1
+references, whose exact compatibility source is
+[Core v1.0.1](https://github.com/tako0614/takoform/tree/v1.0.1/spec).
+For Provider 5 / Host API v2, use the
+[consumer reference](/docs/provider-host-api-v2-source.html). Current neutral
+API documentation belongs to the [Host API owner](https://takoform.com/en/host-api/).
 
 | Term | Meaning |
 | --- | --- |
@@ -16,16 +20,16 @@ summaries; the normative Core source is [Core v1.0.1](https://github.com/tako061
 | **Form Package** | A closed, data-only distribution of one Form Definition plus its fixtures, bound by a canonical content digest ([Core Form Package](https://github.com/tako0614/takoform/tree/v1.0.1/spec/form-package)). No executable or credential content is allowed. |
 | **schemaDigest** | SHA-256 over the RFC 8785 canonical Form Definition bytes. |
 | **packageDigest** | SHA-256 over the RFC 8785 canonical package index; it is the publication locator (`sha256-<hex>`) of a package. |
-| **API/Core release** | A public SemVer compatibility checkpoint for the Core contract. The current checkpoint is `1.0.1` on `/v1`; it does not version individual Forms or imply Host implementation/support. |
+| **API/Core release** | A public SemVer compatibility checkpoint for the Core contract. The checkpoint linked by the Provider 4 reference is `1.0.1` on `/v1`; it does not version individual Forms or imply Host implementation/support. |
 | **Historical Specification receipt** | The sealed Specification 1.1 source snapshot retained for history. It is not a current selectable/version axis, does not create `/v1.1`, and does not publish a Form, package, or Provider. |
 | **Legacy lane** | A frozen protocol or Form identity retained for compatibility, recovery, revocation, and migration. The pre-Beta lanes (`forms.takoform.com/v1alpha1` and `/v1alpha2`) were withdrawn ([Core decision 0042](https://github.com/tako0614/takoform/blob/v1.0.1/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md)). |
-| **Form Family** | A versionless namespaced Form group ([Core Form Families](https://github.com/tako0614/takoform/blob/v1.0.1/spec/form-families.md)) such as `edge.forms.takoform.com`: related Forms sharing exact Interface and Binding contracts. The tako0614 publisher's Edge source publishes 17 Experimental `0.x` packages selected by the next Provider major — the 16 Edge Forms Provider 3 carries plus `ObjectBucket`. Provider 3's 31 resources across eight families are retained history. |
+| **Form Family** | A versionless namespaced Form group ([Core Form Families](https://github.com/tako0614/takoform/blob/v1.0.1/spec/form-families.md)) such as `edge.forms.takoform.com`: related Forms sharing exact Interface and Binding contracts. The tako0614 publisher's Edge source publishes 17 Experimental `0.x` packages selected by published Provider 4 — the 16 Edge Forms Provider 3 carries plus `ObjectBucket`. Provider 3's 31 resources across eight families are retained history. |
 | **Resource Role** | The closed role enum — `identity`, `revision`, `deployment`, `attachment`, `policy` — deciding one Form's lifecycle mechanics: revisions are immutable, deployments move traffic, attachments activate inward events. |
 | **Envelope** | The package API version used to carry a Form. Current versionless-group candidates use `packages.forms.takoform.com/v1alpha5`; retained Provider 2.1.1/v1beta1 packages keep `v1alpha4`, and earlier envelope identities remain immutable history. |
 | **Space** | An opaque, case-sensitive scope identity (`SpaceID`) that scopes Resources, Interface reads, idempotency, and provider configuration. |
 | **Host** | Any implementation of the Host API that advertises exact FormRefs, executes the portable lifecycle, and owns placement, credentials, and recovery. |
-| **Host API** | The versioned HTTP contract ([Host API in Core v1.0.1](https://github.com/tako0614/takoform/tree/v1.0.1/spec/host-api)): discovery, exact Form availability, preview/apply, read/import/observe/delete, fencing, and stable errors. The current wire is `forms.takoform.com/v1`; v1beta4 is a retained pre-v1 design snapshot and v1beta1 remains the immutable Provider 2.1.1 lane. |
-| **Discovery** | The versioned well-known endpoint at which a host advertises its API, Forms, and features: `/.well-known/takoform/v1` for the current Host API. |
+| **Host API** | The versioned HTTP contract ([Host API in Core v1.0.1](https://github.com/tako0614/takoform/tree/v1.0.1/spec/host-api)): discovery, exact Form availability, preview/apply, read/import/observe/delete, fencing, and stable errors. The published Provider 4 wire is `forms.takoform.com/v1`; v1beta4 is a retained pre-v1 design snapshot and v1beta1 remains the immutable Provider 2.1.1 lane. |
+| **Discovery** | The versioned well-known endpoint at which a host advertises its API, Forms, and features: `/.well-known/takoform/v1` for Host API v1. |
 | **Lane** | One exact Host protocol path. The public Core checkpoint `1.0.1` uses `forms.takoform.com/v1` independently of Provider publication or Form maturity. The published Provider `4.1.0` keeps that lane and selects only the 17-Form Edge surface from `tako0614/takoform-forms`; Provider `3.0.0` retains the former eight-family/31-resource aggregate and Provider `2.1.1` retains v1beta1 history. |
 | **Substrate** | The concrete backend or cloud an implementation runs on. Substrate operation is never portable Form state. |
 | **Interface declaration** | The withdrawn v1alpha2 lane's read-only `(name, version)` descriptor surface; superseded by exact digest-bound [Core Interface contracts](https://github.com/tako0614/takoform/tree/v1.0.1/spec/interface-contract). |
@@ -43,3 +47,15 @@ summaries; the normative Core source is [Core v1.0.1](https://github.com/tako061
 | **Idempotency-Key** | A deterministic client-supplied key scoping mutation replay; a retry must reuse the same key and request bytes. |
 | **Checkpoint** | A cumulative, hash-chained revocation checkpoint carrying every statement from sequence 1 through the current sequence. |
 | **Drift** | A lifecycle outcome derived from validated observed evidence; it is not a separate host operation. |
+
+## Provider 5 terms
+
+| Term | Meaning |
+| --- | --- |
+| **Exact Form URL** | The immutable publisher URL selected by each v5 resource, recorded in `form_url` state. Resource names remain Provider mapping metadata. |
+| **Host API root** | The exact advertised v2 API root, configured as `host_api_root`. It is also part of the private intent-store binding. |
+| **Private intent store** | Durable Provider-side custody for mutation intent and accepted Operations. Configure exactly one initialized local `store_path` or Runner-granted `intent_store_slot`; it is separate from Terraform state. |
+| **store_id** | A fixed caller-scope label for private-store custody, not authentication or proof of the Host principal. |
+
+The default source-built plugin uses these v2 contracts. The v4 glossary
+entries above do not imply a v4-to-v5 state upgrade or Host support.

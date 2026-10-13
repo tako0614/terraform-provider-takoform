@@ -2,6 +2,12 @@
 
 # HCL から公開済み Form を管理する
 
+この手順は、Registry で公開済みの Provider 4.1.0 と Host API v1 contract を使います。
+現在のsource targetである Provider 5.0.0 は、release ledger 上では candidate-only です。
+Provider 5 には別の Host API v2 設定と fresh-install state model があり、Provider 4 の
+state は自動移行されません。Provider 5 を評価する場合は[consumer reference](../provider-host-api-v2-source.md)
+を参照してください。
+
 このガイドでは、Random Provider と Takoform のリソースを 1 つずつ含む
 Terraform / OpenTofu module を紹介します。使用する設定は
 [`examples/getting-started/main.tf`](../../examples/getting-started/main.tf) です。
@@ -62,7 +68,9 @@ contract は、Host endpoint や credentials を提供するものではあり�
 
 ## Provider の版と Form identity
 
-サンプルの `version = "~> 4.0"` は Provider package の 4.x 系を選びます。
+サンプルの `version = "~> 4.0"` は Provider package の 4.x 系を選びます。このガイドで
+扱う公開済み release は Provider 4.1.0 です。版を固定する場合は
+`version = "= 4.1.0"` とします。
 `tofu init` は選択した Provider package と checksum を `.terraform.lock.hcl` に記録
 します。実際の module ではこの lock file を commit してください。この制約は**Form
 の版を固定しません**。各 Provider release が resource type と正確な FormRef を対応
@@ -89,6 +97,6 @@ ephemeral 配送に対応しない runner ではこれらの入力を適用で�
 ## 次に読むもの
 
 - [全 resource の reference](../index.md#resource-reference) と
-  [Provider から Form への対応一覧](../../forms/README.md)
+  [Provider から Form への対応一覧](https://github.com/tako0614/terraform-provider-takoform/blob/main/forms/README.md)
 - provider-neutral な契約が必要な場合は、別文書の[Takoform Host API](https://takoform.com/host-api/)
 - Provider 3 から更新する前に[Provider 3 から 4 への移行ガイド](../../release/migrations/v3-to-v4.md)

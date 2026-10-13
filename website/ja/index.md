@@ -2,66 +2,34 @@
 layout: home
 
 hero:
-  name: Takoform
-  text: Terraform / OpenTofu から Takoform Host を使う
-  tagline: 型付きリソースをポータブルな Form contract に対応させる Provider
+  name: Takoform Provider
+  text: HCL から exact Form を管理する
+  tagline: 互換 Takoform Host に対応する Terraform / OpenTofu の型付き resource
   actions:
     - theme: brand
-      text: Provider を使う
-      link: /ja/docs/
+      text: 4.1.0 の入門ガイド
+      link: /ja/docs/getting-started.html
     - theme: alt
-      text: Core v1.0.1 を読む
-      link: https://github.com/tako0614/takoform/tree/v1.0.1/spec
+      text: Provider 5 を評価する（英語）
+      link: /docs/provider-host-api-v2-source.html
 ---
 
-Takoform Provider は、Terraform / OpenTofu の型付きリソースを、互換 Host が
-公開する Form contract に対応させます。Registry の
-Provider **`4.1.0`** は既存の
-`tako0614/takoform` addressで、`tako0614/takoform-forms` から選んだ
-exact Edge Form 17種だけを登録します。
-Provider `3.0.0` は31 resource aggregateのimmutable historyです。
-API/Core **`v1.0.1`** は `forms.takoform.com/v1` のままです。
+Terraform / OpenTofu の HCL を、選択した Host が公開する exact Form contract に対応させます。
+他の Provider と同じ module に宣言し、HCL の参照で resource をつなげられます。
 
-## Install と configure
+| 用途 | Provider | Host API | 対応する resource |
+| --- | --- | --- | --- |
+| Registry からインストール | **4.1.0** | `forms.takoform.com/v1` | Edge Form 17 種 |
+| ソースから評価 | **5.0.0** | `forms.takoform.com/v2` | exact Edge Form URL 13 種 |
 
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "~> 4.0"
-    }
-  }
-}
+接続先、Space、認証情報、サービス実装は Host が提供します。
+[Random + Takoform の入門ガイド](/ja/docs/getting-started.html)から始めてください。
+Random はクラウド認証情報を必要としません。Provider の pin を変える前には
+[バージョンと互換性](/ja/docs/versions.html)を確認してください。
+Provider 4 の state は Provider 5 へ自動変換されません。
 
-provider "takoform" {
-  endpoint = "https://forms.example.com"
-  space    = "prod"
-}
-
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
-```
-
-`endpoint`、`space`、bearer `token` は `TAKOFORM_ENDPOINT`、`TAKOFORM_SPACE`、
-`TAKOFORM_TOKEN` からも設定できます。
-
-## Resource reference
-
-全 mapping の生成済み reference:
-
-| Publisher family | Provider 4 mapping |
-| --- | ---: |
-| Edge | 17 |
-
-各リソースの FormRef、引数、state、import は [Provider reference](/ja/docs/)、
-一覧は [mapping inventory](/forms/)、実行可能な検証は [conformance](/conformance/)
-を参照してください。過去のリリースと移行方法は
-[バージョンと互換性](/ja/docs/versions.html) にまとめています。
-AWS、Cloudflare、Kubernetesなどは同じOpenTofu moduleでTakoformと並ぶ
-native providerとして宣言します。
-
-## 必要なもの
-
-Provider の利用には、設定する FormRef を実装した互換 Host が必要です。
+[Provider reference（英語）](/docs/reference.html)は公開済み v4 resource、
+[Provider 5 consumer reference（英語）](/docs/provider-host-api-v2-source.html)は
+ソースの v5 schema、private intent-store、lifecycle を説明します。
+Form の公開は publisher が行い、Host の対応は別に確認する必要があります。
+provider-neutral な契約は[Host API ドキュメント](https://takoform.com/host-api/)を参照してください。

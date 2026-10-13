@@ -1,97 +1,59 @@
-# Takoform Provider
+# Use Takoform Provider
 
-Takoform Provider is the Terraform/OpenTofu client for a compatible Takoform
-Host. It maps typed configuration to exact Form contracts and keeps resource
-identity and desired state in Terraform state; the Host runs the service.
-The current API/Core checkpoint is **`v1.0.1`** on the existing
-`forms.takoform.com/v1` wire and discovery lane.
+Manage exact Takoform Forms from Terraform or OpenTofu. A compatible Host
+provides the endpoint, Space, authentication, and service implementation.
 
-## Publisher-specific major
+## Choose your version
 
-Provider `4.1.0` keeps the existing
-`registry.terraform.io/tako0614/takoform` address and registers only the 17
-exact Forms selected from `github.com/tako0614/takoform-forms`. Provider `3.0.0` remains
-immutable 31-resource aggregate history. The Registry readback that records
-`4.1.0` as published is the `4.1.0` entry of the
-[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json).
+| Use | Provider | Host API | Resource mappings |
+| --- | --- | --- | --- |
+| Registry installation | **4.1.0** | `forms.takoform.com/v1` | 17 Edge Forms |
+| Source evaluation | **5.0.0** | `forms.takoform.com/v2` | 13 exact Edge Form URLs |
 
-This relationship is identified by publisher repository and exact FormRefs;
-Takoform assigns it no privileged classification.
+The [release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
+records the verified 4.1.0 Registry publication. Check the exact live Registry
+version before selecting 5.0.0; a source target or tag is not installation
+evidence. **Provider 4 state is not automatically translated to Provider 5.**
 
-Install and configure it as follows:
+## Start with published Provider 4.1.0
+
+Follow [Getting started](/docs/getting-started.html) to initialize, validate,
+and plan a [Random + Takoform module](/examples/getting-started/main.tf).
+Random needs no cloud credentials; the Takoform resource is managed by the
+selected Host. The guide explains the required inputs, token handling, lock
+file, and exact EdgeKVNamespace 0.1.0 Form identity.
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "~> 4.0"
+      version = "= 4.1.0"
     }
   }
 }
-
-provider "takoform" {
-  endpoint = "https://forms.example.com"
-  space    = "prod"
-}
-
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
 ```
 
-`endpoint`, `space`, and bearer `token` may instead come from
-`TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
+The guide supplies the Host configuration and resource declaration. For an
+AWS resource alongside Takoform, see [native provider composition](/examples/native-provider-composition/main.tf).
+Each Provider keeps its own source, credentials, and state.
 
-Provider 4.1.0 adds `token_file` or
-`TAKOFORM_TOKEN_FILE` for a run-local token rotated by atomic file replacement.
-The provider opens it for each Host request. The file must be a regular file
-owned by the provider user with no group/other access, symlink, parent
-traversal, or newline. `token` / `TAKOFORM_TOKEN` and a token file are mutually
-exclusive. Existing Provider 4.0.0 static-token installations remain valid;
-confirm Registry availability before selecting a new exact version.
-The token-file mode is supported on Linux, macOS, FreeBSD, OpenBSD, and NetBSD;
-Windows keeps the static-token option only.
+## Evaluate Provider 5
 
-Resource names are Provider metadata; contract meaning comes from the linked
-publisher Form Definitions and the [Core v1.0.1 specification](https://github.com/tako0614/takoform/tree/v1.0.1/spec).
+Use the [Provider 5 consumer reference](/docs/provider-host-api-v2-source.html)
+for the thirteen mappings, typed HCL, local or remote private-store custody,
+import, and lifecycle boundaries. It requires a Host that supports
+`forms.takoform.com/v2` and the exact Form URLs, plus one private intent-store
+mode. Host support and Runner private-file access are supplied by the
+execution environment.
 
 ## Resource reference {#resource-reference}
 
-The generated reference covers the complete publisher-selected Provider roster:
+The [Provider reference](/docs/reference.html#resource-reference) and its
+seventeen resource pages describe **Provider 4.1.0 / Host API v1**. Use the
+Provider 5 reference above for source-v5 schemas and Form URLs.
 
-### Edge (17)
-
-- [`takoform_module_worker`](/docs/resources/module_worker.html), [`takoform_worker_bundle`](/docs/resources/worker_bundle.html), [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html), [`takoform_worker_version`](/docs/resources/worker_version.html)
-- [`takoform_worker_deployment`](/docs/resources/worker_deployment.html), [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html), [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html), [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)
-- [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html), [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html), [`takoform_sqlite_database`](/docs/resources/sqlite_database.html), [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html), [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html)
-- [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html), [`takoform_queue_consumer`](/docs/resources/queue_consumer.html), [`takoform_durable_workflow`](/docs/resources/durable_workflow.html), [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
-
-Each generated page shows the full four-field FormRef, its separate package
-digest, typed arguments, state behavior, import contract, and source Form. The
-[mapping inventory](/forms/) lists the roster and each `definitionVersion`;
-the [identity ledger](/release/provider-form-identities.json) retains exact
-release identities.
-
-## History and migration
-
-Current compatibility and retained releases are summarized in
-[Versions and compatibility](/docs/versions.html). Existing users of an older
-provider should follow the [v2-to-v3 migration boundary](/release/migrations/v2-to-v3.html).
-Provider 3 users should read the explicit [v3-to-v4 publisher-set
-boundary](/release/migrations/v3-to-v4.html) before upgrading.
-
-## Compose native providers
-
-AWS, Cloudflare, Kubernetes, PostgreSQL, and other industry providers remain
-ordinary peers in `required_providers`. OpenTofu installs all declared sources
-and builds one dependency graph; Takoform does not wrap their resources as
-Forms or maintain a provider catalog. See the [native provider composition
-example](/examples/native-provider-composition/main.tf).
-
-The executable compatibility checks are listed in [Conformance](/conformance/).
-
-## Before apply
-
-Before applying, confirm that the configured Host advertises support for every
-exact FormRef in the plan.
+For migration and release evidence, see [Versions and compatibility](/docs/versions.html),
+the [v3-to-v4 migration guide](/release/migrations/v3-to-v4.html), and
+[Conformance](/conformance/). For provider-neutral API contracts, see the
+[Host API documentation](https://takoform.com/en/host-api/).
