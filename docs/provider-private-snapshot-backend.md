@@ -10,14 +10,27 @@ The v2 Host Provider has two explicit, mutually exclusive intent-store modes:
   Host resource or a storage-provider selection. It is never inferred from
   the Host endpoint, Workspace, Run ID or product name.
 
-For remote mode, the Runner supplies `TAKOSUMI_PRIVATE_RUN_FILES` as a JSON
-array of `{ "slot": "...", "endpoint": "...", "grant": "..." }` objects. The
-selected endpoint is the exact internal base
+For remote mode, the Runner supplies exactly one private descriptor source.
+`TAKOSUMI_PRIVATE_RUN_FILES_FILE` names an absolute file in a private,
+Runner-owned directory. Its complete JSON envelope is
+`{"version":1,"sequence":0,"files":[{"slot":"...","endpoint":"...","grant":"..."}]}`.
+The Runner starts at sequence zero and atomically replaces its 0600 regular
+file with an increasing sequence when it renews grants. The Provider reopens
+and validates that file before every read, commit and receipt resolve, pins
+the initial slot/endpoint set, accepts exact same-sequence replay, and rejects
+rollback, changed identities, malformed data or insecure files. No grant is
+cached from this file. The envelope is limited to 4 MiB and 256 slots.
+
+The original `TAKOSUMI_PRIVATE_RUN_FILES` JSON array of
+`{ "slot": "...", "endpoint": "...", "grant": "..." }` remains an explicit,
+nonrenewed process input. It cannot be combined with the file input; an
+invalid file never falls back to the static array. In either mode, the selected
+endpoint is the exact internal base
 `/internal/private-run-files/v1`; the Provider sends `POST` requests to its
 `/read`, `/commit` and `/resolve` children with the opaque grant as a Bearer
 header. HTTPS is required except for an explicitly loopback HTTP endpoint for
 local/self-hosted integration. Redirects are never followed. The environment
-value and grant are process inputs only: neither is included in an intent
+value, file path and grant are process inputs only: none is included in an intent
 snapshot, Terraform state, a Host request, or a diagnostic.
 
 `read` returns an absent marker or `{kind:"present",version,digest,bytesBase64}`.
@@ -34,6 +47,8 @@ with that expected version and a fresh commit ID. The Provider returns an
 intent, including its original Host idempotency key, only after an exact
 commit receipt is acknowledged. If a commit response is lost or unknown, it
 issues one `/resolve` for that exact commit ID, expected version and digest.
+In file mode, this resolve reopens the current descriptor and may use a newer
+grant; it never retries the original commit.
 Only an exact committed receipt qualifies. Conflict or unresolved outcomes
 return a value-free error and do not authorize a Host send or a blind mutation
 retry. A competing writer can therefore produce one winner, not two Host

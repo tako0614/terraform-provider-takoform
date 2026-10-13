@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -22,12 +23,17 @@ import (
 
 // Remote snapshots are private Runner custody, not a Host API extension. The
 // grant is only kept in this process and is never included in the snapshot.
-const PrivateRunFilesEnvironment = "TAKOSUMI_PRIVATE_RUN_FILES"
+const (
+	PrivateRunFilesEnvironment     = "TAKOSUMI_PRIVATE_RUN_FILES"
+	PrivateRunFilesFileEnvironment = "TAKOSUMI_PRIVATE_RUN_FILES_FILE"
+)
 
 const (
-	privateRunFilesPath = "/internal/private-run-files/v1"
-	maxRemoteWireBytes  = (maxSnapshotBytes*4)/3 + 8192
-	maxRemoteVersion    = uint64(9007199254740991)
+	privateRunFilesPath   = "/internal/private-run-files/v1"
+	maxRemoteWireBytes    = (maxSnapshotBytes*4)/3 + 8192
+	maxRemoteVersion      = uint64(9007199254740991)
+	maxDescriptorBytes    = 4 << 20
+	maxDescriptorSequence = uint64(2048)
 )
 
 var (
@@ -44,10 +50,22 @@ type remoteFileGrant struct {
 }
 
 type remoteSnapshotBackend struct {
-	endpoint string
-	grant    string
-	client   *http.Client
-	binding  StoreBinding
+	endpoint         string
+	grant            string // Only static, explicitly nonrenewed delivery.
+	descriptorPath   string
+	slot             string
+	endpoints        map[string]string
+	sequence         uint64
+	descriptorDigest [sha256.Size]byte
+	client           *http.Client
+	binding          StoreBinding
+}
+
+type remoteDescriptor struct {
+	sequence  uint64
+	digest    [sha256.Size]byte
+	endpoints map[string]string
+	grant     string
 }
 
 type remoteReceipt struct {
@@ -108,42 +126,118 @@ func OpenRemote(ctx context.Context, slot, storeID string, binding StoreBinding)
 }
 
 func remoteBackendForSlot(slot string) (*remoteSnapshotBackend, error) {
-	raw := os.Getenv(PrivateRunFilesEnvironment)
-	if raw == "" || len(raw) > 1<<20 {
+	raw, staticSet := os.LookupEnv(PrivateRunFilesEnvironment)
+	path, fileSet := os.LookupEnv(PrivateRunFilesFileEnvironment)
+	if staticSet == fileSet {
 		return nil, ErrStoreUnavailable
 	}
-	var grants []remoteFileGrant
-	if err := decodeStrict([]byte(raw), &grants); err != nil || len(grants) == 0 || len(grants) > 256 {
-		return nil, ErrStoreUnavailable
-	}
-	seen := make(map[string]bool, len(grants))
-	var chosen *remoteFileGrant
-	for i := range grants {
-		entry := &grants[i]
-		if !remoteSlotPattern.MatchString(entry.Slot) || seen[entry.Slot] || !validPrivateRunFilesEndpoint(entry.Endpoint) || !validRemoteGrant(entry.Grant) {
+	backend := &remoteSnapshotBackend{}
+	if fileSet {
+		if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return nil, ErrStoreUnavailable
 		}
-		seen[entry.Slot] = true
-		if entry.Slot == slot {
-			chosen = entry
+		descriptor, err := readRemoteDescriptor(path, slot)
+		if err != nil {
+			return nil, err
 		}
-	}
-	if chosen == nil {
-		return nil, ErrStoreUnavailable
+		backend.endpoint = descriptor.endpoints[slot]
+		backend.descriptorPath = path
+		backend.slot = slot
+		backend.endpoints = descriptor.endpoints
+		backend.sequence = descriptor.sequence
+		backend.descriptorDigest = descriptor.digest
+	} else {
+		if raw == "" || len(raw) > 1<<20 {
+			return nil, ErrStoreUnavailable
+		}
+		var grants []remoteFileGrant
+		if err := decodeStrict([]byte(raw), &grants); err != nil {
+			return nil, ErrStoreUnavailable
+		}
+		selected, _, err := selectRemoteGrant(grants, slot)
+		if err != nil {
+			return nil, err
+		}
+		backend.endpoint = selected.Endpoint
+		backend.grant = selected.Grant
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.DisableCompression = true
-	return &remoteSnapshotBackend{
-		endpoint: chosen.Endpoint,
-		grant:    chosen.Grant,
-		client: &http.Client{
-			Timeout:   15 * time.Second,
-			Transport: transport,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+	backend.client = &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
 		},
-	}, nil
+	}
+	return backend, nil
+}
+
+func selectRemoteGrant(grants []remoteFileGrant, slot string) (remoteFileGrant, map[string]string, error) {
+	if len(grants) == 0 || len(grants) > 256 {
+		return remoteFileGrant{}, nil, ErrStoreUnavailable
+	}
+	endpoints := make(map[string]string, len(grants))
+	var selected remoteFileGrant
+	for _, entry := range grants {
+		if !remoteSlotPattern.MatchString(entry.Slot) || endpoints[entry.Slot] != "" ||
+			!validPrivateRunFilesEndpoint(entry.Endpoint) || !validRemoteGrant(entry.Grant) {
+			return remoteFileGrant{}, nil, ErrStoreUnavailable
+		}
+		endpoints[entry.Slot] = entry.Endpoint
+		if entry.Slot == slot {
+			selected = entry
+		}
+	}
+	if selected.Slot == "" {
+		return remoteFileGrant{}, nil, ErrStoreUnavailable
+	}
+	return selected, endpoints, nil
+}
+
+func readRemoteDescriptor(path, slot string) (remoteDescriptor, error) {
+	raw, err := readPrivateDescriptor(path, maxDescriptorBytes)
+	if err != nil {
+		return remoteDescriptor{}, ErrStoreUnavailable
+	}
+	defer clearDescriptorBytes(raw)
+	var envelope struct {
+		Version  *uint64            `json:"version"`
+		Sequence *uint64            `json:"sequence"`
+		Files    *[]remoteFileGrant `json:"files"`
+	}
+	if decodeStrict(raw, &envelope) != nil || envelope.Version == nil || *envelope.Version != 1 ||
+		envelope.Sequence == nil || *envelope.Sequence > maxDescriptorSequence || envelope.Files == nil {
+		return remoteDescriptor{}, ErrStoreUnavailable
+	}
+	selected, endpoints, err := selectRemoteGrant(*envelope.Files, slot)
+	if err != nil {
+		return remoteDescriptor{}, err
+	}
+	return remoteDescriptor{sequence: *envelope.Sequence, digest: sha256.Sum256(raw), endpoints: endpoints, grant: selected.Grant}, nil
+}
+
+func (r *remoteSnapshotBackend) currentGrant() (string, error) {
+	if r.descriptorPath == "" {
+		return r.grant, nil
+	}
+	descriptor, err := readRemoteDescriptor(r.descriptorPath, r.slot)
+	if err != nil || len(descriptor.endpoints) != len(r.endpoints) {
+		return "", ErrStoreUnavailable
+	}
+	for slot, endpoint := range r.endpoints {
+		if descriptor.endpoints[slot] != endpoint {
+			return "", ErrStoreUnavailable
+		}
+	}
+	if descriptor.sequence < r.sequence || descriptor.sequence == r.sequence && descriptor.digest != r.descriptorDigest {
+		return "", ErrStoreUnavailable
+	}
+	if descriptor.sequence > r.sequence {
+		r.sequence = descriptor.sequence
+		r.descriptorDigest = descriptor.digest
+	}
+	return descriptor.grant, nil
 }
 
 func validPrivateRunFilesEndpoint(raw string) bool {
@@ -294,6 +388,10 @@ func snapshotDigest(data []byte) string {
 
 func (r *remoteSnapshotBackend) post(ctx context.Context, operation string, body any) (remoteResponse, int, error) {
 	var zero remoteResponse
+	grant, err := r.currentGrant()
+	if err != nil {
+		return zero, 0, ErrStoreUnavailable
+	}
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return zero, 0, ErrStoreUnavailable
@@ -302,7 +400,7 @@ func (r *remoteSnapshotBackend) post(ctx context.Context, operation string, body
 	if err != nil {
 		return zero, 0, ErrStoreUnavailable
 	}
-	request.Header.Set("Authorization", "Bearer "+r.grant)
+	request.Header.Set("Authorization", "Bearer "+grant)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := r.client.Do(request)
 	if err != nil {
