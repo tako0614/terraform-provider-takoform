@@ -5,18 +5,26 @@ description: "Publisher-specific Takoform Terraform/OpenTofu Provider resource r
 
 # Takoform Provider
 
-Takoform Provider is a Terraform/OpenTofu client for a compatible Host. It
-maps typed resource configuration to exact Form contracts and stores the
-resulting identity and desired state in Terraform state; the Host runs the
-service. API/Core checkpoint **`v1.0.1`** uses the existing
-`forms.takoform.com/v1` wire and discovery lane.
+Takoform Provider maps Terraform/OpenTofu resources to exact Form contracts
+served by a compatible Host. The Host runs the service; the Provider manages
+typed configuration, state, and import.
 
-## Publisher-specific major
+| Use | Provider | Host API | Reference |
+| --- | --- | --- | --- |
+| Registry installation | 4.1.0 | `forms.takoform.com/v1` | [Getting started](getting-started.md) · [日本語](/ja/docs/getting-started.md) |
+| Current source evaluation | 5.0.0 | `forms.takoform.com/v2` | [Provider 5 consumer reference](provider-host-api-v2-source.md) |
 
-This checkout implements the Provider major published at the
-`registry.terraform.io/tako0614/takoform` source address. It registers only the
-17 exact Forms selected from `github.com/tako0614/takoform-forms`. Provider `3.0.0`
-remains immutable 31-Form aggregate history and is not silently rewritten.
+The resource pages below describe the published v4 mapping. The default
+source-built plugin is v5 and has a different schema and thirteen exact Form
+URLs. Provider SemVer, Form definitions, and Host support are independent.
+
+## Published Provider 4.1.0 (Host API v1)
+
+Provider 4.1.0 is published at
+`registry.terraform.io/tako0614/takoform` and registers 17 exact Edge Forms
+selected from `github.com/tako0614/takoform-forms`. Its Host API lane is
+`forms.takoform.com/v1`. Provider 3.0.0 remains immutable 31-Form aggregate
+history; it has a separate [migration boundary](../release/migrations/v3-to-v4.md).
 
 This relationship is identified by publisher repository and exact FormRefs;
 Takoform assigns it no privileged classification.
@@ -63,7 +71,7 @@ Availability is verified, not declared by this immutable documentation.
 The exact removal and state boundary is documented in the
 [v3-to-v4 migration guide](../release/migrations/v3-to-v4.md).
 
-## Provider 5.0.0
+## Provider 5.0.0 (Host API v2)
 
 Provider 5.0.0 is a fresh-install Provider for Host API
 `forms.takoform.com/v2` and thirteen exact Edge Forms. Registry availability is
@@ -80,9 +88,12 @@ versioned Form URL. For example, the exact
 is one of the thirteen URLs mounted by Provider 5.0.0.
 
 The v5 configuration and lifecycle boundaries are in the
-[Provider 5 consumer reference](provider-host-api-v2-source.md). A minimal
-version pin and resource show the intended source contract; do not apply this
-example against a Host until it advertises and authorizes the exact Forms:
+[Provider 5 consumer reference](provider-host-api-v2-source.md). The HCL below shows the v5 schema and the Registry pin to use after
+exact-version publication is verified. To evaluate before publication, build
+and install a local plugin as described in that reference. Initialize the
+private local store before configuring `store_path`, or use exactly one
+`intent_store_slot` explicitly granted by the execution environment. The
+Host must advertise and authorize the exact Forms before applying:
 
 ```hcl
 terraform {
@@ -123,7 +134,7 @@ A source tag or local build alone is not evidence of Registry publication.
 
 ## Resource reference
 
-### Edge (17)
+### Provider 4.1.0: Edge (17)
 
 - [ModuleWorker](resources/module_worker.md), [WorkerBundle](resources/worker_bundle.md), [StaticAssetBundle](resources/static_asset_bundle.md), [WorkerVersion](resources/worker_version.md)
 - [WorkerDeployment](resources/worker_deployment.md), [WorkerCustomDomain](resources/worker_custom_domain.md), [WorkerEndpoint](resources/worker_endpoint.md), [WorkerCronTrigger](resources/worker_cron_trigger.md)
@@ -148,7 +159,7 @@ git checkout --detach v4.1.0
 A source tag, documentation page, or local build alone is not
 Registry publication or installation evidence.
 
-Version and migration history are kept in `website/docs/versions.md`, the
+Version and migration history are kept in [Versions and compatibility](/docs/versions.md), the
 [v2-to-v3 guide](../release/migrations/v2-to-v3.md), and the
 [publisher-set v3-to-v4 guide](../release/migrations/v3-to-v4.md).
 
@@ -164,5 +175,5 @@ or maintain a central provider catalog. See the
 ## Host requirements
 
 Before applying, confirm that the configured Host advertises support for every
-exact FormRef in the plan. Executable compatibility checks are listed in
+exact FormRef (v4) or Form URL (v5) in the plan. Executable compatibility checks are listed in
 [Conformance](../conformance/index.md).

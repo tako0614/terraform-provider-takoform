@@ -1,19 +1,35 @@
 # Provider 5 consumer reference
 
 Provider 5.0.0 is a fresh-install Provider for Host API
-`forms.takoform.com/v2`; this page does not establish current Registry
-availability or that a particular Host supports the API or any listed Form.
-Check the live Registry listing and exact-version readback before installing
-or pinning 5.0.0. Until then, evaluate from source or a local build. The
-published Provider 4.1.0 remains the v1 client. **Provider 4 state is not
-automatically translated to Provider 5.**
+`forms.takoform.com/v2`. It maps thirteen exact published Edge Form URLs from
+the `takoform-forms` publisher to Terraform/OpenTofu resources and never
+negotiates or falls back to v1. Check the live Registry listing and exact
+version readback before installing or pinning 5.0.0; this reference does not
+state current Registry availability. Provider 4.1.0 remains the published v1
+client. A compatible Host must independently advertise support for each exact
+Form before use.
 
-The exact v2 API identity and discovery path are in the Provider's [protocol
-identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
+The Host API identity and discovery path are defined in the Provider's
+[v2 protocol identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
 and [HTTP client](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/client.go).
-The 13 mapped publisher Forms are:
+These links describe the client implementation; they are not a claim that a
+particular Host implements or supports the API.
 
-| Terraform resource | Exact Form URL |
+The mounted Terraform/OpenTofu resource type names are
+`takoform_module_worker`, `takoform_worker_bundle`,
+`takoform_worker_version`, `takoform_worker_deployment`,
+`takoform_worker_endpoint`, `takoform_worker_cron_trigger`,
+`takoform_edge_kv_namespace`, `takoform_edge_object_bucket`,
+`takoform_sqlite_database`, `takoform_sqlite_migration_set`,
+`takoform_sqlite_migration_application`, `takoform_at_least_once_queue`,
+and `takoform_queue_consumer`. Their HCL `spec` object is typed per exact Form;
+the four empty-spec Forms omit that attribute. Artifact Forms carry typed
+`artifact.url` and `artifact.sha256` inputs. This Provider forwards those
+identities; it neither publishes artifact bytes nor grants the Host permission
+to fetch arbitrary sources. WorkerVersion's arbitrary public `vars` value is
+authored as `spec.vars_json`, validated as strict JSON by the exact Form codec.
+
+| Terraform resource | Exact publisher Form URL |
 | --- | --- |
 | `takoform_module_worker` | [ModuleWorker 0.3.0](https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/) |
 | `takoform_worker_bundle` | [WorkerBundle 0.2.0](https://edge.forms.takoform.com/forms/WorkerBundle/0.2.0/) |
@@ -29,61 +45,184 @@ The 13 mapped publisher Forms are:
 | `takoform_at_least_once_queue` | [AtLeastOnceQueue 0.2.0](https://edge.forms.takoform.com/forms/AtLeastOnceQueue/0.2.0/) |
 | `takoform_queue_consumer` | [QueueConsumer 0.3.0](https://edge.forms.takoform.com/forms/QueueConsumer/0.3.0/) |
 
-The resource `spec` values are typed to their exact Forms. Four Forms have an
-empty spec. Artifact Forms accept `artifact.url` and `artifact.sha256`; the
-Provider does not publish the bytes or authorize arbitrary artifact fetching.
-WorkerVersion's public `vars` object is configured as strict-JSON
-`spec.vars_json`.
+### Example: Worker identity and deployment relationships
 
-## Source evaluation and Registry installation
+Resource references use exact Host-assigned UIDs, not name lookup. These
+references let Terraform order the resources and pass those UIDs to the
+Provider:
 
-For source development, initialize one private, absolute-path intent store
-for the fixed local management scope and exact Host API root. The source
-checkout command is:
+```hcl
+resource "takoform_module_worker" "api" {
+  name = "api"
+}
+
+resource "takoform_worker_bundle" "api" {
+  name = "api-bundle"
+  spec = {
+    artifact = {
+      url    = var.bundle_url
+      sha256 = var.bundle_sha256
+    }
+  }
+}
+
+resource "takoform_worker_version" "api" {
+  name = "api-v1"
+  spec = {
+    worker   = { resource_uid = takoform_module_worker.api.uid }
+    bundle   = { resource_uid = takoform_worker_bundle.api.uid }
+    handlers = ["fetch"]
+  }
+}
+
+resource "takoform_worker_deployment" "api" {
+  name = "api-live"
+  spec = {
+    worker = { resource_uid = takoform_module_worker.api.uid }
+    versions = [{
+      worker_version = { resource_uid = takoform_worker_version.api.uid }
+      weight         = 10000
+    }]
+  }
+}
+
+resource "takoform_worker_endpoint" "api" {
+  name = "api-endpoint"
+  spec = {
+    worker = { resource_uid = takoform_module_worker.api.uid }
+  }
+}
+```
+
+`bundle_url` and `bundle_sha256` must identify the same artifact; the example
+does not publish or upload it. The Host assigns and returns the worker UID.
+The deployment references the worker and version, while the endpoint references
+the worker; the Host controls resulting endpoint and runtime behavior.
+
+For a queue relationship, `takoform_queue_consumer.spec.queue` and `.worker`
+also take exact UIDs:
+
+```hcl
+resource "takoform_at_least_once_queue" "events" {
+  name = "events"
+  spec = { message_retention_seconds = 86400 }
+}
+
+resource "takoform_queue_consumer" "events" {
+  name = "events-consumer"
+  spec = {
+    queue                     = { resource_uid = takoform_at_least_once_queue.events.uid }
+    worker                    = { resource_uid = takoform_module_worker.api.uid }
+    max_batch_size            = 10
+    max_batch_timeout_seconds = 5
+    max_concurrency           = 1
+    max_retries               = 3
+    retry_delay_seconds       = 10
+  }
+}
+```
+
+## Build and load a local plugin
+
+Use a fresh evaluation module, separate from existing v4 state. From this
+repository root, build the default v2 plugin into an absolute directory:
+
+```console
+PROVIDER_DEV_DIR="$(mktemp -d)"
+go build -ldflags="-X main.version=5.0.0-dev" \
+  -o "$PROVIDER_DEV_DIR/terraform-provider-takoform" .
+```
+
+Create a CLI configuration file at `$PROVIDER_DEV_DIR/dev.tfrc`, replacing
+`/absolute/provider-dev-dir` with that directory's actual path:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "registry.terraform.io/tako0614/takoform" = "/absolute/provider-dev-dir"
+  }
+  direct {}
+}
+```
+
+In the fresh module, declare the canonical Provider source in
+`required_providers`, add the v5 configuration below, and declare any referenced
+root variables. Run CLI commands with this override explicitly selected:
+
+```console
+TF_CLI_CONFIG_FILE="$PROVIDER_DEV_DIR/dev.tfrc" tofu providers schema -json
+TF_CLI_CONFIG_FILE="$PROVIDER_DEV_DIR/dev.tfrc" tofu validate
+```
+
+Use `terraform` in place of `tofu` for Terraform. These commands load the
+local plugin; schema inspection does not contact a Host. The CLI's development
+override warning is expected. In a minimal module using only this Provider and
+local state, skip `init` for this evaluation: it still tries to select a
+published Registry version. If other Providers, modules, or a remote backend
+need initialization, initialize them separately according to their own
+requirements. See the [OpenTofu CLI configuration](https://opentofu.org/docs/cli/config/config-file/)
+and [Terraform development override documentation](https://developer.hashicorp.com/terraform/plugin/debugging).
+
+After initializing custody and supplying a compatible Host, use the same CLI
+configuration to review `tofu plan`. Applying changes the selected Host.
+Keep the override scoped to this evaluation; omit `TF_CLI_CONFIG_FILE` when
+returning to ordinary Registry installation. A development build is not a
+signed release, a Registry package, or Host support evidence.
+
+## Intent-store custody before resource planning
+
+Select exactly one intent-store mode. In local mode, a caller must initialize
+one private, absolute-path store for one fixed management scope and exact Host
+API root. The store is an execution-owner durability obligation; do not put it
+in an ephemeral directory that disappears between plans, applies, refreshes,
+or process restarts.
 
 ```sh
-go run ./cmd/intent-store-init \
+terraform-provider-takoform intent-store-init \
   --path "$INTENT_STORE_PATH" \
   --store-id "$CALLER_SCOPE_ID" \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
 ```
 
-The built Provider binary exposes the same initializer as
-`terraform-provider-takoform intent-store-init --path "$INTENT_STORE_PATH"
---store-id "$CALLER_SCOPE_ID" --host-api
-"https://host.example/apis/forms.takoform.com/v2"`. Neither command installs
-the Provider through the Registry. Once the exact version appears in the
-Registry listing, verify it separately. When the `v5.0.0` tag resolves to the
-intended reviewed source, the source verification command is:
+A locally built Provider binary exposes this subcommand, so initializing a
+store does not require the Go source tree. From a source checkout,
+`go run ./cmd/intent-store-init` accepts the same flags. Neither invocation
+installs the Provider through the Terraform Registry.
 
-```sh
-git checkout --detach v5.0.0
+The tool refuses mismatched or nonempty unbound stores. `store-id` is a fixed
+local label, **not** authentication or proof that a rotated bearer token has
+the same Host principal. The execution owner must retain the store and the
+actual Host principal/authorization continuity. Loss, corruption, a changed
+path/root/ID, or an unresolved claim stops mutation; it does not silently
+create a replacement store.
+
+```hcl
+provider "takoform" {
+  endpoint      = "https://host.example"
+  host_api_root = "https://host.example/apis/forms.takoform.com/v2"
+  token         = var.host_token
+  store_path    = var.absolute_private_store_path
+  store_id      = var.fixed_caller_scope_id
+  space         = "prod"
+}
+
+resource "takoform_worker_endpoint" "api" {
+  name = "api"
+  spec = {
+    worker = { resource_uid = var.existing_worker_uid }
+  }
+}
 ```
 
-A source checkout or tag alone is not Registry publication evidence.
-
-`store_id` is a local label, not authentication or proof that a rotated bearer
-token still represents the same Host principal. The selected store is bound to
-the exact Host API root. With local `store_path` custody, Configure opens the
-already initialized store locally and sends no HTTP request. Keep it available
-across plans, applies, refreshes, and restarts. Loss, corruption, changed
-path/root/ID, or unresolved intent stops mutation rather than silently creating
-a replacement.
-
-Alternatively, configure exactly one `intent_store_slot` instead of
-`store_path` when the Runner/OpenTofu environment explicitly grants generic
-private-file access for that opaque slot. The Provider does not provision this
-capability; no default Cloud mount or ambient authentication is implied. For
-example, set `intent_store_slot = var.runner_private_slot` only when that exact
-slot is granted. During Configure, before resource planning, remote mode may
-initialize an empty slot with a compare-and-swap snapshot bound to the same
-`store_id` and exact Host API root. This private-store operation is not a Host
-API request, and a mismatch or unresolved commit outcome stops before Host
-mutation. Before each Host mutation, an exact acknowledged durable journal
-commit is required; a lost or unknown commit acknowledgement is accepted only
-after an exact receipt is resolved. Unresolved outcomes refuse mutation.
-
-For example, with `runner_private_slot` granted by the execution environment:
+For remote mode, set `intent_store_slot` instead of `store_path`. This is an
+opaque slot name, not a path or credential. It is usable only when the
+Runner/OpenTofu execution environment explicitly grants the Provider generic
+private-file access for that exact slot. The Provider does not provision this
+capability, and no runtime default Cloud mount or ambient authentication is
+implied. The [snapshot backend note](/docs/provider-private-snapshot-backend.md)
+documents the Runner descriptor inputs, conditional snapshot commits, and
+receipt handling. For example, with `runner_private_slot` supplied by that
+explicitly capable environment:
 
 ```hcl
 provider "takoform" {
@@ -96,57 +235,61 @@ provider "takoform" {
 }
 ```
 
-```hcl
-provider "takoform" {
-  endpoint      = "https://host.example"
-  host_api_root = "https://host.example/apis/forms.takoform.com/v2"
-  token         = var.host_token
-  store_path    = var.absolute_private_store_path
-  store_id      = var.fixed_caller_scope_id
-  space         = "prod"
-}
+Exactly one of `store_path` and `intent_store_slot` must be configured. During
+Configure, before resource planning, remote mode reads the selected private
+slot and conditionally initializes an absent slot with an empty snapshot bound
+to the same `store_id` and exact `host_api_root`; this is private-store traffic,
+not a Host API request. A concurrent initializer is accepted only if the
+winning snapshot has that exact binding. Malformed, mismatched, or unresolved
+storage state is refused before Host mutation. Local mode instead opens the
+already initialized path and makes no HTTP request. Both modes use the same
+intent-store rules described in the [journal implementation note](/docs/host-v2-intent-journal.md).
 
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
+Before any Host mutation, the journal must have an exact acknowledged durable
+snapshot commit. If a commit acknowledgement is lost or unknown, the Provider
+checks only that exact commit; it proceeds only on an exact receipt and refuses
+to mutate while the outcome remains unresolved. This storage acknowledgement
+is separate from acknowledgement of the Host mutation itself.
 
-resource "takoform_worker_endpoint" "api" {
-  name = "api-endpoint"
-  spec = {
-    worker = { resource_uid = takoform_module_worker.api.uid }
-  }
-}
-```
-
-References pass exact Host-assigned UIDs. WorkerVersion refers to a worker and
-optionally a bundle; WorkerDeployment refers to its worker and weighted
-versions; WorkerEndpoint and WorkerCronTrigger refer to a worker. QueueConsumer
-refers to a queue and worker, and may refer to a dead-letter queue. These are
-relations between resources, not name-based adoption.
-
-The Host must advertise the exact v2 root and authorize every exact Form used.
-If Offerings are advertised, Configure both `offering_id` and
+Each resource validates state and custody before v2 discovery. Discovery's
+`baseUrl` must equal `host_api_root` exactly.
+The Host's authorized exact Form support and Offering policy are checked for
+a new Create. If Offerings are advertised, set both `offering_id` and
 `offering_revision`; otherwise omit both. There is no default Offering.
 
-## Private inputs and recovery boundary
+## Recovery and private inputs
 
-WorkerVersion private input values are supplied only to the Provider process at
-apply or same-Operation continuation time through
-`TAKOFORM_V2_PRIVATE_INPUTS_JSON`. They are not HCL attributes, public `spec`,
-Terraform state, the intent store, command arguments, or diagnostics. The
-environment input must be controlled by the process owner; this is not a
-Runner delivery guarantee. An accepted `waiting_input` Operation requires the
-entire original input map on that same Operation; if unavailable, stop and
-reconcile it rather than creating a replacement operation.
+Each Create/Update/Delete durably records the original public request,
+idempotency key, first-send time, and advertised replay window before its
+first Host mutation. The store excludes bearer credentials and private-input
+values. Once an Operation is acknowledged, the Provider follows that exact
+Operation and reads the exact Resource UID before settling state. An accepted
+ACK whose Terraform state was lost can be reconstructed by those two reads
+without a second mutation. A pre-ACK claim with no Operation ID is deliberately
+halted: neither a new key nor automatic replay or name-based adoption is
+authorized. A failed accepted Resource keeps its UID and name reservation;
+recovery is an explicit same-UID Update or Delete. Delete releases state only
+after terminal success and exact UID 404 evidence.
 
-Create, Update, and Delete claims persist the original public request and
-idempotency key before the first mutation. After acknowledgement, recovery
-follows that exact Operation and reads the exact Resource UID. If a claim has
-no Operation ID, the unknown outcome is an operator refusal: no new key,
-automatic replay, or name-based adoption. Failed accepted resources retain
-their UID and name reservation until an explicit same-UID Update or Delete.
+The v2 state schema is version 2. v0/v1 state upgrade is an explicit refusal
+before HTTP. A fresh UID import uses the configured Space and requires an
+authorized exact-UID Resource GET with matching Host root, Form, Space, UID,
+name, and generation before the store binds it. Import does not synthesize a
+Create, Operation, or prior private input. Do not use import as an automatic
+orphan-adoption or legacy-state migration path.
 
-Provider 5 uses fresh v2 state. v0/v1 upgrades are refused before HTTP. Import
-is by one exact UID and requires an authorized Resource read matching Host
-root, Form, Space, UID, name, and generation before binding the store. Import
-does not synthesize a Create or migrate legacy state.
+For WorkerVersion `required_sensitive_vars`, the caller supplies the exact
+Space/name/input-name map only in the Provider process at apply or same-Operation
+continuation time through `TAKOFORM_V2_PRIVATE_INPUTS_JSON`. The source shape
+and constraints are in [the private-input source note](/docs/private-input-source-v2.md).
+Values do not enter `spec`, HCL resource attributes, Terraform state, the
+intent store, or diagnostics. A fresh Create requires the full map. An explicit
+Update may omit `privateInputs` to retain the Host's prior values; a selected
+map must still match the declaration exactly. A Host `waiting_input` Operation
+requires the entire original map on that same Operation, never a replacement
+Create/Update.
+
+This source and its local fixture tests do not establish a normal Takosumi
+Runner's store initialization, persistent filesystem custody, private-input
+delivery, live Host conformance, artifact availability, Provider release, or
+GA readiness. Those require their separate owning integrations and evidence.

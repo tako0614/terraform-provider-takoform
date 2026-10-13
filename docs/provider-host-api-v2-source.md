@@ -122,6 +122,53 @@ resource "takoform_queue_consumer" "events" {
 }
 ```
 
+## Build and load a local plugin
+
+Use a fresh evaluation module, separate from existing v4 state. From this
+repository root, build the default v2 plugin into an absolute directory:
+
+```console
+PROVIDER_DEV_DIR="$(mktemp -d)"
+go build -ldflags="-X main.version=5.0.0-dev" \
+  -o "$PROVIDER_DEV_DIR/terraform-provider-takoform" .
+```
+
+Create a CLI configuration file at `$PROVIDER_DEV_DIR/dev.tfrc`, replacing
+`/absolute/provider-dev-dir` with that directory's actual path:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "registry.terraform.io/tako0614/takoform" = "/absolute/provider-dev-dir"
+  }
+  direct {}
+}
+```
+
+In the fresh module, declare the canonical Provider source in
+`required_providers`, add the v5 configuration below, and declare any referenced
+root variables. Run CLI commands with this override explicitly selected:
+
+```console
+TF_CLI_CONFIG_FILE="$PROVIDER_DEV_DIR/dev.tfrc" tofu providers schema -json
+TF_CLI_CONFIG_FILE="$PROVIDER_DEV_DIR/dev.tfrc" tofu validate
+```
+
+Use `terraform` in place of `tofu` for Terraform. These commands load the
+local plugin; schema inspection does not contact a Host. The CLI's development
+override warning is expected. In a minimal module using only this Provider and
+local state, skip `init` for this evaluation: it still tries to select a
+published Registry version. If other Providers, modules, or a remote backend
+need initialization, initialize them separately according to their own
+requirements. See the [OpenTofu CLI configuration](https://opentofu.org/docs/cli/config/config-file/)
+and [Terraform development override documentation](https://developer.hashicorp.com/terraform/plugin/debugging).
+
+After initializing custody and supplying a compatible Host, use the same CLI
+configuration to review `tofu plan`. Applying changes the selected Host.
+Keep the override scoped to this evaluation; omit `TF_CLI_CONFIG_FILE` when
+returning to ordinary Registry installation. A development build is not a
+signed release, a Registry package, or Host support evidence.
+
 ## Intent-store custody before resource planning
 
 Select exactly one intent-store mode. In local mode, a caller must initialize
@@ -172,8 +219,10 @@ opaque slot name, not a path or credential. It is usable only when the
 Runner/OpenTofu execution environment explicitly grants the Provider generic
 private-file access for that exact slot. The Provider does not provision this
 capability, and no runtime default Cloud mount or ambient authentication is
-implied. For example, with `runner_private_slot` supplied by that explicitly
-capable environment:
+implied. The [snapshot backend note](provider-private-snapshot-backend.md)
+documents the Runner descriptor inputs, conditional snapshot commits, and
+receipt handling. For example, with `runner_private_slot` supplied by that
+explicitly capable environment:
 
 ```hcl
 provider "takoform" {
@@ -188,12 +237,13 @@ provider "takoform" {
 
 Exactly one of `store_path` and `intent_store_slot` must be configured. During
 Configure, before resource planning, remote mode reads the selected private
-slot. If it is empty, the Provider attempts a compare-and-swap initialization
-of an empty snapshot bound to the same `store_id` and exact `host_api_root`;
-this is private-store traffic, not a Host API request. A conflict is accepted
-only if the winning snapshot has that exact binding. Malformed, mismatched, or
-unresolved storage state is refused before Host mutation. Local mode instead
-opens the already initialized path and makes no HTTP request.
+slot and conditionally initializes an absent slot with an empty snapshot bound
+to the same `store_id` and exact `host_api_root`; this is private-store traffic,
+not a Host API request. A concurrent initializer is accepted only if the
+winning snapshot has that exact binding. Malformed, mismatched, or unresolved
+storage state is refused before Host mutation. Local mode instead opens the
+already initialized path and makes no HTTP request. Both modes use the same
+intent-store rules described in the [journal implementation note](host-v2-intent-journal.md).
 
 Before any Host mutation, the journal must have an exact acknowledged durable
 snapshot commit. If a commit acknowledgement is lost or unknown, the Provider

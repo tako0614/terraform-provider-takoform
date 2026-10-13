@@ -50,8 +50,8 @@ const compatibilityNavItems = [
 ];
 
 const englishNav = [
-  { text: "Current", link: "/docs/" },
-  { text: "Core v1.0.1 source", link: coreSpec },
+  { text: "Provider docs", link: "/docs/" },
+  { text: "Host API", link: "https://takoform.com/en/host-api/" },
   {
     text: "Compatibility",
     items: compatibilityNavItems,
@@ -69,7 +69,7 @@ const japaneseProjectNavItems = [
 ];
 
 const japaneseCompatibilityNavItems = [
-  { text: "Versions & compatibility (英語のみ)", link: "/docs/versions.html" },
+  { text: "バージョンと互換性", link: "/ja/docs/versions.html" },
   {
     text: "v3 to v4 publisher-set migration (英語のみ)",
     link: "/release/migrations/v3-to-v4.html",
@@ -81,8 +81,8 @@ const japaneseCompatibilityNavItems = [
 ];
 
 const japaneseNav = [
-  { text: "Current", link: "/ja/docs/" },
-  { text: "Core v1.0.1 source (英語のみ)", link: coreSpec },
+  { text: "Provider の使い方", link: "/ja/docs/" },
+  { text: "Host API", link: "https://takoform.com/host-api/" },
   {
     text: "Compatibility",
     items: japaneseCompatibilityNavItems,
@@ -137,15 +137,31 @@ const englishSidebar = {
     {
       text: "Provider quick start",
       items: [
-        { text: "Quick start", link: "/docs/" },
+        { text: "Overview", link: "/docs/" },
+        { text: "Getting started (4.1.0)", link: "/docs/getting-started.html" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
         { text: "Reference", link: "/docs/reference.html" },
         { text: "Glossary", link: "/docs/glossary.html" },
       ],
     },
     {
-            text: "Forms from tako0614 (17 resources)",
+      text: "Provider 4.1.0 · 17 resources",
       items: edgeResourceItems,
+    },
+    {
+      text: "Provider 5 · source evaluation",
+      items: [
+        { text: "Consumer reference (13 resources)", link: "/docs/provider-host-api-v2-source.html" },
+      ],
+    },
+    {
+      text: "Provider 5 implementation notes",
+      collapsed: true,
+      items: [
+        { text: "Intent journal", link: "/docs/host-v2-intent-journal.html" },
+        { text: "Private snapshot backend", link: "/docs/provider-private-snapshot-backend.html" },
+        { text: "Private inputs", link: "/docs/private-input-source-v2.html" },
+      ],
     },
     {
       text: "Withdrawn epochs / Migration",
@@ -179,7 +195,7 @@ const englishSidebar = {
   "/release/": [
     {
       text: "Release",
-      items: [{ text: "Specification and Provider releases", link: "/release/" }],
+      items: [{ text: "Provider release evidence", link: "/release/" }],
     },
   ],
 };
@@ -189,16 +205,18 @@ const japaneseSidebar = {
     {
       text: "Provider quick start",
       items: [
-        { text: "クイックスタート", link: "/ja/docs/" },
+        { text: "概要", link: "/ja/docs/" },
+        { text: "入門ガイド (4.1.0)", link: "/ja/docs/getting-started.html" },
+        { text: "Provider 5 · ソース評価 (英語)", link: "/docs/provider-host-api-v2-source.html" },
         {
-          text: "Versions & compatibility (英語のみ)",
+          text: "バージョンと互換性",
           link: "/ja/docs/versions.html",
         },
         { text: "用語集 (英語のみ)", link: "/docs/glossary.html" },
       ],
     },
     {
-      text: "Forms from tako0614 (17 resources)",
+      text: "Provider 4.1.0 · 17 resources",
       items: edgeResourceItems,
     },
     {
@@ -210,7 +228,7 @@ const japaneseSidebar = {
           link: "/release/migrations/v3-to-v4.html",
         },
         {
-          text: "Versions & compatibility (英語のみ)",
+          text: "バージョンと互換性",
           link: "/ja/docs/versions.html",
         },
         {
@@ -228,9 +246,9 @@ const japaneseSidebar = {
 
 export default defineConfig({
   lang: "en",
-  title: "Takoform",
+  title: "Takoform Provider",
   description:
-    "One typed provider. Any compatible host. Portable resource contracts for Terraform and OpenTofu.",
+    "Typed Terraform and OpenTofu resources for exact Takoform Forms served by a compatible Host.",
   cleanUrls: false,
   lastUpdated: false,
   // Spec and proposal Markdown remains addressable for historical URL and

@@ -279,8 +279,9 @@ describe("the committed status document", () => {
       path.join(repositoryRoot, "website/.vitepress/config.mts"),
       "utf8",
     );
-    expect(config).toContain("Core v1.0.1 source");
-    expect(config).toContain("Forms from tako0614 (17 resources)");
+    expect(config).toContain("https://takoform.com/en/host-api/");
+    expect(config).toContain("Provider 4.1.0 · 17 resources");
+    expect(config).toContain("/docs/provider-host-api-v2-source.html");
     expect(config).toContain("v3 to v4 publisher-set migration");
     expect(config).not.toContain("Specification 1.0 candidate / Host API v1");
     expect(config).not.toContain("Specification 1.1 candidate");
@@ -309,8 +310,8 @@ describe("the committed status document", () => {
       "utf8",
     );
     expect(footer).toContain("Provider {{ status.providerPublished }}");
-    expect(footer).toContain("API/Core 1.0.1");
-    expect(footer).toContain("{{ status.currentFormCount }} mappings");
+    expect(footer).not.toContain("API/Core 1.0.1");
+    expect(footer).not.toContain("status.currentFormCount");
     expect(footer).toContain("/docs/versions.html");
     expect(footer).not.toMatch(/W09|package status|takoform-site|distribution/i);
   });
@@ -338,8 +339,10 @@ describe("the committed status document", () => {
 
     for (const relativePath of ["website/index.md", "website/ja/index.md"]) {
       const page = readFileSync(path.join(repositoryRoot, relativePath), "utf8");
-      expect(page).toContain("**`4.1.0`**");
-      expect(page).toContain("**`v1.0.1`**");
+      expect(page).toContain("**4.1.0**");
+      expect(page).toContain("forms.takoform.com/v1");
+      expect(page).toContain("forms.takoform.com/v2");
+      expect(page).toContain("/docs/provider-host-api-v2-source.html");
       expect(page).not.toContain("Specification 1.1 candidate / Host API v1");
     }
 
@@ -347,8 +350,8 @@ describe("the committed status document", () => {
       path.join(repositoryRoot, "website/docs/versions.md"),
       "utf8",
     );
-    expect(versions).toContain("two domain version axes");
-    expect(versions).toContain("API/Core");
+    expect(versions).toContain("Provider version selects a client schema");
+    expect(versions).toContain("Host API versions have their own owners");
     expect(versions).toContain("definitionVersion");
 
     const decision = readFileSync(

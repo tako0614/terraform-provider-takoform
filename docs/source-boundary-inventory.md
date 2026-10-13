@@ -1,28 +1,40 @@
 # Takoform source and extraction boundary inventory
 
-Status: W08 duplicate-authority deletion completed for TASK-0033
-Baseline: `2fbc557265bc52ac2e046b9df0be2bfa3565c3d6` (2026-08-26)
+## Current Provider boundary
 
-This document classifies the current source graph before repository extraction.
-It is not a public contract or a publication record. The target topology is:
+The default plugin entrypoint in `main.go` calls `internal/provider.New`,
+which constructs the Host API v2 Provider. Its thirteen resource mappings are
+registered by `internal/provider/v2_schema.go`; exact Form URLs and codecs
+live in `internal/edgev2/`. The [Provider 5 consumer reference](provider-host-api-v2-source.md)
+describes this source contract, including private intent-store custody.
 
-Post-extraction/current Provider policy supersedes this counted baseline:
-`tako0614/takoform` selects only the 17 exact tako0614 Edge Forms published by
-`takoform-forms` — the 16 Edge Forms counted below plus `ObjectBucket`, which
-the publisher set supplies and this repository's own corpus does not. The
-former eight-family/31-resource aggregate is Provider 3 history, not the
-current source roster. Ordinary OpenTofu providers compose natively and are
-never re-published as Takoform Forms.
+Provider 4.1.0 is the Registry-published Host API v1 release with 17 Edge
+mappings. The v1 source, catalogs, packages, generated resource references,
+and explicitly tagged conformance plugin remain here for compatibility and
+release evidence. Provider 3's eight-family, 31-resource aggregate is retained
+history. These trees do not describe the default source-built plugin.
 
-| Repository                                        | Sole responsibility after extraction                                                                |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `github.com/tako0614/takoform`                    | Specification, neutral Core, package schemas/verifier, generic conformance, SDK and CLI             |
-| `github.com/tako0614/takoform-forms`              | Publisher family declarations, family corpora, package production and tako0614 publisher evidence    |
-| `github.com/tako0614/terraform-provider-takoform` | Terraform/OpenTofu projection, schemas, imports, codecs, diagnostics and immutable Provider history |
+| Repository | Responsibility |
+| --- | --- |
+| `github.com/tako0614/takoform` | Normative Host API, neutral Core, schemas, verifier, and generic contracts |
+| `github.com/tako0614/takoform-forms` | Publisher-owned Form definitions, packages, family semantics, and publication |
+| `github.com/tako0614/terraform-provider-takoform` | Terraform/OpenTofu mappings, state, import, codecs, diagnostics, and Provider history |
 
-Physical extraction begins only after the artifact boundary and downstream
-parity gates pass. Moving the current fixed roster between repositories is not
-the target architecture.
+For current release identities, use `release/version.json`,
+`release/candidates/provider-v5.0.0.json`, and
+`release/provider-release-identities.json`. A candidate descriptor or retained
+package tree does not establish Registry publication or Host support.
+
+## Historical extraction audit
+
+Status at the audit: W08 duplicate-authority deletion completed for TASK-0033.
+Baseline: `2fbc557265bc52ac2e046b9df0be2bfa3565c3d6` (2026-08-26).
+
+The counts, source paths, future-owner assignments, and consumer table below
+record the pre-extraction graph at that baseline. They are retained audit
+history, not a current source roster, public contract, or publication record.
+The 17-Form v4 publisher set later added `ObjectBucket` to the sixteen Edge
+Forms counted here; v5 independently selects thirteen exact Form URLs.
 
 ## Counted baseline
 

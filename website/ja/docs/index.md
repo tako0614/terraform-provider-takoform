@@ -1,98 +1,57 @@
-# Takoform Provider
+# Takoform Provider を使う
 
-Takoform Provider は、Terraform / OpenTofu の型付きリソースを、互換 Host が
-公開する Form contract に対応させます。resource identity と desired state は
-Terraform state に保持され、実際のリソースは Host が実行します。現在の
-API/Core は **`v1.0.1`** で、`forms.takoform.com/v1` を使います。
+Terraform / OpenTofu の HCL から、互換 Host が公開する exact Form を管理します。
+Host の接続先、Space、認証情報、サービスの実装は選択した Host が提供します。
 
-## Publisher-specific major
+## 利用する版を選ぶ
 
-Provider `4.1.0` は既存の `registry.terraform.io/tako0614/takoform`
-address を維持し、`github.com/tako0614/takoform-forms` から選んだ exact Form 17 種だけを
-登録します。Provider `3.0.0` の 31 resource aggregate は immutable history
-として残します。Registry 公開の根拠は
-[Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
-の `4.1.0` entry にある Registry readback です。
+| 用途 | Provider | Host API | 対応する resource |
+| --- | --- | --- | --- |
+| Registry からインストール | **4.1.0** | `forms.takoform.com/v1` | Edge Form 17 種 |
+| ソースから評価 | **5.0.0** | `forms.takoform.com/v2` | exact Edge Form URL 13 種 |
 
-この関係は publisher repository と exact FormRefs で識別します。Takoform は
-特権的な分類を付けません。
+4.1.0 の Registry 公開は
+[release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
+に記録されています。5.0.0 を Registry から利用する前に、公開一覧と exact version を
+確認してください。ソースの target や tag だけではインストール可能とは判断できません。
+**Provider 4 の state は Provider 5 へ自動変換されません。**
 
-設定は次のとおりです。
+## 公開済み Provider 4.1.0 から始める
+
+[入門ガイド](/ja/docs/getting-started.html)に沿って
+[Random + Takoform の module](/examples/getting-started/main.tf) を初期化、検証し、plan を確認します。
+Random はクラウド認証情報を必要とせず、Takoform resource は選択した Host が管理します。
+ガイドには Host の入力値、token の扱い、lock file、EdgeKVNamespace 0.1.0 の Form identity をまとめています。
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "~> 4.0"
+      version = "= 4.1.0"
     }
   }
 }
-
-provider "takoform" {
-  endpoint = "https://forms.example.com"
-  space    = "prod"
-}
-
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
 ```
 
-`endpoint`、`space`、bearer `token` は `TAKOFORM_ENDPOINT`、
-`TAKOFORM_SPACE`、`TAKOFORM_TOKEN` からも設定できます。
+Host 設定と resource 宣言はガイドにあります。AWS resource と組み合わせる場合は
+[native provider composition](/examples/native-provider-composition/main.tf) を参照してください。
+各 Provider の source、認証情報、state は独立しています。
 
-Provider 4.1.0 は、run 中にローテーションする bearer token を読み取る
-`token_file` / `TAKOFORM_TOKEN_FILE` を追加します。各 Host request の直前に
-ファイルを開き直します。ファイルは Provider 実行ユーザー所有の regular file とし、
-group / other のアクセス、symlink、親ディレクトリの traversal、末尾改行を
-許可しません。静的 `token` / `TAKOFORM_TOKEN` と同時には指定できません。
-Linux、macOS、FreeBSD、OpenBSD、NetBSD で利用でき、Windows では従来の
-静的 token 設定のみを使えます。4.1.0 を pin する前に Registry の公開状態を
-確認してください。既存の 4.0.0 静的 token 利用者は pin を変更する必要がありません。
+## Provider 5 を評価する
 
-リソース名は Provider の metadata であり、contract の意味は各ページから
-リンクする publisher Form Definition と
-[Core v1.0.1 の仕様](https://github.com/tako0614/takoform/tree/v1.0.1/spec)
-で定義されます。
+[Provider 5 consumer reference（英語）](/docs/provider-host-api-v2-source.html)に、
+13 種の対応表、型付き HCL、local / remote private-store の設定、import、lifecycle の境界をまとめています。
+`forms.takoform.com/v2` と exact Form URL に対応する Host、および private intent-store の
+設定が必要です。Host の対応と Runner の private-file access は実行環境が提供します。
 
 ## Resource reference {#resource-reference}
 
-生成された reference は、この Provider が選んだ全17 mappingを収録します。
+[Provider reference（英語）](/docs/reference.html#resource-reference)と 17 種の個別ページは
+**Provider 4.1.0 / Host API v1** の説明です。ソースの v5 schema と Form URL は上記の
+Provider 5 reference を参照してください。
 
-### Edge (17)
-
-- [`takoform_module_worker`](/docs/resources/module_worker.html)、[`takoform_worker_bundle`](/docs/resources/worker_bundle.html)、[`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html)、[`takoform_worker_version`](/docs/resources/worker_version.html)
-- [`takoform_worker_deployment`](/docs/resources/worker_deployment.html)、[`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html)、[`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)、[`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)
-- [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)、[`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html)、[`takoform_sqlite_database`](/docs/resources/sqlite_database.html)、[`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)、[`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html)
-- [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)、[`takoform_queue_consumer`](/docs/resources/queue_consumer.html)、[`takoform_durable_workflow`](/docs/resources/durable_workflow.html)、[`takoform_actor_namespace`](/docs/resources/actor_namespace.html)
-
-各リソースページには、4 フィールドすべてを含む FormRef、別管理の package
-digest、引数、state、import の仕様、参照元の Form が載っています。
-[mapping inventory](/forms/) はリソース一覧と各 `definitionVersion` を、
-[identity ledger](/release/provider-form-identities.json) はリリース時の正確な
-identity を記録します。
-
-## History と migration
-
-現在の互換性と過去のリリースは [バージョンと互換性](/ja/docs/versions.html)
-にまとめています。古い Provider state は
-[v2-to-v3 migration](/release/migrations/v2-to-v3.html) を確認してください。
-Provider 3 からの更新前には [v3-to-v4 publisher-set
-boundary](/release/migrations/v3-to-v4.html) を確認してください。
-
-## 他providerとのnative連携
-
-AWS、Cloudflare、Kubernetes、PostgreSQLなどの業界標準providerは
-`required_providers` の対等なsourceとして宣言します。OpenTofuが複数providerの
-install、alias、plan/state、dependency graphを管理します。Takoformはそれらを
-Formでwrapせず、provider catalogも持ちません。
-[native provider composition example](/examples/native-provider-composition/main.tf)
-を参照してください。
-
-実行可能な互換性検証は [Conformance](/conformance/) にまとめています。
-
-## Apply 前に確認
-
-Apply 前に、plan に含まれる各 FormRef を Host がサポートしていることを
-確認してください。
+更新前には[バージョンと互換性](/ja/docs/versions.html)と
+[v3-to-v4 migration（英語）](/release/migrations/v3-to-v4.html)を確認してください。
+実行可能な検証は[Conformance（英語）](/conformance/)、provider-neutral な契約は
+[Host API ドキュメント](https://takoform.com/host-api/)にあります。

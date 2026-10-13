@@ -27,7 +27,7 @@ retains prior values; a present but malformed or mismatched map is refused.
 The helper returns only selected values and writes, logs, persists,
 or hashes none of them; it keeps no package-global copy. The source is bounded
 to 1 MiB. Each value is limited to 1..32768 UTF-8 bytes with no NUL by the
-Provider's [run-scoped runtime-input policy](resources/worker_version.md#run-scoped-sensitive-inputs);
+shared [runtime-input value validator](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/provider/v3_runtime_inputs.go);
 WorkerVersion Form independently requires nonempty strings but sets no
 value-length or NUL rule. `Load` itself
 is a generic selector and does not enforce Form-specific declaration counts.
