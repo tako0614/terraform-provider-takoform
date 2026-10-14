@@ -178,7 +178,7 @@ in an ephemeral directory that disappears between plans, applies, refreshes,
 or process restarts.
 
 ```sh
-terraform-provider-takoform intent-store-init \
+"$PROVIDER_DEV_DIR/terraform-provider-takoform" intent-store-init \
   --path "$INTENT_STORE_PATH" \
   --store-id "$CALLER_SCOPE_ID" \
   --host-api "https://host.example/apis/forms.takoform.com/v2"
