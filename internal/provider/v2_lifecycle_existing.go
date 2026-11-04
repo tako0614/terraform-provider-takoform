@@ -16,6 +16,62 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/privateinputsv2"
 )
 
+// A previous Terraform state can survive after the journal durably records an
+// Update or Delete. Bind it to that exact pre-mutation fence, including the
+// immediate failed predecessor when this was an explicit recovery action.
+func v2StaleStateMatchesLatest(identity v2Identity, history []intentv2.Intent) bool {
+	if len(history) == 0 {
+		return false
+	}
+	latest := history[len(history)-1]
+	if (latest.Action != intentv2.ActionUpdate && latest.Action != intentv2.ActionDelete) ||
+		latest.Form != identity.form || latest.UID != identity.uid || latest.OperationUID != identity.uid ||
+		latest.OperationID == "" || latest.Generation != strconv.FormatInt(identity.generation, 10) ||
+		latest.OperationGeneration != identity.generation+1 {
+		return false
+	}
+	if identity.intentID == "" {
+		return latest.SupersedesIntentID == ""
+	}
+	if len(history) < 2 || latest.SupersedesIntentID != identity.intentID {
+		return false
+	}
+	prior := history[len(history)-2]
+	return prior.ID == identity.intentID && prior.OperationID == identity.operationID &&
+		prior.Status == intentv2.StatusFailedReserved && prior.OperationUID == identity.uid &&
+		prior.ObservedGeneration == latest.Generation && prior.Form == latest.Form && prior.Target == latest.Target
+}
+
+// Completed journal evidence survives the Host's Operation retention period.
+// Re-read only the exact UID before restoring state or honoring a Delete.
+func (r *v2Resource) readCompletedOperation(ctx context.Context, latest intentv2.Intent, state *tfsdk.State, diags *diag.Diagnostics) {
+	record, err := r.data.client.ReadResource(ctx, latest.OperationUID)
+	if latest.Status == intentv2.StatusDeleteConfirmed {
+		if _, ok := v2DeletedResourceStatus(err); !ok {
+			diags.AddError("v2 Delete absence unproven", "The exact retained UID must still return 404 or a valid 410 before state can be cleared")
+			return
+		}
+		state.RemoveResource(ctx)
+		return
+	}
+	phase := "idle"
+	if latest.Status == intentv2.StatusFailedReserved {
+		phase = "error"
+	}
+	if err != nil || record.UID != latest.OperationUID || record.Form != latest.Form ||
+		record.Space != latest.Target.Space || record.Name != latest.Target.Name ||
+		record.Generation != latest.OperationGeneration || record.LastOperation != latest.OperationID || record.Phase != phase {
+		diags.AddError("v2 completed Resource evidence mismatch", "The exact retained UID, Form, Space, name, generation, phase, and Operation must still match; state was not adopted")
+		return
+	}
+	if latest.Status == intentv2.StatusFailedReserved {
+		r.writeResource(ctx, state, record, latest.ID, latest.OperationID, diags)
+		diags.AddWarning("v2 Operation failed with retained UID", "The Host retains this UID/name and any known partial effects. Use an explicit update or delete on this same UID; no new Create is safe.")
+		return
+	}
+	r.writeResource(ctx, state, record, "", "", diags)
+}
+
 func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	identity, err := r.identity(ctx, req.State, true)
 	if err != nil {
@@ -66,6 +122,30 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 			resp.Diagnostics.AddError("Unknown pre-ACK v2 outcome", "The durable store has an unknown original claim. Reconcile it under the original principal before any Host read or new intent; no automatic replay or adoption is safe")
 			return
 		}
+		staleState := v2StaleStateMatchesLatest(identity, history)
+		linkedCompleted := (latest.Status == intentv2.StatusApplied || latest.Status == intentv2.StatusFailedReserved || latest.Status == intentv2.StatusDeleteConfirmed) && latest.Form == identity.form &&
+			latest.OperationUID == identity.uid && latest.ID == identity.intentID && latest.OperationID == identity.operationID &&
+			latest.OperationGeneration == identity.generation
+		if staleState || linkedCompleted {
+			switch latest.Status {
+			case intentv2.StatusAccepted, intentv2.StatusAcceptedFailed, intentv2.StatusApplied, intentv2.StatusFailedReserved, intentv2.StatusDeleteConfirmed:
+				if _, err := r.discover(ctx); err != nil {
+					resp.Diagnostics.AddError("v2 discovery refused", err.Error())
+					return
+				}
+				resp.State = req.State
+				if latest.Status == intentv2.StatusAccepted || latest.Status == intentv2.StatusAcceptedFailed {
+					r.finish(ctx, latest, &resp.State, &resp.Diagnostics, 0, false)
+				} else {
+					r.readCompletedOperation(ctx, latest, &resp.State, &resp.Diagnostics)
+				}
+				return
+			}
+		}
+		if (latest.Status == intentv2.StatusAccepted || latest.Status == intentv2.StatusAcceptedFailed) && latest.ID != identity.intentID {
+			resp.Diagnostics.AddError("v2 state/journal Operation mismatch", "The retained Operation is not bound to this state or its exact pre-mutation fence; no Host request was made")
+			return
+		}
 		if latest.Form != r.def.form || latest.Status == intentv2.StatusDeleteConfirmed ||
 			(latest.OperationUID != "" && latest.OperationUID != identity.uid) {
 			resp.Diagnostics.AddError("v2 state/journal identity mismatch", "The same Space/name has a different Form, UID, or confirmed deletion; no Host request was made")
@@ -77,22 +157,7 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 			return
 		}
 		if latest.Status == intentv2.StatusFailedReserved {
-			if identity.intentID != latest.ID || identity.operationID != latest.OperationID {
-				resp.Diagnostics.AddError("v2 failed Resource linkage mismatch", "The state must retain the exact failed Operation before a same-UID recovery; no Host request was made")
-				return
-			}
-			if _, err := r.discover(ctx); err != nil {
-				resp.Diagnostics.AddError("v2 discovery refused", err.Error())
-				return
-			}
-			record, err := r.data.client.ReadResource(ctx, identity.uid)
-			if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space ||
-				record.Name != identity.name || record.Generation != identity.generation || record.Phase != "error" || record.LastOperation != latest.OperationID {
-				resp.Diagnostics.AddError("v2 failed Resource evidence mismatch", "The exact retained UID/Form/Space/name/generation/error phase/Operation must still be present; state was not adopted")
-				return
-			}
-			resp.State = req.State
-			r.writeResource(ctx, &resp.State, record, latest.ID, latest.OperationID, &resp.Diagnostics)
+			resp.Diagnostics.AddError("v2 failed Resource linkage mismatch", "The state must retain the exact failed Operation before a same-UID recovery; no Host request was made")
 			return
 		}
 	}
@@ -104,7 +169,8 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 				break
 			}
 		}
-		if pending == nil || pending.OperationID != identity.operationID || pending.OperationUID != identity.uid {
+		if pending == nil || pending.ID != history[len(history)-1].ID || pending.OperationID != identity.operationID ||
+			pending.OperationUID != identity.uid || pending.OperationGeneration != identity.generation {
 			resp.Diagnostics.AddError("v2 state Operation linkage mismatch", "The state and durable store disagree; no Host request was made")
 			return
 		}
@@ -113,7 +179,7 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 			return
 		}
 		resp.State = req.State
-		r.finish(ctx, *pending, tfsdk.Plan{}, &resp.State, &resp.Diagnostics, 0)
+		r.finish(ctx, *pending, &resp.State, &resp.Diagnostics, 0, false)
 		return
 	}
 	if _, err := r.discover(ctx); err != nil {
@@ -263,7 +329,7 @@ func (r *v2Resource) mutateExisting(ctx context.Context, action intentv2.Action,
 	if diags.HasError() {
 		return
 	}
-	r.finish(ctx, intent, plan, state, diags, op.RetryAfterSeconds)
+	r.finish(ctx, intent, state, diags, op.RetryAfterSeconds, true)
 }
 
 func (r *v2Resource) privateInputsForUpdate(space, name string, spec map[string]any) (*map[string]string, []string, error) {

@@ -263,7 +263,7 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 			resp.Diagnostics.AddError("v2 discovery refused", err.Error())
 			return
 		}
-		r.finish(ctx, latest, req.Plan, &resp.State, &resp.Diagnostics, 0)
+		r.finish(ctx, latest, &resp.State, &resp.Diagnostics, 0, true)
 		return
 	}
 	discovery, err := r.discover(ctx)
@@ -313,7 +313,7 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.finish(ctx, intent, req.Plan, &resp.State, &resp.Diagnostics, op.RetryAfterSeconds)
+	r.finish(ctx, intent, &resp.State, &resp.Diagnostics, op.RetryAfterSeconds, true)
 }
 
 func v2HasCRUD(operations []string) bool {
@@ -397,7 +397,17 @@ func (r *v2Resource) writeResource(ctx context.Context, state *tfsdk.State, reco
 	}
 }
 
-func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tfsdk.Plan, state *tfsdk.State, diags *diag.Diagnostics, initialDelay int64) {
+// A 410 must be a valid Host problem response, not an intermediary error.
+// Either status is evidence only after the original Delete succeeded.
+func v2DeletedResourceStatus(err error) (int, bool) {
+	var apiErr *hostv2.APIError
+	if errors.As(err, &apiErr) && (apiErr.Status == http.StatusNotFound || apiErr.Status == http.StatusGone && apiErr.Code == "gone") {
+		return apiErr.Status, true
+	}
+	return 0, false
+}
+
+func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, state *tfsdk.State, diags *diag.Diagnostics, initialDelay int64, reportFailure bool) {
 	if initialDelay > 0 {
 		if err := v2Wait(ctx, initialDelay); err != nil {
 			diags.AddError("v2 Operation still pending", "Context ended before the Host retry delay; retained intent and UID must be reconciled")
@@ -441,12 +451,12 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 	observation := intentv2.ResourceObservation{Path: "/resources/" + op.ResourceUID}
 	if intent.Action == intentv2.ActionDelete && op.Status == "succeeded" {
 		_, err = r.data.client.ReadResource(ctx, op.ResourceUID)
-		var apiErr *hostv2.APIError
-		if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
-			diags.AddError("v2 Delete absence unproven", "The Host must return exact UID 404 before the name slot and state can be released")
+		status, absent := v2DeletedResourceStatus(err)
+		if !absent {
+			diags.AddError("v2 Delete absence unproven", "The Host must return exact UID 404 or a valid 410 before the name slot and state can be released")
 			return
 		}
-		observation.StatusCode = 404
+		observation.StatusCode = status
 	} else {
 		record, err = r.data.client.ReadResource(ctx, op.ResourceUID)
 		if err != nil || record.Form != r.def.form || record.Space != intent.Target.Space || record.Name != intent.Target.Name || record.Generation != op.Generation || record.LastOperation != op.ID {
@@ -466,7 +476,11 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 	}
 	if op.Status == "failed" {
 		r.writeResource(ctx, state, record, intent.ID, op.ID, diags)
-		diags.AddError("v2 Operation failed with retained UID", "The Host retains this UID/name and any known partial effects. Use an explicit update or delete on this same UID; no new Create is safe.")
+		if reportFailure {
+			diags.AddError("v2 Operation failed with retained UID", "The Host retains this UID/name and any known partial effects. Use an explicit update or delete on this same UID; no new Create is safe.")
+		} else {
+			diags.AddWarning("v2 Operation failed with retained UID", "The Host retains this UID/name and any known partial effects. Use an explicit update or delete on this same UID; no new Create is safe.")
+		}
 		return
 	}
 	r.writeResource(ctx, state, record, "", "", diags)
