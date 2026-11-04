@@ -300,7 +300,7 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 	public.PrivateInputs = private
 	op, err := r.data.client.CreateResource(ctx, intent.Key, public)
 	if err != nil {
-		resp.Diagnostics.AddError("Unknown v2 Create outcome", "The original key and request are held in the store, but no Operation is durably acknowledged. Stop and reconcile with the Host/operator; no automatic resend or new key is safe.")
+		resp.Diagnostics.AddError("Unknown v2 Create outcome", v2UnacknowledgedMutationDetail(err, "The original key and request are held in the store, but no Operation is durably acknowledged. Stop and reconcile with the Host/operator; no automatic resend or new key is safe."))
 		return
 	}
 	intent, err = r.data.store.RecordAccepted(ctx, intent.ID, v2Ack(op))
@@ -314,6 +314,18 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 	r.finish(ctx, intent, &resp.State, &resp.Diagnostics, op.RetryAfterSeconds, true)
+}
+
+func v2UnacknowledgedMutationDetail(err error, held string) string {
+	var problem *hostv2.APIError
+	if errors.As(err, &problem) && problem != nil &&
+		(problem.Status == http.StatusUnauthorized && problem.Code == "unauthenticated" ||
+			problem.Status == http.StatusForbidden && problem.Code == "forbidden") {
+		// Only bounded, validated protocol classifications are shown. Even an
+		// authority refusal can conceal an earlier accepted same-key request.
+		return fmt.Sprintf("The Host returned HTTP %d (%s). Recheck authentication and authorization; this response does not resolve any earlier acceptance. %s", problem.Status, problem.Code, held)
+	}
+	return held
 }
 
 func v2HasCRUD(operations []string) bool {

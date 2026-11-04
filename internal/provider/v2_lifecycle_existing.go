@@ -313,7 +313,7 @@ func (r *v2Resource) mutateExisting(ctx context.Context, action intentv2.Action,
 		op, err = r.data.client.DeleteResource(ctx, identity.uid, intent.Key, identity.generation)
 	}
 	if err != nil {
-		diags.AddError("Unknown v2 mutation outcome", "Original key/request/window remain in the durable store, but no Operation was acknowledged. Stop; no automatic replay or new key is safe.")
+		diags.AddError("Unknown v2 mutation outcome", v2UnacknowledgedMutationDetail(err, "Original key/request/window remain in the durable store, but no Operation was acknowledged. Stop; no automatic replay or new key is safe."))
 		return
 	}
 	intent, err = r.data.store.RecordAccepted(ctx, intent.ID, v2Ack(op))
