@@ -404,9 +404,9 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 			return
 		}
 	}
-	op, err := r.readOperation(ctx, intent.OperationID)
+	op, err := r.readOperation(ctx, intent)
 	if err != nil {
-		diags.AddError("Accepted v2 Operation unreadable", "The exact Operation must be reconciled under the original principal; no new mutation was sent")
+		diags.AddError("Accepted v2 Operation unavailable or inconsistent", "The recorded Operation could not be read with its original UID, action, and generation. Reconcile it under the original principal; do not send another Resource mutation.")
 		return
 	}
 	for op.Status != "succeeded" && op.Status != "failed" {
@@ -431,9 +431,9 @@ func (r *v2Resource) finish(ctx context.Context, intent intentv2.Intent, plan tf
 			diags.AddError("v2 Operation still pending", "Context ended before the accepted Operation settled; retained intent and UID must be reconciled")
 			return
 		}
-		op, err = r.readOperation(ctx, intent.OperationID)
+		op, err = r.readOperation(ctx, intent)
 		if err != nil {
-			diags.AddError("Accepted v2 Operation unreadable", "Read and reconcile the exact Operation; no new mutation was sent")
+			diags.AddError("Accepted v2 Operation unavailable or inconsistent", "The recorded Operation could not be read with its original UID, action, and generation. Reconcile it under the original principal; do not send another Resource mutation.")
 			return
 		}
 	}
@@ -490,10 +490,14 @@ func v2Wait(ctx context.Context, seconds int64) error {
 	}
 }
 
-func (r *v2Resource) readOperation(ctx context.Context, id string) (hostv2.Operation, error) {
+func (r *v2Resource) readOperation(ctx context.Context, intent intentv2.Intent) (hostv2.Operation, error) {
 	for {
-		op, err := r.data.client.ReadOperation(ctx, id)
+		op, err := r.data.client.ReadOperation(ctx, intent.OperationID)
 		if err == nil {
+			if op.ID != intent.OperationID || op.ResourceUID != intent.OperationUID ||
+				intentv2.Action(op.Action) != intent.Action || op.Generation != intent.OperationGeneration {
+				return hostv2.Operation{}, errors.New("takoform v2: Operation identity differs from the accepted intent")
+			}
 			return op, nil
 		}
 		var apiErr *hostv2.APIError
