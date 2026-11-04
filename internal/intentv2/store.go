@@ -173,7 +173,7 @@ type OperationAck struct {
 
 // ResourceObservation is a validated exact-UID Host read. Present observations
 // bind the current Form/Space/name/generation. An absent observation binds the
-// exact UID route and 404; it is useful only alongside a succeeded Delete.
+// exact UID route and 404 or 410; it is useful only alongside a succeeded Delete.
 type ResourceObservation struct {
 	Present    bool
 	Path       string
@@ -968,7 +968,7 @@ func resourceMatches(record Intent, observation ResourceObservation, generation 
 }
 
 func resourceAbsentMatches(record Intent, observation ResourceObservation) bool {
-	return !observation.Present && observation.Path == "/resources/"+record.UID && observation.StatusCode == 404 &&
+	return !observation.Present && observation.Path == "/resources/"+record.UID && (observation.StatusCode == 404 || observation.StatusCode == 410) &&
 		observation.UID == "" && observation.Form == "" && observation.Space == "" && observation.Name == "" && observation.Generation == 0
 }
 

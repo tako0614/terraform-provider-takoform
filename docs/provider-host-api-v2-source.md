@@ -269,7 +269,7 @@ without a second mutation. A pre-ACK claim with no Operation ID is deliberately
 halted: neither a new key nor automatic replay or name-based adoption is
 authorized. A failed accepted Resource keeps its UID and name reservation;
 recovery is an explicit same-UID Update or Delete. Delete releases state only
-after terminal success and exact UID 404 evidence.
+after terminal success and an exact UID 404 or valid 410 deletion marker.
 
 The v2 state schema is version 2. v0/v1 state upgrade is an explicit refusal
 before HTTP. A fresh UID import uses the configured Space and requires an
