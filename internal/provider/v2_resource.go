@@ -272,7 +272,18 @@ func (r *v2Resource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 	support, err := r.data.client.GetSupport(ctx, r.def.form)
-	if err != nil || !support.Supported || !v2HasCRUD(support.Operations) {
+	if err != nil {
+		detail := "The Host's exact Form support response could not be read or verified; no mutation was sent"
+		var problem *hostv2.APIError
+		if errors.As(err, &problem) && problem != nil &&
+			(problem.Status == http.StatusUnauthorized && problem.Code == "unauthenticated" ||
+				problem.Status == http.StatusForbidden && problem.Code == "forbidden") {
+			detail = fmt.Sprintf("The Host returned HTTP %d (%s) while checking exact Form support. Recheck authentication and authorization; no mutation was sent", problem.Status, problem.Code)
+		}
+		resp.Diagnostics.AddError("v2 Form support unavailable", detail)
+		return
+	}
+	if !support.Supported || !v2HasCRUD(support.Operations) {
 		resp.Diagnostics.AddError("Exact Form is not supported", "The Host must declare complete CRUD support for this exact Form URL; no mutation was sent")
 		return
 	}
