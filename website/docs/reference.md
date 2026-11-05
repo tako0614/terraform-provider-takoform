@@ -1,6 +1,6 @@
 ---
 page_title: "Takoform provider"
-description: "Publisher-specific Takoform Terraform/OpenTofu Provider resource reference"
+description: "Current Host API v2 source reference and historical Provider 4.1.0 resource reference"
 ---
 
 # Takoform Provider
@@ -11,14 +11,80 @@ typed configuration, state, and import.
 
 | Use | Provider | Host API | Reference |
 | --- | --- | --- | --- |
-| Registry installation | 4.1.0 | `forms.takoform.com/v1` | [Getting started](getting-started.md) · [日本語](/ja/docs/getting-started.md) |
-| Current source evaluation | 5.0.0 | `forms.takoform.com/v2` | [Provider 5 consumer reference](provider-host-api-v2-source.md) |
+| Current source evaluation | 5.0.0 source target / candidate | `forms.takoform.com/v2` | [Provider 5 consumer reference](provider-host-api-v2-source.md) |
+| Deprecated Registry release | 4.1.0 published | `forms.takoform.com/v1` | [Legacy getting started](getting-started.md) · [日本語](/ja/docs/getting-started.md) |
 
-The resource pages below describe the published v4 mapping. The default
-source-built plugin is v5 and has a different schema and thirteen exact Form
-URLs. Provider SemVer, Form definitions, and Host support are independent.
+The default source-built plugin uses v2 and has a different schema and
+thirteen exact Form URLs. Provider 4.1.0 is a published legacy v1 client and is
+unsupported by the default Provider 5 entrypoint. The resource pages below
+describe that v4 mapping. Provider SemVer, Form definitions, and Host support
+are independent.
 
-## Published Provider 4.1.0 (Host API v1)
+## Provider 5.0.0 (current Host API v2 source)
+
+Provider 5.0.0 is a fresh-install source target for Host API
+`forms.takoform.com/v2` and thirteen exact Edge Forms. Registry availability is
+determined by the live listing and exact-version readback, not this reference.
+Check both before installing or pinning 5.0.0. Until then, evaluate the source
+checkout or a local build rather than attempting Registry installation. This
+reference does not establish that a Host supports the Forms. Provider 4.1.0
+remains a published legacy v1 Provider and is unsupported by the default
+Provider 5 entrypoint. **Provider 4 state is not automatically translated to Provider 5.**
+Keep existing v4 state with v4 unless an operator plans and
+verifies a separate migration.
+
+The v2 wire namespace is `forms.takoform.com/v2`; it is separate from each
+versioned Form URL. For example, the exact
+[ModuleWorker 0.3.0 Form](https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/)
+is one of the thirteen URLs mounted by Provider 5.0.0.
+
+The v5 configuration and lifecycle boundaries are in the
+[Provider 5 consumer reference](provider-host-api-v2-source.md). The HCL below
+shows the v5 schema and Registry pin to use only after exact-version
+publication is verified. To evaluate before publication, build and install a
+local plugin as described in that reference. Initialize the private local
+store before configuring `store_path`, or use exactly one
+`intent_store_slot` explicitly granted by the execution environment. The Host
+must advertise and authorize the exact Forms before applying:
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "takoform" {
+  endpoint      = "https://host.example"
+  host_api_root = "https://host.example/apis/forms.takoform.com/v2"
+  token         = var.host_token
+  store_path    = var.absolute_private_store_path
+  store_id      = var.fixed_caller_scope_id
+  space         = "prod"
+}
+
+resource "takoform_module_worker" "api" {
+  name = "api"
+}
+```
+
+After the exact Provider version is listed in the Registry, verify that
+version before changing a consumer pin. Source-tag verification is separate;
+when the `v5.0.0` tag resolves to the intended reviewed source, the exact
+checkout is:
+
+```sh
+git clone https://github.com/tako0614/terraform-provider-takoform.git
+cd terraform-provider-takoform
+git checkout --detach v5.0.0
+```
+
+A source tag or local build alone is not evidence of Registry publication.
+
+## Deprecated published Provider 4.1.0 (Host API v1)
 
 Provider 4.1.0 is published at
 `registry.terraform.io/tako0614/takoform` and registers 17 exact Edge Forms
@@ -71,70 +137,9 @@ Availability is verified, not declared by this immutable documentation.
 The exact removal and state boundary is documented in the
 [v3-to-v4 migration guide](../release/migrations/v3-to-v4.md).
 
-## Provider 5.0.0 (Host API v2)
-
-Provider 5.0.0 is a fresh-install Provider for Host API
-`forms.takoform.com/v2` and thirteen exact Edge Forms. Registry availability is
-determined by the live listing and exact-version readback, not this reference.
-Check both before installing or pinning 5.0.0. Until that version is listed,
-evaluate the source checkout or a local build rather than attempting Registry
-installation.
-This reference does not establish that a Host supports the Forms. Provider
-4.1.0 remains the published v1 Provider. **Provider 4 state is not automatically translated to Provider 5.** Keep existing v4 state with v4 unless an operator plans and verifies a separate migration.
-
-The v2 wire namespace is `forms.takoform.com/v2`; it is separate from each
-versioned Form URL. For example, the exact
-[ModuleWorker 0.3.0 Form](https://edge.forms.takoform.com/forms/ModuleWorker/0.3.0/)
-is one of the thirteen URLs mounted by Provider 5.0.0.
-
-The v5 configuration and lifecycle boundaries are in the
-[Provider 5 consumer reference](provider-host-api-v2-source.md). The HCL below shows the v5 schema and the Registry pin to use after
-exact-version publication is verified. To evaluate before publication, build
-and install a local plugin as described in that reference. Initialize the
-private local store before configuring `store_path`, or use exactly one
-`intent_store_slot` explicitly granted by the execution environment. The
-Host must advertise and authorize the exact Forms before applying:
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "takoform" {
-  endpoint      = "https://host.example"
-  host_api_root = "https://host.example/apis/forms.takoform.com/v2"
-  token         = var.host_token
-  store_path    = var.absolute_private_store_path
-  store_id      = var.fixed_caller_scope_id
-  space         = "prod"
-}
-
-resource "takoform_module_worker" "api" {
-  name = "api"
-}
-```
-
-After the exact Provider version is listed in the Registry, verify that
-version before changing a consumer pin. Source-tag verification is separate;
-when the `v5.0.0` tag resolves to the intended reviewed source, the exact
-checkout is:
-
-```sh
-git clone https://github.com/tako0614/terraform-provider-takoform.git
-cd terraform-provider-takoform
-git checkout --detach v5.0.0
-```
-
-A source tag or local build alone is not evidence of Registry publication.
-
 ## Resource reference
 
-### Provider 4.1.0: Edge (17)
+### Deprecated Provider 4.1.0 legacy resources: Edge (17)
 
 - [ModuleWorker](resources/module_worker.md), [WorkerBundle](resources/worker_bundle.md), [StaticAssetBundle](resources/static_asset_bundle.md), [WorkerVersion](resources/worker_version.md)
 - [WorkerDeployment](resources/worker_deployment.md), [WorkerCustomDomain](resources/worker_custom_domain.md), [WorkerEndpoint](resources/worker_endpoint.md), [WorkerCronTrigger](resources/worker_cron_trigger.md)

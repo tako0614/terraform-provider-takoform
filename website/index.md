@@ -7,11 +7,11 @@ hero:
   tagline: Typed Terraform and OpenTofu resources for a compatible Takoform Host.
   actions:
     - theme: brand
-      text: Get started with 4.1.0
-      link: /docs/getting-started.html
-    - theme: alt
-      text: Evaluate Provider 5
+      text: Evaluate current v2 source
       link: /docs/provider-host-api-v2-source.html
+    - theme: alt
+      text: Legacy 4.1.0 guide
+      link: /docs/getting-started.html
 ---
 
 Takoform Provider connects ordinary Terraform/OpenTofu configuration to exact
@@ -20,17 +20,17 @@ resources through the HCL dependency graph.
 
 | Use | Provider | Host API | Resources |
 | --- | --- | --- | --- |
-| Registry installation | **4.1.0** | `forms.takoform.com/v1` | 17 exact Edge Forms |
-| Source evaluation | **5.0.0** | `forms.takoform.com/v2` | 13 exact Edge Form URLs |
+| Current source target / candidate | **5.0.0** | `forms.takoform.com/v2` | 13 exact Edge Form URLs |
+| Deprecated Registry release | **4.1.0** | `forms.takoform.com/v1` | 17 exact Edge Forms |
 
-The Host supplies the endpoint, Space, authentication, and implementation.
-Start with the [Random + Takoform guide](/docs/getting-started.html); Random
-needs no cloud credentials. See [Versions and compatibility](/docs/versions.html)
-before changing a Provider pin. Provider 4 state is not automatically
-translated to Provider 5.
+The default source-built Provider uses v2 and does not support v1. Provider
+5.0.0 is not proven Registry-published; check [Versions and
+compatibility](/docs/versions.html) and exact-version readback before changing
+a pin. Provider 4 state is not automatically translated to Provider 5. The
+Host supplies its endpoint, Space, authentication, and implementation.
 
-The [Provider reference](/docs/reference.html) documents the published v4
-resources. The [Provider 5 consumer reference](/docs/provider-host-api-v2-source.html)
-documents the source-v5 schema, private intent store, and lifecycle. Form
-publication belongs to its publisher; Host support must be verified separately.
+The [Provider 5 consumer reference](/docs/provider-host-api-v2-source.html)
+documents the current source-v2 schema, private intent store, and lifecycle.
+The [Provider reference](/docs/reference.html) documents deprecated v4
+resources. Form publication belongs to its publisher; Host support must be verified separately.
 For the provider-neutral contract, read the [Host API documentation](https://takoform.com/en/host-api/).

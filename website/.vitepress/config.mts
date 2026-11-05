@@ -135,23 +135,21 @@ const edgeResourceItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Provider quick start",
+      text: "Provider 5 · Host API v2",
       items: [
         { text: "Overview", link: "/docs/" },
-        { text: "Getting started (4.1.0)", link: "/docs/getting-started.html" },
+        { text: "Consumer reference (13 resources)", link: "/docs/provider-host-api-v2-source.html" },
         { text: "Versions & compatibility", link: "/docs/versions.html" },
         { text: "Reference", link: "/docs/reference.html" },
         { text: "Glossary", link: "/docs/glossary.html" },
       ],
     },
     {
-      text: "Provider 4.1.0 · 17 resources",
-      items: edgeResourceItems,
-    },
-    {
-      text: "Provider 5 · source evaluation",
+      text: "Deprecated v1 · Provider 4.1.0 · 17 resources",
+      collapsed: true,
       items: [
-        { text: "Consumer reference (13 resources)", link: "/docs/provider-host-api-v2-source.html" },
+        { text: "Retained v1 guide", link: "/docs/getting-started.html" },
+        ...edgeResourceItems,
       ],
     },
     {
@@ -203,11 +201,10 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Provider quick start",
+      text: "Provider 5 · Host API v2",
       items: [
         { text: "概要", link: "/ja/docs/" },
-        { text: "入門ガイド (4.1.0)", link: "/ja/docs/getting-started.html" },
-        { text: "Provider 5 · ソース評価 (英語)", link: "/docs/provider-host-api-v2-source.html" },
+        { text: "Provider 5 利用資料 (英語)", link: "/docs/provider-host-api-v2-source.html" },
         {
           text: "バージョンと互換性",
           link: "/ja/docs/versions.html",
@@ -216,8 +213,12 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "Provider 4.1.0 · 17 resources",
-      items: edgeResourceItems,
+      text: "非推奨 v1 · Provider 4.1.0 · 17 resources",
+      collapsed: true,
+      items: [
+        { text: "保持 v1 入門ガイド", link: "/ja/docs/getting-started.html" },
+        ...edgeResourceItems,
+      ],
     },
     {
       text: "Withdrawn epochs / Migration",

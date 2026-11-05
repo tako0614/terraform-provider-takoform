@@ -4,25 +4,26 @@ Provider の版は client schema と exact Form の対応表を選びます。
 Form の公開や Host の対応を保証するものではありません。Form definition の版、
 package digest、Host API の版はそれぞれ独立した owner と履歴を持ちます。
 
-## インストールする版と評価するソース
+## 現行の実装と公開済み release
 
 | Provider | この repository での状態 | Host API | 対応表 | 参照先 |
 | --- | --- | --- | --- | --- |
-| **4.1.0** | Registry 公開済み | `forms.takoform.com/v1` | Edge Form 17 種 | [入門ガイド](/ja/docs/getting-started.html) |
-| **5.0.0** | ソースの target | `forms.takoform.com/v2` | exact Edge Form URL 13 種 | [Provider 5（英語）](/docs/provider-host-api-v2-source.html) |
+| **5.0.0** | default の現行 source target / candidate。Registry 公開は未確認 | `forms.takoform.com/v2` | exact Edge Form URL 13 種 | [Provider 5（英語）](/docs/provider-host-api-v2-source.html) |
+| **4.1.0** | Registry 公開済みの非推奨 legacy | `forms.takoform.com/v1` | Edge Form 17 種 | [旧版の入門ガイド](/ja/docs/getting-started.html) |
 
 4.1.0 の署名済み tag、GitHub Release、Registry readback は
 [Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
 にあります。[5.0.0 descriptor](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/candidates/provider-v5.0.0.json)
-はソースの target を指定するもので、Registry からのインストールを証明しません。
-pin を変える前に[Registry の公開一覧](https://registry.terraform.io/providers/tako0614/takoform/latest)と
-exact version の readback を確認してください。
+は default の現行 source target を指定するもので、Registry 公開を証明しません。Host API v1 と
+Provider 4.1.0 は非推奨で、default Provider 5 entrypoint は v1 をサポートしません。
+Provider release と Host API support は独立しています。pin を変える前に
+[Registry の公開一覧](https://registry.terraform.io/providers/tako0614/takoform/latest)と exact version の readback を確認してください。
 
 **Provider 4 の state は Provider 5 へ自動変換されません。** 既存 v4 workspace の
 移行は別に計画し、検証する必要があります。ソースから通常 build した plugin は v2 を使い、
 v2 での失敗時に v1 へ切り替えません。
 
-## Provider 4 の identity
+## 非推奨 Provider 4 の identity
 
 4.1.0 の Edge Form 17 種の公開正本は
 [`takoform-forms` commit `3231633605b737ce5279d7fc020b4780568e7091`](https://github.com/tako0614/takoform-forms/commit/3231633605b737ce5279d7fc020b4780568e7091)
@@ -30,7 +31,8 @@ v2 での失敗時に v1 へ切り替えません。
 4 フィールドからなる exact FormRef を記録し、package digest は別に package bytes を識別します。
 [embedded candidate snapshot](/forms/candidates/edge.forms.takoform.com/candidate-set.json)の
 `publicationStatus: unpublished` は外部での公開 evidence ではありません。
-Core v1.0.1 への参照はこの v1 reference の互換性 checkpoint です。
+Core v1.0.1 への参照はこの v1 reference の過去の互換性 checkpoint であり、現行の default Provider や
+Host API lane を説明するものではありません。
 
 Provider 5 は `form_url` に exact publisher Form URL を記録し、独自の schema と
 private intent-store 契約を使います。13 種の対応表と exact definition version は
@@ -40,7 +42,7 @@ Provider 5 reference にあります。
 
 | Provider | Host API lane | 互換性 |
 | --- | --- | --- |
-| **4.1.0** | `forms.takoform.com/v1` | token file と pending-operation custody に対応。Form identity は 4.0.0 と同一。 |
+| **4.1.0** | `forms.takoform.com/v1` | 非推奨の公開 minor。token file と pending-operation custody に対応。Form identity は 4.0.0 と同一。 |
 | **4.0.0** | `forms.takoform.com/v1` | publisher set の Edge Form 17 種。静的 token に対応。 |
 | **3.0.0** | `forms.takoform.com/v1` | 8 family / 31 Form の不変の aggregate release。 |
 | **2.1.1** | `forms.takoform.com/v1beta1` | [identity ledger](/release/provider-form-identities.json)にある 15 種の不変の Edge Form。 |

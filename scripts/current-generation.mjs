@@ -23,21 +23,14 @@ const readmePath = path.join(repositoryRoot, "README.md");
 const BEGIN = "<!-- current-generation:begin -->";
 const END = "<!-- current-generation:end -->";
 
-// This is a provider-facing display projection of the public Core release.
-// Core owns the release identity; this repository only links to that external
-// authority and never derives Provider or Host publication from it.
-const CORE_API_RELEASE_VERSION = "1.0.1";
-const CORE_API_LANE = "forms.takoform.com/v1";
 function render(facts) {
-  // The published Provider and the descriptor target are independent axes, so
-  // the note states the second one only while they differ.
-  const target = facts.providerTarget === facts.providerPublished
-    ? ""
-    : ` Provider \`${facts.providerTarget}\` is the candidate at the same source address.`;
+  const targetPublication = facts.providerTargetStatus === "registry-published"
+    ? ` Provider \`${facts.providerTarget}\` also has Registry readback.`
+    : ` Provider \`${facts.providerTarget}\` is a source target/candidate, not Registry publication evidence.`;
   return [
     BEGIN,
     "",
-    `Registry Provider \`${facts.providerPublished}\` is the published release at the \`tako0614/takoform\` source address and registers only the 17 Forms selected from \`tako0614/takoform-forms\`.${target} Provider \`3.0.0\` remains immutable 31-Form aggregate history. Core \`${CORE_API_RELEASE_VERSION}\` implements \`${CORE_API_LANE}\`; no Provider release changes that API. See [Versions and compatibility](website/docs/versions.md).`,
+    `The default source-built Provider uses current Host API \`forms.takoform.com/v2\`.${targetPublication} The latest Registry-published Provider is \`${facts.providerPublished}\`; Provider 4.1.0 remains published legacy v1 history with the 17 Forms selected from \`tako0614/takoform-forms\`. The default Provider 5 entrypoint does not support v1. Provider release and Host API support are independent. See [Versions and compatibility](website/docs/versions.md).`,
     "",
     END,
   ].join("\n");
