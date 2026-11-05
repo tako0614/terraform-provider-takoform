@@ -173,6 +173,28 @@ Keep the override scoped to this evaluation; omit `TF_CLI_CONFIG_FILE` when
 returning to ordinary Registry installation. A development build is not a
 signed release, a Registry package, or Host support evidence.
 
+## Host credential input
+
+Supply the Host bearer through `TAKOFORM_TOKEN` in the Provider process
+environment and omit `token` from HCL. This works with an execution owner's
+declared credential delivery without putting the value in source or a root
+variable. The Provider reads this environment value once during Configure;
+it does not enroll a principal, discover credentials, or refresh a token.
+Each Plan and Apply process must receive a valid credential for the selected
+Host. Never put its value in command arguments, checked-in files, or logs.
+
+An explicit, known, nonempty `token` attribute takes precedence over the
+environment. An explicitly empty or unknown attribute is rejected rather than
+replaced by the environment. Missing or empty environment credentials are
+also rejected before the intent store is opened. Environment defaults are
+process-wide: Provider aliases for different principals need their own
+explicit credentials or separate execution environments. `store_id` is not
+proof of principal identity.
+
+Provider 5 does not consume `TAKOFORM_TOKEN_FILE` or expose `token_file`.
+The deprecated Provider 4 rotating-file configuration is a separate contract.
+No v1 configuration fallback or Host API negotiation is introduced here.
+
 ## Intent-store custody before resource planning
 
 Select exactly one intent-store mode. In local mode, a caller must initialize
@@ -204,7 +226,6 @@ create a replacement store.
 provider "takoform" {
   endpoint      = "https://host.example"
   host_api_root = "https://host.example/apis/forms.takoform.com/v2"
-  token         = var.host_token
   store_path    = var.absolute_private_store_path
   store_id      = var.fixed_caller_scope_id
   space         = "prod"
@@ -232,7 +253,6 @@ explicitly capable environment:
 provider "takoform" {
   endpoint          = "https://host.example"
   host_api_root     = "https://host.example/apis/forms.takoform.com/v2"
-  token             = var.host_token
   intent_store_slot = var.runner_private_slot
   store_id          = var.fixed_caller_scope_id
   space             = "prod"

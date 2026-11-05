@@ -47,6 +47,10 @@ store before configuring `store_path`, or use exactly one
 `intent_store_slot` explicitly granted by the execution environment. The Host
 must advertise and authorize the exact Forms before applying:
 
+Supply the Host bearer to the Provider process as `TAKOFORM_TOKEN` and omit
+`token` from HCL, as in this example. See the consumer reference for explicit
+attribute precedence and process-wide environment scope.
+
 ```hcl
 terraform {
   required_providers {
@@ -60,7 +64,6 @@ terraform {
 provider "takoform" {
   endpoint      = "https://host.example"
   host_api_root = "https://host.example/apis/forms.takoform.com/v2"
-  token         = var.host_token
   store_path    = var.absolute_private_store_path
   store_id      = var.fixed_caller_scope_id
   space         = "prod"

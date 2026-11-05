@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -55,7 +56,7 @@ func (p *v2Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 			"endpoint":          schema.StringAttribute{Required: true, Description: "HTTPS Host origin used only for v2 discovery."},
 			"host_api_root":     schema.StringAttribute{Required: true, Description: "Exact v2 API root from Host discovery; must match the pre-initialized intent store binding."},
 			"space":             schema.StringAttribute{Optional: true, Description: "Default exact Host Space ID."},
-			"token":             schema.StringAttribute{Required: true, Sensitive: true, Description: "Bearer credential for this Host principal. Not persisted in the intent store."},
+			"token":             schema.StringAttribute{Optional: true, Sensitive: true, Description: "Bearer credential for this Host principal. May also be set via the " + envToken + " environment variable. Not persisted in the intent store."},
 			"store_path":        schema.StringAttribute{Optional: true, Description: "Absolute path to an explicitly initialized private intent store. Mutually exclusive with intent_store_slot."},
 			"intent_store_slot": schema.StringAttribute{Optional: true, Description: "Explicit opaque Runner private-file slot for a remote intent snapshot. Mutually exclusive with store_path."},
 			"store_id":          schema.StringAttribute{Required: true, Description: "Fixed caller-scope identifier of that store. A label, not authentication proof."},
@@ -71,11 +72,22 @@ func (p *v2Provider) Configure(ctx context.Context, req provider.ConfigureReques
 	}
 	for name, value := range map[string]types.String{
 		"endpoint": cfg.Endpoint, "host_api_root": cfg.HostAPIRoot,
-		"token": cfg.Token, "store_id": cfg.StoreID,
+		"store_id": cfg.StoreID,
 	} {
 		if value.IsUnknown() || value.IsNull() || value.ValueString() == "" {
 			resp.Diagnostics.AddError("Invalid v2 provider configuration", name+" must be a known, nonempty value before intent store open")
 		}
+	}
+	token := ""
+	if cfg.Token.IsUnknown() {
+		resp.Diagnostics.AddError("Invalid v2 provider configuration", "token must be known at configure time")
+	} else if cfg.Token.IsNull() {
+		token = os.Getenv(envToken)
+	} else {
+		token = cfg.Token.ValueString()
+	}
+	if token == "" {
+		resp.Diagnostics.AddError("Invalid v2 provider configuration", "token must be a known, nonempty value before intent store open")
 	}
 	if cfg.StorePath.IsUnknown() || cfg.StoreSlot.IsUnknown() {
 		resp.Diagnostics.AddError("Invalid v2 intent store selection", "store_path and intent_store_slot must be known at configure time")
@@ -126,7 +138,7 @@ func (p *v2Provider) Configure(ctx context.Context, req provider.ConfigureReques
 		return
 	}
 	data := &v2ProviderData{
-		client: hostv2.New(endpoint, cfg.Token.ValueString(), newResourceAPIHTTPClient()),
+		client: hostv2.New(endpoint, token, newResourceAPIHTTPClient()),
 		store:  store, endpoint: endpoint, hostAPIRoot: root, storeID: cfg.StoreID.ValueString(), space: space,
 	}
 	resp.ResourceData = data
