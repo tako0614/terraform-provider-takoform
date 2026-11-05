@@ -1,19 +1,23 @@
-# Provider 5 consumer reference
+# Current Host API v2 source reference (Provider 5)
 
-Provider 5.0.0 is a fresh-install Provider for Host API
-`forms.takoform.com/v2`. It maps thirteen exact published Edge Form URLs from
-the `takoform-forms` publisher to Terraform/OpenTofu resources and never
-negotiates or falls back to v1. Check the live Registry listing and exact
-version readback before installing or pinning 5.0.0; this reference does not
-state current Registry availability. Provider 4.1.0 remains the published v1
-client. A compatible Host must independently advertise support for each exact
-Form before use.
+The default source-built Provider is the current Host API v2 implementation.
+Provider 5.0.0 is its source target/candidate and supports fresh installs; it
+maps thirteen exact published Edge Form URLs from the `takoform-forms`
+publisher to Terraform/OpenTofu resources and never negotiates or falls back
+to v1. Provider 5.0.0 is not proven Registry-published: check the live listing
+and exact-version readback before installing or pinning it. Registry-published
+Provider 4.1.0 is a deprecated legacy v1 client and is unsupported by the
+default Provider 5 entrypoint. A compatible Host must independently advertise
+support for each exact Form before use. Provider release status and Host API
+support are independent.
 
-The Host API identity and discovery path are defined in the Provider's
-[v2 protocol identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
-and [HTTP client](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/client.go).
-These links describe the client implementation; they are not a claim that a
-particular Host implements or supports the API.
+The provider-neutral Host API contract is owned by the
+[Host API v2 specification](https://github.com/tako0614/takoform/blob/main/spec/host-api/v2/README.md)
+and its [HTTP contract](https://github.com/tako0614/takoform/blob/main/spec/host-api/v2/http.md).
+The Provider's [v2 protocol identifiers](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/types.go)
+and [HTTP client](https://github.com/tako0614/terraform-provider-takoform/blob/main/internal/hostv2/client.go)
+implement that contract; they do not establish that a particular Host
+implements or supports it.
 
 The mounted Terraform/OpenTofu resource type names are
 `takoform_module_worker`, `takoform_worker_bundle`,

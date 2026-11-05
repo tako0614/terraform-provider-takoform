@@ -1,13 +1,13 @@
 English: [日本語](ja/getting-started.md)
 
-# Manage a published Form from HCL
+# Legacy: manage a published Form from HCL
 
-This walkthrough uses Registry-published Provider 4.1.0 and the Host API v1
-contract. Provider 5.0.0 is the current source target, but its release ledger
-still marks it candidate-only; it has a separate Host API v2 configuration and
-fresh-install state model. See the
-[Provider 5 consumer reference](provider-host-api-v2-source.md) for that path.
-Provider 4 state is not automatically migrated to Provider 5.
+> **Deprecated legacy guide:** This walkthrough uses Registry-published
+> Provider 4.1.0 and Host API v1. Host API v1 is unsupported by the default
+> source-built Provider 5 entrypoint. For the current Host API v2 source path,
+> see the [Provider 5 consumer reference](provider-host-api-v2-source.md).
+> Provider 5.0.0 is a source target/candidate, not proven Registry-published.
+> Provider 4 state is not automatically migrated to Provider 5.
 
 This guide introduces a small Terraform/OpenTofu module with one Random
 Provider resource and one Takoform resource. The example is

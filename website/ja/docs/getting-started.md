@@ -1,12 +1,12 @@
 日本語: [English](/docs/getting-started.md)
 
-# HCL から公開済み Form を管理する
+# 旧版: HCL から公開済み Form を管理する
 
-この手順は、Registry で公開済みの Provider 4.1.0 と Host API v1 contract を使います。
-現在のsource targetである Provider 5.0.0 は、release ledger 上では candidate-only です。
-Provider 5 には別の Host API v2 設定と fresh-install state model があり、Provider 4 の
-state は自動移行されません。Provider 5 を評価する場合は[consumer reference](/docs/provider-host-api-v2-source.md)
-を参照してください。
+> **非推奨の旧版ガイド:** この手順は Registry 公開済みの Provider 4.1.0 と Host API v1 を使います。
+> Host API v1 は、ソースから通常 build する Provider 5 の entrypoint ではサポートされません。
+> 現在の Host API v2 の source path は[Provider 5 consumer reference](/docs/provider-host-api-v2-source.md)
+> を参照してください。Provider 5.0.0 は source target / candidate であり、Registry 公開済みとは確認されていません。
+> Provider 4 の state は Provider 5 へ自動移行されません。
 
 このガイドでは、Random Provider と Takoform のリソースを 1 つずつ含む
 Terraform / OpenTofu module を紹介します。使用する設定は

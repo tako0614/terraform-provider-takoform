@@ -4,25 +4,27 @@ A Provider version selects a client schema and its exact Form mappings. It
 does not publish Forms or establish Host support. Form definition versions,
 package digests, and Host API versions have their own owners and histories.
 
-## Choose an installation or source target
+## Current implementation and published release
 
 | Provider | Status in this repository | Host API | Mappings | Reference |
 | --- | --- | --- | --- | --- |
-| **4.1.0** | Registry-published | `forms.takoform.com/v1` | 17 Edge Forms | [Getting started](/docs/getting-started.html) |
-| **5.0.0** | Source target | `forms.takoform.com/v2` | 13 exact Edge Form URLs | [Provider 5](/docs/provider-host-api-v2-source.html) |
+| **5.0.0** | Current default source target / candidate; Registry publication unproven | `forms.takoform.com/v2` | 13 exact Edge Form URLs | [Provider 5](/docs/provider-host-api-v2-source.html) |
+| **4.1.0** | Registry-published deprecated legacy | `forms.takoform.com/v1` | 17 Edge Forms | [Legacy getting started](/docs/getting-started.html) |
 
 The [Provider release identity ledger](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/provider-release-identities.json)
 records the signed tag, immutable GitHub Release, and Registry readback for
 4.1.0. The [5.0.0 descriptor](https://github.com/tako0614/terraform-provider-takoform/blob/main/release/candidates/provider-v5.0.0.json)
-selects the source target; it is not evidence of Registry installation.
-Check the [live Registry listing](https://registry.terraform.io/providers/tako0614/takoform/latest)
+selects the current default source target; it is not evidence of Registry
+publication. Host API v1 and Provider 4.1.0 are deprecated, and the default
+Provider 5 entrypoint does not support v1. Provider release and Host API
+support are independent. Check the [live Registry listing](https://registry.terraform.io/providers/tako0614/takoform/latest)
 and exact-version readback before changing a consumer pin.
 
 **Provider 4 state is not automatically translated to Provider 5.** Existing
 v4 workspaces require a separately planned and verified migration. The default
 source-built plugin speaks v2; it does not fall back to v1 on a v2 failure.
 
-## Provider 4 identity model
+## Deprecated Provider 4 identity model
 
 Provider 4.1.0 selects the 17-Form Edge publication recorded at
 [`takoform-forms` commit `3231633605b737ce5279d7fc020b4780568e7091`](https://github.com/tako0614/takoform-forms/commit/3231633605b737ce5279d7fc020b4780568e7091).
@@ -30,8 +32,9 @@ Its resource state records the exact four-field FormRef: group, kind,
 `definitionVersion`, and `schemaDigest`. The separate package digest identifies
 package bytes. The [Embedded Edge candidate snapshot](/forms/candidates/edge.forms.takoform.com/candidate-set.json)
 retains `publicationStatus: unpublished` and is not publication evidence.
-The linked Core v1.0.1 source is the compatibility checkpoint for this v1
-reference, not a description of the v5 plugin.
+The linked Core v1.0.1 source is a historical compatibility checkpoint for
+this v1 reference; it does not describe the current default Provider or Host
+API lane.
 
 Provider 5 instead records one exact publisher Form URL in `form_url` and uses
 its own schema and private intent-store contract. Its thirteen mappings and
@@ -41,7 +44,7 @@ exact definition versions are listed in the Provider 5 reference.
 
 | Provider | Host API lane | Compatibility |
 | --- | --- | --- |
-| **4.1.0** | `forms.takoform.com/v1` | Published minor adding rotating token-file authentication and pending-operation custody; same Form identities as 4.0.0. |
+| **4.1.0** | `forms.takoform.com/v1` | Deprecated published minor adding rotating token-file authentication and pending-operation custody; same Form identities as 4.0.0. |
 | **4.0.0** | `forms.takoform.com/v1` | Publisher-selected 17-Form Edge release with static-token configuration. |
 | **3.0.0** | `forms.takoform.com/v1` | Immutable 31-Form aggregate release across eight families. |
 | **2.1.1** | `forms.takoform.com/v1beta1` | Fifteen immutable Edge Form identities in the [identity ledger](/release/provider-form-identities.json). |
