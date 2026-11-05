@@ -145,7 +145,7 @@ const englishSidebar = {
       ],
     },
     {
-      text: "Deprecated v1 · Provider 4.1.0",
+      text: "Deprecated v1 · Provider 4.1.0 · 17 resources",
       collapsed: true,
       items: [
         { text: "Retained v1 guide", link: "/docs/getting-started.html" },
@@ -213,7 +213,7 @@ const japaneseSidebar = {
       ],
     },
     {
-      text: "非推奨 v1 · Provider 4.1.0",
+      text: "非推奨 v1 · Provider 4.1.0 · 17 resources",
       collapsed: true,
       items: [
         { text: "保持 v1 入門ガイド", link: "/ja/docs/getting-started.html" },
