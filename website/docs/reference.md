@@ -20,7 +20,7 @@ unsupported by the default Provider 5 entrypoint. The resource pages below
 describe that v4 mapping. Provider SemVer, Form definitions, and Host support
 are independent.
 
-## Current source: Provider 5.0.0 (Host API v2)
+## Provider 5.0.0 (current Host API v2 source)
 
 Provider 5.0.0 is a fresh-install source target for Host API
 `forms.takoform.com/v2` and thirteen exact Edge Forms. Registry availability is
@@ -29,8 +29,8 @@ Check both before installing or pinning 5.0.0. Until then, evaluate the source
 checkout or a local build rather than attempting Registry installation. This
 reference does not establish that a Host supports the Forms. Provider 4.1.0
 remains a published legacy v1 Provider and is unsupported by the default
-Provider 5 entrypoint. **Provider 4 state is not automatically translated to
-Provider 5.** Keep existing v4 state with v4 unless an operator plans and
+Provider 5 entrypoint. **Provider 4 state is not automatically translated to Provider 5.**
+Keep existing v4 state with v4 unless an operator plans and
 verifies a separate migration.
 
 The v2 wire namespace is `forms.takoform.com/v2`; it is separate from each
