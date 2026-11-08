@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -15,6 +16,18 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/jsonv2"
 	"github.com/tako0614/terraform-provider-takoform/internal/privateinputsv2"
 )
+
+// Only a validated Host Problem Details code identifies an authority refusal.
+// Raw Host bodies and other read failures cannot establish why evidence is absent.
+func v2ResourceReadDetail(err error, fallback string) string {
+	var problem *hostv2.APIError
+	if errors.As(err, &problem) && problem != nil &&
+		(problem.Status == http.StatusUnauthorized && problem.Code == "unauthenticated" ||
+			problem.Status == http.StatusForbidden && problem.Code == "forbidden") {
+		return fmt.Sprintf("The Host returned HTTP %d (%s) while reading the exact Resource UID. Recheck authentication and authorization; %s", problem.Status, problem.Code, fallback)
+	}
+	return fallback
+}
 
 // A previous Terraform state can survive after the journal durably records an
 // Update or Delete. Bind it to that exact pre-mutation fence, including the
@@ -48,7 +61,7 @@ func (r *v2Resource) readCompletedOperation(ctx context.Context, latest intentv2
 	record, err := r.data.client.ReadResource(ctx, latest.OperationUID)
 	if latest.Status == intentv2.StatusDeleteConfirmed {
 		if _, ok := v2DeletedResourceStatus(err); !ok {
-			diags.AddError("v2 Delete absence unproven", "The exact retained UID must still return 404 or a valid 410 before state can be cleared")
+			diags.AddError("v2 Delete absence unproven", v2ResourceReadDetail(err, "The exact retained UID must still return 404 or a valid 410 before state can be cleared"))
 			return
 		}
 		state.RemoveResource(ctx)
@@ -61,7 +74,7 @@ func (r *v2Resource) readCompletedOperation(ctx context.Context, latest intentv2
 	if err != nil || record.UID != latest.OperationUID || record.Form != latest.Form ||
 		record.Space != latest.Target.Space || record.Name != latest.Target.Name ||
 		record.Generation != latest.OperationGeneration || record.LastOperation != latest.OperationID || record.Phase != phase {
-		diags.AddError("v2 completed Resource evidence mismatch", "The exact retained UID, Form, Space, name, generation, phase, and Operation must still match; state was not adopted")
+		diags.AddError("v2 completed Resource evidence mismatch", v2ResourceReadDetail(err, "The exact retained UID, Form, Space, name, generation, phase, and Operation must still match; state was not adopted"))
 		return
 	}
 	if latest.Status == intentv2.StatusFailedReserved {
@@ -85,7 +98,7 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		}
 		record, err := r.data.client.ReadResource(ctx, identity.uid)
 		if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space || record.Generation < 1 {
-			resp.Diagnostics.AddError("v2 import evidence refused", "An authorized exact-UID 200 Resource with this Form and Space is required; no Create or adoption-by-name occurred")
+			resp.Diagnostics.AddError("v2 import evidence refused", v2ResourceReadDetail(err, "An authorized exact-UID 200 Resource with this Form and Space is required; no Create or adoption-by-name occurred"))
 			return
 		}
 		target := r.target(record.Space, record.Name)
@@ -188,7 +201,7 @@ func (r *v2Resource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 	}
 	record, err := r.data.client.ReadResource(ctx, identity.uid)
 	if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space || record.Name != identity.name || record.Generation != identity.generation {
-		resp.Diagnostics.AddError("v2 Resource evidence mismatch", "Exact UID, Form, Space, name, and generation are required. A 404/410 does not prove backend effects absent; no state was cleared")
+		resp.Diagnostics.AddError("v2 Resource evidence mismatch", v2ResourceReadDetail(err, "Exact UID, Form, Space, name, and generation are required. A 404/410 does not prove backend effects absent; no state was cleared"))
 		return
 	}
 	resp.State = req.State
@@ -270,7 +283,7 @@ func (r *v2Resource) mutateExisting(ctx context.Context, action intentv2.Action,
 	}
 	record, err := r.data.client.ReadResource(ctx, identity.uid)
 	if err != nil || record.UID != identity.uid || record.Form != r.def.form || record.Space != identity.space || record.Name != identity.name || record.Generation != identity.generation {
-		diags.AddError("v2 generation or identity fence mismatch", "Read and reconcile the exact UID/Form/Space/name/generation; no mutation was sent")
+		diags.AddError("v2 generation or identity fence mismatch", v2ResourceReadDetail(err, "Read and reconcile the exact UID/Form/Space/name/generation; no mutation was sent"))
 		return
 	}
 	var publicJSON []byte
